@@ -216,6 +216,25 @@ class RepositoryContractTestCase(unittest.TestCase):
             self.run_cli(RESEARCHCTL, repository, "validate")
             self.run_cli(EPCTL, repository, "validate")
 
+    def test_project_brand_and_skill_names_are_independent(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertTrue(readme.startswith("# EngineeringPlan\n"))
+        self.assertIn(
+            "https://github.com/XiaoWeiKIN/EngineeringPlan.git",
+            readme,
+        )
+        self.assertNotIn("XiaoWeiKIN/ExecutionPlan", readme)
+        self.assertIn(
+            "name: execution-plan",
+            (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "name: engineering-research",
+            (ROOT / "engineering-research" / "SKILL.md").read_text(
+                encoding="utf-8"
+            ),
+        )
+
     def test_skills_work_when_installed_independently(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
