@@ -17,9 +17,10 @@ flowchart LR
     S --> A{"存在架构级选择？"}
     A -->|"是"| P["Proposed ADR"]
     P --> H["用户 / Decision Owner<br/>明确接受或拒绝"]
-    H --> D["Accepted ADR"]
+    H --> D["Accepted ADR 集合<br/>依赖 / 修订关系"]
     A -->|"否，写明理由"| AG["Architecture Gate<br/>not_required"]
-    D --> EP["ExecPlan v2.3<br/>自包含计划 + 完成证明"]
+    D --> I["Architecture Input Set<br/>ADRs + Design Docs + 入口"]
+    I --> EP["ExecPlan v2.4<br/>自包含计划 + 完成证明"]
     RG --> A
     AG --> EP
 ```
@@ -60,6 +61,8 @@ Bugfix 一旦需要 Research、ADR、任务拆分、公共契约变更或持续�
 ```text
 docs/
 ├── .epctl/
+│   ├── state.json
+│   └── config.json          # 可选：注册既有 architecture roots
 ├── RESEARCH.md
 ├── DECISIONS.md
 ├── PLANS.md
@@ -73,6 +76,7 @@ docs/
 │   └── completed/
 ├── adr/
 │   └── adr-NNN_slug.md
+├── design-docs/             # 可选：既有 ADR / Design Doc corpus
 ├── exec-plans/
 │   ├── active/ep-NNN_slug/
 │   │   ├── EXECPLAN.md
@@ -86,7 +90,9 @@ docs/
     └── completed/
 ```
 
-Research 结论或取消时整体移动到 `research/completed/`。ADR 路径稳定，不随状态移动。四个根索引都是可重建投影；制品文件才是事实源。
+Research 结论或取消时整体移动到 `research/completed/`。新 ADR 始终写入
+`docs/adr/`，路径稳定且不随状态移动。既有 ADR / Design Doc corpus 可以原地注册，
+不要求搬迁。四个根索引都是可重建投影；制品文件才是事实源。
 
 ## 优先使用确定性脚本
 
@@ -94,9 +100,12 @@ Research 结论或取消时整体移动到 `research/completed/`。ADR 路径稳
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . init
+python3 <skill-dir>/scripts/epctl.py --repo . register-architecture-root \
+  docs/design-docs
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
-  --slug cache-topology --title "Choose cache topology" --research R-001
+  --slug cache-topology --title "Choose cache topology" --research R-001 \
+  --depends-on ADR-004 --design docs/design-docs/cache-topology.md
 python3 <skill-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
   --outcome accepted --decision-maker "<explicit authority>"
 python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
@@ -104,7 +113,9 @@ python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   --slug implement-cache --title "Implement cache topology" \
-  --research R-001 --adr ADR-001
+  --research R-001 --adr ADR-004 --adr ADR-005 \
+  --design docs/design-docs/cache-topology.md \
+  --architecture-entrypoint docs/design-docs/index.md
 
 python3 <skill-dir>/scripts/epctl.py --repo . validate
 python3 <skill-dir>/scripts/epctl.py --repo . validate --fix-index
@@ -112,7 +123,9 @@ python3 <skill-dir>/scripts/epctl.py --repo . reindex
 python3 <skill-dir>/scripts/epctl.py --repo . status
 ```
 
-重复引用时重复写 `--research` 或 `--adr`。如果某个 Gate 不需要正式制品：
+重复引用时重复写 `--research`、`--adr` 或 `--design`。注册信息写入
+`docs/.epctl/config.json`，本地和 CI 因而使用同一组 architecture roots。如果某个
+Gate 不需要正式制品：
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
@@ -157,22 +170,41 @@ Agent 可以调研、比较并起草 `proposed` ADR。只有当前对话或明�
 2. 写全 Context、Decision Drivers、可信选项、Outcome、Consequences、Confirmation 和 Revisit Triggers。
 3. 把真实授权主体传给 `--decision-maker`。
 
-accepted/rejected ADR 的正文由 SHA-256 封存。方向变化时创建并接受新 ADR，再执行 `supersede-adr ADR-OLD --by ADR-NEW`；不要编辑旧决定正文。Superseded ADR 不能满足新 ExecPlan 的 Architecture Gate。
+accepted/rejected schema 1.1 ADR 的正文、Research/ADR/Design 输入和决策授权由
+SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使用 `amends` 或执行
+`supersede-adr ADR-OLD --by ADR-NEW`；不要编辑旧决定。Superseded ADR 不能满足
+新 ExecPlan 的 Architecture Gate。
+
+一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
+
+- `depends_on` 表示必须同时成立的 accepted 前置决定。
+- `amends` 表示新决定只修订旧决定的一部分；两者仍是当前决定。
+- `supersedes` 表示完整替代，旧 ADR 进入 superseded。
+- `design_refs` 指向承载接口、数据流、迁移细节的 Design Docs。
+
+关系必须无环且互斥。ExecPlan 的 `adr_refs` 必须包含 `depends_on` / `amends`
+传递闭包，不能只引用叶子 ADR。
+
+既有 `docs/design-docs` 等目录先用 `register-architecture-root` 注册。
+`doc_type: adr` 或文件名含 `ADR-NNN` 的文档会被发现；缺少 epctl
+`decision_maker` / seal 的 accepted 旧 ADR 可兼容满足 Gate，但验证会持续告警，
+工具把它视为只读。后续变化应创建严格的新 ADR，不要就地伪造历史授权。
 
 ## 创建 ExecPlan
 
 执行前读取 `references/template.md`。
 
 1. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
-2. Architecture Gate 必须引用所有当前 accepted ADR，或提供具体 not-required 理由。
-3. ADR 引用的 Research 也必须进入 ExecPlan 的 `research_refs`。
-4. 运行 `new-ep` 创建 v2.3 目录和模板。
-5. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
+2. Architecture Gate 必须引用依赖闭包内所有当前 accepted ADR，或提供具体 not-required 理由。
+3. ADR 引用的 Research 和 Design Docs 也必须进入 ExecPlan 的对应引用数组。
+4. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
+5. 运行 `new-ep` 创建 v2.4 目录和模板。
+6. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
    - 支持路线的关键证据与置信边界；
    - accepted ADR 的接口、数据、运维、迁移和负面后果；
    - 仍需在实现中验证的未知；
    - 跳过 Gate 的具体理由。
-6. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
+7. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
    - 解释目的、术语、用户可观察结果和系统现状；
    - 给出准确仓库相对路径、接口与依赖；
    - 提供独立可验证里程碑、工作目录、命令、预期输出和证据位置；
@@ -243,7 +275,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \
 - `reindex` 从事实制品重建 Research、ADR、ExecPlan 和 Bugfix 投影。
 - CI 只调用仓库内唯一检查入口；GitHub、GitLab 或其他 CI 平台不得复制校验逻辑。
 - accepted ADR 的 Confirmation 应指向测试、lint、schema check 或明确人工验收。
-- completed v2.3 EP 必须保存 `verified_revision` 和至少一个
+- completed v2.3+ EP 必须保存 `verified_revision` 和至少一个
   `verification_evidence`，归档正文由 `archive_sha256` 封存；Checkpoint 必须
   保存 `repository_revision`。
 
@@ -252,6 +284,8 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \
 - 制品路由、状态机、兼容策略 → `references/templates.md`
 - Research/Synthesis 消费契约与 manifest 兼容 → `references/research.md`
 - ADR 门槛、授权、状态与 supersession → `references/adr.md`
+- 多 ADR / Design Doc Architecture Input Set 示例 →
+  `examples/architecture-input-set/README.md`
 - ExecPlan 自包含要求与 Living Document → `references/template.md`
 - Checkpoint、压缩与恢复 → `references/checkpoints.md`
 - 文档—代码完整性、CI 适配与合并门禁 → `references/integrity.md`

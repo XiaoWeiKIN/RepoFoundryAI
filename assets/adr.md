@@ -1,9 +1,12 @@
 ---
-schema_version: "1"
+schema_version: "1.1"
 id: {{ID}}
 title: "{{TITLE}}"
 status: proposed
 research_refs: {{RESEARCH_REFS}}
+depends_on: {{DEPENDS_ON}}
+amends: {{AMENDS}}
+design_refs: {{DESIGN_REFS}}
 supersedes: []
 superseded_by:
 decision_maker:
@@ -17,8 +20,8 @@ owner: "{{OWNER}}"
 # {{TITLE}}
 
 This ADR records one architecturally significant decision. Proposed ADRs may be
-revised. Accepted or rejected ADR bodies are sealed; later changes require a
-superseding ADR.
+revised. Accepted or rejected ADR bodies and decision-input metadata are sealed;
+later changes require an amending or superseding ADR.
 
 ## Context and Problem Statement
 
@@ -55,6 +58,9 @@ superseding ADR.
 ## More Information
 
 - Research references: {{RESEARCH_REFS}}
+- Prerequisite ADRs: {{DEPENDS_ON}}
+- Amended ADRs: {{AMENDS}}
+- Design documents: {{DESIGN_REFS}}
 - Related ExecPlans: none yet.
 
 ## Revision Notes

@@ -216,6 +216,32 @@ python3 "$EPCTL" --repo . decide-adr ADR-001 \
 python3 "$EPCTL" --repo . supersede-adr ADR-001 --by ADR-002
 ```
 
+一个功能需要多个决定时，不把它们揉成一个巨型 ADR。每份 ADR 保持原子性，
+再用有类型的关系组成 Architecture Input Set：
+
+```mermaid
+flowchart LR
+    A11["ADR-011<br/>属性查询"] -->|"depends_on"| A10["ADR-010<br/>存储基座"]
+    A12["ADR-012<br/>环境路由"] -->|"depends_on"| A10
+    D1["Design Doc<br/>查询细节"] --> A11
+    D2["Design Doc<br/>路由细节"] --> A12
+    A10 --> EP["EP v2.4"]
+    A11 --> EP
+    A12 --> EP
+    D1 --> EP
+    D2 --> EP
+```
+
+既有 ADR / Design Doc 目录可以原地注册：
+
+```bash
+python3 "$EPCTL" --repo . register-architecture-root docs/design-docs
+```
+
+注册结果保存在 `docs/.epctl/config.json`，所以本地、GitHub Actions、GitLab CI
+和其他 Pipeline 使用相同输入。新 ADR 仍写入 `docs/adr/`。旧 ADR 没有 epctl
+决策签名时会以只读兼容模式接入并产生告警；后续决策不要回填伪造的历史授权。
+
 ### 4. 创建 gated ExecPlan
 
 ```bash
@@ -223,11 +249,15 @@ python3 "$EPCTL" --repo . new-ep \
   --slug implement-token-refresh \
   --title "Implement token refresh contract" \
   --research R-001 \
-  --adr ADR-001
+  --adr ADR-001 \
+  --design docs/design-docs/token-refresh.md \
+  --architecture-entrypoint docs/design-docs/index.md
 ```
 
 在 `Research and Architecture Inputs` 中复述关键证据、架构约束、负面后果和
-剩余未知，再填写里程碑、Concrete Steps、验收和恢复方法。
+剩余未知，再填写里程碑、Concrete Steps、验收和恢复方法。ADR 有
+`depends_on` 或 `amends` 时，`--adr` 必须显式列出完整传递闭包；ADR 引用的
+Design Docs 也必须进入 `--design`。
 
 只有在输入已经充分且没有会改变路线的未知时才能 fast track，并要记录可核查
 理由：
@@ -329,6 +359,9 @@ CI 文件不得复制这些子命令：
   `engineering-research`；这是迁移兼容面，不是新的职责边界。
 - 两个 Skill 不通过相对 import、安装目录或运行时调用耦合。
 - Manifest 是可选的向后兼容字段；一旦出现，就必须满足版本化契约。
+- v2.0–v2.3 ExecPlan 继续按原 schema 读取；新计划使用 v2.4 Architecture
+  Input Set。
+- 既有 accepted ADR 可以从注册目录只读接入；严格的新 ADR 使用 schema 1.1。
 
 ## 开发与验证
 
@@ -343,6 +376,7 @@ python3 -B scripts/check.py
 端到端：
 
 - [可运行的 cache-topology 端到端示例](./examples/cache-topology/README.md)
+- [多 ADR / Design Doc Architecture Input Set 示例](./examples/architecture-input-set/README.md)
 
 Engineering Research：
 

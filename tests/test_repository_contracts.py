@@ -184,7 +184,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.3"', plan_text)
+            self.assertIn('schema_version: "2.4"', plan_text)
             self.assertIn("research_gate: satisfied", plan_text)
             self.assertIn("architecture_gate: satisfied", plan_text)
             self.complete_placeholders(plan)

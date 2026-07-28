@@ -1,5 +1,5 @@
 ---
-schema_version: "2.3"
+schema_version: "2.4"
 id: {{ID}}
 title: "{{TITLE}}"
 status: active
@@ -8,6 +8,8 @@ research_refs: {{RESEARCH_REFS}}
 research_gate: {{RESEARCH_GATE}}
 research_gate_reason: "{{RESEARCH_GATE_REASON}}"
 adr_refs: {{ADR_REFS}}
+design_refs: {{DESIGN_REFS}}
+architecture_entrypoint: "{{ARCHITECTURE_ENTRYPOINT}}"
 architecture_gate: {{ARCHITECTURE_GATE}}
 architecture_gate_reason: "{{ARCHITECTURE_GATE_REASON}}"
 verified_revision:
@@ -53,6 +55,8 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 - Research references: {{RESEARCH_REFS}}.
 - Architecture gate: `{{ARCHITECTURE_GATE}}`.
 - ADR references: {{ADR_REFS}}.
+- Design document references: {{DESIGN_REFS}}.
+- Architecture entrypoint: `{{ARCHITECTURE_ENTRYPOINT}}`.
 
 <!-- REQUIRED: Restate the Research conclusions, accepted ADR consequences, implementation constraints, and remaining unknowns needed to execute this plan without opening upstream artifacts. Explain each not-required reason when a gate was explicitly skipped. -->
 

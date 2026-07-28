@@ -5,7 +5,8 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 
 ## Protocol
 
-- ADRs live at `docs/adr/adr-NNN_slug.md`.
+- New ADRs live at `docs/adr/adr-NNN_slug.md`; registered legacy architecture
+  roots are projected here without moving their source files.
 - Agents may author proposed ADRs.
 - Accept or reject an ADR only after explicit user or Decision Owner
   authorization.

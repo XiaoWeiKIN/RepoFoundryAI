@@ -71,17 +71,25 @@ python3 <execution-plan-dir>/scripts/epctl.py --repo . new-ep \
 
 ## 多份输入
 
-参数通过重复 flag 表示：
+参数通过重复 flag 表示。先注册既有架构文档目录：
 
 ```bash
+python3 <execution-plan-dir>/scripts/epctl.py --repo . \
+  register-architecture-root docs/design-docs
+
 python3 <execution-plan-dir>/scripts/epctl.py --repo . new-ep \
   --slug migrate-storage \
   --title "Migrate storage" \
   --research R-003 --research R-007 \
-  --adr ADR-004 --adr ADR-009
+  --adr ADR-004 --adr ADR-009 \
+  --design docs/design-docs/storage-schema.md \
+  --design docs/design-docs/storage-migration.md \
+  --architecture-entrypoint docs/design-docs/index.md
 ```
 
-ADR 引用的每份 Research 都必须出现在 ExecPlan 中。
+ADR 引用的每份 Research 和 Design Doc 都必须出现在 ExecPlan 中。若 ADR-009
+`depends_on: ["ADR-004"]`，不能只传 `--adr ADR-009`；依赖闭包必须显式完整。
+完整案例见 `examples/architecture-input-set/README.md`。
 
 ## Fast track
 
@@ -177,7 +185,7 @@ python3 <execution-plan-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
 ```
 
 未完成验收、非终态 Task、open blocker、未填写复盘或缺少 revision/evidence
-都会阻止 v2.3 completed。明确停止时可以：
+都会阻止 v2.3+ completed。明确停止时可以：
 
 ```bash
 python3 <execution-plan-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
