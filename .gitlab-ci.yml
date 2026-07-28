@@ -1,0 +1,18 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+stages:
+  - verify
+
+ep-integrity:
+  stage: verify
+  image: python:3.10
+  interruptible: true
+  variables:
+    PYTHONDONTWRITEBYTECODE: "1"
+  script:
+    - python3 -B scripts/check.py

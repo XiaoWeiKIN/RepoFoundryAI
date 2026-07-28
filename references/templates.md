@@ -49,7 +49,7 @@ flowchart TD
 - 权威标准或用户已固定方案。
 - 工作局部、可逆，没有会改变执行路线的未知。
 
-跳过必须在 v2.2 ExecPlan 中记录具体 `research_gate_reason`。
+跳过必须在 v2.2+ ExecPlan 中记录具体 `research_gate_reason`。
 
 创建 ADR：
 
@@ -107,7 +107,8 @@ stateDiagram-v2
     blocked --> cancelled
 ```
 
-`completed` 要求验收完成、Task 终态、无 open blocker、复盘完整。
+`completed` 要求验收完成、Task 终态、无 open blocker、复盘完整；v2.3 还要求
+`verified_revision` 和至少一个 `verification_evidence`。
 
 ### Task
 
@@ -146,12 +147,15 @@ stateDiagram-v2
 - 编号在仓库锁内分配，扫描 active、completed、索引和高水位后取最大值 +1。
 - 允许故障跳号；删除文件后也不复用编号。
 - `RESEARCH.md`、`DECISIONS.md`、`PLANS.md`、`BUGFIXES.md` 的托管区可由 `reindex` 重建，人工区必须保留。
-- 新 ExecPlan 使用 `schema_version: "2.2"`，明确两个 Gate、引用数组和 `Research and Architecture Inputs`。
+- 新 ExecPlan 使用 `schema_version: "2.3"`，明确两个 Gate、引用数组、
+  `Research and Architecture Inputs` 和完成证明字段。
 - Research Gate 只接受 valid + concluded Research；Architecture Gate 只接受 valid + accepted + current ADR。
 - manifest-bearing Research 还必须具有 sealed、摘要一致且文档完整的受支持 manifest；无 manifest 的旧包继续走兼容路径。
 - Gate 可以为 `not_required`，但必须有理由，且不能同时保留引用。
 - ADR 引用的 Research 必须同时进入 ExecPlan。
 - sealed Synthesis、decided ADR 和 Checkpoint 使用 Markdown body SHA-256 检测篡改。
+- 新 Checkpoint 记录 `repository_revision`；completed v2.3 EP 记录实际通过验证的
+  revision 和证据引用，所有 archived v2.3 EP 使用 `archive_sha256` 封存全文。
 - Task 使用 `parent_id: EP-NNN` 和 `depends_on: ["TASK-NNN"]`。
 - Checkpoint 只封存已完成进度和已关闭 blocker；开放工作留在根计划。
 - Frontmatter 仅支持简单标量和 JSON 风格一级字符串数组。
@@ -162,9 +166,9 @@ stateDiagram-v2
 ## 旧版兼容
 
 - 继续读取旧 `ep-NNN_name.md` 和 `README.md + progress.md + tasks/`。
-- v2.0/v2.1 `EXECPLAN.md` 保持可读、可验证、可归档；不要静默补 Gate。
+- v2.0/v2.1/v2.2 `EXECPLAN.md` 保持可读、可验证、可归档；不要静默升级。
 - v2.1 仍可 checkpoint。v2.0 建立 checkpoint 前显式迁移到至少 v2.1，并补 `Current Snapshot`。
-- 新建统一使用 v2.2 `ep-NNN_slug/EXECPLAN.md`。
+- 新建统一使用 v2.3 `ep-NNN_slug/EXECPLAN.md`。
 - 修改旧制品时保留原格式；用户要求迁移时先建立可恢复点，再合并当前事实与历史。
 - 旧 `docs/tech-debt-tracker.md` 继续读取；新仓库使用 `docs/exec-plans/tech-debt-tracker.md`。
 - `epctl` 中旧 Research 生产命令暂时保留，但新 Research 的主路径是

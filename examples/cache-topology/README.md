@@ -92,14 +92,14 @@ docs/research/active/r-001_cache-topology/
       "base": "repo",
       "path": "research-input/cache-topology/benchmark.md",
       "role": "document",
-      "bytes": 1208,
       "sha256": "…"
     }
   ]
 }
 ```
 
-实际 manifest 必须包含四篇文档，其中 `index.md` 的 role 是 `entrypoint`。
+实际 manifest 必须包含四篇文档，其中 `index.md` 的 role 是 `entrypoint`；
+`bytes` 与完整 `sha256` 由 `researchctl` 根据源文件生成，不在说明文档中手抄。
 
 ## Research 的结论应压缩证据，不复制 corpus
 
@@ -221,6 +221,22 @@ architecture_gate: satisfied
 每个里程碑都要写真实文件路径、命令、预期输出和证据位置。实施历史增长后用
 Checkpoint 封存已完成事件，根 `EXECPLAN.md` 继续保存当前事实和准确下一步。
 
+## 完成时绑定真实代码版本与证据
+
+只有真实实现和全部验收完成后，才把 EP 归档为 `completed`：
+
+```bash
+python3 "$EPCTL" --repo . archive-ep EP-001 \
+  --outcome completed \
+  --verified-revision "git:<实际通过验收的 commit>" \
+  --evidence "ci:<实际 pipeline 或 job URL>" \
+  --evidence "artifact:<仓库内验收产物路径>"
+```
+
+`verified_revision` 绑定“哪些代码被验证过”，evidence 绑定“在哪里可以复核”。
+复选框全部勾选但缺少这两类信息时，v2.3 EP 仍不能完成。非 Git 仓库可以使用
+稳定的 `snapshot:<id>`；该契约不依赖 GitHub 或 GitLab。
+
 ## 三条命令验证完整链路
 
 ```bash
@@ -233,7 +249,8 @@ python3 "$EPCTL" --repo . status
 
 - R-001 是 `concluded`，Synthesis 与 manifest 都是 sealed。
 - ADR-001 是 `accepted`，并记录真实 Decision Owner。
-- EP-001 是 `active`，两个 Gate 都是 `satisfied`。
+- 实施前 EP-001 是 `active`，两个 Gate 都是 `satisfied`；真实验收和上述归档
+  命令完成后，它才是带 revision/evidence 的 sealed `completed`。
 - 两个 validate 命令没有 error。
 
 这个例子刻意保留人工编辑和明确授权步骤。Research 结论与 ADR 接受不能由演示

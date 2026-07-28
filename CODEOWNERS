@@ -1,0 +1,11 @@
+# This root location is recognized by GitHub and GitLab.
+* @XiaoWeiKIN
+
+# Contract and lifecycle changes always need the repository owner.
+/scripts/ @XiaoWeiKIN
+/engineering-research/scripts/ @XiaoWeiKIN
+/assets/ @XiaoWeiKIN
+/engineering-research/assets/ @XiaoWeiKIN
+/references/ @XiaoWeiKIN
+/engineering-research/references/ @XiaoWeiKIN
+/examples/ @XiaoWeiKIN

@@ -49,7 +49,7 @@
 | Revision Notes | 对当前事实的每次修订及原因 |
 
 使用 `assets/execplan.md` 作为唯一新建模板。新计划使用
-`schema_version: "2.2"`；v2.0/v2.1 只做兼容读取，不因普通编辑静默迁移。
+`schema_version: "2.3"`；v2.0/v2.1/v2.2 只做兼容读取，不因普通编辑静默迁移。
 
 ## Research 与 Architecture Inputs
 
@@ -99,6 +99,10 @@
 `make test` 通过只能证明测试集合通过。若目标有用户可见行为，还要提供端到端观察。
 
 根文件只保留短 transcript。完整输出写入 EP 的 `artifacts/`，用仓库相对路径引用。
+归档 completed 前，把实际运行这些验证的版本写入 `verified_revision`，把 CI
+run、日志或仓库制品写入 `verification_evidence`。字段由 `archive-ep` 填写；
+active 计划必须保持为空。归档时 CLI 还会写入 `archive_sha256`，封存 frontmatter
+和正文；后续变化必须通过新计划或明确的兼容迁移表达。
 
 ## 上下文与长期知识
 
@@ -112,7 +116,7 @@
 4. 经单独确认后更新权威文档，并优先编码为 lint/test。
 5. `AGENTS.md` 仅增加短入口，不复制规则全文。
 
-accepted ADR 的约束属于当前事实。若 ADR 后续 superseded，active v2.2
+accepted ADR 的约束属于当前事实。若 ADR 后续 superseded，active v2.2+
 ExecPlan 必须重新评估路线并更新引用、Inputs、Plan 和 Validation；验证器会拒绝
 superseded ADR 继续满足 Gate。
 

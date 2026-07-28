@@ -1,7 +1,7 @@
 ---
 name: execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务。适用于把证据转成技术架构决策和可跨会话恢复的开发计划，也适用于用户提到 EP、ExecPlan、执行计划、ADR、架构决策、拆 task、压缩计划、记录/归档 bugfix、查状态或登记技术债务。需要新的资料搜集、实验、多文档 Research corpus 或 Synthesis 时使用独立的 engineering-research skill；本 skill 只依赖版本化文件契约，不依赖其安装路径。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务。适用于把证据转成技术架构决策和可跨会话恢复的开发计划，也适用于用户提到 EP、ExecPlan、执行计划、ADR、架构决策、拆 task、压缩计划、记录/归档 bugfix、查状态、登记技术债务，或要求用 CI/契约测试防止工程文档与代码偏移。需要新的资料搜集、实验、多文档 Research corpus 或 Synthesis 时使用独立的 engineering-research skill；本 skill 只依赖版本化文件契约，不依赖其安装路径。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Execution Plan
@@ -19,7 +19,7 @@ flowchart LR
     P --> H["用户 / Decision Owner<br/>明确接受或拒绝"]
     H --> D["Accepted ADR"]
     A -->|"否，写明理由"| AG["Architecture Gate<br/>not_required"]
-    D --> EP["ExecPlan v2.2<br/>自包含开发计划"]
+    D --> EP["ExecPlan v2.3<br/>自包含计划 + 完成证明"]
     RG --> A
     AG --> EP
 ```
@@ -166,7 +166,7 @@ accepted/rejected ADR 的正文由 SHA-256 封存。方向变化时创建并接�
 1. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
 2. Architecture Gate 必须引用所有当前 accepted ADR，或提供具体 not-required 理由。
 3. ADR 引用的 Research 也必须进入 ExecPlan 的 `research_refs`。
-4. 运行 `new-ep` 创建 v2.2 目录和模板。
+4. 运行 `new-ep` 创建 v2.3 目录和模板。
 5. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
    - 支持路线的关键证据与置信边界；
    - accepted ADR 的接口、数据、运维、迁移和负面后果；
@@ -191,9 +191,10 @@ accepted/rejected ADR 的正文由 SHA-256 封存。方向变化时创建并接�
 1. 把仍有效的发现和决定吸收到当前事实。
 2. 把完整输出移到 `artifacts/`。
 3. 读取 `references/checkpoints.md`。
-4. 先运行 `checkpoint ... --dry-run`，确认后再正式封存。
-5. 保证未完成 Progress/Validation 和 open blocker 留在根文件。
-6. 只读根 `EXECPLAN.md` 做一次恢复检查。
+4. 读取 `references/integrity.md`，取得当前仓库或工作区 revision。
+5. 先运行带 `--revision` 的 `checkpoint ... --dry-run`，确认后再正式封存。
+6. 保证未完成 Progress/Validation 和 open blocker 留在根文件。
+7. 只读根 `EXECPLAN.md` 做一次恢复检查。
 
 Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 
@@ -221,7 +222,15 @@ Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 3. 确认 Task 全部 `done` / `cancelled`。
 4. 确认没有 open blocker。
 5. 填写 Outcomes & Retrospective。
-6. 运行 `validate`，再运行 `archive-ep EP-NNN --outcome completed`。
+6. 取得实际通过验证的 repository/workspace revision 和证据引用。
+7. 运行 `validate`，再运行：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \
+  --outcome completed \
+  --verified-revision "<vcs-or-snapshot-revision>" \
+  --evidence "<ci-run-or-repository-artifact>"
+```
 
 不完整计划保持 active/blocked，或在明确停止时以原因归档为 cancelled。不能靠口头确认、force 或删除验收项伪装完成。
 
@@ -232,6 +241,11 @@ Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 - `status` 汇总 Research 问题、Synthesis、ADR、Gate、验收、Task、blocker、Checkpoint 和文档大小。
 - `validate` 检查 ID、路径、状态、必需 section、引用、依赖、payload 和索引。
 - `reindex` 从事实制品重建 Research、ADR、ExecPlan 和 Bugfix 投影。
+- CI 只调用仓库内唯一检查入口；GitHub、GitLab 或其他 CI 平台不得复制校验逻辑。
+- accepted ADR 的 Confirmation 应指向测试、lint、schema check 或明确人工验收。
+- completed v2.3 EP 必须保存 `verified_revision` 和至少一个
+  `verification_evidence`，归档正文由 `archive_sha256` 封存；Checkpoint 必须
+  保存 `repository_revision`。
 
 ## 参考
 
@@ -240,5 +254,6 @@ Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 - ADR 门槛、授权、状态与 supersession → `references/adr.md`
 - ExecPlan 自包含要求与 Living Document → `references/template.md`
 - Checkpoint、压缩与恢复 → `references/checkpoints.md`
+- 文档—代码完整性、CI 适配与合并门禁 → `references/integrity.md`
 - Bugfix 字段与升级/归档 → `references/bugfix.md`
 - 完整命令、典型场景和端到端输出边界 → `references/examples.md`

@@ -18,6 +18,13 @@ FAST_TRACK_ARGS = (
     "--architecture-not-required-reason",
     "Test fixture has no durable architecture choice.",
 )
+CHECKPOINT_REVISION_ARGS = ("--revision", "test:workspace-revision")
+COMPLETION_ATTESTATION_ARGS = (
+    "--verified-revision",
+    "test:verified-revision",
+    "--evidence",
+    "test:ep-integrity",
+)
 
 
 class EpctlTestCase(unittest.TestCase):
@@ -439,7 +446,10 @@ class EpctlTestCase(unittest.TestCase):
             ).stdout.strip()
         )
         content = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.2"', content)
+        self.assertIn('schema_version: "2.3"', content)
+        self.assertIn("verified_revision:", content)
+        self.assertIn("verification_evidence: []", content)
+        self.assertIn("archive_sha256:", content)
         self.assertIn("research_gate: satisfied", content)
         self.assertIn("architecture_gate: satisfied", content)
         self.assertIn("R-001", content)
@@ -505,13 +515,14 @@ class EpctlTestCase(unittest.TestCase):
         self.init()
         plan = self.new_ep("legacy-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.2"',
+            'schema_version: "2.3"',
             'schema_version: "2.1"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:research_refs|research_gate|research_gate_reason|"
-            r"adr_refs|architecture_gate|architecture_gate_reason):.*\n",
+            r"adr_refs|architecture_gate|architecture_gate_reason|"
+            r"verified_revision|verification_evidence|archive_sha256):.*\n",
             "",
             text,
         )
@@ -532,18 +543,44 @@ class EpctlTestCase(unittest.TestCase):
         self.assertIn("RESEARCH.md: missing; run init", result.stderr)
         self.assertIn("DECISIONS.md: missing; run init", result.stderr)
 
+    def test_v22_execplan_remains_archive_compatible(self) -> None:
+        self.init()
+        plan = self.new_ep("v22-compatible")
+        text = plan.read_text(encoding="utf-8").replace(
+            'schema_version: "2.3"',
+            'schema_version: "2.2"',
+            1,
+        )
+        text = re.sub(
+            r"(?m)^(?:verified_revision|verification_evidence|"
+            r"archive_sha256):.*\n",
+            "",
+            text,
+        )
+        plan.write_text(text, encoding="utf-8")
+        self.complete_all_placeholders(plan)
+
+        archived = Path(self.run_cli("archive-ep", "EP-001").stdout.strip())
+        archived_text = archived.read_text(encoding="utf-8")
+        self.assertIn('schema_version: "2.2"', archived_text)
+        self.assertNotIn("verified_revision:", archived_text)
+        self.assertNotIn("verification_evidence:", archived_text)
+        self.assertNotIn("archive_sha256:", archived_text)
+        self.run_cli("validate")
+
     def test_v20_execplan_remains_readable_and_valid(self) -> None:
         self.init()
         plan = self.new_ep("v20-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.2"',
+            'schema_version: "2.3"',
             'schema_version: "2.0"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:latest_checkpoint|research_refs|research_gate|"
             r"research_gate_reason|adr_refs|architecture_gate|"
-            r"architecture_gate_reason):.*\n",
+            r"architecture_gate_reason|verified_revision|"
+            r"verification_evidence|archive_sha256):.*\n",
             "",
             text,
         )
@@ -721,16 +758,47 @@ class EpctlTestCase(unittest.TestCase):
     def test_completed_ep_requires_acceptance_and_archives_atomically(self) -> None:
         self.init()
         plan = self.new_ep()
-        blocked = self.run_cli("archive-ep", "EP-001", expected=2)
+        blocked = self.run_cli(
+            "archive-ep",
+            "EP-001",
+            *COMPLETION_ATTESTATION_ARGS,
+            expected=2,
+        )
         self.assertIn("incomplete acceptance", blocked.stderr)
         self.assertTrue(plan.exists())
 
         self.complete_all_placeholders(plan)
-        archived = Path(self.run_cli("archive-ep", "EP-001").stdout.strip())
+        unattested = self.run_cli("archive-ep", "EP-001", expected=2)
+        self.assertIn("requires --verified-revision", unattested.stderr)
+        archived = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
 
         self.assertTrue(archived.exists())
         self.assertFalse(plan.exists())
-        self.assertIn("status: completed", archived.read_text(encoding="utf-8"))
+        archived_text = archived.read_text(encoding="utf-8")
+        self.assertIn("status: completed", archived_text)
+        self.assertIn('verified_revision: "test:verified-revision"', archived_text)
+        self.assertIn(
+            'verification_evidence: ["test:ep-integrity"]',
+            archived_text,
+        )
+        self.assertRegex(archived_text, r"(?m)^archive_sha256: [0-9a-f]{64}$")
+        self.run_cli("validate")
+        archived.write_text(
+            archived_text.replace(
+                '"test:verified-revision"',
+                '"test:tampered-revision"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        tampered = self.run_cli("validate", expected=1)
+        self.assertIn("archived v2.3 plan changed", tampered.stderr)
         plans_index = (self.repo / "docs" / "PLANS.md").read_text(
             encoding="utf-8"
         )
@@ -785,7 +853,9 @@ class EpctlTestCase(unittest.TestCase):
         content = archived.read_text(encoding="utf-8")
         self.assertIn("status: cancelled", content)
         self.assertIn("Product direction changed", content)
+        self.assertRegex(content, r"(?m)^archive_sha256: [0-9a-f]{64}$")
         self.assertFalse(plan.exists())
+        self.run_cli("validate")
 
     def test_fixed_bugfix_requires_verification(self) -> None:
         self.init()
@@ -1017,6 +1087,7 @@ class EpctlTestCase(unittest.TestCase):
             "Milestone 1 is complete; Milestone 2 is blocked on a credential.",
             "--next-action",
             "Request the credential, then edit service/handler.py.",
+            *CHECKPOINT_REVISION_ARGS,
             "--dry-run",
         )
         payload = json.loads(result.stdout)
@@ -1045,6 +1116,7 @@ class EpctlTestCase(unittest.TestCase):
             "Milestone 1 is complete; Milestone 2 is blocked on a credential.",
             "--next-action",
             "Request the credential, then edit service/handler.py.",
+            *CHECKPOINT_REVISION_ARGS,
         )
         payload = json.loads(result.stdout)
         checkpoint = self.repo / payload["path"]
@@ -1065,6 +1137,11 @@ class EpctlTestCase(unittest.TestCase):
         self.assertIn("BLK-001 | resolved", sealed)
         self.assertIn("Keep compatibility at the boundary", sealed)
         self.assertIn("status: sealed", sealed)
+        self.assertIn('schema_version: "1.1"', sealed)
+        self.assertIn(
+            'repository_revision: "test:workspace-revision"',
+            sealed,
+        )
         validation = self.run_cli("validate")
         self.assertIn('"errors": 0', validation.stdout)
 
@@ -1091,6 +1168,7 @@ class EpctlTestCase(unittest.TestCase):
             "Milestone 1 is complete.",
             "--next-action",
             "Implement Milestone 2.",
+            *CHECKPOINT_REVISION_ARGS,
         )
         text = plan.read_text(encoding="utf-8")
         text = text.replace("- [ ]", "- [x]")
@@ -1120,6 +1198,7 @@ class EpctlTestCase(unittest.TestCase):
                 "All implementation milestones are complete.",
                 "--next-action",
                 "Run final acceptance and archive the plan.",
+                *CHECKPOINT_REVISION_ARGS,
             ).stdout
         )
         second_path = self.repo / second["path"]
@@ -1132,7 +1211,13 @@ class EpctlTestCase(unittest.TestCase):
             plan.read_text(encoding="utf-8"),
         )
 
-        archived = Path(self.run_cli("archive-ep", "EP-001").stdout.strip())
+        archived = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
 
         self.assertTrue(archived.exists())
         self.assertTrue((archived.parent / "history").is_dir())
@@ -1159,6 +1244,7 @@ class EpctlTestCase(unittest.TestCase):
                 "Milestone 1 is complete.",
                 "--next-action",
                 "Implement Milestone 2.",
+                *CHECKPOINT_REVISION_ARGS,
             ).stdout
         )
         checkpoint = self.repo / payload["path"]
@@ -1188,6 +1274,7 @@ class EpctlTestCase(unittest.TestCase):
             "The plan is not authored yet.",
             "--next-action",
             "Author the plan.",
+            *CHECKPOINT_REVISION_ARGS,
             expected=2,
         )
 

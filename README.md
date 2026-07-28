@@ -18,6 +18,10 @@ flowchart LR
     E --> C["Checkpoint<br/>封存已完成历史"]
 ```
 
+文档—代码完整性同样不依赖某个 Agent 或代码托管平台。仓库内
+`python3 -B scripts/check.py` 是唯一检查入口；GitHub Actions、GitLab CI 或
+其他 Pipeline 只负责调用它。
+
 ## 为什么拆成两个 Skill
 
 Research 与实施治理的触发条件、工具和内容增长方式不同。
@@ -265,6 +269,7 @@ python3 "$EPCTL" --repo . checkpoint EP-001 \
   --current-milestone "Milestone 2: adapter integration" \
   --summary "契约层已完成；适配层尚未实现。" \
   --next-action "编辑 src/adapter.ts 并运行 npm test。" \
+  --revision "git:<current-commit>" \
   --dry-run
 ```
 
@@ -283,10 +288,39 @@ ExecPlan 只有在验收完成、Task 终态、无 open blocker、复盘完整�
 才能完成：
 
 ```bash
-python3 "$EPCTL" --repo . archive-ep EP-001 --outcome completed
+python3 "$EPCTL" --repo . archive-ep EP-001 \
+  --outcome completed \
+  --verified-revision "git:<verified-commit>" \
+  --evidence "ci:<pipeline-or-job-url>"
 ```
 
 根索引是可重建投影；目录中的事实制品才决定真实状态。
+
+## 文档—代码完整性与 CI
+
+```mermaid
+flowchart LR
+    S["代码、Schema、模板"] --> C["scripts/check.py"]
+    D["README、Example、Research、ADR、EP"] --> C
+    C --> P["任意 CI 平台"]
+    P --> G["受保护分支的合并门禁"]
+```
+
+Canonical check 会运行两个 CLI 的测试与仓库验证、Skill 包可移植性检查、本地
+Markdown 链接检查、cache-topology 端到端契约测试，以及索引 regeneration-diff。
+CI 文件不得复制这些子命令：
+
+- GitHub 使用 `.github/workflows/integrity.yml`，将稳定的 `ep-integrity`
+  status check 设为 required。
+- GitLab 使用 `.gitlab-ci.yml`，保护默认分支、禁止直接 push，并启用
+  `Pipelines must succeed`。
+- Jenkins、Buildkite 等平台直接运行 `python3 -B scripts/check.py`。
+
+`CODEOWNERS` 位于仓库根目录，GitHub 与 GitLab 都能识别。具体审批账号和平台
+设置属于仓库治理，不属于 Skill 的安装目录。GitLab Free 可用它路由 review；
+把 Code Owner approval 设为强制需要支持该能力的 GitLab tier，CI 合并门禁不受
+此限制。完整原则见
+[文档与代码完整性](./references/integrity.md)。
 
 ## 兼容性
 
@@ -299,16 +333,10 @@ python3 "$EPCTL" --repo . archive-ep EP-001 --outcome completed
 ## 开发与验证
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover \
-  -s engineering-research/tests -p 'test_*.py' -v
-PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover \
-  -s tests -p 'test_*.py' -v
-
-python3 -B /path/to/skill-creator/scripts/quick_validate.py \
-  "$EXECUTION_PLAN_HOME/engineering-research"
-python3 -B /path/to/skill-creator/scripts/quick_validate.py \
-  "$EXECUTION_PLAN_HOME"
+python3 -B scripts/check.py
 ```
+
+该命令只依赖仓库内容和 Python 3.10+，不依赖某个 Agent 的私有 Skill 目录。
 
 ## 项目文档
 
@@ -331,6 +359,7 @@ Execution Plan：
 - [ExecPlan 规范](./references/template.md)
 - [制品路由与状态机](./references/templates.md)
 - [Checkpoint 与有界工作集](./references/checkpoints.md)
+- [文档与代码完整性](./references/integrity.md)
 - [Bugfix 规则](./references/bugfix.md)
 - [完整示例](./references/examples.md)
 

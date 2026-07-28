@@ -208,7 +208,7 @@
     {
       "id": 10,
       "prompt": "先为登录态回归建一个 BF；随后我补充确认：网关、BFF、SDK 的刷新契约都不一致，需要改公共字段。相关 Research R-003 已 concluded，ADR-002 已 accepted。把它升级成 EP，并把原 BF 正确收口。",
-      "expected_output": "引用 R-003/ADR-002 创建自包含 v2.2 EP；原 Bugfix 填写 linked_ep，终态设为 escalated，Outcome 记录跨模块/契约原因并移入 completed。后续进度只写 EP。",
+      "expected_output": "引用 R-003/ADR-002 创建自包含 v2.3 EP；原 Bugfix 填写 linked_ep，终态设为 escalated，Outcome 记录跨模块/契约原因并移入 completed。后续进度只写 EP。",
       "files": [],
       "assertions": [
         {
@@ -232,12 +232,12 @@
     {
       "id": 11,
       "prompt": "EP-023 已完成前两个里程碑，Progress、Decision Log 和已解决 blocker 很长，但第三个里程碑还在进行，也有一个 open blocker。帮我压缩根文档，不能丢历史，也不能让接手 Agent 先读一堆历史。",
-      "expected_output": "先把有效发现/决策吸收到当前事实和 Current Snapshot，再用 epctl checkpoint --dry-run 预览并建立 sealed CP-NNN。已完成进度、决策、发现和已关闭 blocker 原文进入 history；未完成进度、验收、open blocker 和准确下一动作留在根文档。完整输出进入 artifacts。",
+      "expected_output": "先把有效发现/决策吸收到当前事实和 Current Snapshot，取得当前 repository/workspace revision，再用 epctl checkpoint --revision <revision> --dry-run 预览并建立 sealed CP-NNN。已完成进度、决策、发现和已关闭 blocker 原文进入 history；未完成进度、验收、open blocker 和准确下一动作留在根文档。完整输出进入 artifacts。",
       "files": [],
       "assertions": [
         {
           "name": "creates_sealed_checkpoint",
-          "description": "创建 history/cp-NNN_slug.md，front matter 为 sealed 且带 payload_sha256"
+          "description": "创建 history/cp-NNN_slug.md，front matter 为 sealed 且带 repository_revision 和 payload_sha256"
         },
         {
           "name": "preserves_open_work_in_root",
@@ -264,12 +264,12 @@
     {
       "id": 12,
       "prompt": "仓库中 R-004 已 concluded，ADR-002 已 accepted 且没有被替代。请引用它们创建支付幂等迁移 EP，另一个没看过 Research/ADR 的 Agent 也必须能只读根计划继续。",
-      "expected_output": "创建 v2.2 ExecPlan，Research/Architecture Gate 均为 satisfied；引用 R-004/ADR-002，并在 Research and Architecture Inputs 复述证据结论、架构后果、迁移约束和剩余未知。根计划包含可执行里程碑、命令、验收和恢复方法。",
+      "expected_output": "创建 v2.3 ExecPlan，Research/Architecture Gate 均为 satisfied；引用 R-004/ADR-002，并在 Research and Architecture Inputs 复述证据结论、架构后果、迁移约束和剩余未知。根计划包含可执行里程碑、命令、验收和恢复方法。",
       "files": [],
       "assertions": [
         {
-          "name": "creates_gated_v22_plan",
-          "description": "schema_version 为 2.2，两个 Gate satisfied，引用真实 Research 和 ADR"
+          "name": "creates_gated_v23_plan",
+          "description": "schema_version 为 2.3，两个 Gate satisfied，引用真实 Research 和 ADR"
         },
         {
           "name": "restates_upstream_inputs",
@@ -332,7 +332,7 @@
     {
       "id": 15,
       "prompt": "我作为该系统的 Decision Owner，已经审阅 ADR-007，明确接受其中的 Option B。请记录这个决定，然后用 concluded R-008 和 ADR-007 创建实现 EP。",
-      "expected_output": "以用户明确给出的身份接受 ADR-007，记录 decision_maker、decided 和 sealed payload；随后创建引用 R-008/ADR-007 的 v2.2 ExecPlan，并复述 Option B 的约束与后果。",
+      "expected_output": "以用户明确给出的身份接受 ADR-007，记录 decision_maker、decided 和 sealed payload；随后创建引用 R-008/ADR-007 的 v2.3 ExecPlan，并复述 Option B 的约束与后果。",
       "files": [],
       "assertions": [
         {
@@ -356,7 +356,7 @@
     {
       "id": 16,
       "prompt": "给一个只改模块内私有 helper 名称和测试的 EP。现有测试已经完整定义行为，不改 API、数据、依赖或部署；请判断能否跳过 Research 和 ADR。",
-      "expected_output": "可以 fast track，但两个 Gate 都必须为 not_required，并分别写出可核查理由：现有测试覆盖输入，且没有长期架构级选择。仍创建自包含 v2.2 ExecPlan 和真实验收。",
+      "expected_output": "可以 fast track，但两个 Gate 都必须为 not_required，并分别写出可核查理由：现有测试覆盖输入，且没有长期架构级选择。仍创建自包含 v2.3 ExecPlan 和真实验收。",
       "files": [],
       "assertions": [
         {
@@ -394,6 +394,54 @@
         {
           "name": "records_revision",
           "description": "EP Revision Notes 说明输入变化和路线影响"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "我们不是固定用 GitHub，有些项目在 GitLab。请为仓库设计防止 ADR、EP、README 与代码偏移的机制；不要把保证绑定到某个平台。",
+      "expected_output": "把语义校验、契约测试、引用/索引检查和制品验证收敛到仓库内唯一的 provider-neutral 命令；GitHub Actions 与 GitLab CI 只调用该命令。平台侧分别把稳定检查设为受保护分支或合并请求的必需门禁，CODEOWNERS/审批只补充语义审查。完成 EP 时还必须记录真实验证过的 revision 和证据。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_one_provider_neutral_check",
+          "description": "仓库只有一个可在本地运行的权威检查入口，校验逻辑不散落在 CI YAML"
+        },
+        {
+          "name": "keeps_ci_adapters_thin",
+          "description": "GitHub Actions 和 GitLab CI 都只负责环境准备并调用同一命令"
+        },
+        {
+          "name": "requires_provider_merge_enforcement",
+          "description": "说明 GitHub required status check 与 GitLab Pipelines must succeed/protected branch 是不同平台适配，不是 skill 安装契约"
+        },
+        {
+          "name": "preserves_semantic_review_boundary",
+          "description": "机械检查负责可执行约束，CODEOWNERS 或 Decision Owner 审查负责无法机械证明的架构语义"
+        },
+        {
+          "name": "binds_completion_to_revision_and_evidence",
+          "description": "completed EP 记录被验证的 revision 与 CI run 或仓库证据，而不是只勾选复选框"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "EP-031 的所有复选框都勾完了，直接归档 completed；现在没有代码 revision，也没有 CI run 或本地验证产物可引用。",
+      "expected_output": "拒绝把 v2.3 EP 归档为 completed。复选框不是完成证明；必须先对一个明确的 repository/workspace revision 运行真实验证，并通过 --verified-revision 和至少一个 --evidence 保存可审计证据。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "rejects_unattested_completion",
+          "description": "缺少 verified revision 或 verification evidence 时不创建 completed 归档"
+        },
+        {
+          "name": "does_not_treat_checkboxes_as_proof",
+          "description": "明确区分计划中的验收声明与某个真实 revision 上的验证证据"
+        },
+        {
+          "name": "requires_auditable_evidence",
+          "description": "要求可追溯的 CI run、测试报告或仓库 artifacts，而不是口头确认"
         }
       ]
     }

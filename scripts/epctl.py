@@ -722,16 +722,25 @@ def normalize_reference_ids(values: Iterable[str], prefix: str) -> list[str]:
 
 
 def parse_reference_array(value: str, prefix: str, field: str) -> list[str]:
+    raw = parse_string_array(value, field)
+    normalized = normalize_reference_ids(raw, prefix)
+    if len(normalized) != len(raw):
+        raise EpctlError(f"{field} contains duplicate references")
+    return normalized
+
+
+def parse_string_array(value: str, field: str) -> list[str]:
     try:
         raw = json.loads(value or "[]")
     except json.JSONDecodeError as exc:
         raise EpctlError(f"{field} must be a JSON string array") from exc
     if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
         raise EpctlError(f"{field} must be a JSON string array")
-    normalized = normalize_reference_ids(raw, prefix)
-    if len(normalized) != len(raw):
-        raise EpctlError(f"{field} contains duplicate references")
-    return normalized
+    if any(not inline_text(item) for item in raw):
+        raise EpctlError(f"{field} cannot contain empty values")
+    if len(set(raw)) != len(raw):
+        raise EpctlError(f"{field} contains duplicate values")
+    return raw
 
 
 def marker_block(kind: str) -> str:
@@ -1244,6 +1253,18 @@ def frontmatter_body(text: str) -> str:
 
 def payload_sha256(text: str) -> str:
     return hashlib.sha256(frontmatter_body(text).encode("utf-8")).hexdigest()
+
+
+def canonical_document_sha256(text: str, digest_field: str) -> str:
+    candidate, count = re.subn(
+        rf"(?m)^{re.escape(digest_field)}:.*$",
+        f"{digest_field}:",
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise EpctlError(f"Missing digest field {digest_field}")
+    return hashlib.sha256(candidate.encode("utf-8")).hexdigest()
 
 
 def research_manifest_sha256(data: dict[str, object]) -> str:
@@ -1773,6 +1794,7 @@ def checkpoint_plan(
     current_milestone: str,
     summary: str,
     next_action: str,
+    revision: str,
     dry_run: bool,
 ) -> dict[str, object]:
     validate_slug(slug)
@@ -1784,6 +1806,12 @@ def checkpoint_plan(
         raise EpctlError("Checkpoint summary must not be empty")
     if not inline_text(next_action):
         raise EpctlError("Checkpoint next action must not be empty")
+    revision = inline_text(revision)
+    if not revision:
+        raise EpctlError(
+            "Checkpoint requires --revision so sealed history is bound "
+            "to a repository or workspace version"
+        )
 
     with repo_lock(repo):
         plan_path = find_plan(repo, plan_id, "active")
@@ -1791,9 +1819,9 @@ def checkpoint_plan(
             raise EpctlError("checkpoint requires a v2 EXECPLAN.md")
         text = plan_path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
-        if data.get("schema_version") not in {"2.1", "2.2"}:
+        if data.get("schema_version") not in {"2.1", "2.2", "2.3"}:
             raise EpctlError(
-                "checkpoint requires schema_version 2.1 or 2.2 "
+                "checkpoint requires schema_version 2.1, 2.2 or 2.3 "
                 "and ## Current Snapshot"
             )
         errors, _ = validate_plan(plan_path)
@@ -1879,7 +1907,7 @@ def checkpoint_plan(
                 f"- [ ] ({timestamp_string()}) "
                 f"Continue with: {inline_text(next_action)}"
             )
-        revision = (
+        revision_note = (
             f"- {timestamp_string()} — Sealed {checkpoint_id}; "
             "refreshed Current Snapshot and preserved historical detail."
         )
@@ -1897,7 +1925,7 @@ def checkpoint_plan(
             f"- None since {checkpoint_id}.",
         )
         new_root = replace_section(new_root, "Blockers", remaining_blockers)
-        new_root = replace_section(new_root, "Revision Notes", revision)
+        new_root = replace_section(new_root, "Revision Notes", revision_note)
         new_root = update_frontmatter(
             new_root,
             {
@@ -1910,10 +1938,12 @@ def checkpoint_plan(
         candidate = render_asset(
             "checkpoint.md",
             {
+                "CHECKPOINT_SCHEMA_VERSION": "1.1",
                 "CHECKPOINT_ID": checkpoint_id,
                 "PARENT_ID": plan_id.upper(),
                 "TITLE": yaml_string(inline_text(title)),
                 "PREVIOUS_CHECKPOINT": previous,
+                "REPOSITORY_REVISION": yaml_string(revision),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
                 "PAYLOAD_SHA256": "PENDING",
@@ -1936,6 +1966,7 @@ def checkpoint_plan(
             "checkpoint_id": checkpoint_id,
             "path": checkpoint_path.relative_to(repo).as_posix(),
             "previous_checkpoint": previous or None,
+            "repository_revision": revision,
             "dry_run": dry_run,
             "archived": {
                 "progress_blocks": (
@@ -2437,8 +2468,13 @@ def validate_checkpoint(
             errors.append(
                 f"{path}: frontmatter id {checkpoint_id} does not match path"
             )
-    if data.get("schema_version") != "1":
-        errors.append(f"{path}: checkpoint schema_version must be 1")
+    checkpoint_schema = data.get("schema_version", "")
+    if checkpoint_schema not in {"1", "1.1"}:
+        errors.append(f"{path}: checkpoint schema_version must be 1 or 1.1")
+    if checkpoint_schema == "1.1" and not inline_text(
+        data.get("repository_revision", "")
+    ):
+        errors.append(f"{path}: schema 1.1 checkpoint requires repository_revision")
     if data.get("parent_id") != plan_id:
         errors.append(f"{path}: parent_id must be {plan_id}")
     if data.get("status") != "sealed":
@@ -2502,9 +2538,9 @@ def validate_plan(
     plan_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "EP"))
     schema_version = data.get("schema_version", "2.0")
-    if schema_version not in {"2.0", "2.1", "2.2"}:
+    if schema_version not in {"2.0", "2.1", "2.2", "2.3"}:
         errors.append(f"{path}: unsupported schema_version {schema_version!r}")
-    if schema_version in {"2.1", "2.2"}:
+    if schema_version in {"2.1", "2.2", "2.3"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V21_SECTIONS)
         )
@@ -2515,7 +2551,7 @@ def validate_plan(
             f"{path}: v2.0 plan has no bounded checkpoint model; "
             "add schema_version 2.1 and ## Current Snapshot before checkpointing"
         )
-    if schema_version == "2.2":
+    if schema_version in {"2.2", "2.3"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V22_SECTIONS)
         )
@@ -2634,6 +2670,64 @@ def validate_plan(
     completing = archive_status == "completed" or (
         archive_status is None and status == "completed"
     )
+    if schema_version == "2.3":
+        if "verified_revision" not in data:
+            errors.append(f"{path}: missing frontmatter field verified_revision")
+        if "verification_evidence" not in data:
+            errors.append(f"{path}: missing frontmatter field verification_evidence")
+        if "archive_sha256" not in data:
+            errors.append(f"{path}: missing frontmatter field archive_sha256")
+        try:
+            verification_evidence = parse_string_array(
+                data.get("verification_evidence", ""),
+                "verification_evidence",
+            )
+        except EpctlError as exc:
+            errors.append(f"{path}: {exc}")
+            verification_evidence = []
+        verified_revision = inline_text(data.get("verified_revision", ""))
+        if completing:
+            if not verified_revision:
+                errors.append(
+                    f"{path}: completed v2.3 plan requires verified_revision"
+                )
+            if not verification_evidence:
+                errors.append(
+                    f"{path}: completed v2.3 plan requires verification_evidence"
+                )
+        elif status in PLAN_ACTIVE_STATUSES and (
+            verified_revision or verification_evidence
+        ):
+            errors.append(
+                f"{path}: active v2.3 plan cannot carry completion attestation"
+            )
+        sealed = (
+            location == "completed"
+            or archive_status in PLAN_COMPLETED_STATUSES
+        )
+        archive_digest = data.get("archive_sha256", "")
+        if sealed:
+            if not re.fullmatch(r"[0-9a-f]{64}", archive_digest):
+                errors.append(f"{path}: archived v2.3 plan requires archive_sha256")
+            else:
+                try:
+                    actual_archive_digest = canonical_document_sha256(
+                        text,
+                        "archive_sha256",
+                    )
+                except EpctlError as exc:
+                    errors.append(f"{path}: {exc}")
+                else:
+                    if archive_digest != actual_archive_digest:
+                        errors.append(
+                            f"{path}: archived v2.3 plan changed "
+                            f"(expected {archive_digest}, "
+                            f"got {actual_archive_digest})"
+                        )
+        elif archive_digest:
+            errors.append(
+                f"{path}: active v2.3 plan cannot carry archive_sha256"
+            )
     if completing and acceptance and not all(acceptance):
         errors.append(f"{path}: incomplete acceptance blocks completion")
     blockers = unresolved_blockers(text)
@@ -2719,7 +2813,7 @@ def validate_plan(
         errors.append(
             f"{path}: Current Snapshot must link {latest_checkpoint}"
         )
-    if schema_version in {"2.1", "2.2"} and not re.search(
+    if schema_version in {"2.1", "2.2", "2.3"} and not re.search(
         r"(?im)^-\s+Next action:\s+\S",
         snapshot,
     ):
@@ -3351,6 +3445,8 @@ def archive_ep(
     plan_id: str,
     outcome: str,
     reason: str,
+    verified_revision: str,
+    evidence: Iterable[str],
 ) -> Path:
     with repo_lock(repo):
         path = find_plan(repo, plan_id, "active")
@@ -3363,15 +3459,49 @@ def archive_ep(
             raise EpctlError("EP outcome must be completed or cancelled")
         if outcome == "cancelled" and not reason.strip():
             raise EpctlError("Cancelled EP requires --reason")
+        verified_revision = inline_text(verified_revision)
+        verification_evidence = [inline_text(item) for item in evidence]
+        if any(not item for item in verification_evidence):
+            raise EpctlError("--evidence cannot be empty")
+        if len(set(verification_evidence)) != len(verification_evidence):
+            raise EpctlError("--evidence values must be unique")
+        if outcome == "cancelled" and (
+            verified_revision or verification_evidence
+        ):
+            raise EpctlError(
+                "--verified-revision and --evidence are valid only "
+                "for completed EPs"
+            )
         text = path.read_text(encoding="utf-8")
+        data, _, _ = parse_frontmatter(text)
+        is_v23 = data.get("schema_version") == "2.3"
+        if outcome == "completed" and is_v23:
+            if not verified_revision:
+                raise EpctlError(
+                    "Completed v2.3 EP requires --verified-revision"
+                )
+            if not verification_evidence:
+                raise EpctlError(
+                    "Completed v2.3 EP requires at least one --evidence"
+                )
         container = path.parent
         destination = repo / "docs" / "exec-plans" / "completed" / container.name
         reject_symlink_path(repo, destination)
         if destination.exists():
             raise EpctlError(f"Archive destination exists: {destination}")
-        new_text = update_frontmatter(
-            text, {"status": outcome, "updated": date_string()}
-        ).replace(
+        updates = {"status": outcome, "updated": date_string()}
+        if is_v23 and outcome == "completed":
+            updates["verified_revision"] = json.dumps(
+                verified_revision,
+                ensure_ascii=False,
+            )
+            updates["verification_evidence"] = json.dumps(
+                verification_evidence,
+                ensure_ascii=False,
+            )
+        if is_v23:
+            updates["archive_sha256"] = ""
+        new_text = update_frontmatter(text, updates).replace(
             f"docs/exec-plans/active/{container.name}",
             f"docs/exec-plans/completed/{container.name}",
         )
@@ -3382,6 +3512,15 @@ def archive_ep(
                 "REQUIRED_AT_COMPLETION",
                 "Cancelled",
                 reason.strip(),
+            )
+        if is_v23:
+            archive_digest = canonical_document_sha256(
+                new_text,
+                "archive_sha256",
+            )
+            new_text = update_frontmatter(
+                new_text,
+                {"archive_sha256": archive_digest},
             )
         snapshots = managed_index_snapshots(repo)
         atomic_write(path, new_text)
@@ -3719,7 +3858,10 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="ADR-NNN",
     )
 
-    ep = sub.add_parser("new-ep", help="Create a gated v2.2 ExecPlan")
+    ep = sub.add_parser(
+        "new-ep",
+        help="Create a gated v2.3 ExecPlan with completion attestation fields",
+    )
     ep.add_argument("--slug", required=True)
     ep.add_argument("--title", required=True)
     ep.add_argument("--owner", default="")
@@ -3768,6 +3910,14 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--current-milestone", required=True)
     checkpoint.add_argument("--summary", required=True)
     checkpoint.add_argument("--next-action", required=True)
+    checkpoint.add_argument(
+        "--revision",
+        required=True,
+        help=(
+            "Repository or workspace revision represented by this checkpoint, "
+            "for example git:<sha> or snapshot:<id>"
+        ),
+    )
     checkpoint.add_argument("--dry-run", action="store_true")
 
     validate_parser = sub.add_parser(
@@ -3794,6 +3944,17 @@ def build_parser() -> argparse.ArgumentParser:
         default="completed",
     )
     archive_plan.add_argument("--reason", default="")
+    archive_plan.add_argument(
+        "--verified-revision",
+        default="",
+        help="Repository or workspace revision that passed final verification",
+    )
+    archive_plan.add_argument(
+        "--evidence",
+        action="append",
+        default=[],
+        help="Verification artifact or CI reference; repeat for multiple items",
+    )
     archive_bug = sub.add_parser(
         "archive-bugfix", help="Archive a fixed, escalated or cancelled bugfix"
     )
@@ -3886,6 +4047,7 @@ def main(argv: list[str] | None = None) -> int:
                         args.current_milestone,
                         args.summary,
                         args.next_action,
+                        args.revision,
                         args.dry_run,
                     ),
                     ensure_ascii=False,
@@ -3915,7 +4077,16 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "status":
             print_status(repo, args.as_json)
         elif args.command == "archive-ep":
-            print(archive_ep(repo, args.plan_id, args.outcome, args.reason))
+            print(
+                archive_ep(
+                    repo,
+                    args.plan_id,
+                    args.outcome,
+                    args.reason,
+                    args.verified_revision,
+                    args.evidence,
+                )
+            )
         elif args.command == "archive-bugfix":
             print(
                 archive_bugfix(

@@ -44,6 +44,8 @@ ep-NNN_slug/
 4. 确认每条 Progress 使用 `[x]` / `[ ]` 表达完成状态。
 5. 确认 blocker 使用 `open` / `resolved` / `dismissed`。
 6. 删除所有 `<!-- REQUIRED... -->` 占位符并运行 `validate`。
+7. 取得当前 repository/workspace revision；Git 可使用 `git:<sha>`，其他
+   VCS 或构建系统使用稳定的 `snapshot:<id>`。
 
 语义摘要由 Agent 编写，脚本不自动推断关键决策。
 
@@ -58,6 +60,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . checkpoint EP-023 \
   --current-milestone "Milestone 2: adapter integration" \
   --summary "契约层已完成；适配层仍待实现。" \
   --next-action "编辑 src/adapter.ts 并运行 npm test。" \
+  --revision "git:<current-commit>" \
   --dry-run
 ```
 
@@ -68,6 +71,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . checkpoint EP-023 \
 - 只封存 `resolved` / `dismissed` blocker，保留 `open` blocker。
 - 封存 Revision Notes。
 - 更新 `Current Snapshot`、`latest_checkpoint` 和索引更新时间。
+- 记录 `repository_revision`，说明历史对应的代码或工作区版本。
 - 为 checkpoint payload 写入 SHA-256；后续编辑会使 `validate` 失败。
 
 ## 永远留在根文档的内容

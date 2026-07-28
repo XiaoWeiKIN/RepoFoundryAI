@@ -1,0 +1,51 @@
+name: integrity
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "23 17 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integrity-python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.14"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run the provider-neutral integrity contract
+        run: python3 -B scripts/check.py
+
+  ep-integrity:
+    name: ep-integrity
+    if: always()
+    needs:
+      - integrity-python
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Python contract job to pass
+        env:
+          RESULT: ${{ needs.integrity-python.result }}
+        run: test "$RESULT" = "success"

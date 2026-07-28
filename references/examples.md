@@ -160,6 +160,7 @@ python3 <execution-plan-dir>/scripts/epctl.py --repo . checkpoint EP-001 \
   --current-milestone "Milestone 2: adapter integration" \
   --summary "契约层已完成；适配层尚未实现。" \
   --next-action "编辑 src/adapter.ts 并运行 npm test。" \
+  --revision "git:<current-commit>" \
   --dry-run
 ```
 
@@ -170,10 +171,13 @@ python3 <execution-plan-dir>/scripts/epctl.py --repo . checkpoint EP-001 \
 ```bash
 python3 <execution-plan-dir>/scripts/epctl.py --repo . validate
 python3 <execution-plan-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
-  --outcome completed
+  --outcome completed \
+  --verified-revision "git:<verified-commit>" \
+  --evidence "ci:<pipeline-or-job-url>"
 ```
 
-未完成验收、非终态 Task、open blocker 或未填写复盘都会阻止 completed。明确停止时可以：
+未完成验收、非终态 Task、open blocker、未填写复盘或缺少 revision/evidence
+都会阻止 v2.3 completed。明确停止时可以：
 
 ```bash
 python3 <execution-plan-dir>/scripts/epctl.py --repo . archive-ep EP-001 \

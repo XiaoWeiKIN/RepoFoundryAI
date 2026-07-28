@@ -1,5 +1,5 @@
 ---
-schema_version: "2.2"
+schema_version: "2.3"
 id: {{ID}}
 title: "{{TITLE}}"
 status: active
@@ -10,6 +10,9 @@ research_gate_reason: "{{RESEARCH_GATE_REASON}}"
 adr_refs: {{ADR_REFS}}
 architecture_gate: {{ARCHITECTURE_GATE}}
 architecture_gate_reason: "{{ARCHITECTURE_GATE_REASON}}"
+verified_revision:
+verification_evidence: []
+archive_sha256:
 created: {{DATE}}
 updated: {{DATE}}
 owner: "{{OWNER}}"
@@ -72,6 +75,10 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 <!-- REQUIRED: Replace every placeholder with observable behavior, exact commands, expected results, and evidence. -->
 
 - [ ] From `<repo-root>`, run `<command>`; expect `<observable result>`. Evidence: `<path or concise transcript>`.
+
+Completion writes `verified_revision` and `verification_evidence` through
+`archive-ep`. Archival also seals the complete document with `archive_sha256`;
+do not pre-fill these fields while the plan is active.
 
 ## Idempotence and Recovery
 
