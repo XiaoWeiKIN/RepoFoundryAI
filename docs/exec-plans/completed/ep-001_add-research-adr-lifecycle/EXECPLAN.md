@@ -2,7 +2,7 @@
 schema_version: "2.1"
 id: EP-001
 title: "Add research and ADR lifecycle"
-status: active
+status: completed
 latest_checkpoint:
 created: 2026-07-28
 updated: 2026-07-28
@@ -39,9 +39,10 @@ v2.1 ExecPlans continue to validate, checkpoint and archive.
   documentation and UI metadata are implemented. All 30 unit tests and static
   skill validation pass. The isolated fresh-Agent lifecycle also passed with
   `0 errors / 0 warnings` and no product-code changes. Installed and legacy
-  skill copies now exactly match the verified source.
-- Next action: Publish the implementation commit, verify the clean tree, then
-  complete and archive EP-001 in a final lifecycle commit.
+  skill copies exactly match the verified source. Implementation commit
+  `23984ff` is published to `origin/main`, and the post-push tree was clean.
+- Next action: Archive EP-001 as completed and publish the lifecycle-only
+  archive commit.
 - Open blockers: none.
 
 ## Context and Orientation
@@ -198,8 +199,8 @@ Run all commands from `/Users/wangxiaowei1/x-otel/ExecutionPlan`.
   suite exit 0.
 - [x] An isolated fresh-Agent workflow produces valid Research, Synthesis, ADR
   and ExecPlan artifacts without changing unrelated product files.
-- [ ] Source and installed skill copies match, and the final Git working tree is
-  clean after publishing.
+- [x] Source and installed skill copies match, and the implementation Git tree
+  was clean after publishing.
 
 ## Idempotence and Recovery
 
@@ -243,8 +244,9 @@ repository remains the recoverable source of truth.
   `/Users/wangxiaowei1/.codex/skills/execution-plan` and the legacy
   `x-otel/datafox-skill/execution-plan` mirror. Directory parity, quick
   validation and the installed copy's 30-test suite all pass.
-- [ ] Complete Milestone 3 documentation, regression, forward test, sync and
-  release.
+- [x] (2026-07-28T07:17:59Z) Completed Milestone 3 and published implementation
+  commit `23984ff` to `origin/main`; local HEAD and `origin/main` matched with a
+  clean post-push working tree.
 
 ## Surprises & Discoveries
 
@@ -288,12 +290,36 @@ repository remains the recoverable source of truth.
 
 ## Outcomes & Retrospective
 
-EP-001 is active. Outcomes will compare the shipped lifecycle with the Purpose,
-including compatibility results, forward-test behavior and any remaining gaps.
+The skill now supports the complete Research → Synthesis → ADR → ExecPlan
+lifecycle:
+
+- complex work defaults to a bounded Research package with explicit questions,
+  focused notes, externalized raw evidence and a separately sealed Synthesis;
+- Agents may propose ADRs, while accepted/rejected transitions record explicit
+  decision authority and seal the decided body;
+- v2.2 ExecPlans require valid Research/Architecture Gates and restate upstream
+  conclusions and consequences;
+- `status`, `reindex`, `validate --fix-index`, high-water IDs and transactional
+  rollback cover the new artifacts;
+- Checkpoint continues to bound a growing root EP, while v2.0/v2.1 plans remain
+  readable and usable.
+
+Evidence includes 30 passing unit tests, 17 behavior evals, two successful
+`quick_validate.py` checks on consumer copies, exact directory parity, and a
+context-isolated full lifecycle with `0 errors / 0 warnings`. The forward Agent
+preserved product hashes and produced a self-contained implementation plan
+without reading this EP.
+
+No known functional gap remains in the approved scope. Semantic evidence
+quality and actual ADR authority still require Agent judgment; the script
+deliberately validates explicit structure and recorded status rather than
+pretending it can infer human intent.
 
 ### Knowledge promotion candidates
 
-- None yet.
+- The reusable lifecycle, Gate and bounded-document rules are already promoted
+  into `SKILL.md`, `references/`, templates, tests and evals in this change.
+  No additional `AGENTS.md` rule is needed.
 
 ## Interfaces and Dependencies
 
@@ -320,7 +346,7 @@ matching the existing Checkpoint approach.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-001_add-research-adr-lifecycle/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-001_add-research-adr-lifecycle/EXECPLAN.md`
 - Full logs, traces, screenshots and generated evidence belong under
   `artifacts/`; keep only concise observations and paths here.
 - Approved design sources:
@@ -342,3 +368,6 @@ matching the existing Checkpoint approach.
 - 2026-07-28T07:17:06Z — Verified exact parity for all managed skill files in
   both consumer locations and advanced to the two-step implementation/lifecycle
   publication sequence.
+- 2026-07-28T07:17:59Z — Published implementation commit `23984ff`, verified
+  `HEAD == origin/main` and a clean tree, completed all acceptance criteria and
+  prepared EP-001 for strict archive.
