@@ -25,4 +25,5 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 <!-- ADRCTL:COMPLETED:START -->
 | ID | Title | Status | Updated | Research | Superseded By | Path |
 |---|---|---|---|---|---|---|
+| ADR-001 | Separate engineering research from execution planning | accepted | 2026-07-28 | ["R-001"] |  | [ADR](adr/adr-001_split-engineering-research.md) |
 <!-- ADRCTL:COMPLETED:END -->

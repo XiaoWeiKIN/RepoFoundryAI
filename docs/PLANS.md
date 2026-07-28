@@ -23,4 +23,5 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
 | EP-001 | Add research and ADR lifecycle | completed | 2026-07-28 | [EXECPLAN](exec-plans/completed/ep-001_add-research-adr-lifecycle/EXECPLAN.md) |
+| EP-002 | Split engineering research from execution planning | completed | 2026-07-28 | [EXECPLAN](exec-plans/completed/ep-002_split-engineering-research/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->

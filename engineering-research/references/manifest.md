@@ -1,0 +1,135 @@
+# Research manifest contract
+
+## Contents
+
+- Role and compatibility
+- Schema
+- Path resolution
+- Discovery and refresh
+- Reference diagnostics
+- Sealing and snapshots
+- Consumer requirements
+
+## Role and compatibility
+
+`RESEARCH_MANIFEST.json` makes a Research document set explicit. Controller
+schema 1 packages without a manifest are legacy-compatible inputs, but new
+Engineering Research packages always contain one.
+
+The JSON file is UTF-8, formatted deterministically, and uses only standard
+JSON types.
+
+## Schema
+
+Top-level fields:
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Contract version string; initially `"1"` |
+| `research_id` | Parent `R-NNN` |
+| `status` | `active` or `sealed` |
+| `mode` | `managed`, `linked`, or `snapshot` |
+| `roots` | Declared discovery roots |
+| `entrypoints` | Normalized entrypoint paths |
+| `documents` | Deterministic document inventory |
+| `payload_sha256` | Empty while active; canonical manifest digest when sealed |
+
+An active root contains:
+
+```json
+{
+  "base": "package",
+  "path": "notes",
+  "include": ["**/*.md"]
+}
+```
+
+`base` is `package` for managed content or `repo` for linked content. Paths
+always use `/` and contain no `.` or `..` components.
+
+An active document contains:
+
+```json
+{
+  "base": "repo",
+  "path": "_research/topic/index.md",
+  "role": "entrypoint",
+  "bytes": 1200,
+  "sha256": "..."
+}
+```
+
+A snapshotted document additionally retains `source_path` for provenance while
+`base` becomes `package` and `path` points under
+`artifacts/research-snapshot/`.
+
+## Path resolution
+
+- `repo` paths resolve from the target repository root.
+- `package` paths resolve from the directory containing `RESEARCH.md`.
+- CLI input may be absolute only if the resolved target remains inside the
+  repository.
+- Persisted paths are relative POSIX paths.
+- Reject traversal, symlinked components, symlinked files, directories outside
+  the repository, duplicate documents, and files outside declared roots.
+
+## Discovery and refresh
+
+`sync-research` expands each root's include patterns, sorts paths
+lexicographically, computes byte size and SHA-256, assigns the entrypoint role,
+and atomically replaces the active manifest.
+
+Validation rescans active roots. A changed membership set, size, or digest is
+manifest drift. Refresh is explicit so users can review new or removed
+documents.
+
+Default discovery is `**/*.md`. Repeat `--include` to use a different declared
+set. Raw artifacts are not implicitly members.
+
+## Reference diagnostics
+
+For each Markdown document:
+
+- validate relative Markdown links and repository-relative local links;
+- ignore URL, mail, fragment-only, and data links;
+- strip query and fragment suffixes before local resolution;
+- inspect flat `inputDocuments` frontmatter lists;
+- report missing repository paths as errors;
+- report absolute workstation paths as portability warnings, even when they
+  currently exist.
+
+References outside the manifest may be valid source evidence; they need not be
+added automatically. The check proves the target exists, not that its claim is
+correct.
+
+## Sealing and snapshots
+
+Managed conclusion hashes documents in place. Linked conclusion copies every
+declared document into a temporary directory below
+`artifacts/research-snapshot/`, preserving root-relative structure. Only after
+all copies and hashes validate does the command replace the final snapshot.
+
+The sealed manifest:
+
+- uses `status: sealed`;
+- uses `mode: snapshot` for formerly linked content;
+- resolves every auditable document from the package;
+- retains original repository paths as `source_path`;
+- records every byte count and SHA-256;
+- stores `payload_sha256`, calculated from canonical JSON with
+  `payload_sha256` treated as an empty string.
+
+Changing a sealed document, inventory field, root, entrypoint, or digest causes
+validation failure.
+
+## Consumer requirements
+
+A consumer such as `execution-plan`:
+
+1. locates concluded Research through its controller;
+2. validates the sealed Synthesis body digest;
+3. when `manifest` is present, requires a sealed supported manifest;
+4. validates manifest identity, canonical payload digest, document existence,
+   and per-document digests;
+5. may accept legacy concluded packages without a manifest;
+6. never assumes the producer skill is installed.

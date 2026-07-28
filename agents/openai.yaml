@@ -1,4 +1,4 @@
 interface:
   display_name: "Execution Plan"
-  short_description: "编排 Research、ADR 与有界 ExecPlan 工程生命周期"
-  default_prompt: "Use $execution-plan to research this feature, synthesize evidence, record the authorized architecture decision, and create a gated implementation plan."
+  short_description: "Turn sealed research into ADRs and executable plans"
+  default_prompt: "Use $execution-plan to turn sealed engineering research into an authorized architecture decision and a resumable implementation plan."

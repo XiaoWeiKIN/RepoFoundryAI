@@ -1246,6 +1246,149 @@ def payload_sha256(text: str) -> str:
     return hashlib.sha256(frontmatter_body(text).encode("utf-8")).hexdigest()
 
 
+def research_manifest_sha256(data: dict[str, object]) -> str:
+    payload = json.loads(json.dumps(data))
+    payload["payload_sha256"] = ""
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def research_manifest_locator_path(
+    repo: Path,
+    package: Path,
+    locator: dict[str, object],
+) -> Path:
+    base = locator.get("base")
+    raw_path = locator.get("path")
+    if base not in {"repo", "package"} or not isinstance(raw_path, str):
+        raise EpctlError(f"invalid Research manifest locator: {locator!r}")
+    relative = Path(raw_path)
+    if relative.is_absolute() or any(
+        component in {"", ".", ".."} for component in relative.parts
+    ):
+        raise EpctlError(f"unsafe Research manifest path: {raw_path!r}")
+    root = repo if base == "repo" else package
+    candidate = root / relative
+    reject_symlink_path(repo, candidate)
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise EpctlError(
+            f"Research manifest document does not exist: {candidate}"
+        ) from exc
+    try:
+        resolved.relative_to(repo)
+    except ValueError as exc:
+        raise EpctlError(
+            f"Research manifest document escapes repository: {candidate}"
+        ) from exc
+    if not resolved.is_file():
+        raise EpctlError(f"Research manifest document is not a file: {candidate}")
+    return resolved
+
+
+def validate_research_manifest(
+    repo: Path,
+    path: Path,
+    parent_id: str,
+    require_sealed: bool,
+) -> list[str]:
+    errors: list[str] = []
+    if not path.is_file():
+        return [f"{path}: missing Research manifest"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"{path}: invalid Research manifest: {exc}"]
+    if not isinstance(data, dict):
+        return [f"{path}: Research manifest must be an object"]
+    if data.get("schema_version") != "1":
+        errors.append(f"{path}: Research manifest schema_version must be 1")
+    if data.get("research_id") != parent_id:
+        errors.append(f"{path}: research_id must be {parent_id}")
+    status = data.get("status")
+    mode = data.get("mode")
+    if status not in {"active", "sealed"}:
+        errors.append(f"{path}: invalid Research manifest status {status!r}")
+    if mode not in {"managed", "linked", "snapshot"}:
+        errors.append(f"{path}: invalid Research manifest mode {mode!r}")
+    if require_sealed and status != "sealed":
+        errors.append(f"{path}: concluded Research requires sealed manifest")
+    documents = data.get("documents")
+    entrypoints = data.get("entrypoints")
+    if not isinstance(documents, list):
+        errors.append(f"{path}: documents must be an array")
+        documents = []
+    if not isinstance(entrypoints, list):
+        errors.append(f"{path}: entrypoints must be an array")
+        entrypoints = []
+    if status == "sealed":
+        expected = data.get("payload_sha256")
+        actual = research_manifest_sha256(data)
+        if not isinstance(expected, str) or not expected:
+            errors.append(f"{path}: sealed manifest requires payload_sha256")
+        elif expected != actual:
+            errors.append(
+                f"{path}: sealed Research manifest payload changed "
+                f"(expected {expected}, got {actual})"
+            )
+        seen: set[tuple[str, str]] = set()
+        for document in documents:
+            if not isinstance(document, dict):
+                errors.append(f"{path}: manifest document must be an object")
+                continue
+            base = document.get("base")
+            raw_document_path = document.get("path")
+            key = (str(base), str(raw_document_path))
+            if key in seen:
+                errors.append(f"{path}: duplicate manifest document {key}")
+            seen.add(key)
+            if require_sealed and base != "package":
+                errors.append(
+                    f"{path}: concluded manifest documents must be package-relative"
+                )
+            try:
+                document_path = research_manifest_locator_path(
+                    repo, path.parent, document
+                )
+            except EpctlError as exc:
+                errors.append(f"{path}: {exc}")
+                continue
+            expected_hash = document.get("sha256")
+            expected_bytes = document.get("bytes")
+            actual_hash = hashlib.sha256(document_path.read_bytes()).hexdigest()
+            actual_bytes = document_path.stat().st_size
+            if expected_hash != actual_hash:
+                errors.append(f"{document_path}: sealed document digest changed")
+            if expected_bytes != actual_bytes:
+                errors.append(f"{document_path}: sealed document size changed")
+        entrypoint_keys: set[tuple[str, str]] = set()
+        for entrypoint in entrypoints:
+            if not isinstance(entrypoint, dict):
+                errors.append(f"{path}: manifest entrypoint must be an object")
+                continue
+            entrypoint_keys.add(
+                (str(entrypoint.get("base")), str(entrypoint.get("path")))
+            )
+        missing_entrypoints = entrypoint_keys - seen
+        if missing_entrypoints:
+            errors.append(
+                f"{path}: entrypoints are absent from documents: "
+                + ", ".join(
+                    f"{base}:{document_path}"
+                    for base, document_path in sorted(missing_entrypoints)
+                )
+            )
+    elif data.get("payload_sha256"):
+        errors.append(f"{path}: active manifest cannot have payload_sha256")
+    return errors
+
+
 def history_event_count(text: str) -> int:
     count = 0
     for heading in (
@@ -2090,6 +2233,21 @@ def validate_research(
     )
     errors.extend(synthesis_errors)
     warnings.extend(synthesis_warnings)
+    manifest_name = data.get("manifest", "")
+    if manifest_name:
+        if manifest_name != "RESEARCH_MANIFEST.json":
+            errors.append(
+                f"{path}: manifest must be RESEARCH_MANIFEST.json"
+            )
+        else:
+            errors.extend(
+                validate_research_manifest(
+                    repository_from_artifact(path),
+                    path.parent / manifest_name,
+                    research_id,
+                    require_sealed=concluding,
+                )
+            )
     if concluding:
         if open_questions:
             errors.append(

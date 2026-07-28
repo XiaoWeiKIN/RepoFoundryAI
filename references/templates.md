@@ -6,8 +6,8 @@
 |---|---|---|
 | 线程内轻量计划 | 范围局部、上下文明确、无需恢复 | 降低记录成本 |
 | Bugfix | 用户明确要求记录局部既有行为缺陷 | 保存问题闭环和验证证据 |
-| Research | 决策相关事实不清，需要比较、实验或外部证据 | 把未知转成可追溯结论 |
-| Synthesis | Research 已具备决策输入 | 为 ADR/EP 提供有界结论 |
+| Research | 决策相关事实不清，需要比较、实验或外部证据 | 由 `engineering-research` 把未知转成可追溯 corpus |
+| Synthesis | Research 已具备决策输入 | 作为两个 Skill 之间的有界、sealed 契约 |
 | ADR | 架构级选择会形成长期约束 | 保存选择、后果和确认方式 |
 | ExecPlan | 已知方向需要跨模块、多里程碑或跨会话实施 | 让无历史会话的 Agent 可执行 |
 
@@ -20,7 +20,7 @@
 ```mermaid
 flowchart TD
     W["工程工作"] --> U{"决策相关未知？"}
-    U -->|"是"| R["Research + Synthesis"]
+    U -->|"是"| R["engineering-research<br/>Research + Synthesis"]
     U -->|"否，记录理由"| A
     R --> A{"架构级选择？"}
     A -->|"是"| ADR["Proposed ADR → 明确决定"]
@@ -38,6 +38,10 @@ flowchart TD
 - 需要比较库、协议、架构、迁移方案或成本。
 - 需要 prototype、spike、benchmark、trace 或真实系统观察。
 - 结论涉及公共契约、安全、可靠性、数据或高逆转成本。
+
+需要新建、接管或维护 Research 时切换到独立的
+`engineering-research` Skill。本 Skill 从 concluded Research 的文件契约开始，
+不负责证据采集或 corpus authoring。
 
 可跳过 Research：
 
@@ -144,6 +148,7 @@ stateDiagram-v2
 - `RESEARCH.md`、`DECISIONS.md`、`PLANS.md`、`BUGFIXES.md` 的托管区可由 `reindex` 重建，人工区必须保留。
 - 新 ExecPlan 使用 `schema_version: "2.2"`，明确两个 Gate、引用数组和 `Research and Architecture Inputs`。
 - Research Gate 只接受 valid + concluded Research；Architecture Gate 只接受 valid + accepted + current ADR。
+- manifest-bearing Research 还必须具有 sealed、摘要一致且文档完整的受支持 manifest；无 manifest 的旧包继续走兼容路径。
 - Gate 可以为 `not_required`，但必须有理由，且不能同时保留引用。
 - ADR 引用的 Research 必须同时进入 ExecPlan。
 - sealed Synthesis、decided ADR 和 Checkpoint 使用 Markdown body SHA-256 检测篡改。
@@ -162,3 +167,5 @@ stateDiagram-v2
 - 新建统一使用 v2.2 `ep-NNN_slug/EXECPLAN.md`。
 - 修改旧制品时保留原格式；用户要求迁移时先建立可恢复点，再合并当前事实与历史。
 - 旧 `docs/tech-debt-tracker.md` 继续读取；新仓库使用 `docs/exec-plans/tech-debt-tracker.md`。
+- `epctl` 中旧 Research 生产命令暂时保留，但新 Research 的主路径是
+  `engineering-research`；不要把兼容命令解释成新的职责归属。

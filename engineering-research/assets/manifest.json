@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "research_id": "{{ID}}",
+  "status": "active",
+  "mode": "{{MODE}}",
+  "roots": {{ROOTS_JSON}},
+  "entrypoints": {{ENTRYPOINTS_JSON}},
+  "documents": [],
+  "payload_sha256": ""
+}

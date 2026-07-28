@@ -25,4 +25,5 @@ Research packages. Each concluded package contains a sealed `SYNTHESIS.md`.
 <!-- RCTL:COMPLETED:START -->
 | ID | Title | Status | Updated | Synthesis | Path |
 |---|---|---|---|---|---|
+| R-001 | Model multi-document Research workspaces | concluded | 2026-07-28 | [Synthesis](research/completed/r-001_multi-document-research/SYNTHESIS.md) | [Research](research/completed/r-001_multi-document-research/RESEARCH.md) |
 <!-- RCTL:COMPLETED:END -->

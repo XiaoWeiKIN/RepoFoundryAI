@@ -1,7 +1,7 @@
 ---
 name: execution-plan
 description: |
-  创建和维护仓库内的 Research、Synthesis、ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务。适用于先调研功能与方案、总结证据、形成技术架构决策，再建立可跨会话恢复的开发计划；也适用于用户提到 EP、ExecPlan、执行计划、Research、技术调研、ADR、架构决策、拆 task、压缩计划、记录/归档 bugfix、查状态或登记技术债务。复杂功能默认先 Research；ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务。适用于把证据转成技术架构决策和可跨会话恢复的开发计划，也适用于用户提到 EP、ExecPlan、执行计划、ADR、架构决策、拆 task、压缩计划、记录/归档 bugfix、查状态或登记技术债务。需要新的资料搜集、实验、多文档 Research corpus 或 Synthesis 时使用独立的 engineering-research skill；本 skill 只依赖版本化文件契约，不依赖其安装路径。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Execution Plan
@@ -11,8 +11,8 @@ description: |
 ```mermaid
 flowchart LR
     F["功能目标"] --> Q{"存在决策相关未知？"}
-    Q -->|"是"| R["Research<br/>问题、证据、实验"]
-    R --> S["Sealed Synthesis<br/>决策级结论"]
+    Q -->|"是"| R["engineering-research 或兼容生产者<br/>问题、证据、多文档 corpus"]
+    R --> S["Sealed Manifest + Synthesis<br/>版本化文件契约"]
     Q -->|"否，写明理由"| RG["Research Gate<br/>not_required"]
     S --> A{"存在架构级选择？"}
     A -->|"是"| P["Proposed ADR"]
@@ -24,7 +24,10 @@ flowchart LR
     AG --> EP
 ```
 
-Research 负责减少未知，Synthesis 负责压缩证据，ADR 负责保存长期决定，ExecPlan 负责把已决定的方向变成可执行计划。引用提供审计链；下游制品仍需复述执行所需的结论和约束。
+Engineering Research 负责减少未知并输出 sealed Manifest/Synthesis；本 skill
+从该文件契约开始，负责 ADR、ExecPlan 和实施生命周期。生产者可以是
+`engineering-research`、BMAD、其他 Deep Research 工具或人工流程，只要制品满足
+契约。引用提供审计链；下游制品仍需复述执行所需的结论和约束。
 
 ## 制品路由
 
@@ -32,11 +35,13 @@ Research 负责减少未知，Synthesis 负责压缩证据，ADR 负责保存长
 |---|---|
 | 小型、上下文明确、一次会话可完成 | 线程内轻量计划 |
 | 用户明确要求记录的局部既有行为缺陷 | Bugfix |
-| 关键事实不清、需要比较方案或实验 | Research + Synthesis |
+| 关键事实不清、需要比较方案或实验 | 切换到 `engineering-research` |
 | 存在影响长期边界且逆转成本较高的选择 | ADR |
 | 跨模块、多里程碑、需跨会话恢复或已有决策待实施 | ExecPlan |
 
-复杂功能默认创建 Research，尤其是涉及公共契约、安全、可靠性、数据、迁移、第三方选型、prototype 或 benchmark 时。以下情况可直接进入 ExecPlan，但必须记录具体的 Research Gate 跳过理由：
+复杂功能默认先取得 concluded Research，尤其是涉及公共契约、安全、可靠性、数据、迁移、第三方选型、prototype 或 benchmark 时。需要创建或扩展 Research 时使用
+`engineering-research`。以下情况可直接进入 ExecPlan，但必须记录具体的
+Research Gate 跳过理由：
 
 - 当前 accepted ADR 和代码事实已覆盖所需输入。
 - 权威标准或用户已经固定实现方向。
@@ -46,7 +51,9 @@ Research 负责减少未知，Synthesis 负责压缩证据，ADR 负责保存长
 
 Bugfix 一旦需要 Research、ADR、任务拆分、公共契约变更或持续推进，升级为 ExecPlan。普通“修 bug”仍是实现请求；用户未要求记录时不创建 Bugfix 台账。
 
-完整判定与状态机见 `references/templates.md`。执行 Research 前读取 `references/research.md`；起草或决定 ADR 前读取 `references/adr.md`。
+完整判定与状态机见 `references/templates.md`。消费 manifest-bearing Research
+前读取 `references/research.md`；起草或决定 ADR 前读取
+`references/adr.md`。
 
 ## 仓库布局
 
@@ -88,11 +95,6 @@ Research 结论或取消时整体移动到 `research/completed/`。ADR 路径稳
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . init
 
-python3 <skill-dir>/scripts/epctl.py --repo . new-research \
-  --slug cache-topology --title "Research cache topology"
-python3 <skill-dir>/scripts/epctl.py --repo . archive-research R-001 \
-  --outcome concluded
-
 python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
   --slug cache-topology --title "Choose cache topology" --research R-001
 python3 <skill-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
@@ -120,29 +122,28 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
 ```
 
 - 先运行 `init`；它只补缺失目录和索引，不覆盖已有内容。
-- 用脚本分配 ID、复制 assets、迁移状态、封存 payload、重建索引和验证引用。不要手工猜编号。
+- 用脚本分配 ADR/EP 等本 skill 拥有的 ID、复制 assets、迁移状态、封存
+  payload、重建索引和验证引用。不要手工猜编号。
 - `.epctl/state.json` 保存编号高水位。故障可以造成跳号，不能复用旧 ID。
 - `validate --fix-index` 只修复派生索引，不改事实制品。
 - 脚本不可用时按 `assets/` 模板执行，并扫描文件系统、索引和高水位后取最大 ID +1。
 - 不要求目标仓库使用 Git。
 
-## Research 与 Synthesis
+## 消费 Research 与 Synthesis
 
-1. 先检查仓库入口、现有文档、代码和测试，再创建 Research。
-2. 在 `RESEARCH.md` 定义决策目的、范围、Decision Drivers 和 `RQ-NNN` 问题。
-3. 为每个关键主张保留可定位来源或可复现实验。主题分析写入 `notes/`，完整日志、benchmark、trace 和抓包写入 `artifacts/`。
-4. 持续维护 Current Snapshot；根控制文档只保留当前路线、发现索引、问题状态和下一步。
-5. 在 `SYNTHESIS.md` 直接回答研究目的，比较选项，记录被否定假设、剩余未知、推荐方向与成立条件。
-6. 结论前确认没有 `open` 问题、open blocker 或 REQUIRED 标记，再运行：
+1. 如果仍有会改变路线的未知，先使用 `engineering-research` 或其他兼容流程。
+2. 只让 `concluded` Research 满足 Gate；cancelled 或 active Research 都不能。
+3. 验证 sealed `SYNTHESIS.md` 正文摘要。
+4. 如果控制页声明 `RESEARCH_MANIFEST.json`，还必须验证：
+   - schema 与 Research ID；
+   - sealed manifest payload；
+   - package-relative 文档存在且 bytes/SHA-256 匹配；
+   - entrypoint 属于文档集合。
+5. 兼容没有 manifest 的既有 v1 Research，但不要把这种兼容当作新制品模板。
+6. 在 ADR 与 ExecPlan 中复述关键结论、置信边界、负面证据、成立条件和剩余未知。
 
-   ```bash
-   python3 <skill-dir>/scripts/epctl.py --repo . archive-research R-NNN \
-     --outcome concluded
-   ```
-
-该命令封存 Synthesis 正文 SHA-256 并移动整个包。新证据若改变结论，创建新 Research；不要改写 sealed Synthesis。
-
-取消必须提供原因。Cancelled Research 保留证据，但不能满足 Research Gate。
+本仓库的 `epctl` 暂时保留 legacy Research 创建/归档命令，供既有自动化迁移；
+新 Research 不再从本 skill 的主流程创建。
 
 ## ADR 与显式决策权
 
@@ -235,7 +236,7 @@ Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 ## 参考
 
 - 制品路由、状态机、兼容策略 → `references/templates.md`
-- Research、Synthesis、证据与有界性 → `references/research.md`
+- Research/Synthesis 消费契约与 manifest 兼容 → `references/research.md`
 - ADR 门槛、授权、状态与 supersession → `references/adr.md`
 - ExecPlan 自包含要求与 Living Document → `references/template.md`
 - Checkpoint、压缩与恢复 → `references/checkpoints.md`

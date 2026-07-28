@@ -1,0 +1,4 @@
+interface:
+  display_name: "Engineering Research"
+  short_description: "Manage multi-document engineering research and synthesis"
+  default_prompt: "Use $engineering-research to investigate this engineering question, maintain a multi-document evidence corpus, and produce a sealed synthesis."
