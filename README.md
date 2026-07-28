@@ -31,26 +31,44 @@ flowchart LR
 
 这样可以保留完整审计链，同时避免单个 EP 随研究材料和迭代日志无限膨胀。
 
-## 安装
+## 安装与宿主接入
 
-要求 Python 3.10+；运行时只使用标准库。
+ExecutionPlan 是独立于具体 Agent 和 Harness 的 skill 包。仓库检出位置不属于
+skill 契约：`SKILL.md` 是入口，`references/`、`assets/` 和 `scripts/` 是配套资源，
+`agents/` 仅保存可选的宿主集成元数据。
+
+```mermaid
+flowchart LR
+    P["ExecutionPlan skill 包<br/>SKILL.md + resources"] -->|"注册或发现"| H["支持 Skill 的<br/>Agent / Harness"]
+    P -->|"直接运行"| C["epctl CLI"]
+    C --> W["目标代码仓库<br/>docs/"]
+```
+
+要求 Python 3.10+；运行时只使用标准库。可以把仓库克隆到任意稳定目录：
 
 ```bash
-git clone https://github.com/XiaoWeiKIN/ExecutionPlan.git \
-  ~/.codex/skills/execution-plan
+git clone https://github.com/xiaoweikin/ExecutionPlan.git \
+  /absolute/path/to/ExecutionPlan
+export EXECUTION_PLAN_HOME=/absolute/path/to/ExecutionPlan
 ```
+
+然后按所用 Agent 或 Harness 的 skill 发现机制注册
+`$EXECUTION_PLAN_HOME`：目录扫描型宿主可以建立符号链接，显式配置型宿主可以直接
+指向该目录。ExecutionPlan 不要求复制到任何特定 Agent 的私有目录。
 
 更新：
 
 ```bash
-git -C ~/.codex/skills/execution-plan pull --ff-only
+git -C "$EXECUTION_PLAN_HOME" pull --ff-only
 ```
 
-在 Codex 中可以直接说：
+如果宿主支持 `$<skill-name>` 调用语法，可以直接说：
 
 ```text
 使用 $execution-plan 先研究这个功能，形成技术架构决策，再给出开发计划。
 ```
+
+其他宿主使用其自身的 skill 调用约定即可。
 
 ## 快速开始
 
@@ -59,7 +77,8 @@ git -C ~/.codex/skills/execution-plan pull --ff-only
 初始化：
 
 ```bash
-EPCTL=~/.codex/skills/execution-plan/scripts/epctl.py
+EXECUTION_PLAN_HOME=/absolute/path/to/ExecutionPlan
+EPCTL="$EXECUTION_PLAN_HOME/scripts/epctl.py"
 python3 "$EPCTL" --repo . init
 ```
 
