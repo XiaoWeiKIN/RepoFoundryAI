@@ -241,4 +241,4 @@ Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 - ExecPlan 自包含要求与 Living Document → `references/template.md`
 - Checkpoint、压缩与恢复 → `references/checkpoints.md`
 - Bugfix 字段与升级/归档 → `references/bugfix.md`
-- 完整命令和典型场景 → `references/examples.md`
+- 完整命令、典型场景和端到端输出边界 → `references/examples.md`

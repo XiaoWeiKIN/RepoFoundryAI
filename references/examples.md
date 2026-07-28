@@ -4,6 +4,13 @@
 Research 的生产命令来自独立注册的 `<engineering-research-dir>`。两个目录之间
 没有固定相对路径。
 
+## 可运行的端到端样例
+
+发行仓库中的 `examples/cache-topology/README.md` 从四篇 linked corpus 文档
+开始，展示完整的 R-001、sealed Synthesis/Manifest、明确授权的 ADR-001 和
+gated EP-001。需要理解“每份制品实际写什么”时先读该例；以下章节继续作为命令
+与边界速查。
+
 ## 初始化
 
 ```bash

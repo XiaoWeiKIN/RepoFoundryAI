@@ -103,6 +103,23 @@ python3 "$EPCTL" --repo . init
 两个 `init` 都是幂等的，并共享 `docs/.epctl/state.json` 中的 Research ID
 高水位。
 
+### 完整示例：从四篇文档到可执行 EP
+
+[cache-topology 端到端示例](./examples/cache-topology/README.md) 提供四篇可复制
+的 corpus 文档，并展示：
+
+```mermaid
+flowchart LR
+    C["index + 3 篇专题文档"] --> R["linked R-001"]
+    R --> S["sealed Manifest + Synthesis"]
+    S --> A["proposed ADR-001"]
+    A -->|"Decision Owner 明确接受"| E["gated EP-001"]
+```
+
+示例给出具体 Research Questions、benchmark 数字、Synthesis 结论、ADR
+授权语句、Gate 字段和实施里程碑。注册 corpus 的命令可以直接运行；ADR
+仍会停在 `proposed`，不会用演示脚本伪造人的决定。
+
 ### 1. 创建 managed Research
 
 适合从零开始的调研：
@@ -294,6 +311,10 @@ python3 -B /path/to/skill-creator/scripts/quick_validate.py \
 ```
 
 ## 项目文档
+
+端到端：
+
+- [可运行的 cache-topology 端到端示例](./examples/cache-topology/README.md)
 
 Engineering Research：
 

@@ -1,5 +1,19 @@
 # Examples
 
+## End-to-end worked example
+
+The distribution repository contains
+`examples/cache-topology/README.md` and a four-document corpus. It demonstrates
+one linked Research with an `index.md` entrypoint, three answered Research
+Questions, a bounded Synthesis, a sealed snapshot, an explicitly authorized
+ADR, and a gated ExecPlan.
+
+The expected Research conclusion selects a five-second process-local L1 plus a
+30-second Redis L2. It preserves the faster-but-invalid L1-only result as
+negative evidence and sends Redis outage and invalidation backlog tests to the
+ExecPlan. Use this example when a user needs to see the contents of each
+handoff, not only the CLI sequence.
+
 ## Managed research
 
 ```bash
