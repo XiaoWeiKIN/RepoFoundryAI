@@ -234,7 +234,7 @@ python3 "$EPCTL" --repo . archive-ep EP-001 \
 ```
 
 `verified_revision` 绑定“哪些代码被验证过”，evidence 绑定“在哪里可以复核”。
-复选框全部勾选但缺少这两类信息时，v2.3 EP 仍不能完成。非 Git 仓库可以使用
+复选框全部勾选但缺少这两类信息时，v2.4 EP 仍不能完成。非 Git 仓库可以使用
 稳定的 `snapshot:<id>`；该契约不依赖 GitHub 或 GitLab。
 
 ## 三条命令验证完整链路

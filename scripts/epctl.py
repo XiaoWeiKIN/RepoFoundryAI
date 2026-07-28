@@ -29,6 +29,8 @@ except ImportError:  # pragma: no cover - POSIX
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSET_DIR = SKILL_DIR / "assets"
 STATE_VERSION = 1
+CONFIG_VERSION = 1
+DEFAULT_ARCHITECTURE_ROOT = "docs/adr"
 
 EXECPLAN_SECTIONS = (
     "Purpose / Big Picture",
@@ -255,6 +257,127 @@ def state_path(repo: Path) -> Path:
     return repo / "docs" / ".epctl" / "state.json"
 
 
+def config_path(repo: Path) -> Path:
+    return repo / "docs" / ".epctl" / "config.json"
+
+
+def empty_config() -> dict[str, object]:
+    return {
+        "version": CONFIG_VERSION,
+        "architecture_roots": [DEFAULT_ARCHITECTURE_ROOT],
+    }
+
+
+def repository_relative_path(
+    repo: Path,
+    value: str,
+    field: str,
+    *,
+    require_directory: bool = False,
+    require_file: bool = False,
+) -> tuple[str, Path]:
+    repo = repo.resolve()
+    candidate = Path(value.strip())
+    if not value.strip() or candidate.is_absolute():
+        raise EpctlError(f"{field} must be a non-empty repository-relative path")
+    lexical = repo / candidate
+    reject_symlink_path(repo, lexical)
+    resolved = lexical.resolve(strict=False)
+    try:
+        relative = resolved.relative_to(repo)
+    except ValueError as exc:
+        raise EpctlError(f"{field} escapes repository: {value!r}") from exc
+    if require_directory and not resolved.is_dir():
+        raise EpctlError(f"{field} directory does not exist: {relative.as_posix()}")
+    if require_file and not resolved.is_file():
+        raise EpctlError(f"{field} file does not exist: {relative.as_posix()}")
+    return relative.as_posix(), resolved
+
+
+def load_config(repo: Path) -> dict[str, object]:
+    path = config_path(repo)
+    if not path.exists():
+        return empty_config()
+    reject_symlink_path(repo, path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EpctlError(f"Invalid epctl config file {path}: {exc}") from exc
+    if not isinstance(data, dict) or data.get("version") != CONFIG_VERSION:
+        raise EpctlError(f"Unsupported epctl config in {path}")
+    roots = data.get("architecture_roots")
+    if (
+        not isinstance(roots, list)
+        or not roots
+        or not all(isinstance(item, str) for item in roots)
+        or len(set(roots)) != len(roots)
+    ):
+        raise EpctlError(f"Invalid architecture_roots in {path}")
+    normalized: list[str] = []
+    for value in roots:
+        relative, _ = repository_relative_path(
+            repo,
+            value,
+            "architecture_roots",
+            require_directory=False,
+        )
+        if not relative.startswith("docs/"):
+            raise EpctlError(
+                f"architecture_roots must be a directory below docs/: {value!r}"
+            )
+        normalized.append(relative)
+    if len(set(normalized)) != len(normalized):
+        raise EpctlError(f"architecture_roots normalize to duplicates in {path}")
+    if DEFAULT_ARCHITECTURE_ROOT not in normalized:
+        normalized.insert(0, DEFAULT_ARCHITECTURE_ROOT)
+    return {"version": CONFIG_VERSION, "architecture_roots": normalized}
+
+
+def save_config(repo: Path, data: dict[str, object]) -> None:
+    atomic_write(
+        config_path(repo),
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    )
+
+
+def architecture_roots(repo: Path, *, existing_only: bool = False) -> tuple[Path, ...]:
+    roots: list[Path] = []
+    for value in load_config(repo)["architecture_roots"]:
+        assert isinstance(value, str)
+        _, path = repository_relative_path(
+            repo,
+            value,
+            "architecture_roots",
+            require_directory=False,
+        )
+        if not existing_only or path.is_dir():
+            roots.append(path)
+    return tuple(roots)
+
+
+def register_architecture_root(repo: Path, value: str) -> Path:
+    with repo_lock(repo):
+        init_repo(repo)
+        relative, path = repository_relative_path(
+            repo,
+            value,
+            "architecture root",
+            require_directory=True,
+        )
+        if not relative.startswith("docs/"):
+            raise EpctlError(
+                "Architecture roots must be directories below docs/"
+            )
+        config = load_config(repo)
+        roots = config["architecture_roots"]
+        assert isinstance(roots, list)
+        if relative not in roots:
+            roots.append(relative)
+            save_config(repo, config)
+        rebuild_indexes(repo)
+        return path
+
+
 def empty_state() -> dict[str, object]:
     return {"version": STATE_VERSION, "high_water": {}}
 
@@ -357,7 +480,7 @@ def id_roots(repo: Path, prefix: str, scope: Path | None = None) -> tuple[Path, 
     if prefix == "R":
         return (repo / "docs" / "research", repo / "docs" / "RESEARCH.md")
     if prefix == "ADR":
-        return (repo / "docs" / "adr", repo / "docs" / "DECISIONS.md")
+        return (*architecture_roots(repo), repo / "docs" / "DECISIONS.md")
     if prefix == "BF":
         return (repo / "docs" / "bugfixes", repo / "docs" / "BUGFIXES.md")
     if prefix == "TD":
@@ -489,6 +612,120 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], int, int]:
             )
         data[key] = value
     return data, 4, end
+
+
+def parse_legacy_frontmatter(text: str) -> tuple[dict[str, str], int, int]:
+    """Read the small YAML subset commonly used by linked design-doc corpora."""
+    if not text.startswith("---\n"):
+        raise EpctlError("Missing YAML frontmatter")
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        raise EpctlError("Unclosed YAML frontmatter")
+    data: dict[str, str] = {}
+    current_array: str | None = None
+    array_values: list[str] = []
+
+    def finish_array() -> None:
+        nonlocal current_array, array_values
+        if current_array is not None:
+            data[current_array] = json.dumps(array_values, ensure_ascii=False)
+        current_array = None
+        array_values = []
+
+    for line_number, raw in enumerate(text[4:end].splitlines(), start=2):
+        if "\t" in raw:
+            raise EpctlError(f"Tabs are not allowed in frontmatter (line {line_number})")
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        if raw[:1].isspace():
+            match = re.match(r"^\s*-\s+(.+?)\s*$", raw)
+            if current_array is None or not match:
+                raise EpctlError(
+                    f"Unsupported legacy YAML construct (line {line_number})"
+                )
+            item = match.group(1).strip()
+            if (
+                len(item) >= 2
+                and item[0] == item[-1]
+                and item[0] in {'"', "'"}
+            ):
+                item = item[1:-1]
+            array_values.append(item)
+            continue
+        finish_array()
+        if ":" not in raw:
+            raise EpctlError(f"Expected key: value (line {line_number})")
+        key, value = raw.split(":", 1)
+        key = key.strip()
+        if not re.fullmatch(r"[a-z][a-z0-9_-]*", key):
+            raise EpctlError(f"Invalid frontmatter key {key!r} (line {line_number})")
+        key = key.replace("-", "_")
+        value = value.strip()
+        if not value and key in {
+            "relates_to",
+            "research_refs",
+            "depends_on",
+            "amends",
+            "supersedes",
+            "design_refs",
+        }:
+            current_array = key
+            continue
+        if value.startswith("["):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError as exc:
+                raise EpctlError(
+                    f"Arrays must use JSON syntax for {key!r} (line {line_number})"
+                ) from exc
+            if not isinstance(parsed, list) or not all(
+                isinstance(item, str) for item in parsed
+            ):
+                raise EpctlError(
+                    f"{key!r} supports only a flat string array (line {line_number})"
+                )
+        elif (
+            len(value) >= 2
+            and value[0] == value[-1]
+            and value[0] in {'"', "'"}
+        ):
+            value = value[1:-1]
+        data[key] = value
+    finish_array()
+    return data, 4, end
+
+
+def adr_document_data(path: Path) -> tuple[dict[str, str], bool]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        data, _, _ = parse_frontmatter(text)
+    except EpctlError as strict_error:
+        data, _, _ = parse_legacy_frontmatter(text)
+        if data.get("schema_version"):
+            raise strict_error
+    strict = bool(data.get("schema_version"))
+    if not strict:
+        inferred_match = re.search(
+            r"(?i)(?:^|/)adr-(\d{3,})(?=[_.-]|$)",
+            path.as_posix(),
+        )
+        if not data.get("id") and inferred_match:
+            data["id"] = f"ADR-{int(inferred_match.group(1)):03d}"
+        data["schema_version"] = "legacy-linked"
+        data.setdefault("title", path.stem)
+        data.setdefault("status", "")
+        data.setdefault("created", data.get("last_verified", ""))
+        data.setdefault("updated", data.get("last_verified", data.get("created", "")))
+        for field in (
+            "research_refs",
+            "depends_on",
+            "amends",
+            "supersedes",
+            "design_refs",
+        ):
+            data.setdefault(field, "[]")
+        data.setdefault("superseded_by", "")
+    return data, strict
 
 
 def update_frontmatter(text: str, updates: dict[str, str]) -> str:
@@ -928,6 +1165,12 @@ def legacy_metadata(path: Path, prefix: str) -> dict[str, str]:
 
 
 def artifact_metadata(path: Path, prefix: str) -> dict[str, str]:
+    if prefix == "ADR":
+        try:
+            data, _ = adr_document_data(path)
+            return data
+        except EpctlError:
+            return legacy_metadata(path, prefix)
     try:
         data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
         return data
@@ -1137,8 +1380,19 @@ def research_files(repo: Path, state: str | None = None) -> list[Path]:
 
 
 def adr_files(repo: Path) -> list[Path]:
-    root = repo / "docs" / "adr"
-    return sorted(root.glob("adr-*.md")) if root.exists() else []
+    found: set[Path] = set()
+    for root in architecture_roots(repo, existing_only=True):
+        for path in root.rglob("*.md"):
+            if re.search(r"(?i)^adr-\d{3,}(?=[_.-]|$)", path.name):
+                found.add(path)
+                continue
+            try:
+                data, _ = adr_document_data(path)
+            except (EpctlError, OSError, UnicodeDecodeError):
+                continue
+            if data.get("doc_type", "").lower() == "adr":
+                found.add(path)
+    return sorted(found)
 
 
 def bugfix_files(repo: Path, state: str | None = None) -> list[Path]:
@@ -1235,6 +1489,113 @@ def find_adr(repo: Path, adr_id: str) -> Path:
     return matches[0]
 
 
+def normalize_document_refs(
+    repo: Path,
+    values: Iterable[str],
+    field: str,
+) -> list[str]:
+    normalized: list[str] = []
+    roots = architecture_roots(repo, existing_only=True)
+    for value in values:
+        relative, path = repository_relative_path(
+            repo,
+            value,
+            field,
+            require_file=True,
+        )
+        if path.suffix.lower() != ".md":
+            raise EpctlError(f"{field} must reference Markdown files: {relative}")
+        if not any(path == root or root in path.parents for root in roots):
+            raise EpctlError(
+                f"{field} must be inside a registered architecture root: {relative}"
+            )
+        if relative not in normalized:
+            normalized.append(relative)
+    return normalized
+
+
+def validate_design_ref(
+    repo: Path,
+    value: str,
+    *,
+    entrypoint: bool = False,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    label = "architecture_entrypoint" if entrypoint else "design_refs"
+    try:
+        refs = normalize_document_refs(repo, (value,), label)
+    except EpctlError as exc:
+        return [str(exc)], warnings
+    path = repo / refs[0]
+    if entrypoint:
+        return errors, warnings
+    try:
+        data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+    except EpctlError:
+        try:
+            data, _, _ = parse_legacy_frontmatter(path.read_text(encoding="utf-8"))
+        except EpctlError:
+            warnings.append(
+                f"{path}: linked Design Doc has no readable metadata"
+            )
+            return errors, warnings
+    doc_type = data.get("doc_type", "")
+    if doc_type and doc_type != "design":
+        errors.append(f"{path}: design_refs target has doc_type {doc_type!r}")
+    elif not doc_type:
+        warnings.append(f"{path}: linked Design Doc has no doc_type")
+    status = data.get("status", "").lower()
+    if status in {"obsolete", "abandoned", "superseded", "rejected"}:
+        errors.append(f"{path}: linked Design Doc has terminal status {status!r}")
+    elif status == "draft":
+        warnings.append(f"{path}: linked Design Doc is still draft")
+    elif not status:
+        warnings.append(f"{path}: linked Design Doc has no status")
+    return errors, warnings
+
+
+def adr_relations(data: dict[str, str]) -> list[str]:
+    relations: list[str] = []
+    for field in ("depends_on", "amends"):
+        relations.extend(parse_reference_array(data.get(field, ""), "ADR", field))
+    return list(dict.fromkeys(relations))
+
+
+def adr_input_closure(
+    repo: Path,
+    adr_values: Iterable[str],
+) -> tuple[list[str], dict[str, dict[str, str]]]:
+    requested = normalize_reference_ids(adr_values, "ADR")
+    ordered: list[str] = []
+    data_by_id: dict[str, dict[str, str]] = {}
+    visiting: list[str] = []
+
+    def visit(adr_id: str) -> None:
+        if adr_id in visiting:
+            cycle = " -> ".join((*visiting[visiting.index(adr_id) :], adr_id))
+            raise EpctlError(f"ADR dependency cycle: {cycle}")
+        if adr_id in data_by_id:
+            return
+        path = find_adr(repo, adr_id)
+        adr_errors, _, data = validate_adr(path)
+        if adr_errors or data.get("status") != "accepted":
+            details = "; ".join(adr_errors) if adr_errors else data.get("status", "")
+            raise EpctlError(
+                f"{adr_id} must be valid, accepted and current: {details}"
+            )
+        visiting.append(adr_id)
+        for dependency in adr_relations(data):
+            visit(dependency)
+        visiting.pop()
+        data_by_id[adr_id] = data
+        ordered.append(adr_id)
+
+    for adr_id in requested:
+        visit(adr_id)
+    return ordered, data_by_id
+
+
 def task_files(plan_path: Path) -> list[Path]:
     return sorted((plan_path.parent / "tasks").glob("*.md"))
 
@@ -1253,6 +1614,35 @@ def frontmatter_body(text: str) -> str:
 
 def payload_sha256(text: str) -> str:
     return hashlib.sha256(frontmatter_body(text).encode("utf-8")).hexdigest()
+
+
+def adr_payload_sha256(text: str, data: dict[str, str]) -> str:
+    if data.get("schema_version") != "1.1":
+        return payload_sha256(text)
+    decision_payload = {
+        "schema_version": data.get("schema_version", ""),
+        "id": data.get("id", ""),
+        "title": data.get("title", ""),
+        "research_refs": data.get("research_refs", ""),
+        "depends_on": data.get("depends_on", ""),
+        "amends": data.get("amends", ""),
+        "design_refs": data.get("design_refs", ""),
+        "decision_maker": data.get("decision_maker", ""),
+        "decided": data.get("decided", ""),
+        "decision_outcome": (
+            "accepted"
+            if data.get("status") == "superseded"
+            else data.get("status", "")
+        ),
+        "body": frontmatter_body(text),
+    }
+    canonical = json.dumps(
+        decision_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def canonical_document_sha256(text: str, digest_field: str) -> str:
@@ -1500,11 +1890,22 @@ def new_adr(
     title: str,
     owner: str,
     research_values: Iterable[str],
+    depends_on_values: Iterable[str],
+    amends_values: Iterable[str],
+    design_values: Iterable[str],
 ) -> Path:
     validate_slug(slug)
     research_refs = normalize_reference_ids(research_values, "R")
+    depends_on = normalize_reference_ids(depends_on_values, "ADR")
+    amends = normalize_reference_ids(amends_values, "ADR")
+    overlap = set(depends_on) & set(amends)
+    if overlap:
+        raise EpctlError(
+            "ADR cannot both depend on and amend: " + ", ".join(sorted(overlap))
+        )
     with repo_lock(repo):
         init_repo(repo)
+        design_refs = normalize_document_refs(repo, design_values, "design_refs")
         for research_id in research_refs:
             research_path = find_research(repo, research_id, "completed")
             errors, _ = validate_research(research_path)
@@ -1515,6 +1916,18 @@ def new_adr(
                 details = "; ".join(errors) if errors else data.get("status", "")
                 raise EpctlError(
                     f"{research_id} must be valid and concluded: {details}"
+                )
+        for related_id in (*depends_on, *amends):
+            related_path = find_adr(repo, related_id)
+            related_errors, _, related_data = validate_adr(related_path)
+            if related_errors or related_data.get("status") != "accepted":
+                details = (
+                    "; ".join(related_errors)
+                    if related_errors
+                    else related_data.get("status", "")
+                )
+                raise EpctlError(
+                    f"{related_id} must be valid, accepted and current: {details}"
                 )
         item_id = next_id(repo, "ADR")
         number = int(item_id.split("-")[1])
@@ -1530,6 +1943,9 @@ def new_adr(
                 "TITLE": yaml_string(title),
                 "OWNER": yaml_string(owner),
                 "RESEARCH_REFS": refs_json,
+                "DEPENDS_ON": json.dumps(depends_on, ensure_ascii=False),
+                "AMENDS": json.dumps(amends, ensure_ascii=False),
+                "DESIGN_REFS": json.dumps(design_refs, ensure_ascii=False),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
             },
@@ -1562,12 +1978,15 @@ def new_ep(
     owner: str,
     research_values: Iterable[str],
     adr_values: Iterable[str],
+    design_values: Iterable[str],
+    architecture_entrypoint_value: str,
     research_not_required_reason: str,
     architecture_not_required_reason: str,
 ) -> Path:
     validate_slug(slug)
     research_refs = normalize_reference_ids(research_values, "R")
     adr_refs = normalize_reference_ids(adr_values, "ADR")
+    raw_design_values = list(design_values)
     research_reason = inline_text(research_not_required_reason)
     architecture_reason = inline_text(architecture_not_required_reason)
     if research_refs and research_reason:
@@ -1588,8 +2007,27 @@ def new_ep(
             "new-ep requires accepted --adr references or "
             "--architecture-not-required-reason"
         )
+    if architecture_reason and (
+        raw_design_values or inline_text(architecture_entrypoint_value)
+    ):
+        raise EpctlError(
+            "Design references and architecture entrypoint require a satisfied "
+            "Architecture Gate"
+        )
     with repo_lock(repo):
         init_repo(repo)
+        design_refs = normalize_document_refs(
+            repo,
+            raw_design_values,
+            "design_refs",
+        )
+        architecture_entrypoint = ""
+        if inline_text(architecture_entrypoint_value):
+            architecture_entrypoint = normalize_document_refs(
+                repo,
+                (architecture_entrypoint_value,),
+                "architecture_entrypoint",
+            )[0]
         for research_id in research_refs:
             research_path = find_research(repo, research_id, "completed")
             errors, _ = validate_research(research_path)
@@ -1601,14 +2039,15 @@ def new_ep(
                 raise EpctlError(
                     f"{research_id} must be valid and concluded: {details}"
                 )
-        for adr_id in adr_refs:
-            adr_path = find_adr(repo, adr_id)
-            errors, _, adr_data = validate_adr(adr_path)
-            if errors or adr_data.get("status") != "accepted":
-                details = "; ".join(errors) if errors else adr_data.get("status", "")
-                raise EpctlError(
-                    f"{adr_id} must be valid, accepted and current: {details}"
-                )
+        closure, adr_data_by_id = adr_input_closure(repo, adr_refs)
+        missing_adrs = set(closure) - set(adr_refs)
+        if missing_adrs:
+            raise EpctlError(
+                "Plan ADR set is not dependency-closed; add: "
+                + ", ".join(sorted(missing_adrs))
+            )
+        for adr_id in closure:
+            adr_data = adr_data_by_id[adr_id]
             missing_research = set(
                 parse_inline_ids(adr_data.get("research_refs", ""), "R")
             ) - set(research_refs)
@@ -1616,6 +2055,15 @@ def new_ep(
                 raise EpctlError(
                     f"{adr_id} requires Research references missing from the plan: "
                     + ", ".join(sorted(missing_research))
+                )
+            required_designs = set(
+                parse_string_array(adr_data.get("design_refs", ""), "design_refs")
+            )
+            missing_designs = required_designs - set(design_refs)
+            if missing_designs:
+                raise EpctlError(
+                    f"{adr_id} requires Design Doc references missing from the plan: "
+                    + ", ".join(sorted(missing_designs))
                 )
         item_id = next_id(repo, "EP")
         number = int(item_id.split("-")[1])
@@ -1639,6 +2087,10 @@ def new_ep(
                 ),
                 "RESEARCH_GATE_REASON": yaml_string(research_reason),
                 "ADR_REFS": json.dumps(adr_refs, ensure_ascii=False),
+                "DESIGN_REFS": json.dumps(design_refs, ensure_ascii=False),
+                "ARCHITECTURE_ENTRYPOINT": yaml_string(
+                    architecture_entrypoint
+                ),
                 "ARCHITECTURE_GATE": (
                     "satisfied" if adr_refs else "not_required"
                 ),
@@ -1819,9 +2271,9 @@ def checkpoint_plan(
             raise EpctlError("checkpoint requires a v2 EXECPLAN.md")
         text = plan_path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
-        if data.get("schema_version") not in {"2.1", "2.2", "2.3"}:
+        if data.get("schema_version") not in {"2.1", "2.2", "2.3", "2.4"}:
             raise EpctlError(
-                "checkpoint requires schema_version 2.1, 2.2 or 2.3 "
+                "checkpoint requires schema_version 2.1, 2.2, 2.3 or 2.4 "
                 "and ## Current Snapshot"
             )
         errors, _ = validate_plan(plan_path)
@@ -2309,34 +2761,79 @@ def validate_adr(
     warnings: list[str] = []
     text = path.read_text(encoding="utf-8")
     try:
-        data, _, _ = parse_frontmatter(text)
+        data, strict = adr_document_data(path)
     except EpctlError as exc:
         return [f"{path}: {exc}"], warnings, {}
     adr_id = data.get("id", "")
-    errors.extend(validate_common_frontmatter(path, data, "ADR"))
-    if data.get("schema_version") != "1":
-        errors.append(f"{path}: ADR schema_version must be 1")
+    repo = repository_from_artifact(path)
+    if strict:
+        errors.extend(validate_common_frontmatter(path, data, "ADR"))
+        if data.get("schema_version") not in {"1", "1.1"}:
+            errors.append(f"{path}: ADR schema_version must be 1 or 1.1")
+        errors.extend(validate_required_sections(path, text, ADR_SECTIONS))
+    else:
+        if not ID_RE["ADR"].fullmatch(adr_id):
+            errors.append(
+                f"{path}: linked ADR needs an ADR-NNN id in frontmatter or filename"
+            )
+        if data.get("doc_type") and data.get("doc_type") != "adr":
+            errors.append(f"{path}: linked ADR has doc_type {data.get('doc_type')!r}")
+        if not data.get("title"):
+            errors.append(f"{path}: linked ADR requires a title")
+        warnings.append(
+            f"{path}: legacy linked ADR has no epctl decision authority/seal; "
+            "treat it as read-only and use a new strict ADR for later decisions"
+        )
     status = data.get("status", "")
     if status not in ADR_STATUSES:
         errors.append(f"{path}: invalid ADR status {status!r}")
-    errors.extend(validate_required_sections(path, text, ADR_SECTIONS))
+    arrays: dict[str, list[str]] = {}
     try:
-        research_refs = parse_reference_array(
-            data.get("research_refs", ""), "R", "research_refs"
-        )
-        supersedes = parse_reference_array(
-            data.get("supersedes", ""), "ADR", "supersedes"
-        )
+        for field, prefix in (
+            ("research_refs", "R"),
+            ("depends_on", "ADR"),
+            ("amends", "ADR"),
+            ("supersedes", "ADR"),
+        ):
+            arrays[field] = parse_reference_array(
+                data.get(field, ""), prefix, field
+            )
+        design_refs = parse_string_array(data.get("design_refs", ""), "design_refs")
     except EpctlError as exc:
         errors.append(f"{path}: {exc}")
-        research_refs = []
-        supersedes = []
-    if adr_id in supersedes:
-        errors.append(f"{path}: ADR cannot supersede itself")
+        arrays = {
+            "research_refs": [],
+            "depends_on": [],
+            "amends": [],
+            "supersedes": [],
+        }
+        design_refs = []
+    research_refs = arrays["research_refs"]
+    depends_on = arrays["depends_on"]
+    amends = arrays["amends"]
+    supersedes = arrays["supersedes"]
+    if data.get("schema_version") == "1.1":
+        for field in ("depends_on", "amends", "design_refs"):
+            if field not in data:
+                errors.append(f"{path}: schema 1.1 ADR requires {field}")
+    for field, values in (
+        ("depends_on", depends_on),
+        ("amends", amends),
+        ("supersedes", supersedes),
+    ):
+        if adr_id in values:
+            errors.append(f"{path}: ADR cannot list itself in {field}")
+    overlap = (set(depends_on) & set(amends)) | (
+        (set(depends_on) | set(amends)) & set(supersedes)
+    )
+    if overlap:
+        errors.append(
+            f"{path}: ADR relations must be disjoint: {', '.join(sorted(overlap))}"
+        )
     for research_id in research_refs:
         try:
             research_path = find_research(
-                repository_from_artifact(path),
+                repo,
                 research_id,
                 "completed",
             )
@@ -2347,11 +2844,26 @@ def validate_adr(
         research_errors, _ = validate_research(research_path)
         if research_errors or research_data.get("status") != "concluded":
             errors.append(f"{path}: {research_id} is not valid and concluded")
+    for related_id in (*depends_on, *amends):
+        try:
+            related_path = find_adr(repo, related_id)
+            related_data, _ = adr_document_data(related_path)
+        except EpctlError:
+            errors.append(f"{path}: related ADR {related_id} is missing")
+            continue
+        if related_data.get("status") != "accepted":
+            errors.append(
+                f"{path}: {related_id} in depends_on/amends must be accepted"
+            )
+    for design_ref in design_refs:
+        design_errors, design_warnings = validate_design_ref(repo, design_ref)
+        errors.extend(f"{path}: {error}" for error in design_errors)
+        warnings.extend(design_warnings)
     superseded_by = data.get("superseded_by", "")
     if superseded_by and not ID_RE["ADR"].fullmatch(superseded_by):
         errors.append(f"{path}: invalid superseded_by {superseded_by!r}")
     decided = status in {"accepted", "rejected", "superseded"}
-    if decided:
+    if strict and decided:
         if not data.get("decision_maker"):
             errors.append(f"{path}: decided ADR requires decision_maker")
         if not data.get("decided"):
@@ -2366,7 +2878,7 @@ def validate_adr(
         if marker_names(text):
             errors.append(f"{path}: decided ADR has required placeholders")
         expected = data.get("payload_sha256", "")
-        actual = payload_sha256(text)
+        actual = adr_payload_sha256(text, data)
         if not expected:
             errors.append(f"{path}: decided ADR requires payload_sha256")
         elif expected != actual:
@@ -2374,7 +2886,7 @@ def validate_adr(
                 f"{path}: decided ADR payload changed "
                 f"(expected {expected}, got {actual})"
             )
-    else:
+    elif strict:
         if data.get("decision_maker") or data.get("decided"):
             errors.append(f"{path}: proposed ADR cannot record a decision")
         if data.get("payload_sha256"):
@@ -2538,9 +3050,9 @@ def validate_plan(
     plan_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "EP"))
     schema_version = data.get("schema_version", "2.0")
-    if schema_version not in {"2.0", "2.1", "2.2", "2.3"}:
+    if schema_version not in {"2.0", "2.1", "2.2", "2.3", "2.4"}:
         errors.append(f"{path}: unsupported schema_version {schema_version!r}")
-    if schema_version in {"2.1", "2.2", "2.3"}:
+    if schema_version in {"2.1", "2.2", "2.3", "2.4"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V21_SECTIONS)
         )
@@ -2551,7 +3063,7 @@ def validate_plan(
             f"{path}: v2.0 plan has no bounded checkpoint model; "
             "add schema_version 2.1 and ## Current Snapshot before checkpointing"
         )
-    if schema_version in {"2.2", "2.3"}:
+    if schema_version in {"2.2", "2.3", "2.4"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V22_SECTIONS)
         )
@@ -2566,10 +3078,16 @@ def validate_plan(
                 "ADR",
                 "adr_refs",
             )
+            design_refs = (
+                parse_string_array(data.get("design_refs", ""), "design_refs")
+                if schema_version == "2.4"
+                else []
+            )
         except EpctlError as exc:
             errors.append(f"{path}: {exc}")
             research_refs = []
             adr_refs = []
+            design_refs = []
         repo = repository_from_artifact(path)
         inputs = section(text, "Research and Architecture Inputs") or ""
         research_gate = data.get("research_gate", "")
@@ -2631,10 +3149,19 @@ def validate_plan(
                 errors.append(
                     f"{path}: not_required Architecture Gate requires a reason"
                 )
+            if design_refs or (
+                schema_version == "2.4"
+                and inline_text(data.get("architecture_entrypoint", ""))
+            ):
+                errors.append(
+                    f"{path}: not_required Architecture Gate cannot have "
+                    "Design Docs or an architecture entrypoint"
+                )
         else:
             errors.append(
                 f"{path}: invalid architecture_gate {architecture_gate!r}"
             )
+        adr_data_by_id: dict[str, dict[str, str]] = {}
         for adr_id in adr_refs:
             try:
                 adr_path = find_adr(repo, adr_id)
@@ -2644,6 +3171,8 @@ def validate_plan(
             adr_errors, _, adr_data = validate_adr(adr_path)
             if adr_errors or adr_data.get("status") != "accepted":
                 errors.append(f"{path}: {adr_id} is not valid, accepted and current")
+            else:
+                adr_data_by_id[adr_id] = adr_data
             missing_research = set(
                 parse_inline_ids(adr_data.get("research_refs", ""), "R")
             ) - set(research_refs)
@@ -2656,6 +3185,63 @@ def validate_plan(
                 errors.append(
                     f"{path}: Research and Architecture Inputs must mention {adr_id}"
                 )
+        if adr_data_by_id:
+            try:
+                closure, closure_data = adr_input_closure(repo, adr_refs)
+            except EpctlError as exc:
+                errors.append(f"{path}: {exc}")
+                closure = []
+                closure_data = {}
+            missing_adrs = set(closure) - set(adr_refs)
+            if missing_adrs:
+                errors.append(
+                    f"{path}: ADR set is not dependency-closed; missing "
+                    + ", ".join(sorted(missing_adrs))
+                )
+            for adr_id, adr_data in closure_data.items():
+                missing_designs = set(
+                    parse_string_array(
+                        adr_data.get("design_refs", ""),
+                        "design_refs",
+                    )
+                ) - set(design_refs)
+                if missing_designs:
+                    errors.append(
+                        f"{path}: {adr_id} requires missing Design Docs "
+                        + ", ".join(sorted(missing_designs))
+                    )
+        if schema_version == "2.4":
+            if "design_refs" not in data:
+                errors.append(f"{path}: missing frontmatter field design_refs")
+            if "architecture_entrypoint" not in data:
+                errors.append(
+                    f"{path}: missing frontmatter field architecture_entrypoint"
+                )
+            for design_ref in design_refs:
+                item_errors, item_warnings = validate_design_ref(repo, design_ref)
+                errors.extend(f"{path}: {error}" for error in item_errors)
+                warnings.extend(item_warnings)
+                if design_ref not in inputs:
+                    errors.append(
+                        f"{path}: Research and Architecture Inputs must mention "
+                        f"{design_ref}"
+                    )
+            architecture_entrypoint = inline_text(
+                data.get("architecture_entrypoint", "")
+            )
+            if architecture_entrypoint:
+                item_errors, item_warnings = validate_design_ref(
+                    repo,
+                    architecture_entrypoint,
+                    entrypoint=True,
+                )
+                errors.extend(f"{path}: {error}" for error in item_errors)
+                warnings.extend(item_warnings)
+                if architecture_entrypoint not in inputs:
+                    errors.append(
+                        f"{path}: Research and Architecture Inputs must mention "
+                        f"{architecture_entrypoint}"
+                    )
     status = data.get("status", "")
     location = "completed" if "/completed/" in path.as_posix() else "active"
     allowed = PLAN_COMPLETED_STATUSES if location == "completed" else PLAN_ACTIVE_STATUSES
@@ -2670,7 +3256,8 @@ def validate_plan(
     completing = archive_status == "completed" or (
         archive_status is None and status == "completed"
     )
-    if schema_version == "2.3":
+    if schema_version in {"2.3", "2.4"}:
+        attestation_version = schema_version
         if "verified_revision" not in data:
             errors.append(f"{path}: missing frontmatter field verified_revision")
         if "verification_evidence" not in data:
@@ -2689,17 +3276,20 @@ def validate_plan(
         if completing:
             if not verified_revision:
                 errors.append(
-                    f"{path}: completed v2.3 plan requires verified_revision"
+                    f"{path}: completed v{attestation_version} plan requires "
+                    "verified_revision"
                 )
             if not verification_evidence:
                 errors.append(
-                    f"{path}: completed v2.3 plan requires verification_evidence"
+                    f"{path}: completed v{attestation_version} plan requires "
+                    "verification_evidence"
                 )
         elif status in PLAN_ACTIVE_STATUSES and (
             verified_revision or verification_evidence
         ):
             errors.append(
-                f"{path}: active v2.3 plan cannot carry completion attestation"
+                f"{path}: active v{attestation_version} plan cannot carry "
+                "completion attestation"
             )
         sealed = (
             location == "completed"
@@ -2708,7 +3298,10 @@ def validate_plan(
         archive_digest = data.get("archive_sha256", "")
         if sealed:
             if not re.fullmatch(r"[0-9a-f]{64}", archive_digest):
-                errors.append(f"{path}: archived v2.3 plan requires archive_sha256")
+                errors.append(
+                    f"{path}: archived v{attestation_version} plan requires "
+                    "archive_sha256"
+                )
             else:
                 try:
                     actual_archive_digest = canonical_document_sha256(
@@ -2720,13 +3313,14 @@ def validate_plan(
                 else:
                     if archive_digest != actual_archive_digest:
                         errors.append(
-                            f"{path}: archived v2.3 plan changed "
+                            f"{path}: archived v{attestation_version} plan changed "
                             f"(expected {archive_digest}, "
                             f"got {actual_archive_digest})"
                         )
         elif archive_digest:
             errors.append(
-                f"{path}: active v2.3 plan cannot carry archive_sha256"
+                f"{path}: active v{attestation_version} plan cannot carry "
+                "archive_sha256"
             )
     if completing and acceptance and not all(acceptance):
         errors.append(f"{path}: incomplete acceptance blocks completion")
@@ -2813,7 +3407,7 @@ def validate_plan(
         errors.append(
             f"{path}: Current Snapshot must link {latest_checkpoint}"
         )
-    if schema_version in {"2.1", "2.2", "2.3"} and not re.search(
+    if schema_version in {"2.1", "2.2", "2.3", "2.4"} and not re.search(
         r"(?im)^-\s+Next action:\s+\S",
         snapshot,
     ):
@@ -2913,6 +3507,17 @@ def validate_bugfix(
 def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
+    try:
+        load_config(repo)
+        configured_roots = architecture_roots(repo)
+    except EpctlError as exc:
+        errors.append(str(exc))
+        configured_roots = ()
+    for root in configured_roots:
+        if not root.is_dir():
+            errors.append(f"{root}: registered architecture root is missing")
+        elif root.is_symlink():
+            errors.append(f"{root}: symbolic links are not supported")
     docs_root = repo / "docs"
     if docs_root.exists():
         for path in docs_root.rglob("*"):
@@ -3098,6 +3703,53 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                 errors.append(
                     f"{item_id}: supersession backlink from {old_id} is invalid"
                 )
+        for relation in ("depends_on", "amends"):
+            try:
+                related_ids = parse_reference_array(
+                    data.get(relation, ""),
+                    "ADR",
+                    relation,
+                )
+            except EpctlError:
+                continue
+            for related_id in related_ids:
+                related = adr_data_by_id.get(related_id)
+                if not related:
+                    errors.append(
+                        f"{item_id}: {relation} ADR {related_id} is missing"
+                    )
+                elif related.get("status") != "accepted":
+                    errors.append(
+                        f"{item_id}: {relation} ADR {related_id} must be accepted"
+                    )
+
+    adr_graph: dict[str, list[str]] = {}
+    for item_id, data in adr_data_by_id.items():
+        try:
+            adr_graph[item_id] = adr_relations(data)
+        except EpctlError:
+            adr_graph[item_id] = []
+    visited: set[str] = set()
+    visiting: list[str] = []
+
+    def visit_adr_graph(item_id: str) -> None:
+        if item_id in visiting:
+            cycle = " -> ".join(
+                (*visiting[visiting.index(item_id) :], item_id)
+            )
+            errors.append(f"ADR dependency cycle: {cycle}")
+            return
+        if item_id in visited:
+            return
+        visiting.append(item_id)
+        for related_id in adr_graph.get(item_id, []):
+            if related_id in adr_graph:
+                visit_adr_graph(related_id)
+        visiting.pop()
+        visited.add(item_id)
+
+    for item_id in sorted(adr_graph):
+        visit_adr_graph(item_id)
     if "<!-- ADRCTL:ACTIVE:START -->" in decision_text:
         for table in ("ACTIVE", "COMPLETED"):
             body = managed_index_body(decision_text, "ADR", table)
@@ -3358,7 +4010,12 @@ def decide_adr(
         )
         candidate = update_frontmatter(
             candidate,
-            {"payload_sha256": payload_sha256(candidate)},
+            {
+                "payload_sha256": adr_payload_sha256(
+                    candidate,
+                    parse_frontmatter(candidate)[0],
+                )
+            },
         )
         snapshots = managed_index_snapshots(repo)
         try:
@@ -3474,15 +4131,15 @@ def archive_ep(
             )
         text = path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
-        is_v23 = data.get("schema_version") == "2.3"
-        if outcome == "completed" and is_v23:
+        has_completion_attestation = data.get("schema_version") in {"2.3", "2.4"}
+        if outcome == "completed" and has_completion_attestation:
             if not verified_revision:
                 raise EpctlError(
-                    "Completed v2.3 EP requires --verified-revision"
+                    "Completed v2.3+ EP requires --verified-revision"
                 )
             if not verification_evidence:
                 raise EpctlError(
-                    "Completed v2.3 EP requires at least one --evidence"
+                    "Completed v2.3+ EP requires at least one --evidence"
                 )
         container = path.parent
         destination = repo / "docs" / "exec-plans" / "completed" / container.name
@@ -3490,7 +4147,7 @@ def archive_ep(
         if destination.exists():
             raise EpctlError(f"Archive destination exists: {destination}")
         updates = {"status": outcome, "updated": date_string()}
-        if is_v23 and outcome == "completed":
+        if has_completion_attestation and outcome == "completed":
             updates["verified_revision"] = json.dumps(
                 verified_revision,
                 ensure_ascii=False,
@@ -3499,7 +4156,7 @@ def archive_ep(
                 verification_evidence,
                 ensure_ascii=False,
             )
-        if is_v23:
+        if has_completion_attestation:
             updates["archive_sha256"] = ""
         new_text = update_frontmatter(text, updates).replace(
             f"docs/exec-plans/active/{container.name}",
@@ -3513,7 +4170,7 @@ def archive_ep(
                 "Cancelled",
                 reason.strip(),
             )
-        if is_v23:
+        if has_completion_attestation:
             archive_digest = canonical_document_sha256(
                 new_text,
                 "archive_sha256",
@@ -3650,7 +4307,7 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
     for path in adr_files(repo):
         try:
             text = path.read_text(encoding="utf-8")
-            data, _, _ = parse_frontmatter(text)
+            data, strict = adr_document_data(path)
         except EpctlError:
             continue
         adrs.append(
@@ -3663,6 +4320,13 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                     "R",
                 ),
                 "decision_maker": data.get("decision_maker", ""),
+                "depends_on": parse_inline_ids(data.get("depends_on", ""), "ADR"),
+                "amends": parse_inline_ids(data.get("amends", ""), "ADR"),
+                "design_refs": parse_string_array(
+                    data.get("design_refs", ""),
+                    "design_refs",
+                ),
+                "contract": "strict" if strict else "legacy-linked",
                 "superseded_by": data.get("superseded_by", ""),
                 "last_activity": last_activity(text, data),
                 "path": path.relative_to(repo).as_posix(),
@@ -3690,6 +4354,15 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "status": data.get("status", ""),
                 "research_gate": data.get("research_gate", "legacy"),
                 "architecture_gate": data.get("architecture_gate", "legacy"),
+                "adr_refs": parse_inline_ids(data.get("adr_refs", ""), "ADR"),
+                "design_refs": parse_string_array(
+                    data.get("design_refs", ""),
+                    "design_refs",
+                ),
+                "architecture_entrypoint": data.get(
+                    "architecture_entrypoint",
+                    "",
+                ),
                 "acceptance": f"{sum(acceptance)}/{len(acceptance)}",
                 "tasks": f"{sum(s in {'done', 'cancelled'} for s in tasks)}/{len(tasks)}"
                 if tasks
@@ -3755,14 +4428,20 @@ def print_status(repo: Path, as_json: bool) -> None:
         )
     print()
     print(
-        "| ADR | Title | Status | Research | Decision maker | "
-        "Superseded by | Last activity |"
+        "| ADR | Title | Status | Relations | Research | Designs | Contract | "
+        "Decision maker | Superseded by | Last activity |"
     )
-    print("|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|")
     for row in payload["adrs"]:
+        relations = [
+            *(f"depends:{item}" for item in row["depends_on"]),
+            *(f"amends:{item}" for item in row["amends"]),
+        ]
         print(
             f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
+            f"{md_cell(', '.join(relations) or '—')} | "
             f"{md_cell(', '.join(row['research_refs']) or '—')} | "
+            f"{len(row['design_refs']) or '—'} | {row['contract']} | "
             f"{md_cell(str(row['decision_maker']) or '—')} | "
             f"{row['superseded_by'] or '—'} | {row['last_activity']} |"
         )
@@ -3798,6 +4477,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo", default=".", help="Target repository root")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="Create missing directories and repository indexes")
+    architecture_root = sub.add_parser(
+        "register-architecture-root",
+        help="Register an existing repository Design Doc/ADR corpus",
+    )
+    architecture_root.add_argument(
+        "path",
+        help="Repository-relative directory under docs/",
+    )
 
     research = sub.add_parser(
         "new-research",
@@ -3833,6 +4520,27 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="R-NNN",
         help="Concluded Research reference; repeat for multiple packages",
     )
+    adr.add_argument(
+        "--depends-on",
+        action="append",
+        default=[],
+        metavar="ADR-NNN",
+        help="Accepted prerequisite ADR; repeat for multiple dependencies",
+    )
+    adr.add_argument(
+        "--amends",
+        action="append",
+        default=[],
+        metavar="ADR-NNN",
+        help="Accepted ADR narrowed or extended by this decision; repeatable",
+    )
+    adr.add_argument(
+        "--design",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Repository-relative Design Doc; repeat for multiple documents",
+    )
 
     decide = sub.add_parser(
         "decide-adr",
@@ -3860,7 +4568,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ep = sub.add_parser(
         "new-ep",
-        help="Create a gated v2.3 ExecPlan with completion attestation fields",
+        help="Create a gated v2.4 ExecPlan from an architecture input set",
     )
     ep.add_argument("--slug", required=True)
     ep.add_argument("--title", required=True)
@@ -3878,6 +4586,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="ADR-NNN",
         help="Accepted current ADR reference; repeat for multiple decisions",
+    )
+    ep.add_argument(
+        "--design",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Repository-relative Design Doc; repeat for multiple documents",
+    )
+    ep.add_argument(
+        "--architecture-entrypoint",
+        default="",
+        metavar="PATH",
+        help="Optional index or overview for the architecture input set",
     )
     ep.add_argument("--research-not-required-reason", default="")
     ep.add_argument("--architecture-not-required-reason", default="")
@@ -3977,6 +4698,8 @@ def main(argv: list[str] | None = None) -> int:
             with repo_lock(repo):
                 created = init_repo(repo)
             print(json.dumps({"created": created}, ensure_ascii=False))
+        elif args.command == "register-architecture-root":
+            print(register_architecture_root(repo, args.path))
         elif args.command == "new-research":
             print(new_research(repo, args.slug, args.title, args.owner))
         elif args.command == "archive-research":
@@ -3996,6 +4719,9 @@ def main(argv: list[str] | None = None) -> int:
                     args.title,
                     args.owner,
                     args.research,
+                    args.depends_on,
+                    args.amends,
+                    args.design,
                 )
             )
         elif args.command == "decide-adr":
@@ -4018,6 +4744,8 @@ def main(argv: list[str] | None = None) -> int:
                     args.owner,
                     args.research,
                     args.adr,
+                    args.design,
+                    args.architecture_entrypoint,
                     args.research_not_required_reason,
                     args.architecture_not_required_reason,
                 )

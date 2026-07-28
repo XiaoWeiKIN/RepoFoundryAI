@@ -446,7 +446,7 @@ class EpctlTestCase(unittest.TestCase):
             ).stdout.strip()
         )
         content = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.3"', content)
+        self.assertIn('schema_version: "2.4"', content)
         self.assertIn("verified_revision:", content)
         self.assertIn("verification_evidence: []", content)
         self.assertIn("archive_sha256:", content)
@@ -459,6 +459,248 @@ class EpctlTestCase(unittest.TestCase):
         status = json.loads(self.run_cli("status", "--json").stdout)
         self.assertEqual(status["plans"][0]["research_gate"], "satisfied")
         self.assertEqual(status["plans"][0]["architecture_gate"], "satisfied")
+
+    def test_linked_multi_adr_and_design_doc_corpus_is_dependency_closed(
+        self,
+    ) -> None:
+        self.init()
+        design_root = self.repo / "docs" / "design-docs"
+        design_root.mkdir()
+        (design_root / "index.md").write_text(
+            "# Architecture entrypoint\n",
+            encoding="utf-8",
+        )
+        design_ref = "docs/design-docs/spans-env-placement-routing.md"
+        (self.repo / design_ref).write_text(
+            """---
+doc_type: design
+status: draft
+owner: platform
+last_verified: 2026-07-20
+relates_to:
+  - ADR-010
+  - ADR-011
+---
+
+# Spans environment placement routing
+""",
+            encoding="utf-8",
+        )
+        (design_root / "ADR-010-Spans-Storage-Substrate.md").write_text(
+            """---
+doc_type: adr
+title: Spans storage substrate
+status: accepted
+created: 2026-07-18
+last_verified: 2026-07-20
+relates_to:
+  - docs/design-docs/spans-env-placement-routing.md
+---
+
+# ADR-010: Spans storage substrate
+""",
+            encoding="utf-8",
+        )
+        (design_root / "ADR-011-Spans-Placement-Routing.md").write_text(
+            f"""---
+doc_type: adr
+title: Spans placement routing
+status: accepted
+created: 2026-07-20
+last_verified: 2026-07-20
+depends_on: ["ADR-010"]
+amends: []
+design_refs: ["{design_ref}"]
+relates_to:
+  - ADR-010
+  - {design_ref}
+---
+
+# ADR-011: Spans placement routing
+""",
+            encoding="utf-8",
+        )
+
+        registered = self.run_cli(
+            "register-architecture-root",
+            "docs/design-docs",
+        )
+        self.assertIn("docs/design-docs", registered.stdout)
+        config = json.loads(
+            (self.repo / "docs" / ".epctl" / "config.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            config["architecture_roots"],
+            ["docs/adr", "docs/design-docs"],
+        )
+        validation = self.run_cli("validate")
+        self.assertIn('"errors": 0', validation.stdout)
+        self.assertIn("legacy linked ADR", validation.stderr)
+        self.assertIn("still draft", validation.stderr)
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        self.assertEqual(len(status["adrs"]), 2)
+        self.assertEqual(status["adrs"][1]["depends_on"], ["ADR-010"])
+        self.assertEqual(status["adrs"][1]["contract"], "legacy-linked")
+
+        missing_dependency = self.run_cli(
+            "new-ep",
+            "--slug",
+            "missing-dependency",
+            "--title",
+            "Missing dependency",
+            "--research-not-required-reason",
+            "Existing operational evidence is sufficient.",
+            "--adr",
+            "ADR-011",
+            "--design",
+            design_ref,
+            expected=2,
+        )
+        self.assertIn("dependency-closed", missing_dependency.stderr)
+        missing_design = self.run_cli(
+            "new-ep",
+            "--slug",
+            "missing-design",
+            "--title",
+            "Missing design",
+            "--research-not-required-reason",
+            "Existing operational evidence is sufficient.",
+            "--adr",
+            "ADR-010",
+            "--adr",
+            "ADR-011",
+            expected=2,
+        )
+        self.assertIn("requires Design Doc references", missing_design.stderr)
+
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "spans-routing",
+                "--title",
+                "Implement spans routing",
+                "--research-not-required-reason",
+                "Existing operational evidence is sufficient.",
+                "--adr",
+                "ADR-010",
+                "--adr",
+                "ADR-011",
+                "--design",
+                design_ref,
+                "--architecture-entrypoint",
+                "docs/design-docs/index.md",
+            ).stdout.strip()
+        )
+        plan_text = plan.read_text(encoding="utf-8")
+        self.assertIn('schema_version: "2.4"', plan_text)
+        self.assertIn('adr_refs: ["ADR-010", "ADR-011"]', plan_text)
+        self.assertIn(f'design_refs: ["{design_ref}"]', plan_text)
+        self.assertIn(
+            'architecture_entrypoint: "docs/design-docs/index.md"',
+            plan_text,
+        )
+        self.run_cli("validate")
+
+    def test_adr_dependency_cycles_and_duplicate_ids_are_rejected(self) -> None:
+        self.init()
+        design_root = self.repo / "docs" / "design-docs"
+        design_root.mkdir()
+        for number, dependency in ((10, "ADR-011"), (11, "ADR-010")):
+            (design_root / f"ADR-{number:03d}-cycle.md").write_text(
+                f"""---
+doc_type: adr
+title: Cycle {number}
+status: accepted
+depends_on: ["{dependency}"]
+---
+
+# ADR-{number:03d}
+""",
+                encoding="utf-8",
+            )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+        cycle = self.run_cli("validate", expected=1)
+        self.assertIn("ADR dependency cycle", cycle.stderr)
+
+        duplicate_root = self.repo / "docs" / "other-decisions"
+        duplicate_root.mkdir()
+        (duplicate_root / "ADR-010-duplicate.md").write_text(
+            """---
+doc_type: adr
+title: Duplicate
+status: accepted
+---
+
+# Duplicate ADR-010
+""",
+            encoding="utf-8",
+        )
+        self.run_cli("register-architecture-root", "docs/other-decisions")
+        duplicate = self.run_cli("validate", expected=1)
+        self.assertIn("duplicate ADR id ADR-010", duplicate.stderr)
+
+    def test_architecture_roots_and_design_refs_stay_under_registered_docs(
+        self,
+    ) -> None:
+        self.init()
+        docs_root = self.run_cli(
+            "register-architecture-root",
+            "docs",
+            expected=2,
+        )
+        self.assertIn("below docs", docs_root.stderr)
+        traversal = self.run_cli(
+            "register-architecture-root",
+            "../outside",
+            expected=2,
+        )
+        self.assertIn("escapes repository", traversal.stderr)
+
+        design_root = self.repo / "docs" / "design-docs"
+        design_root.mkdir()
+        outside_design = self.repo / "docs" / "outside.md"
+        outside_design.write_text("# Outside\n", encoding="utf-8")
+        (design_root / "ADR-010-invalid-design.md").write_text(
+            """---
+doc_type: adr
+title: Invalid design reference
+status: accepted
+design_refs: ["docs/outside.md"]
+---
+
+# ADR-010
+""",
+            encoding="utf-8",
+        )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+        invalid_design = self.run_cli("validate", expected=1)
+        self.assertIn(
+            "must be inside a registered architecture root",
+            invalid_design.stderr,
+        )
+
+    def test_declared_unknown_adr_schema_fails_closed(self) -> None:
+        self.init()
+        (self.repo / "docs" / "adr" / "adr-001_unknown.md").write_text(
+            """---
+schema_version: "9"
+id: ADR-001
+title: Unknown schema
+status: accepted
+created: 2026-07-28
+updated: 2026-07-28
+---
+
+# Unknown schema
+""",
+            encoding="utf-8",
+        )
+        self.run_cli("reindex")
+        result = self.run_cli("validate", expected=1)
+        self.assertIn("ADR schema_version must be 1 or 1.1", result.stderr)
 
     def test_accepted_adr_can_supersede_an_accepted_adr(self) -> None:
         self.init()
@@ -511,17 +753,49 @@ class EpctlTestCase(unittest.TestCase):
         )
         self.assertIn("ep-001_current-decision", current.stdout)
 
+    def test_schema_11_adr_seals_typed_inputs_and_decision_outcome(self) -> None:
+        self.init()
+        research = self.new_research("sealed-inputs")
+        self.conclude_research(research)
+        first = self.new_adr("base-decision")
+        self.accept_adr(first, "ADR-001")
+        second = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "dependent-decision",
+                "--title",
+                "Dependent decision",
+                "--research",
+                "R-001",
+                "--depends-on",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        self.accept_adr(second, "ADR-002")
+        accepted_text = second.read_text(encoding="utf-8")
+
+        self.replace_frontmatter(second, "depends_on", "[]")
+        relation_tamper = self.run_cli("validate", expected=1)
+        self.assertIn("decided ADR payload changed", relation_tamper.stderr)
+
+        second.write_text(accepted_text, encoding="utf-8")
+        self.replace_frontmatter(second, "status", "rejected")
+        outcome_tamper = self.run_cli("validate", expected=1)
+        self.assertIn("decided ADR payload changed", outcome_tamper.stderr)
+
     def test_v21_execplan_remains_readable_and_valid(self) -> None:
         self.init()
         plan = self.new_ep("legacy-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.3"',
+            'schema_version: "2.4"',
             'schema_version: "2.1"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:research_refs|research_gate|research_gate_reason|"
-            r"adr_refs|architecture_gate|architecture_gate_reason|"
+            r"adr_refs|design_refs|architecture_entrypoint|"
+            r"architecture_gate|architecture_gate_reason|"
             r"verified_revision|verification_evidence|archive_sha256):.*\n",
             "",
             text,
@@ -547,13 +821,13 @@ class EpctlTestCase(unittest.TestCase):
         self.init()
         plan = self.new_ep("v22-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.3"',
+            'schema_version: "2.4"',
             'schema_version: "2.2"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:verified_revision|verification_evidence|"
-            r"archive_sha256):.*\n",
+            r"archive_sha256|design_refs|architecture_entrypoint):.*\n",
             "",
             text,
         )
@@ -572,14 +846,15 @@ class EpctlTestCase(unittest.TestCase):
         self.init()
         plan = self.new_ep("v20-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.3"',
+            'schema_version: "2.4"',
             'schema_version: "2.0"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:latest_checkpoint|research_refs|research_gate|"
             r"research_gate_reason|adr_refs|architecture_gate|"
-            r"architecture_gate_reason|verified_revision|"
+            r"architecture_gate_reason|design_refs|architecture_entrypoint|"
+            r"verified_revision|"
             r"verification_evidence|archive_sha256):.*\n",
             "",
             text,
@@ -798,7 +1073,7 @@ class EpctlTestCase(unittest.TestCase):
             encoding="utf-8",
         )
         tampered = self.run_cli("validate", expected=1)
-        self.assertIn("archived v2.3 plan changed", tampered.stderr)
+        self.assertIn("archived v2.4 plan changed", tampered.stderr)
         plans_index = (self.repo / "docs" / "PLANS.md").read_text(
             encoding="utf-8"
         )

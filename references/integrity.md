@@ -53,7 +53,7 @@ accepted ADR 的 `Confirmation` 必须列出持续确认方式。优先级依次
 Checkpoint 使用 `--revision` 记录它封存的 repository/workspace 版本。可以是
 `git:<sha>`、其他 VCS revision，或稳定的 `snapshot:<id>`；它不绑定 GitHub。
 
-完成 v2.3 ExecPlan 时，使用：
+完成 v2.3+ ExecPlan 时，使用：
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 \

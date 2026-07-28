@@ -49,7 +49,7 @@
 | Revision Notes | 对当前事实的每次修订及原因 |
 
 使用 `assets/execplan.md` 作为唯一新建模板。新计划使用
-`schema_version: "2.3"`；v2.0/v2.1/v2.2 只做兼容读取，不因普通编辑静默迁移。
+`schema_version: "2.4"`；v2.0–v2.3 只做兼容读取，不因普通编辑静默迁移。
 
 ## Research 与 Architecture Inputs
 
@@ -57,6 +57,9 @@
 
 - 每份 concluded Research 支持的结论、置信边界和 sealed Synthesis 路径。
 - 每份 accepted ADR 的选择、负面后果、迁移义务和 Confirmation。
+- ADR 的 `depends_on` / `amends` 传递闭包，以及各关系为何属于本次实施输入。
+- 每份 Design Doc 提供的接口、数据流、迁移或运维细节；多文档集合优先给出
+  `architecture_entrypoint`。
 - 哪些事实是审计信息，哪些约束必须进入实现和验收。
 - 剩余未知为何不改变路线，或它们对应的实验、blocker、里程碑和验收项。
 - Gate 为 `not_required` 时，已有证据或“无架构级选择”的具体依据。
@@ -119,6 +122,10 @@ active 计划必须保持为空。归档时 CLI 还会写入 `archive_sha256`，
 accepted ADR 的约束属于当前事实。若 ADR 后续 superseded，active v2.2+
 ExecPlan 必须重新评估路线并更新引用、Inputs、Plan 和 Validation；验证器会拒绝
 superseded ADR 继续满足 Gate。
+
+EP v2.4 的 `adr_refs` 必须依赖闭合：每个引用 ADR 的 `depends_on` 和 `amends`
+传递目标都要显式出现在数组中。ADR 的 `design_refs` 也必须进入 EP 的
+`design_refs`。这样根计划能展示准确输入边界，验证器不需要隐式猜测。
 
 ## Task 规则
 
