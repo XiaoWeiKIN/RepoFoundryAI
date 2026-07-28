@@ -1,0 +1,269 @@
+{
+  "skill_name": "execution-plan",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "spans 查询有个局部 cursor 边界 bug。先告诉我该怎么处理记录，然后直接修，不需要留 bugfix 台账。",
+      "expected_output": "把它路由为会话内轻量计划，不创建 EP、Bugfix 或技术债务记录；说明目标、当前工作项和验证方式即可。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_thread_local_plan",
+          "description": "明确使用会话内轻量计划处理局部修复"
+        },
+        {
+          "name": "does_not_create_persistent_artifact",
+          "description": "没有创建 docs/exec-plans、docs/bugfixes 或技术债务条目"
+        },
+        {
+          "name": "keeps_verification",
+          "description": "轻量计划仍包含可执行验证或可观察结果"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "spans 查询在结果数恰好等于 page_size 时不生成 next cursor。先帮我建一个 bugfix 记录，不要建 EP。",
+      "expected_output": "使用 epctl 创建 BF-NNN，填写 Symptom、Scope、Reproduction 和 Verification，Root Cause/Fix 未知时保留规定占位；更新 BUGFIXES 投影，不创建 EP。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_bugfix",
+          "description": "创建 docs/bugfixes/active/bf-NNN_slug.md"
+        },
+        {
+          "name": "has_bugfix_evidence_fields",
+          "description": "包含 Symptom、Scope、Reproduction、Root Cause、Fix、Verification、Blockers、Outcome"
+        },
+        {
+          "name": "does_not_create_ep",
+          "description": "没有创建 active ExecPlan"
+        },
+        {
+          "name": "does_not_guess_facts",
+          "description": "未知根因、修复方案或严重级别没有被臆测"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "帮我建一个 EP：统一网关、BFF、前端 SDK 的 token 刷新契约，还要兼容旧字段。请把计划写到能让另一个完全没看过本次对话的 Agent 直接继续。",
+      "expected_output": "创建 ep-NNN_slug/EXECPLAN.md。计划自包含，解释系统背景和术语，列出准确仓库相对路径、里程碑、Concrete Steps、工作目录、精确命令、预期观察、行为验收、证据和恢复方式。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_execplan_directory",
+          "description": "创建 docs/exec-plans/active/ep-NNN_slug/EXECPLAN.md"
+        },
+        {
+          "name": "is_self_contained",
+          "description": "仅凭当前工作树和 EXECPLAN.md 即可恢复目标、上下文、路线和下一步"
+        },
+        {
+          "name": "has_concrete_steps",
+          "description": "Concrete Steps 包含工作目录、可复制命令和短预期输出"
+        },
+        {
+          "name": "has_behavioral_acceptance",
+          "description": "Validation and Acceptance 包含用户可观察行为、命令、预期和证据"
+        },
+        {
+          "name": "has_recovery",
+          "description": "记录幂等重试、回滚或清理策略"
+        },
+        {
+          "name": "no_time_estimate",
+          "description": "没有工时或完成日期预测"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "建一个缓存层 EP。我不确定现有 cache 工具是否正确传播 OTel context；先研究和做一个最小实验，别因为不知道就直接把整个 EP 判定为 blocked。",
+      "expected_output": "创建 active EP，把未知写入 Plan of Work/Surprises，给出最小 prototype 或验证命令与预期结果；只有实验无法运行且确有外部能力缺口时才建立 open blocker。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "plans_research_or_prototype",
+          "description": "计划包含检索、最小实验或 prototype 以消除技术未知"
+        },
+        {
+          "name": "records_evidence_location",
+          "description": "说明观察结果应记录到 Surprises & Discoveries 并附证据"
+        },
+        {
+          "name": "does_not_fake_blocker",
+          "description": "没有仅因知识未知就把 EP 状态设为 blocked"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "帮我建一个支付回调迁移 EP。测试环境凭据由外部团队保管，我现在确实拿不到；没有它无法做真实回调验收。请把这个阻塞记录完整。",
+      "expected_output": "EP 状态为 blocked，Blockers 中存在 open 行，包含 ID、Opened、缺少的凭据、影响和明确解锁条件；Progress 记录停止点。不能编造凭据或声称验收通过。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "blocked_state_matches_open_blocker",
+          "description": "front matter 为 blocked 且存在 status=open 的 blocker"
+        },
+        {
+          "name": "blocker_has_lifecycle_fields",
+          "description": "blocker 有 ID、状态、时间、缺失能力、影响和解锁方式"
+        },
+        {
+          "name": "progress_records_stop_point",
+          "description": "Progress 记录已完成内容、受阻原因和可恢复下一步"
+        },
+        {
+          "name": "does_not_claim_validation",
+          "description": "没有把无法运行的真实回调验收标记为通过"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "先建一个示例 EP，写 5 条验收并把其中 4 条标为已完成，性能压测保持未完成；然后尝试归档。即使我说确认，也不要伪装成 completed。",
+      "expected_output": "拒绝 completed 归档，明确列出未完成的性能压测；计划保持 active/blocked，或在用户明确取消并给出原因后归档为 cancelled。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "completion_is_rejected",
+          "description": "未完成验收时没有移动到 completed 并标记 completed"
+        },
+        {
+          "name": "lists_incomplete_acceptance",
+          "description": "明确指出性能压测未完成"
+        },
+        {
+          "name": "offers_truthful_terminal_state",
+          "description": "只提供继续 active/blocked 或带原因 cancelled 的真实选择"
+        },
+        {
+          "name": "has_no_force_bypass",
+          "description": "没有通过用户确认或 force 跳过机械验收门槛"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "为统一错误码的 EP 拆两个可独立验证的 task：一个定义公共契约，一个迁移 HTTP handler。根计划必须仍然足够自包含。",
+      "expected_output": "创建两个 Task；使用 parent_id: EP-NNN 和 depends_on JSON 数组，文件名为有信息量的动词开头 kebab-case；根 EXECPLAN 保留完整里程碑、进度、接口和验收。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "tasks_have_stable_parent",
+          "description": "Task 使用 parent_id: EP-NNN，不引用 active 物理路径"
+        },
+        {
+          "name": "dependencies_use_ids",
+          "description": "depends_on 仅包含 TASK-NNN，handler 迁移依赖契约 Task"
+        },
+        {
+          "name": "tasks_are_independently_verifiable",
+          "description": "每个 Task 有具体 Change 和独立 Validation"
+        },
+        {
+          "name": "root_plan_remains_self_contained",
+          "description": "EXECPLAN.md 仍保留总体上下文、里程碑、关键接口和验收，不退化为链接目录"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "记录一条技术债务：日志导出路径缺少 trace 关联。模块是 exporter；我没有给优先级，也没有承诺处理日期。",
+      "expected_output": "使用 epctl 新增 TD-NNN；area=exporter，priority=unspecified，target=unscheduled，不因为问题用户可见或看似重要而猜 High。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_debt_entry",
+          "description": "技术债务 tracker 增加单调递增的 TD-NNN"
+        },
+        {
+          "name": "preserves_unknown_priority",
+          "description": "优先级为 unspecified 而不是臆测 High"
+        },
+        {
+          "name": "preserves_unknown_target",
+          "description": "目标时间为 unscheduled，没有预测日期"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "请说明错误码 EP 归档时应怎样整理可复用经验；这次只写归档策略，不实际改仓库。不要顺手改 AGENTS.md，也不要直接创建 accepted ADR。",
+      "expected_output": "在 Outcomes 的 Knowledge promotion candidates 中记录候选规范/决策和证据；只有单独授权后才更新标准入口或 draft ADR，不修改 AGENTS.md、不创建 accepted ADR。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "records_promotion_candidates",
+          "description": "复盘中列出可复用知识候选及其依据"
+        },
+        {
+          "name": "does_not_modify_agents",
+          "description": "没有在归档隐含授权下修改 AGENTS.md"
+        },
+        {
+          "name": "does_not_accept_adr",
+          "description": "没有自动创建 accepted ADR；最多建议后续 draft"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "先为登录态回归建一个 BF；随后我补充确认：网关、BFF、SDK 的刷新契约都不一致，需要改公共字段。把它升级成 EP，并把原 BF 正确收口。",
+      "expected_output": "创建自包含 EP；原 Bugfix 填写 linked_ep，终态设为 escalated，Outcome 记录跨模块/契约原因并移入 completed。后续进度只写 EP。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_execplan_for_complex_work",
+          "description": "跨模块公共契约工作由 ExecPlan 承载"
+        },
+        {
+          "name": "bugfix_links_ep",
+          "description": "Bugfix front matter 的 linked_ep 指向真实存在的 EP-NNN"
+        },
+        {
+          "name": "bugfix_is_escalated_and_archived",
+          "description": "Bugfix 状态为 escalated，Outcome 有升级原因，并移动到 completed"
+        },
+        {
+          "name": "avoids_duplicate_progress_sources",
+          "description": "升级后的复杂推进不再同时写 BF 和 EP"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "EP-023 已完成前两个里程碑，Progress、Decision Log 和已解决 blocker 很长，但第三个里程碑还在进行，也有一个 open blocker。帮我压缩根文档，不能丢历史，也不能让接手 Agent 先读一堆历史。",
+      "expected_output": "先把有效发现/决策吸收到当前事实和 Current Snapshot，再用 epctl checkpoint --dry-run 预览并建立 sealed CP-NNN。已完成进度、决策、发现和已关闭 blocker 原文进入 history；未完成进度、验收、open blocker 和准确下一动作留在根文档。完整输出进入 artifacts。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_sealed_checkpoint",
+          "description": "创建 history/cp-NNN_slug.md，front matter 为 sealed 且带 payload_sha256"
+        },
+        {
+          "name": "preserves_open_work_in_root",
+          "description": "未完成 Progress、未完成验收和 open blocker 仍在 EXECPLAN.md"
+        },
+        {
+          "name": "refreshes_current_snapshot",
+          "description": "Current Snapshot 链接最新 CP，并写明当前状态和准确下一动作"
+        },
+        {
+          "name": "history_is_lossless",
+          "description": "旧事件原文进入 checkpoint，而不是只保留不可追溯的摘要"
+        },
+        {
+          "name": "root_remains_resume_entry",
+          "description": "接手 Agent 只读 EXECPLAN.md 即可继续，不需要先读取 checkpoint"
+        },
+        {
+          "name": "large_evidence_is_externalized",
+          "description": "完整 transcript、trace 或截图放在 artifacts，根文档只保留结论和路径"
+        }
+      ]
+    }
+  ]
+}

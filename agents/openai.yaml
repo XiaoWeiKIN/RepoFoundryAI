@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execution Plan"
+  short_description: "管理有界 ExecPlan、Checkpoint、Bugfix 与技术债务"
+  default_prompt: "Use $execution-plan to create and maintain a bounded, self-contained ExecPlan for this complex engineering change."
