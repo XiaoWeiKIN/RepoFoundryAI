@@ -47,59 +47,55 @@
     },
     {
       "id": 3,
-      "prompt": "帮我建一个 EP：统一网关、BFF、前端 SDK 的 token 刷新契约，还要兼容旧字段。请把计划写到能让另一个完全没看过本次对话的 Agent 直接继续。",
-      "expected_output": "创建 ep-NNN_slug/EXECPLAN.md。计划自包含，解释系统背景和术语，列出准确仓库相对路径、里程碑、Concrete Steps、工作目录、精确命令、预期观察、行为验收、证据和恢复方式。",
+      "prompt": "统一网关、BFF、前端 SDK 的 token 刷新契约，还要兼容旧字段。先做充分 Research 和总结，再起草技术架构决策给我看；我看到 ADR 后再决定是否接受，现在不要提前建开发 EP。",
+      "expected_output": "创建 Research 包，围绕现状、兼容约束和候选契约收集证据并形成独立 Synthesis；Research Gate 满足后创建 proposed ADR。没有用户对具体 ADR 的明确决定，因此不接受 ADR，也不创建 ExecPlan。",
       "files": [],
       "assertions": [
         {
-          "name": "creates_execplan_directory",
-          "description": "创建 docs/exec-plans/active/ep-NNN_slug/EXECPLAN.md"
+          "name": "creates_bounded_research",
+          "description": "创建 RESEARCH.md、SYNTHESIS.md、notes 和 artifacts，并保持控制文档有界"
         },
         {
-          "name": "is_self_contained",
-          "description": "仅凭当前工作树和 EXECPLAN.md 即可恢复目标、上下文、路线和下一步"
+          "name": "synthesis_is_decision_ready",
+          "description": "Synthesis 直接回答目的，比较选项，记录证据、置信边界和剩余未知"
         },
         {
-          "name": "has_concrete_steps",
-          "description": "Concrete Steps 包含工作目录、可复制命令和短预期输出"
+          "name": "adr_remains_proposed",
+          "description": "可以起草 proposed ADR，但没有推断用户已接受或拒绝"
         },
         {
-          "name": "has_behavioral_acceptance",
-          "description": "Validation and Acceptance 包含用户可观察行为、命令、预期和证据"
-        },
-        {
-          "name": "has_recovery",
-          "description": "记录幂等重试、回滚或清理策略"
-        },
-        {
-          "name": "no_time_estimate",
-          "description": "没有工时或完成日期预测"
+          "name": "does_not_create_ep_before_gates",
+          "description": "ADR 尚未明确决定时不创建开发 ExecPlan"
         }
       ]
     },
     {
       "id": 4,
       "prompt": "建一个缓存层 EP。我不确定现有 cache 工具是否正确传播 OTel context；先研究和做一个最小实验，别因为不知道就直接把整个 EP 判定为 blocked。",
-      "expected_output": "创建 active EP，把未知写入 Plan of Work/Surprises，给出最小 prototype 或验证命令与预期结果；只有实验无法运行且确有外部能力缺口时才建立 open blocker。",
+      "expected_output": "先创建 active Research，把 OTel context 传播设为 Research Question，设计可复现最小实验并记录证据位置；技术未知本身不构成 blocker。Research concluded、必要 ADR 明确决定后才创建 EP。",
       "files": [],
       "assertions": [
         {
-          "name": "plans_research_or_prototype",
-          "description": "计划包含检索、最小实验或 prototype 以消除技术未知"
+          "name": "creates_research_question",
+          "description": "在 Research 中把 context 传播未知写成 RQ-NNN"
         },
         {
           "name": "records_evidence_location",
-          "description": "说明观察结果应记录到 Surprises & Discoveries 并附证据"
+          "description": "给出最小实验的工作目录、命令、观察标准和 artifacts 路径"
         },
         {
           "name": "does_not_fake_blocker",
-          "description": "没有仅因知识未知就把 EP 状态设为 blocked"
+          "description": "没有仅因技术未知就把 Research 或 EP 设为 blocked"
+        },
+        {
+          "name": "does_not_bypass_research_gate",
+          "description": "Research 未 concluded 时没有创建 active ExecPlan"
         }
       ]
     },
     {
       "id": 5,
-      "prompt": "帮我建一个支付回调迁移 EP。测试环境凭据由外部团队保管，我现在确实拿不到；没有它无法做真实回调验收。请把这个阻塞记录完整。",
+      "prompt": "支付回调迁移已有 concluded R-010 和 accepted ADR-005。请据此建 EP。测试环境凭据由外部团队保管，我现在确实拿不到；没有它无法做真实回调验收。请把这个阻塞记录完整。",
       "expected_output": "EP 状态为 blocked，Blockers 中存在 open 行，包含 ID、Opened、缺少的凭据、影响和明确解锁条件；Progress 记录停止点。不能编造凭据或声称验收通过。",
       "files": [],
       "assertions": [
@@ -123,7 +119,7 @@
     },
     {
       "id": 6,
-      "prompt": "先建一个示例 EP，写 5 条验收并把其中 4 条标为已完成，性能压测保持未完成；然后尝试归档。即使我说确认，也不要伪装成 completed。",
+      "prompt": "先建一个不涉及真实架构选择的示例 EP，为两个 Gate 写清 not-required 理由；写 5 条验收并把其中 4 条标为已完成，性能压测保持未完成；然后尝试归档。即使我说确认，也不要伪装成 completed。",
       "expected_output": "拒绝 completed 归档，明确列出未完成的性能压测；计划保持 active/blocked，或在用户明确取消并给出原因后归档为 cancelled。",
       "files": [],
       "assertions": [
@@ -211,8 +207,8 @@
     },
     {
       "id": 10,
-      "prompt": "先为登录态回归建一个 BF；随后我补充确认：网关、BFF、SDK 的刷新契约都不一致，需要改公共字段。把它升级成 EP，并把原 BF 正确收口。",
-      "expected_output": "创建自包含 EP；原 Bugfix 填写 linked_ep，终态设为 escalated，Outcome 记录跨模块/契约原因并移入 completed。后续进度只写 EP。",
+      "prompt": "先为登录态回归建一个 BF；随后我补充确认：网关、BFF、SDK 的刷新契约都不一致，需要改公共字段。相关 Research R-003 已 concluded，ADR-002 已 accepted。把它升级成 EP，并把原 BF 正确收口。",
+      "expected_output": "引用 R-003/ADR-002 创建自包含 v2.2 EP；原 Bugfix 填写 linked_ep，终态设为 escalated，Outcome 记录跨模块/契约原因并移入 completed。后续进度只写 EP。",
       "files": [],
       "assertions": [
         {
@@ -262,6 +258,142 @@
         {
           "name": "large_evidence_is_externalized",
           "description": "完整 transcript、trace 或截图放在 artifacts，根文档只保留结论和路径"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "仓库中 R-004 已 concluded，ADR-002 已 accepted 且没有被替代。请引用它们创建支付幂等迁移 EP，另一个没看过 Research/ADR 的 Agent 也必须能只读根计划继续。",
+      "expected_output": "创建 v2.2 ExecPlan，Research/Architecture Gate 均为 satisfied；引用 R-004/ADR-002，并在 Research and Architecture Inputs 复述证据结论、架构后果、迁移约束和剩余未知。根计划包含可执行里程碑、命令、验收和恢复方法。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_gated_v22_plan",
+          "description": "schema_version 为 2.2，两个 Gate satisfied，引用真实 Research 和 ADR"
+        },
+        {
+          "name": "restates_upstream_inputs",
+          "description": "根计划复述结论和执行约束，不只写见 R-004/ADR-002"
+        },
+        {
+          "name": "is_self_contained",
+          "description": "只读当前工作树和 EXECPLAN.md 即可恢复路线和下一动作"
+        },
+        {
+          "name": "has_behavioral_acceptance",
+          "description": "包含工作目录、精确命令、预期结果和证据位置"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "R-006 的材料已经很多，但 RQ-003 仍是 open，SYNTHESIS 里也没解释剩余未知。请把 Research 标成 concluded 并继续建 EP。",
+      "expected_output": "拒绝 conclude 和建 EP，指出 open RQ-003 与不完整 Synthesis；保留 Research active/blocked 的真实状态，并给出完成问题或明确 deferred/invalidated disposition 所需的证据。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "research_conclusion_is_rejected",
+          "description": "没有把含 open Research Question 的包移动到 completed/concluded"
+        },
+        {
+          "name": "identifies_open_question",
+          "description": "明确指出 RQ-003 仍需回答或合法处置"
+        },
+        {
+          "name": "requires_decision_ready_synthesis",
+          "description": "要求 Synthesis 说明剩余未知及其为何不阻塞"
+        },
+        {
+          "name": "does_not_create_ep",
+          "description": "Research Gate 未满足时没有创建 ExecPlan"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "R-008 已 concluded。请根据它比较数据库双写与日志回放，起草 ADR；你觉得哪个更好就直接替我选，但我本人还没有做决定。",
+      "expected_output": "可以推荐选项并创建 proposed ADR，但不能运行 accepted/rejected 决定；明确需要用户或 Decision Owner 对具体 ADR 的结果授权。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_proposed_adr",
+          "description": "ADR 包含 Research Evidence、选项、推荐、后果、Confirmation 和 Revisit Triggers"
+        },
+        {
+          "name": "does_not_infer_authority",
+          "description": "用户要求 Agent 替选不等于用户已接受某个具体 ADR"
+        },
+        {
+          "name": "does_not_record_decision_maker",
+          "description": "ADR 保持 proposed，decision_maker/decided/payload_sha256 未伪造"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "我作为该系统的 Decision Owner，已经审阅 ADR-007，明确接受其中的 Option B。请记录这个决定，然后用 concluded R-008 和 ADR-007 创建实现 EP。",
+      "expected_output": "以用户明确给出的身份接受 ADR-007，记录 decision_maker、decided 和 sealed payload；随后创建引用 R-008/ADR-007 的 v2.2 ExecPlan，并复述 Option B 的约束与后果。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "records_explicit_authority",
+          "description": "decision_maker 来自用户明确身份，没有改写为 Agent 自己"
+        },
+        {
+          "name": "seals_decided_adr",
+          "description": "ADR status=accepted 且正文带有效 payload_sha256"
+        },
+        {
+          "name": "creates_plan_after_decision",
+          "description": "只在 ADR accepted 后创建 gated ExecPlan"
+        },
+        {
+          "name": "propagates_consequences",
+          "description": "EP Inputs、Plan 和 Validation 承接 Option B 的实施约束与 Confirmation"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "给一个只改模块内私有 helper 名称和测试的 EP。现有测试已经完整定义行为，不改 API、数据、依赖或部署；请判断能否跳过 Research 和 ADR。",
+      "expected_output": "可以 fast track，但两个 Gate 都必须为 not_required，并分别写出可核查理由：现有测试覆盖输入，且没有长期架构级选择。仍创建自包含 v2.2 ExecPlan 和真实验收。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_explicit_fast_track",
+          "description": "Research 和 Architecture Gate 都使用 not_required，理由具体且不同"
+        },
+        {
+          "name": "does_not_create_empty_research_or_adr",
+          "description": "不为满足形式创建无意义 Research/ADR"
+        },
+        {
+          "name": "keeps_execplan_quality",
+          "description": "fast track 没有降低路径、步骤、验收和恢复要求"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "ADR-004 已被 accepted ADR-009 替代。现有 active EP-012 仍引用 ADR-004。请检查并修正计划输入，不要改写旧 ADR 的正文。",
+      "expected_output": "识别 superseded ADR 不能满足 Gate；更新 EP-012 引用为 ADR-009，并同步 Research and Architecture Inputs、Plan、Validation 和 Revision Notes。保留 ADR-004 sealed 正文与双向 supersession 链。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "rejects_superseded_gate",
+          "description": "没有让 ADR-004 继续作为 current accepted ADR"
+        },
+        {
+          "name": "updates_plan_semantics",
+          "description": "不仅替换 ID，还同步新 ADR 的约束、后果和确认方式"
+        },
+        {
+          "name": "preserves_old_adr_body",
+          "description": "没有编辑 ADR-004 的 sealed Markdown body"
+        },
+        {
+          "name": "records_revision",
+          "description": "EP Revision Notes 说明输入变化和路线影响"
         }
       ]
     }

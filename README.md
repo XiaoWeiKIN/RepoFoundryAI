@@ -1,147 +1,191 @@
 # ExecutionPlan
 
-ExecutionPlan 是一套面向复杂工程任务的仓库级执行系统。它把计划、进度、决策、阻塞和验收保存为可验证的工程制品，让 Agent 能在跨会话、跨人员和长时间迭代后继续工作。
-
-核心约束很简单：**根 `EXECPLAN.md` 始终保持有界、自包含，并且可以直接接手。**
-
-## 适用场景
-
-ExecutionPlan 适合这些工作：
-
-- 跨模块或涉及公共契约的工程变更。
-- 需要多个可独立验收里程碑的长期任务。
-- 存在技术未知、外部依赖或恢复要求的工作。
-- 需要在不同 Agent、会话或开发者之间持续交接的任务。
-- 用户明确要求记录和跟踪的局部 Bugfix。
-
-一次会话可以完成的小改动，继续使用线程内轻量计划即可。
-
-## 根计划保持为当前工作集
+ExecutionPlan 是一套仓库级工程工作流：先把功能未知变成证据，再把证据压缩为可决策结论，保存长期架构决定，最后生成可跨会话恢复的开发计划。
 
 ```mermaid
 flowchart LR
-    W["当前工程工作"] --> R["EXECPLAN.md<br/>当前事实、验收与下一动作"]
-    R -->|"封存已完成历史"| H["history/CP-NNN<br/>不可变 Checkpoint"]
-    R -->|"外置完整证据"| A["artifacts/<br/>日志、Trace、截图"]
-    R -->|"需要独立追踪时拆分"| T["tasks/<br/>有限上下文任务"]
-    H -. "审计时按需读取" .-> R
+    R["Research<br/>问题、来源、实验"] --> S["Synthesis<br/>决策级结论"]
+    S --> A["ADR<br/>选择、后果、确认"]
+    A --> E["ExecPlan<br/>里程碑、步骤、验收"]
+    E --> C["Checkpoint<br/>封存历史，保持根计划有界"]
 ```
 
-根 `EXECPLAN.md` 始终保留：
+核心约束：
 
-- 当前目的、系统事实、约束、接口和恢复方法。
-- 当前里程碑、当前状态与准确下一动作。
-- 所有未完成的 Progress 和 Validation。
-- 所有 open blocker。
+- 复杂功能默认先 Research；已有充分输入时可 fast track，但必须写明理由。
+- Agent 可以起草 proposed ADR；接受或拒绝必须由用户或 Decision Owner 明确授权。
+- 上游引用提供审计链，ExecPlan 仍需自包含。
+- `RESEARCH.md` 和 `EXECPLAN.md` 都是有界工作集，详细证据和历史下沉。
+- 状态、引用、Gate、payload 和索引都可由标准库脚本机械验证。
 
-Checkpoint 无损封存已完成进度、历史发现、决策、已关闭 blocker 和 Revision Notes。完整输出进入 `artifacts/`，根计划只记录结论与证据路径。
+## 为什么把 Research、ADR 和 ExecPlan 分开
 
-## 主要能力
+三个阶段的变化频率和读者不同：
 
-- 生成自包含的 ExecPlan、Task 和 Bugfix 制品。
-- 使用稳定 ID 和高水位避免编号复用。
-- 校验状态机、验收项、依赖关系、blocker 和索引一致性。
-- 建立带 SHA-256 的 sealed Checkpoint，检测历史正文篡改。
-- 在根计划超过 800 行、64 KiB 或 50 条活跃历史事件时提示压缩。
-- 严格检查完成条件，再归档 ExecPlan 或 Bugfix。
-- 从真实制品重建 `PLANS.md` 和 `BUGFIXES.md` 投影。
-- 不依赖 Git 即可在任意代码仓库中运行。
+| 制品 | 回答的问题 | 内容增长策略 |
+|---|---|---|
+| Research | 我们知道什么，证据可靠吗？ | 主题分析进 `notes/`，原始输出进 `artifacts/` |
+| Synthesis | 哪些结论足以支持选择？ | 只保留决策级结论，完成后 SHA-256 封存 |
+| ADR | 长期选择是什么，承担什么后果？ | 稳定路径；方向变化用 superseding ADR |
+| ExecPlan | 已决定的方向怎样落地并验收？ | 已完成历史进 sealed Checkpoint |
+
+这样可以保留完整审计链，同时避免单个 EP 随研究材料和迭代日志无限膨胀。
 
 ## 安装
 
-环境要求：Python 3.10 或更高版本。运行时只使用 Python 标准库。
-
-将仓库克隆到 Codex skills 目录：
+要求 Python 3.10+；运行时只使用标准库。
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/ExecutionPlan.git \
   ~/.codex/skills/execution-plan
 ```
 
-更新已有安装：
+更新：
 
 ```bash
 git -C ~/.codex/skills/execution-plan pull --ff-only
 ```
 
-在 Codex 中可以直接提出：
+在 Codex 中可以直接说：
 
 ```text
-使用 $execution-plan 为这项跨模块变更创建并维护一个 ExecPlan。
+使用 $execution-plan 先研究这个功能，形成技术架构决策，再给出开发计划。
 ```
 
 ## 快速开始
 
-以下命令都在目标代码仓库根目录运行。
+以下命令在目标代码仓库根目录运行。
 
-初始化管理目录：
+初始化：
 
 ```bash
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . init
+EPCTL=~/.codex/skills/execution-plan/scripts/epctl.py
+python3 "$EPCTL" --repo . init
 ```
 
-创建 ExecPlan：
+### 1. Research 与 Synthesis
 
 ```bash
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . new-ep \
-  --slug unify-token-refresh \
-  --title "Unify token refresh"
+python3 "$EPCTL" --repo . new-research \
+  --slug token-refresh-contract \
+  --title "Research token refresh contract"
 ```
 
-生成后完整填写 `EXECPLAN.md`，删除所有 `<!-- REQUIRED... -->` 占位符，再运行：
+生成：
 
-```bash
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . validate
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . status
+```text
+docs/research/active/r-001_token-refresh-contract/
+├── RESEARCH.md
+├── SYNTHESIS.md
+├── notes/
+└── artifacts/
 ```
 
-按需拆分独立 Task：
+完成 Research Questions、证据和 Synthesis 后：
 
 ```bash
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . new-task EP-001 \
-  --slug add-gateway-contract \
-  --title "Add gateway refresh contract"
+python3 "$EPCTL" --repo . archive-research R-001 \
+  --outcome concluded
 ```
 
-## 用 Checkpoint 控制文档增长
+命令会拒绝 open 问题、open blocker 和未填写占位符，封存 Synthesis 正文并把整个包移到 completed。
 
-先把仍然有效的发现和决策吸收到根计划的当前事实，再预览 Checkpoint：
+### 2. ADR
 
 ```bash
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . checkpoint EP-001 \
+python3 "$EPCTL" --repo . new-adr \
+  --slug token-refresh-contract \
+  --title "Choose token refresh contract" \
+  --research R-001
+```
+
+Agent 填写 proposed ADR。得到明确决定后：
+
+```bash
+python3 "$EPCTL" --repo . decide-adr ADR-001 \
+  --outcome accepted \
+  --decision-maker "API Architecture Council"
+```
+
+accepted/rejected ADR 正文会被封存。方向变化时创建并接受新 ADR：
+
+```bash
+python3 "$EPCTL" --repo . supersede-adr ADR-001 --by ADR-002
+```
+
+### 3. Gated ExecPlan
+
+```bash
+python3 "$EPCTL" --repo . new-ep \
+  --slug implement-token-refresh \
+  --title "Implement token refresh contract" \
+  --research R-001 \
+  --adr ADR-001
+```
+
+`new-ep` 只接受 concluded Research 和当前 accepted ADR。生成后，在
+`Research and Architecture Inputs` 中复述关键证据、架构约束、负面后果和剩余未知，再完成里程碑、Concrete Steps、验收和恢复方法。
+
+局部、可逆、输入已经固定的工作可以 fast track：
+
+```bash
+python3 "$EPCTL" --repo . new-ep \
+  --slug clean-local-adapter \
+  --title "Clean local adapter" \
+  --research-not-required-reason \
+  "Current contract tests fully define the behavior." \
+  --architecture-not-required-reason \
+  "No public boundary or durable technical choice changes."
+```
+
+## 控制长期迭代中的文档增长
+
+```mermaid
+flowchart TD
+    W["根 EXECPLAN.md<br/>当前事实和开放工作"] -->|"已完成历史"| H["history/cp-NNN<br/>sealed Checkpoint"]
+    W -->|"完整日志、Trace、截图"| A["artifacts/"]
+    W -->|"有限上下文、独立验证"| T["tasks/"]
+    H -. "审计时按需读取" .-> W
+```
+
+根 `EXECPLAN.md` 始终保留当前目的、系统事实、Gate 输入、当前里程碑、准确下一动作、未完成 Progress/Validation 和 open blocker。
+
+以下时机建立 Checkpoint：
+
+- 一个独立可验证里程碑完成。
+- 准备跨会话交接或暂停。
+- 根计划超过约 800 行、64 KiB 或 50 条活跃历史事件。
+- 已完成历史开始遮蔽当前下一步。
+
+先把仍有效的结论吸收到当前事实，把完整输出移入 `artifacts/`，再预览：
+
+```bash
+python3 "$EPCTL" --repo . checkpoint EP-001 \
   --slug milestone-one \
   --title "Milestone 1 complete" \
   --current-milestone "Milestone 2: adapter integration" \
-  --summary "契约层已完成；适配层仍待实现。" \
+  --summary "契约层已完成；适配层尚未实现。" \
   --next-action "编辑 src/adapter.ts 并运行 npm test。" \
   --dry-run
 ```
 
-确认归档数量和目标路径后，去掉 `--dry-run`。命令会保留所有未完成工作和 open blocker，并刷新根计划的 `Current Snapshot`。
+确认后去掉 `--dry-run`。Checkpoint 无损保存旧事件，根计划继续作为唯一恢复入口。
 
-Checkpoint 适合在以下时机建立：
-
-- 一个可独立验证的里程碑完成。
-- 准备跨会话交接或长时间暂停。
-- `validate` 报告根计划超过默认警戒线。
-- 历史事件开始遮蔽当前下一步。
-
-详细规则见 [Checkpoint 与有界工作集](./references/checkpoints.md)。
-
-## 严格完成与归档
-
-ExecPlan 只有同时满足这些条件才能归档为 completed：
-
-- Validation 全部完成。
-- Task 全部为 `done` 或 `cancelled`。
-- 没有 open blocker。
-- Outcomes & Retrospective 已填写。
-- `validate` 没有错误。
+## 状态、验证与归档
 
 ```bash
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . validate
-python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . archive-ep \
-  EP-001 --outcome completed
+python3 "$EPCTL" --repo . status
+python3 "$EPCTL" --repo . validate
+python3 "$EPCTL" --repo . validate --fix-index
+python3 "$EPCTL" --repo . reindex
+```
+
+`status` 汇总 Research 问题、Synthesis、ADR、ExecPlan Gate、验收、Task、blocker 和 Checkpoint。`validate --fix-index` 只重建派生索引。
+
+ExecPlan 只有在验收完成、Task 终态、无 open blocker、复盘完整且验证通过时才能 completed：
+
+```bash
+python3 "$EPCTL" --repo . archive-ep EP-001 --outcome completed
 ```
 
 ## 生成的仓库结构
@@ -149,15 +193,16 @@ python3 ~/.codex/skills/execution-plan/scripts/epctl.py --repo . archive-ep \
 ```text
 docs/
 ├── .epctl/
+├── RESEARCH.md
+├── DECISIONS.md
 ├── PLANS.md
 ├── BUGFIXES.md
+├── research/
+│   ├── active/
+│   └── completed/
+├── adr/
 ├── exec-plans/
 │   ├── active/
-│   │   └── ep-NNN_slug/
-│   │       ├── EXECPLAN.md
-│   │       ├── tasks/
-│   │       ├── history/
-│   │       └── artifacts/
 │   ├── completed/
 │   └── tech-debt-tracker.md
 └── bugfixes/
@@ -165,39 +210,33 @@ docs/
     └── completed/
 ```
 
-`PLANS.md` 和 `BUGFIXES.md` 是可重建索引。`active/` 与 `completed/` 下的制品才是事实源。
+根索引是可重建投影；目录中的事实制品才决定真实状态。
 
 ## 开发与验证
-
-运行全部测试：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover \
   -s tests -p 'test_*.py' -v
-```
-
-查看命令：
-
-```bash
 python3 scripts/epctl.py --help
 ```
 
-测试覆盖并发编号、Checkpoint 链、篡改检测、索引恢复、严格归档、依赖循环、symlink 防护和无 Git 环境。
+测试覆盖 Gate、Research 结论、Synthesis/ADR/Checkpoint 篡改检测、ADR supersession、并发编号、索引恢复、严格归档、依赖循环、symlink 防护、无 Git 环境和 v2.1 兼容。
 
 ## 项目文档
 
 - [Skill 入口与工作流](./SKILL.md)
-- [ExecPlan 字段与维护规则](./references/template.md)
+- [Research 与 Synthesis](./references/research.md)
+- [ADR 与 Architecture Gate](./references/adr.md)
+- [ExecPlan 规范](./references/template.md)
 - [制品路由与状态机](./references/templates.md)
 - [Checkpoint 与有界工作集](./references/checkpoints.md)
 - [Bugfix 规则](./references/bugfix.md)
-- [典型命令与场景](./references/examples.md)
+- [完整示例](./references/examples.md)
 
 ## 设计来源
 
-ExecutionPlan 借鉴了 OpenAI 对长时间运行 Agent 的工程实践：
+- [OpenAI Harness engineering](https://openai.com/index/harness-engineering/)
+- [OpenAI Codex Exec Plans](https://developers.openai.com/cookbook/articles/codex_exec_plans)
+- [MADR](https://adr.github.io/madr/)
 
-- [Harness engineering: leveraging Codex in an agent-first world](https://openai.com/index/harness-engineering/)
-- [Codex Exec Plans](https://developers.openai.com/cookbook/articles/codex_exec_plans)
-
-这些实践强调仓库内事实源、渐进式信息披露、确定性工具和持续熵管理。ExecutionPlan 将这些原则落成可执行模板、状态约束与 `epctl` 命令。
+仓库内事实源、短入口与渐进披露、确定性工具、first-class plans 和持续熵管理来自 Harness Engineering。自包含 Living Document 来自 Codex Exec Plans。ADR 字段与状态参考 MADR，并增加显式决策权和 payload 封存。

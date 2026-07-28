@@ -1,34 +1,117 @@
 # 使用示例
 
+以下命令都在目标仓库根目录运行，`<skill-dir>` 是本 skill 目录。
+
 ## 初始化
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . init
 ```
 
-只补缺失目录、`docs/PLANS.md`、`docs/BUGFIXES.md` 和技术债务登记册。
+只补缺失目录、四个派生索引和技术债务登记册，不覆盖人工内容。
 
-## 创建复杂 ExecPlan
+## 完整功能生命周期
 
-用户：“统一网关、BFF、SDK 的 token 刷新契约，并兼容旧字段。”
+用户：“先充分研究网关、BFF、SDK 当前的 token 刷新契约，比较兼容方案，形成架构决定，再给开发计划。”
+
+创建 Research：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . new-research \
+  --slug token-refresh-contract \
+  --title "Research token refresh contract"
+```
+
+填写 `RESEARCH.md`，把聚焦分析写到 `notes/`，把完整命令输出写到
+`artifacts/`。所有 `RQ-NNN` 已回答或明确处置、Synthesis 决策就绪后：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . archive-research R-001 \
+  --outcome concluded
+```
+
+公共契约具有架构意义，创建 proposed ADR：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
+  --slug token-refresh-contract \
+  --title "Choose token refresh contract" \
+  --research R-001
+```
+
+Agent 写全 ADR 后停在 proposed。用户或 Decision Owner 明确接受该 ADR 时：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
+  --outcome accepted \
+  --decision-maker "API Architecture Council"
+```
+
+最后创建 gated ExecPlan：
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
-  --slug unify-token-refresh \
-  --title "Unify token refresh contract"
+  --slug implement-token-refresh \
+  --title "Implement token refresh contract" \
+  --research R-001 \
+  --adr ADR-001
 ```
 
-随后研究仓库并填写 `EXECPLAN.md`。至少写一个独立可验证里程碑、明确契约变化、兼容路径、回滚方法和端到端验证。
+在 `Research and Architecture Inputs` 复述兼容约束、迁移义务、负面后果和仍需验证的未知。随后填写里程碑、Concrete Steps、验收与恢复方法。
+
+## 多份输入
+
+参数通过重复 flag 表示：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
+  --slug migrate-storage \
+  --title "Migrate storage" \
+  --research R-003 --research R-007 \
+  --adr ADR-004 --adr ADR-009
+```
+
+ADR 引用的每份 Research 都必须出现在 ExecPlan 中。
+
+## Fast track
+
+用户要求实现一个局部、可逆的 adapter 清理。现有 accepted ADR 已规定边界，没有新的架构选择：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
+  --slug clean-adapter \
+  --title "Clean adapter boundary" \
+  --research-not-required-reason \
+  "ADR-004 and current contract tests fully define the behavior." \
+  --architecture-not-required-reason \
+  "The change stays behind the accepted boundary and adds no durable choice."
+```
+
+理由必须可核查。“任务很小”“用户说直接做”不足以说明为何 Gate 不需要。
+
+## ADR 替代
+
+新证据推翻 ADR-004 的成立条件：
+
+1. 创建并 conclude 新 Research。
+2. 创建引用新 Research 的 proposed ADR-009。
+3. 获得明确授权并接受 ADR-009。
+4. 建立替代链：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-004 \
+  --by ADR-009
+```
+
+引用 ADR-004 的 active ExecPlan 随后必须更新；superseded ADR 不能继续满足 Architecture Gate。
 
 ## 普通修复不自动建记录
 
 用户：“修复 cursor 等于 page_size 时不生成 next cursor 的问题。”
 
-直接复现、修复和验证。用户没有要求保存 bugfix 记录，因此不创建 `docs/bugfixes/`。
+直接复现、修复和验证。用户没有要求保存 Bugfix 记录，不创建持久制品。
 
-## 明确记录 Bugfix
-
-用户：“先帮我记个 bugfix，不要建 EP。”
+## 明确记录并升级 Bugfix
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . new-bugfix \
@@ -37,7 +120,14 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-bugfix \
   --area spans-api
 ```
 
-填写 Reproduction 和 Verification；根因未知时保留 `待定位`。
+如果调查发现需要改变多个客户端的公共契约，先完成所需 Research/ADR，再创建 ExecPlan。随后：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . archive-bugfix BF-001 \
+  --outcome escalated \
+  --linked-ep EP-001 \
+  --reason "The fix changes a shared cursor contract."
+```
 
 ## 拆 Task
 
@@ -47,22 +137,11 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-task EP-001 \
   --title "Add gateway refresh contract"
 ```
 
-Task 使用稳定父 ID。把里程碑和总体进度继续维护在根 `EXECPLAN.md`。
-
-## 处理技术未知
-
-发现第三方库行为不明确时：
-
-1. 建立可丢弃的 prototype/spike。
-2. 运行最小验证。
-3. 在 Surprises & Discoveries 记录观察与证据。
-4. 更新 Plan of Work 和 Decision Log。
-
-只有缺权限、外部输入、人类判断或高风险不可逆操作时建立 open blocker。
+Task 使用稳定父 ID。根 `EXECPLAN.md` 继续保存总体上下文、里程碑、接口和验收。
 
 ## 压缩增长中的 ExecPlan
 
-Milestone 1 已完成，根文档积累了大量进度、发现和已解决 blocker。先把完整测试输出保存到 `artifacts/milestone-1-validation.txt`，再预览 checkpoint：
+先把有效结论吸收到当前事实，把完整输出保存到 `artifacts/`，再预览：
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . checkpoint EP-001 \
@@ -74,9 +153,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . checkpoint EP-001 \
   --dry-run
 ```
 
-检查预览中的归档数量与路径后，去掉 `--dry-run`。脚本保留所有 `[ ]` Progress 和 open blocker，把旧事件原文写入 sealed checkpoint，并刷新根 Current Snapshot。
-
-不要为了缩短文档删除历史、验收或开放问题。checkpoint 后应让一个无历史会话的 Agent 只读根 `EXECPLAN.md`，确认可以直接执行下一动作。
+确认后去掉 `--dry-run`。未完成 Progress/Validation 和 open blocker 留在根计划；旧事件原文进入 sealed Checkpoint。
 
 ## 严格归档
 
@@ -86,14 +163,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
   --outcome completed
 ```
 
-脚本拒绝归档以下计划：
-
-- 验收仍有未勾选项。
-- Task 仍为 todo/in_progress/blocked。
-- 存在 open blocker。
-- Outcomes & Retrospective 仍有必填占位符。
-
-不完整工作保留 active/blocked，或明确取消：
+未完成验收、非终态 Task、open blocker 或未填写复盘都会阻止 completed。明确停止时可以：
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
@@ -102,10 +172,9 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
 
 ## 修复派生索引
 
-如果制品存在但索引缺行，或索引仍指向已移动路径：
-
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . validate --fix-index
 ```
 
-该操作只重建 `PLANS.md` / `BUGFIXES.md` 的托管区，不改 ExecPlan、Bugfix 或托管区外的人工内容。
+该操作重建 `RESEARCH.md`、`DECISIONS.md`、`PLANS.md` 和 `BUGFIXES.md`
+托管区，不修改事实制品或托管区外人工内容。

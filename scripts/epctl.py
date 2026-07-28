@@ -49,6 +49,7 @@ EXECPLAN_SECTIONS = (
     "Revision Notes",
 )
 EXECPLAN_V21_SECTIONS = ("Current Snapshot",)
+EXECPLAN_V22_SECTIONS = ("Research and Architecture Inputs",)
 CHECKPOINT_SECTIONS = (
     "Handoff Summary",
     "Next Action At Checkpoint",
@@ -57,6 +58,44 @@ CHECKPOINT_SECTIONS = (
     "Archived Decision Log",
     "Archived Resolved Blockers",
     "Archived Revision Notes",
+)
+RESEARCH_SECTIONS = (
+    "Purpose and Decision to Enable",
+    "Current Snapshot",
+    "Scope and Non-goals",
+    "Research Questions",
+    "Method and Sources",
+    "Experiments and Prototypes",
+    "Findings",
+    "Contradictions and Uncertainty",
+    "Decision Drivers and Options",
+    "Blockers",
+    "Progress",
+    "Outcome",
+    "Artifacts and Notes",
+    "Revision Notes",
+)
+SYNTHESIS_SECTIONS = (
+    "Executive Conclusion",
+    "Supported Findings",
+    "Rejected Hypotheses",
+    "Remaining Unknowns",
+    "Options Comparison",
+    "Recommendation and Preconditions",
+    "Handoff to ADR and ExecPlan",
+    "Revision Notes",
+)
+ADR_SECTIONS = (
+    "Context and Problem Statement",
+    "Decision Drivers",
+    "Research Evidence",
+    "Considered Options",
+    "Decision Outcome",
+    "Consequences",
+    "Confirmation",
+    "Revisit Triggers",
+    "More Information",
+    "Revision Notes",
 )
 TASK_SECTIONS = ("Context", "Change", "Constraints", "Validation", "Blockers", "Notes")
 BUGFIX_SECTIONS = (
@@ -73,12 +112,17 @@ BUGFIX_SECTIONS = (
 
 PLAN_ACTIVE_STATUSES = {"active", "blocked"}
 PLAN_COMPLETED_STATUSES = {"completed", "cancelled"}
+RESEARCH_ACTIVE_STATUSES = {"active", "blocked"}
+RESEARCH_COMPLETED_STATUSES = {"concluded", "cancelled"}
+ADR_STATUSES = {"proposed", "accepted", "rejected", "superseded"}
+RESEARCH_QUESTION_STATUSES = {"open", "answered", "deferred", "invalidated"}
 TASK_STATUSES = {"todo", "in_progress", "blocked", "done", "cancelled"}
 BUGFIX_ACTIVE_STATUSES = {"open", "in_progress", "blocked"}
 BUGFIX_COMPLETED_STATUSES = {"fixed", "escalated", "cancelled"}
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 BLOCKER_ID_RE = re.compile(r"\bBLK-(\d{3,})\b", re.IGNORECASE)
+RESEARCH_QUESTION_ID_RE = re.compile(r"RQ-(\d{3,})", re.IGNORECASE)
 ROOT_LINE_WARNING = 800
 ROOT_BYTE_WARNING = 64 * 1024
 HISTORY_EVENT_WARNING = 50
@@ -88,6 +132,8 @@ ID_RE = {
     "TD": re.compile(r"\bTD-(\d{3,})\b", re.IGNORECASE),
     "TASK": re.compile(r"\bTASK-(\d{3,})\b", re.IGNORECASE),
     "CP": re.compile(r"\bCP-(\d{3,})\b", re.IGNORECASE),
+    "R": re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE),
+    "ADR": re.compile(r"\bADR-(\d{3,})\b", re.IGNORECASE),
 }
 
 
@@ -112,6 +158,13 @@ def normalize_repo(value: str) -> Path:
     if not repo.exists() or not repo.is_dir():
         raise EpctlError(f"Repository directory does not exist: {repo}")
     return repo
+
+
+def repository_from_artifact(path: Path) -> Path:
+    for parent in path.parents:
+        if parent.name == "docs":
+            return parent.parent
+    raise EpctlError(f"Artifact is not under a docs directory: {path}")
 
 
 def validate_slug(slug: str) -> str:
@@ -260,6 +313,9 @@ def init_repo(repo: Path) -> list[str]:
         "docs/.epctl",
         "docs/exec-plans/active",
         "docs/exec-plans/completed",
+        "docs/research/active",
+        "docs/research/completed",
+        "docs/adr",
         "docs/bugfixes/active",
         "docs/bugfixes/completed",
     )
@@ -272,6 +328,8 @@ def init_repo(repo: Path) -> list[str]:
 
     files = (
         ("docs/PLANS.md", "plans-index.md", {}),
+        ("docs/RESEARCH.md", "research-index.md", {}),
+        ("docs/DECISIONS.md", "decisions-index.md", {}),
         ("docs/BUGFIXES.md", "bugfixes-index.md", {}),
         (
             "docs/exec-plans/tech-debt-tracker.md",
@@ -296,6 +354,10 @@ def id_roots(repo: Path, prefix: str, scope: Path | None = None) -> tuple[Path, 
         return (scope,)
     if prefix == "EP":
         return (repo / "docs" / "exec-plans", repo / "docs" / "PLANS.md")
+    if prefix == "R":
+        return (repo / "docs" / "research", repo / "docs" / "RESEARCH.md")
+    if prefix == "ADR":
+        return (repo / "docs" / "adr", repo / "docs" / "DECISIONS.md")
     if prefix == "BF":
         return (repo / "docs" / "bugfixes", repo / "docs" / "BUGFIXES.md")
     if prefix == "TD":
@@ -646,6 +708,32 @@ def parse_inline_ids(value: str, prefix: str) -> list[str]:
     return [f"{prefix}-{int(number):03d}" for number in ID_RE[prefix].findall(value)]
 
 
+def normalize_reference_ids(values: Iterable[str], prefix: str) -> list[str]:
+    normalized: list[str] = []
+    for value in values:
+        candidate = value.strip().upper()
+        match = ID_RE[prefix].fullmatch(candidate)
+        if not match:
+            raise EpctlError(f"Invalid {prefix} reference: {value!r}")
+        item_id = f"{prefix}-{int(match.group(1)):03d}"
+        if item_id not in normalized:
+            normalized.append(item_id)
+    return normalized
+
+
+def parse_reference_array(value: str, prefix: str, field: str) -> list[str]:
+    try:
+        raw = json.loads(value or "[]")
+    except json.JSONDecodeError as exc:
+        raise EpctlError(f"{field} must be a JSON string array") from exc
+    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+        raise EpctlError(f"{field} must be a JSON string array")
+    normalized = normalize_reference_ids(raw, prefix)
+    if len(normalized) != len(raw):
+        raise EpctlError(f"{field} contains duplicate references")
+    return normalized
+
+
 def marker_block(kind: str) -> str:
     if kind == "EP":
         return (
@@ -672,6 +760,32 @@ def marker_block(kind: str) -> str:
             "| ID | Title | Area | Severity | Status | Updated | Linked EP | Path |\n"
             "|---|---|---|---|---|---|---|---|\n"
             "<!-- BFCTL:COMPLETED:END -->\n"
+        )
+    if kind == "R":
+        return (
+            "\n\n## epctl managed Research index\n\n### Active\n\n"
+            "<!-- RCTL:ACTIVE:START -->\n"
+            "| ID | Title | Status | Updated | Synthesis | Path |\n"
+            "|---|---|---|---|---|---|\n"
+            "<!-- RCTL:ACTIVE:END -->\n\n"
+            "### Completed\n\n"
+            "<!-- RCTL:COMPLETED:START -->\n"
+            "| ID | Title | Status | Updated | Synthesis | Path |\n"
+            "|---|---|---|---|---|---|\n"
+            "<!-- RCTL:COMPLETED:END -->\n"
+        )
+    if kind == "ADR":
+        return (
+            "\n\n## epctl managed ADR index\n\n### Proposed\n\n"
+            "<!-- ADRCTL:ACTIVE:START -->\n"
+            "| ID | Title | Status | Updated | Research | Superseded By | Path |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "<!-- ADRCTL:ACTIVE:END -->\n\n"
+            "### Decided\n\n"
+            "<!-- ADRCTL:COMPLETED:START -->\n"
+            "| ID | Title | Status | Updated | Research | Superseded By | Path |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "<!-- ADRCTL:COMPLETED:END -->\n"
         )
     if kind == "TD":
         return (
@@ -728,6 +842,16 @@ def index_header(kind: str) -> tuple[str, str]:
         return (
             "| ID | Title | Area | Severity | Status | Updated | Linked EP | Path |",
             "|---|---|---|---|---|---|---|---|",
+        )
+    if kind == "R":
+        return (
+            "| ID | Title | Status | Updated | Synthesis | Path |",
+            "|---|---|---|---|---|---|",
+        )
+    if kind == "ADR":
+        return (
+            "| ID | Title | Status | Updated | Research | Superseded By | Path |",
+            "|---|---|---|---|---|---|---|",
         )
     raise EpctlError(f"Unsupported index kind: {kind}")
 
@@ -825,12 +949,61 @@ def bugfix_index_row(repo: Path, path: Path) -> str:
     )
 
 
+def research_index_row(repo: Path, path: Path) -> str:
+    data = artifact_metadata(path, "R")
+    item_id = data.get("id", "")
+    relative = path.relative_to(repo / "docs").as_posix()
+    synthesis = (path.parent / data.get("synthesis", "SYNTHESIS.md")).relative_to(
+        repo / "docs"
+    ).as_posix()
+    return (
+        f"| {item_id} | {md_cell(data.get('title', item_id))} | "
+        f"{md_cell(data.get('status', ''))} | {md_cell(data.get('updated', ''))} | "
+        f"[Synthesis]({synthesis}) | [Research]({relative}) |"
+    )
+
+
+def adr_index_row(repo: Path, path: Path) -> str:
+    data = artifact_metadata(path, "ADR")
+    item_id = data.get("id", "")
+    relative = path.relative_to(repo / "docs").as_posix()
+    return (
+        f"| {item_id} | {md_cell(data.get('title', item_id))} | "
+        f"{md_cell(data.get('status', ''))} | {md_cell(data.get('updated', ''))} | "
+        f"{md_cell(data.get('research_refs', ''))} | "
+        f"{md_cell(data.get('superseded_by', ''))} | [ADR]({relative}) |"
+    )
+
+
+def managed_index_snapshots(repo: Path) -> dict[Path, str]:
+    return {
+        path: path.read_text(encoding="utf-8")
+        for path in (
+            repo / "docs" / "PLANS.md",
+            repo / "docs" / "RESEARCH.md",
+            repo / "docs" / "DECISIONS.md",
+            repo / "docs" / "BUGFIXES.md",
+        )
+        if path.exists()
+    }
+
+
+def restore_managed_indexes(snapshots: dict[Path, str]) -> None:
+    for path, text in snapshots.items():
+        atomic_write(path, text)
+
+
 def rebuild_indexes(repo: Path) -> dict[str, int]:
     init_repo(repo)
     plan_index = repo / "docs" / "PLANS.md"
+    research_index = repo / "docs" / "RESEARCH.md"
+    decision_index = repo / "docs" / "DECISIONS.md"
     bugfix_index = repo / "docs" / "BUGFIXES.md"
     active_plans = plan_files(repo, "active")
     completed_plans = plan_files(repo, "completed")
+    active_research = research_files(repo, "active")
+    completed_research = research_files(repo, "completed")
+    adrs = adr_files(repo)
     active_bugfixes = bugfix_files(repo, "active")
     completed_bugfixes = bugfix_files(repo, "completed")
 
@@ -848,6 +1021,44 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
         (plan_index_row(repo, path) for path in completed_plans),
     )
     atomic_write(plan_index, plans_text)
+
+    research_text = research_index.read_text(encoding="utf-8")
+    research_text = replace_index_rows(
+        research_text,
+        "R",
+        "ACTIVE",
+        (research_index_row(repo, path) for path in active_research),
+    )
+    research_text = replace_index_rows(
+        research_text,
+        "R",
+        "COMPLETED",
+        (research_index_row(repo, path) for path in completed_research),
+    )
+    atomic_write(research_index, research_text)
+
+    decision_text = decision_index.read_text(encoding="utf-8")
+    decision_text = replace_index_rows(
+        decision_text,
+        "ADR",
+        "ACTIVE",
+        (
+            adr_index_row(repo, path)
+            for path in adrs
+            if artifact_metadata(path, "ADR").get("status") == "proposed"
+        ),
+    )
+    decision_text = replace_index_rows(
+        decision_text,
+        "ADR",
+        "COMPLETED",
+        (
+            adr_index_row(repo, path)
+            for path in adrs
+            if artifact_metadata(path, "ADR").get("status") != "proposed"
+        ),
+    )
+    atomic_write(decision_index, decision_text)
 
     bugfix_text = bugfix_index.read_text(encoding="utf-8")
     bugfix_text = replace_index_rows(
@@ -867,7 +1078,7 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
     state = load_state(repo)
     high_water = state["high_water"]
     assert isinstance(high_water, dict)
-    for prefix in ("EP", "BF", "TD"):
+    for prefix in ("EP", "R", "ADR", "BF", "TD"):
         high_water[prefix] = max(
             int(high_water.get(prefix, 0)),
             max(scan_ids(repo, prefix), default=0),
@@ -875,6 +1086,8 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
     save_state(repo, state)
     return {
         "plans": len(active_plans) + len(completed_plans),
+        "research": len(active_research) + len(completed_research),
+        "adrs": len(adrs),
         "bugfixes": len(active_bugfixes) + len(completed_bugfixes),
     }
 
@@ -896,6 +1109,27 @@ def plan_files(repo: Path, state: str | None = None) -> list[Path]:
         found.extend(root.glob("ep-*/README.md"))
         found.extend(root.glob("ep-*.md"))
     return sorted(set(found))
+
+
+def research_files(repo: Path, state: str | None = None) -> list[Path]:
+    roots = (
+        [repo / "docs" / "research" / state]
+        if state
+        else [
+            repo / "docs" / "research" / "active",
+            repo / "docs" / "research" / "completed",
+        ]
+    )
+    found: list[Path] = []
+    for root in roots:
+        if root.exists():
+            found.extend(root.glob("r-*/RESEARCH.md"))
+    return sorted(set(found))
+
+
+def adr_files(repo: Path) -> list[Path]:
+    root = repo / "docs" / "adr"
+    return sorted(root.glob("adr-*.md")) if root.exists() else []
 
 
 def bugfix_files(repo: Path, state: str | None = None) -> list[Path]:
@@ -952,6 +1186,46 @@ def find_bugfix(repo: Path, bugfix_id: str, state: str | None = None) -> Path:
     return matches[0]
 
 
+def find_research(repo: Path, research_id: str, state: str | None = None) -> Path:
+    target = research_id.upper()
+    id_match = ID_RE["R"].fullmatch(target)
+    target_number = int(id_match.group(1)) if id_match else -1
+    matches: list[Path] = []
+    for path in research_files(repo, state):
+        try:
+            data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except EpctlError:
+            data = {}
+        path_numbers = {
+            int(number) for number in ID_RE["R"].findall(path.as_posix())
+        }
+        if data.get("id", "").upper() == target or target_number in path_numbers:
+            matches.append(path)
+    if len(matches) != 1:
+        raise EpctlError(f"Expected one {target} Research package, found {len(matches)}")
+    return matches[0]
+
+
+def find_adr(repo: Path, adr_id: str) -> Path:
+    target = adr_id.upper()
+    id_match = ID_RE["ADR"].fullmatch(target)
+    target_number = int(id_match.group(1)) if id_match else -1
+    matches: list[Path] = []
+    for path in adr_files(repo):
+        try:
+            data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except EpctlError:
+            data = {}
+        path_numbers = {
+            int(number) for number in ID_RE["ADR"].findall(path.as_posix())
+        }
+        if data.get("id", "").upper() == target or target_number in path_numbers:
+            matches.append(path)
+    if len(matches) != 1:
+        raise EpctlError(f"Expected one {target} ADR, found {len(matches)}")
+    return matches[0]
+
+
 def task_files(plan_path: Path) -> list[Path]:
     return sorted((plan_path.parent / "tasks").glob("*.md"))
 
@@ -991,10 +1265,194 @@ def history_event_count(text: str) -> int:
     return count
 
 
-def new_ep(repo: Path, slug: str, title: str, owner: str) -> Path:
+def new_research(repo: Path, slug: str, title: str, owner: str) -> Path:
     validate_slug(slug)
     with repo_lock(repo):
         init_repo(repo)
+        item_id = next_id(repo, "R")
+        number = int(item_id.split("-")[1])
+        directory_name = f"r-{number:03d}_{slug}"
+        directory = repo / "docs" / "research" / "active" / directory_name
+        path = directory / "RESEARCH.md"
+        synthesis_path = directory / "SYNTHESIS.md"
+        reject_symlink_path(repo, path)
+        reject_symlink_path(repo, synthesis_path)
+        if directory.exists():
+            raise EpctlError(f"Destination already exists: {directory}")
+        research_text = render_asset(
+            "research.md",
+            {
+                "ID": item_id,
+                "TITLE": yaml_string(title),
+                "OWNER": yaml_string(owner),
+                "DATE": date_string(),
+                "TIMESTAMP": timestamp_string(),
+                "DIR_NAME": directory_name,
+            },
+        )
+        synthesis_text = render_asset(
+            "synthesis.md",
+            {
+                "PARENT_ID": item_id,
+                "TITLE": yaml_string(f"{title} — Synthesis"),
+                "DATE": date_string(),
+                "TIMESTAMP": timestamp_string(),
+            },
+        )
+        index_path = repo / "docs" / "RESEARCH.md"
+        old_index = index_path.read_text(encoding="utf-8")
+        relative = path.relative_to(repo / "docs").as_posix()
+        synthesis_relative = synthesis_path.relative_to(repo / "docs").as_posix()
+        row = (
+            f"| {item_id} | {md_cell(title)} | active | {date_string()} | "
+            f"[Synthesis]({synthesis_relative}) | [Research]({relative}) |"
+        )
+        new_index = upsert_index_row(
+            old_index, "R", "ACTIVE", item_id, row
+        )
+        try:
+            atomic_write(path, research_text)
+            atomic_write(synthesis_path, synthesis_text)
+            (directory / "notes").mkdir()
+            (directory / "artifacts").mkdir()
+            atomic_write(index_path, new_index)
+        except Exception:
+            atomic_write(index_path, old_index)
+            for candidate in (synthesis_path, path):
+                if candidate.exists():
+                    candidate.unlink()
+            for child in (directory / "artifacts", directory / "notes"):
+                if child.exists() and not any(child.iterdir()):
+                    child.rmdir()
+            if directory.exists() and not any(directory.iterdir()):
+                directory.rmdir()
+            raise
+        return path
+
+
+def new_adr(
+    repo: Path,
+    slug: str,
+    title: str,
+    owner: str,
+    research_values: Iterable[str],
+) -> Path:
+    validate_slug(slug)
+    research_refs = normalize_reference_ids(research_values, "R")
+    with repo_lock(repo):
+        init_repo(repo)
+        for research_id in research_refs:
+            research_path = find_research(repo, research_id, "completed")
+            errors, _ = validate_research(research_path)
+            data, _, _ = parse_frontmatter(
+                research_path.read_text(encoding="utf-8")
+            )
+            if errors or data.get("status") != "concluded":
+                details = "; ".join(errors) if errors else data.get("status", "")
+                raise EpctlError(
+                    f"{research_id} must be valid and concluded: {details}"
+                )
+        item_id = next_id(repo, "ADR")
+        number = int(item_id.split("-")[1])
+        path = repo / "docs" / "adr" / f"adr-{number:03d}_{slug}.md"
+        reject_symlink_path(repo, path)
+        if path.exists():
+            raise EpctlError(f"Destination already exists: {path}")
+        refs_json = json.dumps(research_refs, ensure_ascii=False)
+        text = render_asset(
+            "adr.md",
+            {
+                "ID": item_id,
+                "TITLE": yaml_string(title),
+                "OWNER": yaml_string(owner),
+                "RESEARCH_REFS": refs_json,
+                "DATE": date_string(),
+                "TIMESTAMP": timestamp_string(),
+            },
+        )
+        index_path = repo / "docs" / "DECISIONS.md"
+        old_index = index_path.read_text(encoding="utf-8")
+        relative = path.relative_to(repo / "docs").as_posix()
+        row = (
+            f"| {item_id} | {md_cell(title)} | proposed | {date_string()} | "
+            f"{md_cell(refs_json)} |  | [ADR]({relative}) |"
+        )
+        new_index = upsert_index_row(
+            old_index, "ADR", "ACTIVE", item_id, row
+        )
+        try:
+            atomic_write(path, text)
+            atomic_write(index_path, new_index)
+        except Exception:
+            if path.exists():
+                path.unlink()
+            atomic_write(index_path, old_index)
+            raise
+        return path
+
+
+def new_ep(
+    repo: Path,
+    slug: str,
+    title: str,
+    owner: str,
+    research_values: Iterable[str],
+    adr_values: Iterable[str],
+    research_not_required_reason: str,
+    architecture_not_required_reason: str,
+) -> Path:
+    validate_slug(slug)
+    research_refs = normalize_reference_ids(research_values, "R")
+    adr_refs = normalize_reference_ids(adr_values, "ADR")
+    research_reason = inline_text(research_not_required_reason)
+    architecture_reason = inline_text(architecture_not_required_reason)
+    if research_refs and research_reason:
+        raise EpctlError(
+            "Use Research references or --research-not-required-reason, not both"
+        )
+    if not research_refs and not research_reason:
+        raise EpctlError(
+            "new-ep requires concluded --research references or "
+            "--research-not-required-reason"
+        )
+    if adr_refs and architecture_reason:
+        raise EpctlError(
+            "Use ADR references or --architecture-not-required-reason, not both"
+        )
+    if not adr_refs and not architecture_reason:
+        raise EpctlError(
+            "new-ep requires accepted --adr references or "
+            "--architecture-not-required-reason"
+        )
+    with repo_lock(repo):
+        init_repo(repo)
+        for research_id in research_refs:
+            research_path = find_research(repo, research_id, "completed")
+            errors, _ = validate_research(research_path)
+            data, _, _ = parse_frontmatter(
+                research_path.read_text(encoding="utf-8")
+            )
+            if errors or data.get("status") != "concluded":
+                details = "; ".join(errors) if errors else data.get("status", "")
+                raise EpctlError(
+                    f"{research_id} must be valid and concluded: {details}"
+                )
+        for adr_id in adr_refs:
+            adr_path = find_adr(repo, adr_id)
+            errors, _, adr_data = validate_adr(adr_path)
+            if errors or adr_data.get("status") != "accepted":
+                details = "; ".join(errors) if errors else adr_data.get("status", "")
+                raise EpctlError(
+                    f"{adr_id} must be valid, accepted and current: {details}"
+                )
+            missing_research = set(
+                parse_inline_ids(adr_data.get("research_refs", ""), "R")
+            ) - set(research_refs)
+            if missing_research:
+                raise EpctlError(
+                    f"{adr_id} requires Research references missing from the plan: "
+                    + ", ".join(sorted(missing_research))
+                )
         item_id = next_id(repo, "EP")
         number = int(item_id.split("-")[1])
         directory_name = f"ep-{number:03d}_{slug}"
@@ -1009,6 +1467,18 @@ def new_ep(repo: Path, slug: str, title: str, owner: str) -> Path:
                 "ID": item_id,
                 "TITLE": yaml_string(title),
                 "OWNER": yaml_string(owner),
+                "RESEARCH_REFS": json.dumps(
+                    research_refs, ensure_ascii=False
+                ),
+                "RESEARCH_GATE": (
+                    "satisfied" if research_refs else "not_required"
+                ),
+                "RESEARCH_GATE_REASON": yaml_string(research_reason),
+                "ADR_REFS": json.dumps(adr_refs, ensure_ascii=False),
+                "ARCHITECTURE_GATE": (
+                    "satisfied" if adr_refs else "not_required"
+                ),
+                "ARCHITECTURE_GATE_REASON": yaml_string(architecture_reason),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
                 "DIR_NAME": directory_name,
@@ -1178,9 +1648,10 @@ def checkpoint_plan(
             raise EpctlError("checkpoint requires a v2 EXECPLAN.md")
         text = plan_path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
-        if data.get("schema_version") != "2.1":
+        if data.get("schema_version") not in {"2.1", "2.2"}:
             raise EpctlError(
-                "checkpoint requires schema_version 2.1 and ## Current Snapshot"
+                "checkpoint requires schema_version 2.1 or 2.2 "
+                "and ## Current Snapshot"
             )
         errors, _ = validate_plan(plan_path)
         if errors:
@@ -1338,10 +1809,7 @@ def checkpoint_plan(
         if dry_run:
             return payload
 
-        plans_index = repo / "docs" / "PLANS.md"
-        bugfix_index = repo / "docs" / "BUGFIXES.md"
-        old_plans_index = plans_index.read_text(encoding="utf-8")
-        old_bugfix_index = bugfix_index.read_text(encoding="utf-8")
+        snapshots = managed_index_snapshots(repo)
         try:
             atomic_write(checkpoint_path, candidate)
             atomic_write(plan_path, new_root)
@@ -1358,8 +1826,7 @@ def checkpoint_plan(
                 checkpoint_path.unlink()
             if history_dir.exists() and not any(history_dir.iterdir()):
                 history_dir.rmdir()
-            atomic_write(plans_index, old_plans_index)
-            atomic_write(bugfix_index, old_bugfix_index)
+            restore_managed_indexes(snapshots)
             raise
         return payload
 
@@ -1467,6 +1934,269 @@ def validate_blocker_table(path: Path, text: str) -> list[str]:
                 f"{path}: open blocker {blocker_id} cannot have Resolved"
             )
     return errors
+
+
+def research_question_rows(text: str) -> list[list[str]]:
+    body = section(text, "Research Questions") or ""
+    rows: list[list[str]] = []
+    for line in visible_markdown_lines(body):
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = split_table_row(line)
+        if not cells or cells[0].lower() == "id" or set(cells[0]) == {"-"}:
+            continue
+        rows.append(cells)
+    return rows
+
+
+def validate_research_questions(path: Path, text: str) -> tuple[list[str], int]:
+    errors: list[str] = []
+    seen: set[str] = set()
+    open_count = 0
+    rows = research_question_rows(text)
+    if not rows:
+        return [f"{path}: Research Questions needs at least one row"], open_count
+    for cells in rows:
+        if len(cells) < 5:
+            errors.append(f"{path}: Research Question rows need five columns")
+            continue
+        question_id = cells[0].upper()
+        status = cells[1].lower()
+        if not RESEARCH_QUESTION_ID_RE.fullmatch(question_id):
+            errors.append(f"{path}: invalid Research Question id {cells[0]!r}")
+        elif question_id in seen:
+            errors.append(f"{path}: duplicate Research Question id {question_id}")
+        seen.add(question_id)
+        if status not in RESEARCH_QUESTION_STATUSES:
+            errors.append(
+                f"{path}: invalid Research Question status {cells[1]!r}"
+            )
+            continue
+        if not cells[2]:
+            errors.append(f"{path}: {question_id} requires a question")
+        if status == "open":
+            open_count += 1
+        elif not cells[3]:
+            errors.append(
+                f"{path}: {status} {question_id} requires an answer or disposition"
+            )
+        if status in {"answered", "invalidated"} and not cells[4]:
+            errors.append(f"{path}: {status} {question_id} requires evidence")
+    return errors, open_count
+
+
+def validate_synthesis(
+    path: Path,
+    parent_id: str,
+    require_sealed: bool,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not path.is_file():
+        return [f"{path}: missing Synthesis"], warnings
+    text = path.read_text(encoding="utf-8")
+    try:
+        data, _, _ = parse_frontmatter(text)
+    except EpctlError as exc:
+        return [f"{path}: {exc}"], warnings
+    if data.get("schema_version") != "1":
+        errors.append(f"{path}: synthesis schema_version must be 1")
+    if data.get("parent_id") != parent_id:
+        errors.append(f"{path}: parent_id must be {parent_id}")
+    if not data.get("title"):
+        errors.append(f"{path}: missing synthesis title")
+    for field in ("created", "updated"):
+        value = data.get(field, "")
+        try:
+            dt.date.fromisoformat(value)
+        except ValueError:
+            errors.append(f"{path}: {field} must be an ISO date, got {value!r}")
+    status = data.get("status", "")
+    if status not in {"draft", "sealed"}:
+        errors.append(f"{path}: invalid synthesis status {status!r}")
+    errors.extend(validate_required_sections(path, text, SYNTHESIS_SECTIONS))
+    required = bool(marker_names(text))
+    if require_sealed and status != "sealed":
+        errors.append(f"{path}: concluded Research requires sealed Synthesis")
+    if status == "sealed":
+        if required:
+            errors.append(f"{path}: sealed Synthesis has required placeholders")
+        expected = data.get("payload_sha256", "")
+        actual = payload_sha256(text)
+        if not expected:
+            errors.append(f"{path}: sealed Synthesis requires payload_sha256")
+        elif expected != actual:
+            errors.append(
+                f"{path}: sealed Synthesis payload changed "
+                f"(expected {expected}, got {actual})"
+            )
+    elif data.get("payload_sha256"):
+        errors.append(f"{path}: draft Synthesis cannot have payload_sha256")
+    elif required:
+        warnings.append(f"{path}: required placeholders remain")
+    return errors, warnings
+
+
+def validate_research(
+    path: Path,
+    archive_status: str | None = None,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    text = path.read_text(encoding="utf-8")
+    try:
+        data, _, _ = parse_frontmatter(text)
+    except EpctlError as exc:
+        return [f"{path}: {exc}"], warnings
+    research_id = data.get("id", "")
+    errors.extend(validate_common_frontmatter(path, data, "R"))
+    if data.get("schema_version") != "1":
+        errors.append(f"{path}: Research schema_version must be 1")
+    location = "completed" if "/completed/" in path.as_posix() else "active"
+    allowed = (
+        RESEARCH_COMPLETED_STATUSES
+        if location == "completed"
+        else RESEARCH_ACTIVE_STATUSES
+    )
+    status = data.get("status", "")
+    if status not in allowed and not (
+        archive_status in RESEARCH_COMPLETED_STATUSES and location == "active"
+    ):
+        errors.append(f"{path}: status {status!r} is invalid in {location}")
+    errors.extend(validate_required_sections(path, text, RESEARCH_SECTIONS))
+    errors.extend(validate_blocker_table(path, text))
+    blockers = unresolved_blockers(text)
+    errors.extend(
+        validate_blocked_state(
+            path,
+            status,
+            blockers,
+            RESEARCH_ACTIVE_STATUSES,
+        )
+    )
+    question_errors, open_questions = validate_research_questions(path, text)
+    errors.extend(question_errors)
+    synthesis_name = data.get("synthesis", "")
+    if synthesis_name != "SYNTHESIS.md":
+        errors.append(f"{path}: synthesis must be SYNTHESIS.md")
+    synthesis_path = path.parent / "SYNTHESIS.md"
+    concluding = archive_status == "concluded" or (
+        archive_status is None and status == "concluded"
+    )
+    synthesis_errors, synthesis_warnings = validate_synthesis(
+        synthesis_path,
+        research_id,
+        require_sealed=concluding,
+    )
+    errors.extend(synthesis_errors)
+    warnings.extend(synthesis_warnings)
+    if concluding:
+        if open_questions:
+            errors.append(
+                f"{path}: {open_questions} open Research Questions block conclusion"
+            )
+        if blockers:
+            errors.append(
+                f"{path}: open blockers block conclusion: {', '.join(blockers)}"
+            )
+        if marker_names(text):
+            errors.append(f"{path}: concluded Research has required placeholders")
+    elif marker_names(text) and status != "cancelled":
+        warnings.append(f"{path}: required placeholders remain")
+    root_bytes = len(text.encode("utf-8"))
+    root_lines = len(text.splitlines())
+    if root_bytes > ROOT_BYTE_WARNING or root_lines > ROOT_LINE_WARNING:
+        warnings.append(
+            f"{path}: Research controller is {root_lines} lines/{root_bytes} "
+            "bytes; move focused analysis to notes/ and raw evidence to artifacts/"
+        )
+    return errors, warnings
+
+
+def validate_adr(
+    path: Path,
+) -> tuple[list[str], list[str], dict[str, str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    text = path.read_text(encoding="utf-8")
+    try:
+        data, _, _ = parse_frontmatter(text)
+    except EpctlError as exc:
+        return [f"{path}: {exc}"], warnings, {}
+    adr_id = data.get("id", "")
+    errors.extend(validate_common_frontmatter(path, data, "ADR"))
+    if data.get("schema_version") != "1":
+        errors.append(f"{path}: ADR schema_version must be 1")
+    status = data.get("status", "")
+    if status not in ADR_STATUSES:
+        errors.append(f"{path}: invalid ADR status {status!r}")
+    errors.extend(validate_required_sections(path, text, ADR_SECTIONS))
+    try:
+        research_refs = parse_reference_array(
+            data.get("research_refs", ""), "R", "research_refs"
+        )
+        supersedes = parse_reference_array(
+            data.get("supersedes", ""), "ADR", "supersedes"
+        )
+    except EpctlError as exc:
+        errors.append(f"{path}: {exc}")
+        research_refs = []
+        supersedes = []
+    if adr_id in supersedes:
+        errors.append(f"{path}: ADR cannot supersede itself")
+    for research_id in research_refs:
+        try:
+            research_path = find_research(
+                repository_from_artifact(path),
+                research_id,
+                "completed",
+            )
+        except EpctlError:
+            errors.append(f"{path}: missing concluded Research {research_id}")
+            continue
+        research_data = artifact_metadata(research_path, "R")
+        research_errors, _ = validate_research(research_path)
+        if research_errors or research_data.get("status") != "concluded":
+            errors.append(f"{path}: {research_id} is not valid and concluded")
+    superseded_by = data.get("superseded_by", "")
+    if superseded_by and not ID_RE["ADR"].fullmatch(superseded_by):
+        errors.append(f"{path}: invalid superseded_by {superseded_by!r}")
+    decided = status in {"accepted", "rejected", "superseded"}
+    if decided:
+        if not data.get("decision_maker"):
+            errors.append(f"{path}: decided ADR requires decision_maker")
+        if not data.get("decided"):
+            errors.append(f"{path}: decided ADR requires decided timestamp")
+        else:
+            try:
+                dt.datetime.fromisoformat(
+                    data["decided"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                errors.append(f"{path}: decided must be an ISO timestamp")
+        if marker_names(text):
+            errors.append(f"{path}: decided ADR has required placeholders")
+        expected = data.get("payload_sha256", "")
+        actual = payload_sha256(text)
+        if not expected:
+            errors.append(f"{path}: decided ADR requires payload_sha256")
+        elif expected != actual:
+            errors.append(
+                f"{path}: decided ADR payload changed "
+                f"(expected {expected}, got {actual})"
+            )
+    else:
+        if data.get("decision_maker") or data.get("decided"):
+            errors.append(f"{path}: proposed ADR cannot record a decision")
+        if data.get("payload_sha256"):
+            errors.append(f"{path}: proposed ADR cannot have payload_sha256")
+        if marker_names(text):
+            warnings.append(f"{path}: required placeholders remain")
+    if status == "superseded" and not superseded_by:
+        errors.append(f"{path}: superseded ADR requires superseded_by")
+    if status != "superseded" and superseded_by:
+        errors.append(f"{path}: only superseded ADR can set superseded_by")
+    return errors, warnings, data
 
 
 def validate_task(
@@ -1614,19 +2344,124 @@ def validate_plan(
     plan_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "EP"))
     schema_version = data.get("schema_version", "2.0")
-    if schema_version not in {"2.0", "2.1"}:
+    if schema_version not in {"2.0", "2.1", "2.2"}:
         errors.append(f"{path}: unsupported schema_version {schema_version!r}")
-    if schema_version == "2.1":
+    if schema_version in {"2.1", "2.2"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V21_SECTIONS)
         )
         if "latest_checkpoint" not in data:
             errors.append(f"{path}: missing frontmatter field latest_checkpoint")
-    else:
+    elif schema_version == "2.0":
         warnings.append(
             f"{path}: v2.0 plan has no bounded checkpoint model; "
             "add schema_version 2.1 and ## Current Snapshot before checkpointing"
         )
+    if schema_version == "2.2":
+        errors.extend(
+            validate_required_sections(path, text, EXECPLAN_V22_SECTIONS)
+        )
+        try:
+            research_refs = parse_reference_array(
+                data.get("research_refs", ""),
+                "R",
+                "research_refs",
+            )
+            adr_refs = parse_reference_array(
+                data.get("adr_refs", ""),
+                "ADR",
+                "adr_refs",
+            )
+        except EpctlError as exc:
+            errors.append(f"{path}: {exc}")
+            research_refs = []
+            adr_refs = []
+        repo = repository_from_artifact(path)
+        inputs = section(text, "Research and Architecture Inputs") or ""
+        research_gate = data.get("research_gate", "")
+        research_reason = inline_text(data.get("research_gate_reason", ""))
+        if research_gate == "satisfied":
+            if not research_refs:
+                errors.append(
+                    f"{path}: satisfied Research Gate requires research_refs"
+                )
+            if research_reason:
+                errors.append(
+                    f"{path}: satisfied Research Gate cannot have a skip reason"
+                )
+        elif research_gate == "not_required":
+            if research_refs:
+                errors.append(
+                    f"{path}: not_required Research Gate cannot have research_refs"
+                )
+            if not research_reason:
+                errors.append(
+                    f"{path}: not_required Research Gate requires a reason"
+                )
+        else:
+            errors.append(f"{path}: invalid research_gate {research_gate!r}")
+        for research_id in research_refs:
+            try:
+                research_path = find_research(repo, research_id, "completed")
+            except EpctlError:
+                errors.append(f"{path}: missing concluded Research {research_id}")
+                continue
+            research_errors, _ = validate_research(research_path)
+            research_data = artifact_metadata(research_path, "R")
+            if research_errors or research_data.get("status") != "concluded":
+                errors.append(f"{path}: {research_id} is not valid and concluded")
+            if research_id not in inputs:
+                errors.append(
+                    f"{path}: Research and Architecture Inputs must mention "
+                    f"{research_id}"
+                )
+        architecture_gate = data.get("architecture_gate", "")
+        architecture_reason = inline_text(
+            data.get("architecture_gate_reason", "")
+        )
+        if architecture_gate == "satisfied":
+            if not adr_refs:
+                errors.append(
+                    f"{path}: satisfied Architecture Gate requires adr_refs"
+                )
+            if architecture_reason:
+                errors.append(
+                    f"{path}: satisfied Architecture Gate cannot have a skip reason"
+                )
+        elif architecture_gate == "not_required":
+            if adr_refs:
+                errors.append(
+                    f"{path}: not_required Architecture Gate cannot have adr_refs"
+                )
+            if not architecture_reason:
+                errors.append(
+                    f"{path}: not_required Architecture Gate requires a reason"
+                )
+        else:
+            errors.append(
+                f"{path}: invalid architecture_gate {architecture_gate!r}"
+            )
+        for adr_id in adr_refs:
+            try:
+                adr_path = find_adr(repo, adr_id)
+            except EpctlError:
+                errors.append(f"{path}: missing accepted ADR {adr_id}")
+                continue
+            adr_errors, _, adr_data = validate_adr(adr_path)
+            if adr_errors or adr_data.get("status") != "accepted":
+                errors.append(f"{path}: {adr_id} is not valid, accepted and current")
+            missing_research = set(
+                parse_inline_ids(adr_data.get("research_refs", ""), "R")
+            ) - set(research_refs)
+            if missing_research:
+                errors.append(
+                    f"{path}: {adr_id} requires missing Research references "
+                    + ", ".join(sorted(missing_research))
+                )
+            if adr_id not in inputs:
+                errors.append(
+                    f"{path}: Research and Architecture Inputs must mention {adr_id}"
+                )
     status = data.get("status", "")
     location = "completed" if "/completed/" in path.as_posix() else "active"
     allowed = PLAN_COMPLETED_STATUSES if location == "completed" else PLAN_ACTIVE_STATUSES
@@ -1726,7 +2561,7 @@ def validate_plan(
         errors.append(
             f"{path}: Current Snapshot must link {latest_checkpoint}"
         )
-    if schema_version == "2.1" and not re.search(
+    if schema_version in {"2.1", "2.2"} and not re.search(
         r"(?im)^-\s+Next action:\s+\S",
         snapshot,
     ):
@@ -1831,15 +2666,32 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
         for path in docs_root.rglob("*"):
             if path.is_symlink() and (
                 "exec-plans" in path.parts
+                or "research" in path.parts
+                or "adr" in path.parts
                 or "bugfixes" in path.parts
                 or ".epctl" in path.parts
-                or path.name in {"PLANS.md", "BUGFIXES.md"}
+                or path.name
+                in {"PLANS.md", "RESEARCH.md", "DECISIONS.md", "BUGFIXES.md"}
             ):
                 errors.append(f"{path}: symbolic links are not supported")
     plans_index = repo / "docs" / "PLANS.md"
+    research_index = repo / "docs" / "RESEARCH.md"
+    decision_index = repo / "docs" / "DECISIONS.md"
     bugfix_index = repo / "docs" / "BUGFIXES.md"
     if not plans_index.is_file():
         errors.append(f"{plans_index}: missing; run init")
+    if not research_index.is_file():
+        message = f"{research_index}: missing; run init"
+        if research_files(repo):
+            errors.append(message)
+        else:
+            warnings.append(message)
+    if not decision_index.is_file():
+        message = f"{decision_index}: missing; run init"
+        if adr_files(repo):
+            errors.append(message)
+        else:
+            warnings.append(message)
     if not bugfix_index.is_file():
         errors.append(f"{bugfix_index}: missing; run init")
 
@@ -1889,6 +2741,133 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                     )
     elif plans_index.exists():
         warnings.append(f"{plans_index}: no epctl managed block; run reindex")
+
+    seen.clear()
+    research_ids_by_table = {"ACTIVE": set(), "COMPLETED": set()}
+    research_paths_by_table: dict[str, dict[str, str]] = {
+        "ACTIVE": {},
+        "COMPLETED": {},
+    }
+    research_text = (
+        research_index.read_text(encoding="utf-8")
+        if research_index.exists()
+        else ""
+    )
+    for path in research_files(repo):
+        item_errors, item_warnings = validate_research(path)
+        errors.extend(item_errors)
+        warnings.extend(item_warnings)
+        data = artifact_metadata(path, "R")
+        item_id = data.get("id", "")
+        if item_id and item_id in seen:
+            errors.append(f"{path}: duplicate Research id {item_id}")
+        if item_id:
+            seen.add(item_id)
+            table = "COMPLETED" if "/completed/" in path.as_posix() else "ACTIVE"
+            research_ids_by_table[table].add(item_id)
+            research_paths_by_table[table][item_id] = path.relative_to(
+                repo / "docs"
+            ).as_posix()
+    if "<!-- RCTL:ACTIVE:START -->" in research_text:
+        for table in ("ACTIVE", "COMPLETED"):
+            body = managed_index_body(research_text, "R", table)
+            indexed = managed_table_ids(research_text, "R", table)
+            expected = research_ids_by_table[table]
+            for item_id in sorted(expected - indexed):
+                errors.append(
+                    f"{research_index}: {item_id} missing from {table.lower()}; "
+                    "run reindex"
+                )
+            for item_id in sorted(indexed - expected):
+                errors.append(
+                    f"{research_index}: stale {item_id} in {table.lower()}; "
+                    "run reindex"
+                )
+            for item_id in sorted(expected & indexed):
+                if research_paths_by_table[table][item_id] not in body:
+                    errors.append(
+                        f"{research_index}: stale path for {item_id}; run reindex"
+                    )
+    elif research_index.exists():
+        warnings.append(f"{research_index}: no epctl managed block; run reindex")
+
+    seen.clear()
+    adr_ids_by_table = {"ACTIVE": set(), "COMPLETED": set()}
+    adr_paths_by_table: dict[str, dict[str, str]] = {
+        "ACTIVE": {},
+        "COMPLETED": {},
+    }
+    adr_data_by_id: dict[str, dict[str, str]] = {}
+    decision_text = (
+        decision_index.read_text(encoding="utf-8")
+        if decision_index.exists()
+        else ""
+    )
+    for path in adr_files(repo):
+        item_errors, item_warnings, data = validate_adr(path)
+        errors.extend(item_errors)
+        warnings.extend(item_warnings)
+        item_id = data.get("id", "")
+        if item_id and item_id in seen:
+            errors.append(f"{path}: duplicate ADR id {item_id}")
+        if item_id:
+            seen.add(item_id)
+            adr_data_by_id[item_id] = data
+            table = "ACTIVE" if data.get("status") == "proposed" else "COMPLETED"
+            adr_ids_by_table[table].add(item_id)
+            adr_paths_by_table[table][item_id] = path.relative_to(
+                repo / "docs"
+            ).as_posix()
+    for item_id, data in adr_data_by_id.items():
+        superseded_by = data.get("superseded_by", "")
+        if superseded_by:
+            target = adr_data_by_id.get(superseded_by)
+            if not target:
+                errors.append(f"{item_id}: superseding ADR {superseded_by} is missing")
+            elif target.get("status") != "accepted":
+                errors.append(
+                    f"{item_id}: superseding ADR {superseded_by} must be accepted"
+                )
+            elif item_id not in parse_inline_ids(
+                target.get("supersedes", ""),
+                "ADR",
+            ):
+                errors.append(
+                    f"{item_id}: {superseded_by} must list it in supersedes"
+                )
+        for old_id in parse_inline_ids(data.get("supersedes", ""), "ADR"):
+            old = adr_data_by_id.get(old_id)
+            if not old:
+                errors.append(f"{item_id}: superseded ADR {old_id} is missing")
+            elif (
+                old.get("status") != "superseded"
+                or old.get("superseded_by") != item_id
+            ):
+                errors.append(
+                    f"{item_id}: supersession backlink from {old_id} is invalid"
+                )
+    if "<!-- ADRCTL:ACTIVE:START -->" in decision_text:
+        for table in ("ACTIVE", "COMPLETED"):
+            body = managed_index_body(decision_text, "ADR", table)
+            indexed = managed_table_ids(decision_text, "ADR", table)
+            expected = adr_ids_by_table[table]
+            for item_id in sorted(expected - indexed):
+                errors.append(
+                    f"{decision_index}: {item_id} missing from {table.lower()}; "
+                    "run reindex"
+                )
+            for item_id in sorted(indexed - expected):
+                errors.append(
+                    f"{decision_index}: stale {item_id} in {table.lower()}; "
+                    "run reindex"
+                )
+            for item_id in sorted(expected & indexed):
+                if adr_paths_by_table[table][item_id] not in body:
+                    errors.append(
+                        f"{decision_index}: stale path for {item_id}; run reindex"
+                    )
+    elif decision_index.exists():
+        warnings.append(f"{decision_index}: no epctl managed block; run reindex")
 
     seen.clear()
     bugfix_ids: set[str] = set()
@@ -1950,7 +2929,7 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
     else:
         high_water = state["high_water"]
         assert isinstance(high_water, dict)
-        for prefix in ("EP", "BF", "TD"):
+        for prefix in ("EP", "R", "ADR", "BF", "TD"):
             observed = max(scan_ids(repo, prefix), default=0)
             if int(high_water.get(prefix, 0)) < observed:
                 warnings.append(
@@ -1977,6 +2956,236 @@ def fill_outcome_marker(
     if not re.search(heading_pattern, text):
         raise EpctlError(f"Missing ## {heading}")
     return re.sub(heading_pattern, rf"\1\n\n{entry}", text, count=1)
+
+
+def replace_required_markers_for_cancellation(text: str, reason: str) -> str:
+    replacement = f"Cancelled before completion: {inline_text(reason)}"
+    return re.sub(
+        r"<!--\s*REQUIRED(?:_[A-Z_]+)?\s*:[\s\S]*?-->",
+        replacement,
+        text,
+    )
+
+
+def archive_research(
+    repo: Path,
+    research_id: str,
+    outcome: str,
+    reason: str,
+) -> Path:
+    with repo_lock(repo):
+        path = find_research(repo, research_id, "active")
+        if outcome not in RESEARCH_COMPLETED_STATUSES:
+            raise EpctlError("Research outcome must be concluded or cancelled")
+        if outcome == "cancelled" and not inline_text(reason):
+            raise EpctlError("Cancelled Research requires --reason")
+        text = path.read_text(encoding="utf-8")
+        synthesis_path = path.parent / "SYNTHESIS.md"
+        synthesis_text = synthesis_path.read_text(encoding="utf-8")
+        base_errors, _ = validate_research(path)
+        if base_errors:
+            raise EpctlError(
+                "Research archive blocked:\n- " + "\n- ".join(base_errors)
+            )
+        if outcome == "concluded":
+            _, open_questions = validate_research_questions(path, text)
+            blockers = unresolved_blockers(text)
+            if open_questions:
+                raise EpctlError(
+                    f"Research conclusion blocked by {open_questions} open questions"
+                )
+            if blockers:
+                raise EpctlError(
+                    "Research conclusion blocked by open blockers: "
+                    + ", ".join(blockers)
+                )
+            if marker_names(text) or marker_names(synthesis_text):
+                raise EpctlError(
+                    "Research conclusion blocked by required placeholders"
+                )
+            synthesis_candidate = update_frontmatter(
+                synthesis_text,
+                {
+                    "status": "sealed",
+                    "updated": date_string(),
+                },
+            )
+            synthesis_candidate = update_frontmatter(
+                synthesis_candidate,
+                {"payload_sha256": payload_sha256(synthesis_candidate)},
+            )
+            outcome_body = (
+                f"- {date_string()} — Concluded with sealed "
+                "`SYNTHESIS.md`; downstream decisions must cite its evidence."
+            )
+            research_candidate = replace_section(text, "Outcome", outcome_body)
+        else:
+            synthesis_candidate = replace_required_markers_for_cancellation(
+                synthesis_text,
+                reason,
+            )
+            outcome_body = (
+                f"- {date_string()} — Cancelled: {inline_text(reason)}"
+            )
+            research_candidate = replace_required_markers_for_cancellation(
+                text,
+                reason,
+            )
+            research_candidate = replace_section(
+                research_candidate,
+                "Outcome",
+                outcome_body,
+            )
+        research_candidate = update_frontmatter(
+            research_candidate,
+            {
+                "status": outcome,
+                "updated": date_string(),
+            },
+        )
+        container = path.parent
+        destination = repo / "docs" / "research" / "completed" / container.name
+        reject_symlink_path(repo, destination)
+        if destination.exists():
+            raise EpctlError(f"Archive destination exists: {destination}")
+        research_candidate = research_candidate.replace(
+            f"docs/research/active/{container.name}",
+            f"docs/research/completed/{container.name}",
+        )
+        snapshots = managed_index_snapshots(repo)
+        try:
+            atomic_write(path, research_candidate)
+            atomic_write(synthesis_path, synthesis_candidate)
+            post_errors, _ = validate_research(path, archive_status=outcome)
+            if post_errors:
+                raise EpctlError(
+                    "Research archive produced invalid artifacts:\n- "
+                    + "\n- ".join(post_errors)
+                )
+            os.replace(container, destination)
+            rebuild_indexes(repo)
+        except Exception:
+            if destination.exists() and not container.exists():
+                os.replace(destination, container)
+            atomic_write(path, text)
+            atomic_write(synthesis_path, synthesis_text)
+            restore_managed_indexes(snapshots)
+            raise
+        return destination / "RESEARCH.md"
+
+
+def decide_adr(
+    repo: Path,
+    adr_id: str,
+    outcome: str,
+    decision_maker: str,
+) -> Path:
+    with repo_lock(repo):
+        if outcome not in {"accepted", "rejected"}:
+            raise EpctlError("ADR outcome must be accepted or rejected")
+        maker = inline_text(decision_maker)
+        if not maker:
+            raise EpctlError("ADR decision requires --decision-maker")
+        path = find_adr(repo, adr_id)
+        text = path.read_text(encoding="utf-8")
+        errors, _, data = validate_adr(path)
+        if errors:
+            raise EpctlError("ADR decision blocked:\n- " + "\n- ".join(errors))
+        if data.get("status") != "proposed":
+            raise EpctlError("Only a proposed ADR can be decided")
+        if marker_names(text):
+            raise EpctlError("ADR decision blocked by required placeholders")
+        candidate = update_frontmatter(
+            text,
+            {
+                "status": outcome,
+                "decision_maker": json.dumps(maker, ensure_ascii=False),
+                "decided": json.dumps(timestamp_string()),
+                "updated": date_string(),
+            },
+        )
+        candidate = update_frontmatter(
+            candidate,
+            {"payload_sha256": payload_sha256(candidate)},
+        )
+        snapshots = managed_index_snapshots(repo)
+        try:
+            atomic_write(path, candidate)
+            post_errors, _, _ = validate_adr(path)
+            if post_errors:
+                raise EpctlError(
+                    "ADR decision produced invalid artifact:\n- "
+                    + "\n- ".join(post_errors)
+                )
+            rebuild_indexes(repo)
+        except Exception:
+            atomic_write(path, text)
+            restore_managed_indexes(snapshots)
+            raise
+        return path
+
+
+def supersede_adr(repo: Path, old_adr_id: str, new_adr_id: str) -> Path:
+    with repo_lock(repo):
+        old_id = normalize_reference_ids((old_adr_id,), "ADR")[0]
+        new_id = normalize_reference_ids((new_adr_id,), "ADR")[0]
+        if old_id == new_id:
+            raise EpctlError("An ADR cannot supersede itself")
+        old_path = find_adr(repo, old_id)
+        new_path = find_adr(repo, new_id)
+        old_text = old_path.read_text(encoding="utf-8")
+        new_text = new_path.read_text(encoding="utf-8")
+        old_errors, _, old_data = validate_adr(old_path)
+        new_errors, _, new_data = validate_adr(new_path)
+        if old_errors or new_errors:
+            raise EpctlError(
+                "ADR supersession blocked:\n- "
+                + "\n- ".join((*old_errors, *new_errors))
+            )
+        if old_data.get("status") != "accepted":
+            raise EpctlError(f"{old_id} must be accepted before supersession")
+        if new_data.get("status") != "accepted":
+            raise EpctlError(f"{new_id} must be accepted before supersession")
+        supersedes = parse_reference_array(
+            new_data.get("supersedes", ""),
+            "ADR",
+            "supersedes",
+        )
+        if old_id not in supersedes:
+            supersedes.append(old_id)
+        old_candidate = update_frontmatter(
+            old_text,
+            {
+                "status": "superseded",
+                "superseded_by": new_id,
+                "updated": date_string(),
+            },
+        )
+        new_candidate = update_frontmatter(
+            new_text,
+            {
+                "supersedes": json.dumps(supersedes),
+                "updated": date_string(),
+            },
+        )
+        snapshots = managed_index_snapshots(repo)
+        try:
+            atomic_write(old_path, old_candidate)
+            atomic_write(new_path, new_candidate)
+            old_post, _, _ = validate_adr(old_path)
+            new_post, _, _ = validate_adr(new_path)
+            if old_post or new_post:
+                raise EpctlError(
+                    "ADR supersession produced invalid artifacts:\n- "
+                    + "\n- ".join((*old_post, *new_post))
+                )
+            rebuild_indexes(repo)
+        except Exception:
+            atomic_write(old_path, old_text)
+            atomic_write(new_path, new_text)
+            restore_managed_indexes(snapshots)
+            raise
+        return old_path
 
 
 def archive_ep(
@@ -2016,10 +3225,7 @@ def archive_ep(
                 "Cancelled",
                 reason.strip(),
             )
-        plans_index = repo / "docs" / "PLANS.md"
-        bugfix_index = repo / "docs" / "BUGFIXES.md"
-        old_plans_index = plans_index.read_text(encoding="utf-8")
-        old_bugfix_index = bugfix_index.read_text(encoding="utf-8")
+        snapshots = managed_index_snapshots(repo)
         atomic_write(path, new_text)
         errors, _ = validate_plan(path, archive_status=outcome)
         if errors:
@@ -2032,8 +3238,7 @@ def archive_ep(
             if destination.exists() and not container.exists():
                 os.replace(destination, container)
             atomic_write(path, text)
-            atomic_write(plans_index, old_plans_index)
-            atomic_write(bugfix_index, old_bugfix_index)
+            restore_managed_indexes(snapshots)
             raise
         return destination / "EXECPLAN.md"
 
@@ -2080,10 +3285,7 @@ def archive_bugfix(
         if destination.exists():
             raise EpctlError(f"Archive destination exists: {destination}")
 
-        plans_index = repo / "docs" / "PLANS.md"
-        bugfix_index = repo / "docs" / "BUGFIXES.md"
-        old_plans_index = plans_index.read_text(encoding="utf-8")
-        old_bugfix_index = bugfix_index.read_text(encoding="utf-8")
+        snapshots = managed_index_snapshots(repo)
         atomic_write(path, new_text)
         errors, _ = validate_bugfix(path, archive_status=outcome)
         if errors:
@@ -2096,8 +3298,7 @@ def archive_bugfix(
             if destination.exists() and not path.exists():
                 os.replace(destination, path)
             atomic_write(path, text)
-            atomic_write(plans_index, old_plans_index)
-            atomic_write(bugfix_index, old_bugfix_index)
+            restore_managed_indexes(snapshots)
             raise
         return destination
 
@@ -2116,6 +3317,60 @@ def last_activity(text: str, data: dict[str, str]) -> str:
 
 
 def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
+    research: list[dict[str, object]] = []
+    for path in research_files(repo):
+        try:
+            text = path.read_text(encoding="utf-8")
+            data, _, _ = parse_frontmatter(text)
+        except EpctlError:
+            continue
+        _, open_questions = validate_research_questions(path, text)
+        synthesis_status = ""
+        synthesis_path = path.parent / "SYNTHESIS.md"
+        if synthesis_path.is_file():
+            try:
+                synthesis_data, _, _ = parse_frontmatter(
+                    synthesis_path.read_text(encoding="utf-8")
+                )
+                synthesis_status = synthesis_data.get("status", "")
+            except EpctlError:
+                synthesis_status = "invalid"
+        research.append(
+            {
+                "id": data.get("id", ""),
+                "title": data.get("title", ""),
+                "status": data.get("status", ""),
+                "synthesis_status": synthesis_status,
+                "open_questions": open_questions,
+                "open_blockers": len(unresolved_blockers(text)),
+                "root_lines": len(text.splitlines()),
+                "root_bytes": len(text.encode("utf-8")),
+                "last_activity": last_activity(text, data),
+                "path": path.relative_to(repo).as_posix(),
+            }
+        )
+    adrs: list[dict[str, object]] = []
+    for path in adr_files(repo):
+        try:
+            text = path.read_text(encoding="utf-8")
+            data, _, _ = parse_frontmatter(text)
+        except EpctlError:
+            continue
+        adrs.append(
+            {
+                "id": data.get("id", ""),
+                "title": data.get("title", ""),
+                "status": data.get("status", ""),
+                "research_refs": parse_inline_ids(
+                    data.get("research_refs", ""),
+                    "R",
+                ),
+                "decision_maker": data.get("decision_maker", ""),
+                "superseded_by": data.get("superseded_by", ""),
+                "last_activity": last_activity(text, data),
+                "path": path.relative_to(repo).as_posix(),
+            }
+        )
     plans: list[dict[str, object]] = []
     for path in plan_files(repo):
         try:
@@ -2136,6 +3391,8 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "id": data.get("id", ""),
                 "title": data.get("title", ""),
                 "status": data.get("status", ""),
+                "research_gate": data.get("research_gate", "legacy"),
+                "architecture_gate": data.get("architecture_gate", "legacy"),
                 "acceptance": f"{sum(acceptance)}/{len(acceptance)}",
                 "tasks": f"{sum(s in {'done', 'cancelled'} for s in tasks)}/{len(tasks)}"
                 if tasks
@@ -2169,9 +3426,16 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "path": path.relative_to(repo).as_posix(),
             }
         )
+    research.sort(key=lambda row: str(row["id"]))
+    adrs.sort(key=lambda row: str(row["id"]))
     plans.sort(key=lambda row: str(row["id"]))
     bugfixes.sort(key=lambda row: str(row["id"]))
-    return {"plans": plans, "bugfixes": bugfixes}
+    return {
+        "research": research,
+        "adrs": adrs,
+        "plans": plans,
+        "bugfixes": bugfixes,
+    }
 
 
 def print_status(repo: Path, as_json: bool) -> None:
@@ -2180,13 +3444,41 @@ def print_status(repo: Path, as_json: bool) -> None:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
     print(
-        "| EP | Title | Status | Acceptance | Tasks | Open blockers | "
-        "Checkpoint | Root | Events | Last activity |"
+        "| Research | Title | Status | Synthesis | Open questions | "
+        "Open blockers | Root | Last activity |"
     )
-    print("|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|")
+    for row in payload["research"]:
+        print(
+            f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
+            f"{row['synthesis_status'] or '—'} | {row['open_questions']} | "
+            f"{row['open_blockers']} | "
+            f"{row['root_lines']}L/{row['root_bytes']}B | "
+            f"{row['last_activity']} |"
+        )
+    print()
+    print(
+        "| ADR | Title | Status | Research | Decision maker | "
+        "Superseded by | Last activity |"
+    )
+    print("|---|---|---|---|---|---|---|")
+    for row in payload["adrs"]:
+        print(
+            f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
+            f"{md_cell(', '.join(row['research_refs']) or '—')} | "
+            f"{md_cell(str(row['decision_maker']) or '—')} | "
+            f"{row['superseded_by'] or '—'} | {row['last_activity']} |"
+        )
+    print()
+    print(
+        "| EP | Title | Status | Gates (R/ADR) | Acceptance | Tasks | "
+        "Open blockers | Checkpoint | Root | Events | Last activity |"
+    )
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     for row in payload["plans"]:
         print(
             f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
+            f"{row['research_gate']}/{row['architecture_gate']} | "
             f"{row['acceptance']} | {row['tasks']} | {row['open_blockers']} | "
             f"{row['latest_checkpoint'] or '—'} ({row['checkpoints']}) | "
             f"{row['root_lines']}L/{row['root_bytes']}B | "
@@ -2210,10 +3502,85 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="Create missing directories and repository indexes")
 
-    ep = sub.add_parser("new-ep", help="Create a v2 self-contained ExecPlan")
+    research = sub.add_parser(
+        "new-research",
+        help="Create a bounded Research package with a draft Synthesis",
+    )
+    research.add_argument("--slug", required=True)
+    research.add_argument("--title", required=True)
+    research.add_argument("--owner", default="")
+
+    archive_research_parser = sub.add_parser(
+        "archive-research",
+        help="Conclude and seal or cancel a Research package",
+    )
+    archive_research_parser.add_argument("research_id")
+    archive_research_parser.add_argument(
+        "--outcome",
+        choices=sorted(RESEARCH_COMPLETED_STATUSES),
+        required=True,
+    )
+    archive_research_parser.add_argument("--reason", default="")
+
+    adr = sub.add_parser(
+        "new-adr",
+        help="Create a proposed architecture decision record",
+    )
+    adr.add_argument("--slug", required=True)
+    adr.add_argument("--title", required=True)
+    adr.add_argument("--owner", default="")
+    adr.add_argument(
+        "--research",
+        action="append",
+        default=[],
+        metavar="R-NNN",
+        help="Concluded Research reference; repeat for multiple packages",
+    )
+
+    decide = sub.add_parser(
+        "decide-adr",
+        help="Accept or reject a proposed ADR with explicit decision authority",
+    )
+    decide.add_argument("adr_id")
+    decide.add_argument(
+        "--outcome",
+        choices=("accepted", "rejected"),
+        required=True,
+    )
+    decide.add_argument("--decision-maker", required=True)
+
+    supersede = sub.add_parser(
+        "supersede-adr",
+        help="Link an accepted ADR as the replacement for another accepted ADR",
+    )
+    supersede.add_argument("old_adr_id")
+    supersede.add_argument(
+        "--by",
+        required=True,
+        dest="new_adr_id",
+        metavar="ADR-NNN",
+    )
+
+    ep = sub.add_parser("new-ep", help="Create a gated v2.2 ExecPlan")
     ep.add_argument("--slug", required=True)
     ep.add_argument("--title", required=True)
     ep.add_argument("--owner", default="")
+    ep.add_argument(
+        "--research",
+        action="append",
+        default=[],
+        metavar="R-NNN",
+        help="Concluded Research reference; repeat for multiple packages",
+    )
+    ep.add_argument(
+        "--adr",
+        action="append",
+        default=[],
+        metavar="ADR-NNN",
+        help="Accepted current ADR reference; repeat for multiple decisions",
+    )
+    ep.add_argument("--research-not-required-reason", default="")
+    ep.add_argument("--architecture-not-required-reason", default="")
 
     task = sub.add_parser("new-task", help="Create a task under an active v2 plan")
     task.add_argument("plan_id")
@@ -2255,7 +3622,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Rebuild only the managed index projections before validation",
     )
     sub.add_parser("reindex", help="Rebuild managed index projections")
-    status_parser = sub.add_parser("status", help="Print plan and bugfix status")
+    status_parser = sub.add_parser(
+        "status",
+        help="Print Research, ADR, plan and bugfix status",
+    )
     status_parser.add_argument("--json", action="store_true", dest="as_json")
 
     archive_plan = sub.add_parser("archive-ep", help="Strictly complete and archive an EP")
@@ -2288,8 +3658,51 @@ def main(argv: list[str] | None = None) -> int:
             with repo_lock(repo):
                 created = init_repo(repo)
             print(json.dumps({"created": created}, ensure_ascii=False))
+        elif args.command == "new-research":
+            print(new_research(repo, args.slug, args.title, args.owner))
+        elif args.command == "archive-research":
+            print(
+                archive_research(
+                    repo,
+                    args.research_id,
+                    args.outcome,
+                    args.reason,
+                )
+            )
+        elif args.command == "new-adr":
+            print(
+                new_adr(
+                    repo,
+                    args.slug,
+                    args.title,
+                    args.owner,
+                    args.research,
+                )
+            )
+        elif args.command == "decide-adr":
+            print(
+                decide_adr(
+                    repo,
+                    args.adr_id,
+                    args.outcome,
+                    args.decision_maker,
+                )
+            )
+        elif args.command == "supersede-adr":
+            print(supersede_adr(repo, args.old_adr_id, args.new_adr_id))
         elif args.command == "new-ep":
-            print(new_ep(repo, args.slug, args.title, args.owner))
+            print(
+                new_ep(
+                    repo,
+                    args.slug,
+                    args.title,
+                    args.owner,
+                    args.research,
+                    args.adr,
+                    args.research_not_required_reason,
+                    args.architecture_not_required_reason,
+                )
+            )
         elif args.command == "new-task":
             print(new_task(repo, args.plan_id, args.slug, args.title, args.owner))
         elif args.command == "new-bugfix":

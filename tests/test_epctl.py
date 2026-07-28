@@ -12,6 +12,12 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "epctl.py"
+FAST_TRACK_ARGS = (
+    "--research-not-required-reason",
+    "Test fixture uses fixed, already-known inputs.",
+    "--architecture-not-required-reason",
+    "Test fixture has no durable architecture choice.",
+)
 
 
 class EpctlTestCase(unittest.TestCase):
@@ -52,6 +58,72 @@ class EpctlTestCase(unittest.TestCase):
             slug,
             "--title",
             slug.replace("-", " ").title(),
+            *FAST_TRACK_ARGS,
+        )
+        return Path(result.stdout.strip())
+
+    def new_research(self, slug: str = "sample-research") -> Path:
+        result = self.run_cli(
+            "new-research",
+            "--slug",
+            slug,
+            "--title",
+            slug.replace("-", " ").title(),
+        )
+        return Path(result.stdout.strip())
+
+    def prepare_research_for_conclusion(self, research: Path) -> None:
+        synthesis = research.parent / "SYNTHESIS.md"
+        self.complete_all_placeholders(research)
+        self.complete_all_placeholders(synthesis)
+        self.replace_section_body(
+            research,
+            "Research Questions",
+            "\n".join(
+                (
+                    "| ID | Status | Question | Answer or disposition | Evidence |",
+                    "|---|---|---|---|---|",
+                    "| RQ-001 | answered | Which option meets the contract? | "
+                    "Option A preserves the contract. | `notes/options.md` |",
+                )
+            ),
+        )
+
+    def conclude_research(self, research: Path) -> Path:
+        self.prepare_research_for_conclusion(research)
+        result = self.run_cli(
+            "archive-research",
+            self.artifact_id(research),
+            "--outcome",
+            "concluded",
+        )
+        return Path(result.stdout.strip())
+
+    def new_adr(
+        self,
+        slug: str = "sample-decision",
+        research_id: str = "R-001",
+    ) -> Path:
+        result = self.run_cli(
+            "new-adr",
+            "--slug",
+            slug,
+            "--title",
+            slug.replace("-", " ").title(),
+            "--research",
+            research_id,
+        )
+        return Path(result.stdout.strip())
+
+    def accept_adr(self, adr: Path, adr_id: str = "ADR-001") -> Path:
+        self.complete_all_placeholders(adr)
+        result = self.run_cli(
+            "decide-adr",
+            adr_id,
+            "--outcome",
+            "accepted",
+            "--decision-maker",
+            "Test Decision Owner",
         )
         return Path(result.stdout.strip())
 
@@ -77,6 +149,16 @@ class EpctlTestCase(unittest.TestCase):
         if count != 1:
             raise AssertionError(f"frontmatter field not found: {key}")
         path.write_text(updated, encoding="utf-8")
+
+    @staticmethod
+    def artifact_id(path: Path) -> str:
+        match = re.search(
+            r"(?m)^id:\s+((?:EP|R|ADR|BF)-\d+)\s*$",
+            path.read_text(encoding="utf-8"),
+        )
+        if not match:
+            raise AssertionError(f"artifact id not found: {path}")
+        return match.group(1)
 
     @staticmethod
     def complete_all_placeholders(path: Path) -> None:
@@ -174,6 +256,314 @@ class EpctlTestCase(unittest.TestCase):
         self.assertEqual(second["created"], [])
         self.assertIn("Human note.", plans.read_text(encoding="utf-8"))
         self.assertTrue((self.repo / "docs" / ".epctl" / "state.json").is_file())
+        self.assertTrue((self.repo / "docs" / "RESEARCH.md").is_file())
+        self.assertTrue((self.repo / "docs" / "DECISIONS.md").is_file())
+        self.assertTrue((self.repo / "docs" / "research" / "active").is_dir())
+        self.assertTrue((self.repo / "docs" / "research" / "completed").is_dir())
+        self.assertTrue((self.repo / "docs" / "adr").is_dir())
+
+    def test_research_conclusion_seals_synthesis_and_detects_tampering(
+        self,
+    ) -> None:
+        self.init()
+        research = self.new_research("storage-options")
+        synthesis = research.parent / "SYNTHESIS.md"
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        self.assertEqual(status["research"][0]["open_questions"], 1)
+        self.assertEqual(status["research"][0]["synthesis_status"], "draft")
+        blocked = self.run_cli(
+            "archive-research",
+            "R-001",
+            "--outcome",
+            "concluded",
+            expected=2,
+        )
+        self.assertIn("open questions", blocked.stderr)
+
+        concluded = self.conclude_research(research)
+        sealed = concluded.parent / "SYNTHESIS.md"
+
+        self.assertTrue(concluded.exists())
+        self.assertFalse(research.exists())
+        self.assertIn("status: concluded", concluded.read_text(encoding="utf-8"))
+        sealed_text = sealed.read_text(encoding="utf-8")
+        self.assertIn("status: sealed", sealed_text)
+        self.assertRegex(sealed_text, r"payload_sha256: [0-9a-f]{64}")
+        clean = self.run_cli("validate")
+        self.assertIn('"errors": 0', clean.stdout)
+        self.assertIn(
+            "| R-001 |",
+            (self.repo / "docs" / "RESEARCH.md").read_text(encoding="utf-8"),
+        )
+
+        sealed.write_text(sealed_text + "\nTampered conclusion.\n", encoding="utf-8")
+        tampered = self.run_cli("validate", expected=1)
+        self.assertIn("sealed Synthesis payload changed", tampered.stderr)
+
+    def test_cancelled_research_requires_reason_and_cannot_satisfy_gate(
+        self,
+    ) -> None:
+        self.init()
+        research = self.new_research("abandoned-spike")
+        missing_reason = self.run_cli(
+            "archive-research",
+            "R-001",
+            "--outcome",
+            "cancelled",
+            expected=2,
+        )
+        self.assertIn("requires --reason", missing_reason.stderr)
+
+        cancelled = Path(
+            self.run_cli(
+                "archive-research",
+                "R-001",
+                "--outcome",
+                "cancelled",
+                "--reason",
+                "The upstream contract was withdrawn.",
+            ).stdout.strip()
+        )
+
+        self.assertTrue(cancelled.exists())
+        self.assertFalse(research.exists())
+        self.assertIn("status: cancelled", cancelled.read_text(encoding="utf-8"))
+        rejected = self.run_cli(
+            "new-ep",
+            "--slug",
+            "invalid-gate",
+            "--title",
+            "Invalid gate",
+            "--research",
+            "R-001",
+            "--architecture-not-required-reason",
+            "No architecture choice exists.",
+            expected=2,
+        )
+        self.assertIn("must be valid and concluded", rejected.stderr)
+
+    def test_adr_requires_concluded_research_and_explicit_decision(
+        self,
+    ) -> None:
+        self.init()
+        research = self.new_research("queue-options")
+        premature = self.run_cli(
+            "new-adr",
+            "--slug",
+            "queue-choice",
+            "--title",
+            "Queue choice",
+            "--research",
+            "R-001",
+            expected=2,
+        )
+        self.assertIn("Research package", premature.stderr)
+        self.conclude_research(research)
+        adr = self.new_adr("queue-choice")
+
+        missing_authority = self.run_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "accepted",
+            expected=2,
+        )
+        self.assertIn("--decision-maker", missing_authority.stderr)
+        unresolved = self.run_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "accepted",
+            "--decision-maker",
+            "Architecture Council",
+            expected=2,
+        )
+        self.assertIn("required placeholders", unresolved.stderr)
+
+        accepted = self.accept_adr(adr)
+        accepted_text = accepted.read_text(encoding="utf-8")
+        self.assertIn("status: accepted", accepted_text)
+        self.assertIn('decision_maker: "Test Decision Owner"', accepted_text)
+        self.assertRegex(accepted_text, r"payload_sha256: [0-9a-f]{64}")
+        self.run_cli("validate")
+
+        accepted.write_text(
+            accepted_text + "\nChanged after acceptance.\n",
+            encoding="utf-8",
+        )
+        tampered = self.run_cli("validate", expected=1)
+        self.assertIn("decided ADR payload changed", tampered.stderr)
+
+    def test_execplan_gates_require_concluded_research_and_accepted_adr(
+        self,
+    ) -> None:
+        self.init()
+        no_inputs = self.run_cli(
+            "new-ep",
+            "--slug",
+            "ungated",
+            "--title",
+            "Ungated",
+            expected=2,
+        )
+        self.assertIn("concluded --research", no_inputs.stderr)
+        research = self.new_research("cache-options")
+        self.conclude_research(research)
+        adr = self.new_adr("cache-topology")
+        proposed = self.run_cli(
+            "new-ep",
+            "--slug",
+            "proposed-decision",
+            "--title",
+            "Proposed decision",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-001",
+            expected=2,
+        )
+        self.assertIn("accepted and current", proposed.stderr)
+
+        self.accept_adr(adr)
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "gated-plan",
+                "--title",
+                "Gated plan",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        content = plan.read_text(encoding="utf-8")
+        self.assertIn('schema_version: "2.2"', content)
+        self.assertIn("research_gate: satisfied", content)
+        self.assertIn("architecture_gate: satisfied", content)
+        self.assertIn("R-001", content)
+        self.assertIn("ADR-001", content)
+        validation = self.run_cli("validate")
+        self.assertIn('"errors": 0', validation.stdout)
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        self.assertEqual(status["plans"][0]["research_gate"], "satisfied")
+        self.assertEqual(status["plans"][0]["architecture_gate"], "satisfied")
+
+    def test_accepted_adr_can_supersede_an_accepted_adr(self) -> None:
+        self.init()
+        research = self.new_research("protocol-options")
+        self.conclude_research(research)
+        old_adr = self.new_adr("protocol-v1")
+        self.accept_adr(old_adr, "ADR-001")
+        new_adr = self.new_adr("protocol-v2")
+        self.accept_adr(new_adr, "ADR-002")
+
+        superseded = Path(
+            self.run_cli(
+                "supersede-adr",
+                "ADR-001",
+                "--by",
+                "ADR-002",
+            ).stdout.strip()
+        )
+
+        self.assertIn("status: superseded", superseded.read_text(encoding="utf-8"))
+        self.assertIn("superseded_by: ADR-002", superseded.read_text(encoding="utf-8"))
+        self.assertIn(
+            'supersedes: ["ADR-001"]',
+            new_adr.read_text(encoding="utf-8"),
+        )
+        self.run_cli("validate")
+        stale = self.run_cli(
+            "new-ep",
+            "--slug",
+            "stale-decision",
+            "--title",
+            "Stale decision",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-001",
+            expected=2,
+        )
+        self.assertIn("accepted and current", stale.stderr)
+        current = self.run_cli(
+            "new-ep",
+            "--slug",
+            "current-decision",
+            "--title",
+            "Current decision",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-002",
+        )
+        self.assertIn("ep-001_current-decision", current.stdout)
+
+    def test_v21_execplan_remains_readable_and_valid(self) -> None:
+        self.init()
+        plan = self.new_ep("legacy-compatible")
+        text = plan.read_text(encoding="utf-8").replace(
+            'schema_version: "2.2"',
+            'schema_version: "2.1"',
+            1,
+        )
+        text = re.sub(
+            r"(?m)^(?:research_refs|research_gate|research_gate_reason|"
+            r"adr_refs|architecture_gate|architecture_gate_reason):.*\n",
+            "",
+            text,
+        )
+        text = re.sub(
+            r"(?ms)^## Research and Architecture Inputs\s*$.*?"
+            r"(?=^## Plan of Work\s*$)",
+            "",
+            text,
+            count=1,
+        )
+        plan.write_text(text, encoding="utf-8")
+        (self.repo / "docs" / "RESEARCH.md").unlink()
+        (self.repo / "docs" / "DECISIONS.md").unlink()
+
+        result = self.run_cli("validate")
+
+        self.assertIn('"errors": 0', result.stdout)
+        self.assertIn("RESEARCH.md: missing; run init", result.stderr)
+        self.assertIn("DECISIONS.md: missing; run init", result.stderr)
+
+    def test_v20_execplan_remains_readable_and_valid(self) -> None:
+        self.init()
+        plan = self.new_ep("v20-compatible")
+        text = plan.read_text(encoding="utf-8").replace(
+            'schema_version: "2.2"',
+            'schema_version: "2.0"',
+            1,
+        )
+        text = re.sub(
+            r"(?m)^(?:latest_checkpoint|research_refs|research_gate|"
+            r"research_gate_reason|adr_refs|architecture_gate|"
+            r"architecture_gate_reason):.*\n",
+            "",
+            text,
+        )
+        for heading, next_heading in (
+            ("Current Snapshot", "Context and Orientation"),
+            ("Research and Architecture Inputs", "Plan of Work"),
+        ):
+            text = re.sub(
+                rf"(?ms)^## {re.escape(heading)}\s*$.*?"
+                rf"(?=^## {re.escape(next_heading)}\s*$)",
+                "",
+                text,
+                count=1,
+            )
+        plan.write_text(text, encoding="utf-8")
+
+        result = self.run_cli("validate")
+
+        self.assertIn('"errors": 0', result.stdout)
+        self.assertIn("v2.0 plan has no bounded checkpoint model", result.stderr)
 
     def test_high_water_prevents_id_reuse_and_supports_four_digits(self) -> None:
         self.init()
@@ -203,6 +593,7 @@ class EpctlTestCase(unittest.TestCase):
                         f"plan-{number}",
                         "--title",
                         f"Plan {number}",
+                        *FAST_TRACK_ARGS,
                     ],
                     text=True,
                     stdout=subprocess.PIPE,
@@ -250,6 +641,52 @@ class EpctlTestCase(unittest.TestCase):
             plans_index.read_text(encoding="utf-8"),
         )
         self.assertTrue(plan.exists())
+
+    def test_fix_index_repairs_all_artifact_projections(self) -> None:
+        self.init()
+        research = self.new_research("index-research")
+        self.conclude_research(research)
+        adr = self.new_adr("index-decision")
+        self.accept_adr(adr)
+        self.run_cli(
+            "new-ep",
+            "--slug",
+            "index-plan",
+            "--title",
+            "Index plan",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-001",
+        )
+        self.new_bugfix("index-bug")
+        projections = (
+            (self.repo / "docs" / "RESEARCH.md", "R-001"),
+            (self.repo / "docs" / "DECISIONS.md", "ADR-001"),
+            (self.repo / "docs" / "PLANS.md", "EP-001"),
+            (self.repo / "docs" / "BUGFIXES.md", "BF-001"),
+        )
+        for index, item_id in projections:
+            text = "\n".join(
+                line
+                for line in index.read_text(encoding="utf-8").splitlines()
+                if f"| {item_id} |" not in line
+            )
+            index.write_text(
+                text + f"\n\nHuman note for {item_id}.\n",
+                encoding="utf-8",
+            )
+
+        broken = self.run_cli("validate", expected=1)
+        for _, item_id in projections:
+            self.assertIn(f"{item_id} missing", broken.stderr)
+        repaired = self.run_cli("validate", "--fix-index")
+
+        self.assertIn('"errors": 0', repaired.stdout)
+        for index, item_id in projections:
+            content = index.read_text(encoding="utf-8")
+            self.assertIn(f"| {item_id} |", content)
+            self.assertIn(f"Human note for {item_id}.", content)
 
     def test_markdown_parser_ignores_fenced_fake_sections(self) -> None:
         self.init()
@@ -535,6 +972,7 @@ class EpctlTestCase(unittest.TestCase):
             "unsafe",
             "--title",
             "Unsafe",
+            *FAST_TRACK_ARGS,
             expected=2,
         )
 
@@ -552,6 +990,7 @@ class EpctlTestCase(unittest.TestCase):
             "without-git",
             "--title",
             "Without Git",
+            *FAST_TRACK_ARGS,
             env=environment,
         )
 

@@ -1,48 +1,77 @@
 ---
 name: execution-plan
 description: |
-  创建和维护仓库内的工程执行制品：为复杂、长时或需要跨会话恢复的工作建立自包含 ExecPlan；按用户明确要求记录局部 bugfix；维护进度、发现、决策、阻塞、Task、归档状态和技术债务。用户提到 EP、ExecPlan、执行计划、建 EP、拆 task、记录/归档 bugfix、查计划状态或登记技术债务时使用。复杂跨模块实现即使未点名 EP，也可使用。普通编码、一次性修 bug、代码解释和测试编写不会自动创建持久记录。
+  创建和维护仓库内的 Research、Synthesis、ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务。适用于先调研功能与方案、总结证据、形成技术架构决策，再建立可跨会话恢复的开发计划；也适用于用户提到 EP、ExecPlan、执行计划、Research、技术调研、ADR、架构决策、拆 task、压缩计划、记录/归档 bugfix、查状态或登记技术债务。复杂功能默认先 Research；ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Execution Plan
 
-把计划当作可执行、可恢复、可验证的仓库制品。人类给出目标和判断，Agent 负责研究、维护计划、执行和验证。
+把复杂工程工作组织成可追溯、可恢复、可机械验证的仓库制品。默认工作流是：
+
+```mermaid
+flowchart LR
+    F["功能目标"] --> Q{"存在决策相关未知？"}
+    Q -->|"是"| R["Research<br/>问题、证据、实验"]
+    R --> S["Sealed Synthesis<br/>决策级结论"]
+    Q -->|"否，写明理由"| RG["Research Gate<br/>not_required"]
+    S --> A{"存在架构级选择？"}
+    A -->|"是"| P["Proposed ADR"]
+    P --> H["用户 / Decision Owner<br/>明确接受或拒绝"]
+    H --> D["Accepted ADR"]
+    A -->|"否，写明理由"| AG["Architecture Gate<br/>not_required"]
+    D --> EP["ExecPlan v2.2<br/>自包含开发计划"]
+    RG --> A
+    AG --> EP
+```
+
+Research 负责减少未知，Synthesis 负责压缩证据，ADR 负责保存长期决定，ExecPlan 负责把已决定的方向变成可执行计划。引用提供审计链；下游制品仍需复述执行所需的结论和约束。
 
 ## 制品路由
 
-| 工作 | 制品 | 是否入库 |
-|---|---|---|
-| 小型、上下文明确、一次会话可完成 | 线程内轻量计划 | 默认否 |
-| 用户明确要求记录的局部既有行为缺陷 | Bugfix | 是 |
-| 跨模块、公共契约、显著未知、需要多里程碑或跨会话恢复 | ExecPlan | 是 |
+| 情况 | 制品 |
+|---|---|
+| 小型、上下文明确、一次会话可完成 | 线程内轻量计划 |
+| 用户明确要求记录的局部既有行为缺陷 | Bugfix |
+| 关键事实不清、需要比较方案或实验 | Research + Synthesis |
+| 存在影响长期边界且逆转成本较高的选择 | ADR |
+| 跨模块、多里程碑、需跨会话恢复或已有决策待实施 | ExecPlan |
 
-- 不因出现“修 bug”“阻塞”“归档”等普通词自动建记录；先判断用户是否要求管理工程制品。
-- Bugfix 一旦需要任务拆分、架构决策、公共契约变更或持续推进，升级为 ExecPlan。
-- 新 ExecPlan 统一使用目录模式，不按验收条目数量选择模板：
+复杂功能默认创建 Research，尤其是涉及公共契约、安全、可靠性、数据、迁移、第三方选型、prototype 或 benchmark 时。以下情况可直接进入 ExecPlan，但必须记录具体的 Research Gate 跳过理由：
 
-```text
-docs/exec-plans/active/ep-NNN_slug/
-├── EXECPLAN.md
-├── tasks/                 # 仅在独立追踪或并行推进有价值时创建
-├── history/               # sealed checkpoint；按需创建
-└── artifacts/             # 完整日志、trace、截图等；按需创建
-```
+- 当前 accepted ADR 和代码事实已覆盖所需输入。
+- 权威标准或用户已经固定实现方向。
+- 工作局部、可逆，且没有会改变计划路线的未知。
 
-`EXECPLAN.md` 始终是自包含、有界的当前事实源。Task 和 checkpoint 都不能成为恢复工作所必需的唯一上下文。
+存在两个以上可信选项，并涉及公共接口、跨系统边界、长期约束、高迁移成本、安全、数据一致性、可靠性或部署拓扑时创建 ADR。局部且易逆转的实现取舍写入 ExecPlan Decision Log，并记录 Architecture Gate 跳过理由。
 
-详细路由与状态机见 `references/templates.md`。
+Bugfix 一旦需要 Research、ADR、任务拆分、公共契约变更或持续推进，升级为 ExecPlan。普通“修 bug”仍是实现请求；用户未要求记录时不创建 Bugfix 台账。
+
+完整判定与状态机见 `references/templates.md`。执行 Research 前读取 `references/research.md`；起草或决定 ADR 前读取 `references/adr.md`。
 
 ## 仓库布局
 
 ```text
 docs/
 ├── .epctl/
-│   ├── lock
-│   └── state.json
+├── RESEARCH.md
+├── DECISIONS.md
 ├── PLANS.md
 ├── BUGFIXES.md
+├── research/
+│   ├── active/r-NNN_slug/
+│   │   ├── RESEARCH.md
+│   │   ├── SYNTHESIS.md
+│   │   ├── notes/
+│   │   └── artifacts/
+│   └── completed/
+├── adr/
+│   └── adr-NNN_slug.md
 ├── exec-plans/
-│   ├── active/
+│   ├── active/ep-NNN_slug/
+│   │   ├── EXECPLAN.md
+│   │   ├── tasks/
+│   │   ├── history/
+│   │   └── artifacts/
 │   ├── completed/
 │   └── tech-debt-tracker.md
 └── bugfixes/
@@ -50,155 +79,165 @@ docs/
     └── completed/
 ```
 
-旧仓库若使用 `docs/tech-debt-tracker.md`，继续读取该路径；不要静默移动历史文件。
+Research 结论或取消时整体移动到 `research/completed/`。ADR 路径稳定，不随状态移动。四个根索引都是可重建投影；制品文件才是事实源。
 
 ## 优先使用确定性脚本
 
-解析 `<skill-dir>` 为本 skill 所在目录。所有命令在目标仓库根目录运行：
+把 `<skill-dir>` 解析为本 skill 所在目录。所有命令在目标仓库根目录运行：
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . init
-python3 <skill-dir>/scripts/epctl.py --repo . new-ep --slug unify-token-refresh --title "Unify token refresh"
-python3 <skill-dir>/scripts/epctl.py --repo . new-task EP-001 --slug add-gateway-contract --title "Add gateway refresh contract"
-python3 <skill-dir>/scripts/epctl.py --repo . new-bugfix --slug cursor-boundary --title "Fix cursor boundary"
-python3 <skill-dir>/scripts/epctl.py --repo . new-debt --description "Trace coverage gap"
-python3 <skill-dir>/scripts/epctl.py --repo . checkpoint EP-001 \
-  --slug milestone-one --title "Milestone 1 complete" \
-  --current-milestone "Milestone 2" \
-  --summary "<current state>" --next-action "<exact next action>" \
-  --dry-run
+
+python3 <skill-dir>/scripts/epctl.py --repo . new-research \
+  --slug cache-topology --title "Research cache topology"
+python3 <skill-dir>/scripts/epctl.py --repo . archive-research R-001 \
+  --outcome concluded
+
+python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
+  --slug cache-topology --title "Choose cache topology" --research R-001
+python3 <skill-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
+  --outcome accepted --decision-maker "<explicit authority>"
+python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
+  --by ADR-002
+
+python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
+  --slug implement-cache --title "Implement cache topology" \
+  --research R-001 --adr ADR-001
+
 python3 <skill-dir>/scripts/epctl.py --repo . validate
 python3 <skill-dir>/scripts/epctl.py --repo . validate --fix-index
 python3 <skill-dir>/scripts/epctl.py --repo . reindex
 python3 <skill-dir>/scripts/epctl.py --repo . status
-python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 --outcome completed
-python3 <skill-dir>/scripts/epctl.py --repo . archive-bugfix BF-001 --outcome fixed
 ```
 
-- 先运行 `init`；该命令只补缺失目录和索引，不覆盖已有内容。
-- 用脚本分配 ID、复制 assets、更新索引、校验和归档。不要手工猜测下一个编号。
-- active/completed 中的制品是事实源；`PLANS.md` / `BUGFIXES.md` 是可重建投影。发现缺项或陈旧行时运行 `reindex`，不要据索引推断制品不存在。
-- `.epctl/state.json` 只保存编号高水位：允许故障造成跳号，不允许复用或覆盖旧 ID。
-- 脚本不可用时，按 `assets/` 中的同名模板执行，并扫描索引与 active/completed 文件系统后取最大 ID +1。
-- 不要求目标仓库使用 Git；普通文件移动后由 Git 自行识别 rename。
+重复引用时重复写 `--research` 或 `--adr`。如果某个 Gate 不需要正式制品：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
+  --slug local-cleanup --title "Clean up local adapter" \
+  --research-not-required-reason "<specific existing evidence>" \
+  --architecture-not-required-reason "<why no durable choice exists>"
+```
+
+- 先运行 `init`；它只补缺失目录和索引，不覆盖已有内容。
+- 用脚本分配 ID、复制 assets、迁移状态、封存 payload、重建索引和验证引用。不要手工猜编号。
+- `.epctl/state.json` 保存编号高水位。故障可以造成跳号，不能复用旧 ID。
+- `validate --fix-index` 只修复派生索引，不改事实制品。
+- 脚本不可用时按 `assets/` 模板执行，并扫描文件系统、索引和高水位后取最大 ID +1。
+- 不要求目标仓库使用 Git。
+
+## Research 与 Synthesis
+
+1. 先检查仓库入口、现有文档、代码和测试，再创建 Research。
+2. 在 `RESEARCH.md` 定义决策目的、范围、Decision Drivers 和 `RQ-NNN` 问题。
+3. 为每个关键主张保留可定位来源或可复现实验。主题分析写入 `notes/`，完整日志、benchmark、trace 和抓包写入 `artifacts/`。
+4. 持续维护 Current Snapshot；根控制文档只保留当前路线、发现索引、问题状态和下一步。
+5. 在 `SYNTHESIS.md` 直接回答研究目的，比较选项，记录被否定假设、剩余未知、推荐方向与成立条件。
+6. 结论前确认没有 `open` 问题、open blocker 或 REQUIRED 标记，再运行：
+
+   ```bash
+   python3 <skill-dir>/scripts/epctl.py --repo . archive-research R-NNN \
+     --outcome concluded
+   ```
+
+该命令封存 Synthesis 正文 SHA-256 并移动整个包。新证据若改变结论，创建新 Research；不要改写 sealed Synthesis。
+
+取消必须提供原因。Cancelled Research 保留证据，但不能满足 Research Gate。
+
+## ADR 与显式决策权
+
+Agent 可以调研、比较并起草 `proposed` ADR。只有当前对话或明确授权来源中出现用户/Decision Owner 对具体 ADR 结果的明确接受或拒绝，才可运行 `decide-adr`。
+
+以下表达不构成决策授权：要求分析、要求起草、同意继续研究、同意实施整个 skill 改造、沉默或推断出的偏好。授权必须能回答“谁决定了哪份 ADR 的哪个结果”。
+
+决定前：
+
+1. 复述 sealed Synthesis 中影响选择的结论和证据路径。
+2. 写全 Context、Decision Drivers、可信选项、Outcome、Consequences、Confirmation 和 Revisit Triggers。
+3. 把真实授权主体传给 `--decision-maker`。
+
+accepted/rejected ADR 的正文由 SHA-256 封存。方向变化时创建并接受新 ADR，再执行 `supersede-adr ADR-OLD --by ADR-NEW`；不要编辑旧决定正文。Superseded ADR 不能满足新 ExecPlan 的 Architecture Gate。
 
 ## 创建 ExecPlan
 
-1. 先读仓库入口、相关代码和测试，确认现状。只在产品意图、权限、不可逆取舍或外部输入确实缺失时询问用户。
-2. 运行 `new-ep` 创建目录和 `EXECPLAN.md`。
-3. 完整填写模板；不得留下 `<!-- REQUIRED... -->` 标记。
-4. 保证计划可以让无历史会话的 Agent 从当前工作树继续：
-   - 解释目的、用户可观察结果和术语。
-   - 在 Current Snapshot 写明当前里程碑、当前状态和准确下一动作。
-   - 写明完整仓库相对路径、模块关系、接口与依赖。
-   - 提供可修订的 `Plan of Work` 与独立可验证的里程碑。
-   - 写清工作目录、精确命令、预期输出和证据位置。
-   - 记录幂等性、失败重试、回滚和清理方法。
-5. 上下文地图用于导航；同时在计划内复述执行所需的关键事实。不要只写“见某文档”。
-6. 不预测耗时。进度时间戳只记录事实。
+执行前读取 `references/template.md`。
 
-完整要求与模板字段见 `references/template.md`。
+1. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
+2. Architecture Gate 必须引用所有当前 accepted ADR，或提供具体 not-required 理由。
+3. ADR 引用的 Research 也必须进入 ExecPlan 的 `research_refs`。
+4. 运行 `new-ep` 创建 v2.2 目录和模板。
+5. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
+   - 支持路线的关键证据与置信边界；
+   - accepted ADR 的接口、数据、运维、迁移和负面后果；
+   - 仍需在实现中验证的未知；
+   - 跳过 Gate 的具体理由。
+6. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
+   - 解释目的、术语、用户可观察结果和系统现状；
+   - 给出准确仓库相对路径、接口与依赖；
+   - 提供独立可验证里程碑、工作目录、命令、预期输出和证据位置；
+   - 写明幂等重试、回滚、迁移与清理。
 
-## 维护 Living Document
+上游引用用于审计，不得替代根计划内的执行上下文。不要预测耗时；时间戳只记录事实。
 
-把内容分成两类：
+## 维护有界 Living Document
 
-- **当前事实**：Purpose、Current Snapshot、Context、Plan、Milestones、Validation、Recovery、Interfaces。发现新事实或改变路线时同步修订和精简。
-- **历史记录**：Progress、Surprises & Discoveries、Decision Log、Blockers、Revision Notes。在当前 checkpoint 区间只追加；纠错时新增更正记录。
+当前事实随路线更新并保持精简：Purpose、Current Snapshot、Context、Inputs、Plan、Milestones、Validation、Recovery、Interfaces。
 
-每个停止点都更新 Progress。每次改动当前事实时，在 Revision Notes 记录时间、作者、变化和原因。
+当前 checkpoint 区间内追加历史：Progress、Surprises & Discoveries、Decision Log、Blockers、Revision Notes。纠错时新增更正记录。每个停止点更新 Progress；修改当前事实时记录 Revision Notes。
 
-“只追加”是逻辑历史不变量，不要求旧事件永远留在根文件。里程碑完成、交接前，或根文档超过约 800 行 / 64 KiB / 50 个活跃历史事件时建立 checkpoint：
+里程碑完成、交接前，或根文档超过约 800 行、64 KiB、50 个活跃历史事件时：
 
-1. 先把仍有效的发现和决策吸收到当前事实。
-2. 把完整 transcript、trace 和截图移到 `artifacts/`，根文档只保留结论和路径。
-3. 用 `checkpoint ... --dry-run` 预览，再去掉 `--dry-run` 封存历史。
-4. 保证未完成 Progress、未完成验收和 open blocker 仍在根文档。
-5. 只读根 `EXECPLAN.md` 做一次接手验证。
+1. 把仍有效的发现和决定吸收到当前事实。
+2. 把完整输出移到 `artifacts/`。
+3. 读取 `references/checkpoints.md`。
+4. 先运行 `checkpoint ... --dry-run`，确认后再正式封存。
+5. 保证未完成 Progress/Validation 和 open blocker 留在根文件。
+6. 只读根 `EXECPLAN.md` 做一次恢复检查。
 
-checkpoint 细则、迁移和恢复见 `references/checkpoints.md`。
+Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 
-## 拆分 Task
+## Task、未知与阻塞
 
-- 仅在 Task 能明确指定修改目标、独立验证、有限上下文推进时拆分。
-- 使用 `new-task` 分配 EP 内唯一 ID。
-- `parent_id` 使用稳定的 `EP-NNN`，不要写 `active/` 物理路径。
-- 开始 Task 前检查 `depends_on` 均为 `done` 或 `cancelled`。
-- 保持根 `EXECPLAN.md` 的进度、里程碑和关键决策同步，确保只读根计划仍可恢复。
+- 仅在工作能指定有限修改目标和独立验证时创建 Task。
+- Task 使用稳定 `parent_id: EP-NNN`；开始前检查依赖均为 `done` 或 `cancelled`。
+- 根 ExecPlan 始终同步总体进度、接口和关键决定。
+- 技术未知优先通过 Research、仓库检索或最小实验解决。
+- 只有缺权限/凭据/外部状态、人类产品判断、范围外能力，或继续会造成安全、数据、兼容风险时建立 open blocker。
+- blocker 解除后补充结果并恢复实体状态，不因历史阻塞持续报告 blocked。
 
-## 处理未知与阻塞
+## Bugfix 与技术债务
 
-先在授权范围内检索、运行小实验或建立 prototype/spike，并把证据写入 Surprises & Discoveries。
+用户明确要求持久记录局部缺陷时使用 Bugfix，并读取 `references/bugfix.md`。至少记录 Symptom、Scope、Root Cause、Fix、Verification 和证据。升级为复杂工作时创建符合 Gate 的 ExecPlan，将 Bugfix 设为 `escalated`、填写 `linked_ep` 并归档，后续只在 EP 推进。
 
-只在以下情况建立硬阻塞：
-
-- 缺少权限、凭据或外部系统状态。
-- 需要人类产品判断或不可逆决策。
-- 缺失能力的建设明显超出当前范围。
-- 继续执行会产生安全、数据或兼容性风险。
-
-Blocker 使用 `open` / `resolved` / `dismissed` 状态。解除后保留原行，补充解决时间和结果；实体状态从 `blocked` 恢复为 `active` / `in_progress`。不要因历史上出现过 blocker 就持续报告阻塞。
-
-## Bugfix
-
-- 只在用户明确要求记录/跟踪局部缺陷时创建。
-- 至少记录 Symptom、Scope、Root Cause、Fix、Verification 和证据。
-- `blocked` 可恢复到 `in_progress`。
-- 升级时创建 ExecPlan，填写 `linked_ep`，将 bugfix 设为 `escalated` 并归档；之后只在 ExecPlan 推进复杂工作。
-
-详细字段见 `references/bugfix.md`。
+技术债务是反馈入口。用户未提供优先级或目标日期时使用 `unspecified` / `unscheduled`，不要猜测。
 
 ## 严格完成与归档
 
 完成 ExecPlan 前：
 
-1. 运行真实验证，补充可观察结果和证据。
-2. 确认 Validation 全部勾选。
+1. 运行真实验证并记录结果和证据。
+2. 勾选全部 Validation。
 3. 确认 Task 全部 `done` / `cancelled`。
-4. 确认没有 `open` blocker。
-5. 填写 Outcomes & Retrospective，说明结果、遗留项和经验。
+4. 确认没有 open blocker。
+5. 填写 Outcomes & Retrospective。
 6. 运行 `validate`，再运行 `archive-ep EP-NNN --outcome completed`。
 
-验收未完成时保持 active/blocked，或明确改为 cancelled；不能把不完整计划标为 completed。
+不完整计划保持 active/blocked，或在明确停止时以原因归档为 cancelled。不能靠口头确认、force 或删除验收项伪装完成。
 
-取消时先把 Task 改为 `done` / `cancelled`，再执行：
+归档只记录知识提升候选。新的架构决定仍需 proposed ADR 和独立明确授权；不要在“归档 EP”的隐含授权下接受 ADR 或修改 `AGENTS.md`。
 
-```bash
-python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \
-  --outcome cancelled --reason "<why work stopped>"
-```
+## 状态与验证
 
-归档时只记录知识提升候选：
-
-- 工程规范候选 → `docs/standards/` 或机械 lint/test。
-- 架构决策候选 → draft ADR。
-- `AGENTS.md` 只维护短入口和链接。
-
-不要在“归档 EP”的隐含授权下自动追加 `AGENTS.md` 规则或直接生成 accepted ADR。
-
-Bugfix 只有在：
-
-- `fixed` 且 Verification 全部完成；
-- `escalated` 且 `linked_ep` 已填写；或
-- `cancelled`
-
-时才能归档。
-
-```bash
-python3 <skill-dir>/scripts/epctl.py --repo . archive-bugfix BF-NNN \
-  --outcome escalated --linked-ep EP-NNN --reason "<why this needs an EP>"
-```
-
-## 查看状态与技术债务
-
-- 用 `status` 汇总验收、Task、未解决 blocker、checkpoint、根文档大小和最后活动时间。
-- 用 `validate` 检查 ID、路径、状态、必需 section、依赖和索引完整性。
-- 技术债务是反馈入口，不是垃圾桶。定期扫描 tracker，将可独立解决的条目转为小型修复或 ExecPlan，并关闭已解决条目。
+- `status` 汇总 Research 问题、Synthesis、ADR、Gate、验收、Task、blocker、Checkpoint 和文档大小。
+- `validate` 检查 ID、路径、状态、必需 section、引用、依赖、payload 和索引。
+- `reindex` 从事实制品重建 Research、ADR、ExecPlan 和 Bugfix 投影。
 
 ## 参考
 
 - 制品路由、状态机、兼容策略 → `references/templates.md`
-- ExecPlan 自包含要求、必需 section、Living Document 规则 → `references/template.md`
+- Research、Synthesis、证据与有界性 → `references/research.md`
+- ADR 门槛、授权、状态与 supersession → `references/adr.md`
+- ExecPlan 自包含要求与 Living Document → `references/template.md`
+- Checkpoint、压缩与恢复 → `references/checkpoints.md`
 - Bugfix 字段与升级/归档 → `references/bugfix.md`
-- 有界根文档、checkpoint、压缩与恢复 → `references/checkpoints.md`
-- 典型命令和场景 → `references/examples.md`
+- 完整命令和典型场景 → `references/examples.md`

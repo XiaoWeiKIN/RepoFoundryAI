@@ -1,9 +1,15 @@
 ---
-schema_version: "2.1"
+schema_version: "2.2"
 id: {{ID}}
 title: "{{TITLE}}"
 status: active
 latest_checkpoint:
+research_refs: {{RESEARCH_REFS}}
+research_gate: {{RESEARCH_GATE}}
+research_gate_reason: "{{RESEARCH_GATE_REASON}}"
+adr_refs: {{ADR_REFS}}
+architecture_gate: {{ARCHITECTURE_GATE}}
+architecture_gate_reason: "{{ARCHITECTURE_GATE_REASON}}"
 created: {{DATE}}
 updated: {{DATE}}
 owner: "{{OWNER}}"
@@ -37,6 +43,15 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 | Source | Why it matters | When to read |
 |---|---|---|
 | `path/from/repo/root` | Replace with a real entry point | Before implementation |
+
+## Research and Architecture Inputs
+
+- Research gate: `{{RESEARCH_GATE}}`.
+- Research references: {{RESEARCH_REFS}}.
+- Architecture gate: `{{ARCHITECTURE_GATE}}`.
+- ADR references: {{ADR_REFS}}.
+
+<!-- REQUIRED: Restate the Research conclusions, accepted ADR consequences, implementation constraints, and remaining unknowns needed to execute this plan without opening upstream artifacts. Explain each not-required reason when a gate was explicitly skipped. -->
 
 ## Plan of Work
 

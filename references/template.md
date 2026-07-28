@@ -20,6 +20,8 @@
 5. **可以恢复**：危险或可能半途失败的操作有重试、回滚和清理方法。
 6. **持续更新**：计划始终反映当前真实路线，同时保留历史轨迹。
 7. **保持有界**：根文档优先服务当前接手，旧事件封存到 checkpoint，完整证据外置。
+8. **输入已决**：Research 与 Architecture Gate 有可验证引用或具体的
+   not-required 理由；上游结论和约束已在根计划重述。
 
 目标与步骤承担不同职责：目标定义成功，步骤提供当前可执行路线。步骤可以随发现修订，不能用模糊清单替代研究。
 
@@ -31,6 +33,7 @@
 | Current Snapshot | 最新 checkpoint、当前里程碑、当前状态、准确下一动作和开放问题 |
 | Context and Orientation | 术语、现状、模块关系、完整仓库相对路径 |
 | Constraints and References | 当前任务所需约束摘要与权威入口 |
+| Research and Architecture Inputs | Gate、关键证据、ADR 后果、执行约束、剩余未知和跳过理由 |
 | Plan of Work | 当前准备怎样修改以及为什么 |
 | Milestones | 每阶段新增能力、改动范围、验证命令与预期结果 |
 | Concrete Steps | 工作目录、精确命令、关键编辑位置 |
@@ -45,13 +48,27 @@
 | Artifacts and Notes | 关键输出、短 transcript、完整截图/日志/trace 的路径 |
 | Revision Notes | 对当前事实的每次修订及原因 |
 
-使用 `assets/execplan.md` 作为唯一新建模板。
+使用 `assets/execplan.md` 作为唯一新建模板。新计划使用
+`schema_version: "2.2"`；v2.0/v2.1 只做兼容读取，不因普通编辑静默迁移。
+
+## Research 与 Architecture Inputs
+
+该 section 是上游证据和执行计划之间的稳定接口，至少写明：
+
+- 每份 concluded Research 支持的结论、置信边界和 sealed Synthesis 路径。
+- 每份 accepted ADR 的选择、负面后果、迁移义务和 Confirmation。
+- 哪些事实是审计信息，哪些约束必须进入实现和验收。
+- 剩余未知为何不改变路线，或它们对应的实验、blocker、里程碑和验收项。
+- Gate 为 `not_required` 时，已有证据或“无架构级选择”的具体依据。
+
+引用不能替代正文。接手 Agent 不应先打开 Research/ADR 才知道要改什么。
 
 ## 当前事实与历史记录
 
 必须持续修订：
 
 - Purpose、Context、Constraints
+- Research and Architecture Inputs
 - Current Snapshot
 - Plan of Work、Milestones、Concrete Steps
 - Validation、Recovery
@@ -94,6 +111,10 @@
 3. 在完成复盘中登记知识提升候选。
 4. 经单独确认后更新权威文档，并优先编码为 lint/test。
 5. `AGENTS.md` 仅增加短入口，不复制规则全文。
+
+accepted ADR 的约束属于当前事实。若 ADR 后续 superseded，active v2.2
+ExecPlan 必须重新评估路线并更新引用、Inputs、Plan 和 Validation；验证器会拒绝
+superseded ADR 继续满足 Gate。
 
 ## Task 规则
 
