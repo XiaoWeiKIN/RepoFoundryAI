@@ -40,7 +40,7 @@ flowchart LR
 以下命令在目标代码仓库根目录运行：
 
 ```bash
-EPCTL=/absolute/path/to/ExecutionPlan/scripts/epctl.py
+EPCTL=/absolute/path/to/EngineeringPlan/scripts/epctl.py
 
 python3 "$EPCTL" --repo . init
 python3 "$EPCTL" --repo . \

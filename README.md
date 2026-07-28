@@ -1,6 +1,6 @@
-# ExecutionPlan
+# EngineeringPlan
 
-ExecutionPlan 现在由两个可独立安装、独立触发的 Skill 组成：
+EngineeringPlan 由两个可独立安装、独立触发的 Skill 组成：
 
 - **Engineering Research**：把大量源码、文档、实验和外部研究组织成可审计的
   多文档 corpus，并输出 sealed Synthesis。
@@ -48,7 +48,7 @@ Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当�
 这个 Git 仓库同时是发行仓库和兼容入口：
 
 ```text
-ExecutionPlan/
+EngineeringPlan/
 ├── SKILL.md                         # execution-plan Skill 根
 ├── scripts/epctl.py
 └── engineering-research/
@@ -59,16 +59,16 @@ ExecutionPlan/
 要求 Python 3.10+，两个 CLI 都只使用标准库。仓库可以检出到任意稳定目录：
 
 ```bash
-git clone https://github.com/XiaoWeiKIN/ExecutionPlan.git \
-  /absolute/path/to/ExecutionPlan
-export EXECUTION_PLAN_HOME=/absolute/path/to/ExecutionPlan
+git clone https://github.com/XiaoWeiKIN/EngineeringPlan.git \
+  /absolute/path/to/EngineeringPlan
+export ENGINEERING_PLAN_HOME=/absolute/path/to/EngineeringPlan
 ```
 
 按所用 Agent 或 Harness 的 Skill 发现机制，分别注册两个目录：
 
 ```text
-/absolute/path/to/ExecutionPlan/engineering-research
-/absolute/path/to/ExecutionPlan
+/absolute/path/to/EngineeringPlan/engineering-research
+/absolute/path/to/EngineeringPlan
 ```
 
 第一个是 Research Skill，第二个是 Execution Plan Skill。目录扫描、符号链接、
@@ -79,7 +79,7 @@ export EXECUTION_PLAN_HOME=/absolute/path/to/ExecutionPlan
 更新发行包：
 
 ```bash
-git -C "$EXECUTION_PLAN_HOME" pull --ff-only
+git -C "$ENGINEERING_PLAN_HOME" pull --ff-only
 ```
 
 如果宿主支持 `$<skill-name>` 调用语法，可以分别调用：
@@ -96,9 +96,9 @@ git -C "$EXECUTION_PLAN_HOME" pull --ff-only
 以下命令都在目标代码仓库根目录运行：
 
 ```bash
-EXECUTION_PLAN_HOME=/absolute/path/to/ExecutionPlan
-RESEARCHCTL="$EXECUTION_PLAN_HOME/engineering-research/scripts/researchctl.py"
-EPCTL="$EXECUTION_PLAN_HOME/scripts/epctl.py"
+ENGINEERING_PLAN_HOME=/absolute/path/to/EngineeringPlan
+RESEARCHCTL="$ENGINEERING_PLAN_HOME/engineering-research/scripts/researchctl.py"
+EPCTL="$ENGINEERING_PLAN_HOME/scripts/epctl.py"
 
 python3 "$RESEARCHCTL" --repo . init
 python3 "$EPCTL" --repo . init
