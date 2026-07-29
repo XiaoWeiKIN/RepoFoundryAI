@@ -1,8 +1,9 @@
 ---
-schema_version: "1"
+schema_version: "1.1"
 parent_id: {{PARENT_ID}}
 title: "{{TITLE}}"
 status: draft
+revision: "0"
 created: {{DATE}}
 updated: {{DATE}}
 payload_sha256:
@@ -10,9 +11,11 @@ payload_sha256:
 
 # {{TITLE}}
 
-This Synthesis is the bounded decision interface between a multi-document
-Research corpus and downstream decisions or plans. Once sealed, changing its
-body invalidates the recorded SHA-256.
+This Synthesis is the bounded, living decision interface between a
+multi-document Research corpus and downstream decisions or plans.
+`review_ready` revisions are immutable review snapshots but do not conclude
+the parent Research. Once sealed, changing the body invalidates the recorded
+SHA-256.
 
 ## Executive Conclusion
 

@@ -90,6 +90,10 @@ class ResearchctlTestCase(unittest.TestCase):
             slug,
             "--title",
             slug.replace("-", " ").title(),
+            "--owner",
+            "Test Research Owner",
+            "--author",
+            "Test Researcher",
             *extra,
         )
         return Path(result.stdout.strip())
@@ -130,6 +134,18 @@ class ResearchctlTestCase(unittest.TestCase):
                 )
             ),
         )
+        self.run_cli("mark-review-ready", "R-001")
+
+    def conclude_research(self, research_id: str = "R-001") -> Path:
+        result = self.run_cli(
+            "conclude-research",
+            research_id,
+            "--approved-by",
+            "Test Research Owner",
+            "--approval-ref",
+            "test:explicit-owner-approval",
+        )
+        return Path(result.stdout.strip())
 
     def test_init_and_managed_manifest_are_idempotent(self) -> None:
         first = json.loads(self.run_cli("init").stdout)
@@ -142,7 +158,10 @@ class ResearchctlTestCase(unittest.TestCase):
             (research.parent / "RESEARCH_MANIFEST.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["mode"], "managed")
-        self.assertEqual(manifest["documents"], [])
+        self.assertEqual(
+            [item for item in manifest["documents"] if item["role"] == "round"],
+            [manifest["documents"][0]],
+        )
         self.assertEqual(manifest["roots"][0]["base"], "package")
         self.assertEqual(manifest["roots"][0]["path"], "notes")
 
@@ -151,7 +170,7 @@ class ResearchctlTestCase(unittest.TestCase):
         notes = research.parent / "notes"
         (notes / "one.md").write_text("# One\n", encoding="utf-8")
         synced = json.loads(self.run_cli("sync-research", "R-001").stdout)
-        self.assertEqual(synced["documents"], 1)
+        self.assertEqual(synced["documents"], 2)
         self.run_cli("validate")
 
         (notes / "two.md").write_text("# Two\n", encoding="utf-8")
@@ -160,6 +179,129 @@ class ResearchctlTestCase(unittest.TestCase):
 
         self.run_cli("sync-research", "R-001")
         self.run_cli("validate")
+
+    def test_review_ready_never_concludes_without_explicit_approval(self) -> None:
+        research = self.new_research("approval-gate")
+        self.prepare_for_conclusion(research)
+
+        controller = research.read_text(encoding="utf-8")
+        synthesis = (research.parent / "SYNTHESIS.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("status: active", controller)
+        self.assertIn("maturity: review_ready", controller)
+        self.assertIn("status: review_ready", synthesis)
+        self.assertTrue(
+            (research.parent / "snapshots" / "synthesis-v001.md").is_file()
+        )
+
+        denied = self.run_cli(
+            "archive-research",
+            "R-001",
+            "--outcome",
+            "concluded",
+            expected=2,
+        )
+        self.assertIn("--approved-by", denied.stderr)
+        self.assertTrue(research.is_file())
+        self.assertEqual(
+            list(
+                (self.repo / "docs" / "research" / "completed").glob(
+                    "r-001_*"
+                )
+            ),
+            [],
+        )
+
+        completed = self.conclude_research()
+        completed_text = completed.read_text(encoding="utf-8")
+        self.assertIn("status: concluded", completed_text)
+        self.assertIn('approved_by: "Test Research Owner"', completed_text)
+        self.assertIn(
+            'approval_ref: "test:explicit-owner-approval"', completed_text
+        )
+
+    def test_review_ready_reopens_as_another_round(self) -> None:
+        research = self.new_research("iterative")
+        self.prepare_for_conclusion(research)
+        first_snapshot = research.parent / "snapshots" / "synthesis-v001.md"
+        first_snapshot_text = first_snapshot.read_text(encoding="utf-8")
+
+        second_round = Path(
+            self.run_cli(
+                "new-round",
+                "R-001",
+                "--slug",
+                "http-security",
+                "--title",
+                "HTTP security deep dive",
+                "--author",
+                "Security Reviewer",
+            ).stdout.strip()
+        )
+        controller = research.read_text(encoding="utf-8")
+        synthesis = (research.parent / "SYNTHESIS.md").read_text(
+            encoding="utf-8"
+        )
+        first_round = research.parent / "rounds" / "rr-001_baseline.md"
+
+        self.assertTrue(second_round.is_file())
+        self.assertIn("current_round: RR-002", controller)
+        self.assertIn("maturity: evidence_building", controller)
+        self.assertIn("| RR-002 | HTTP security deep dive | active |", controller)
+        self.assertIn("status: draft", synthesis)
+        self.assertIn("status: completed", first_round.read_text(encoding="utf-8"))
+        self.assertEqual(
+            first_snapshot.read_text(encoding="utf-8"),
+            first_snapshot_text,
+        )
+        self.run_cli("validate")
+
+        second_snapshot = Path(
+            self.run_cli("mark-review-ready", "R-001").stdout.strip()
+        )
+        self.assertEqual(second_snapshot.name, "synthesis-v002.md")
+        controller = research.read_text(encoding="utf-8")
+        self.assertIn("maturity: review_ready", controller)
+        self.assertIn('synthesis_revision: "2"', controller)
+        self.assertIn("| RR-002 | HTTP security deep dive | completed |", controller)
+        self.run_cli("validate")
+
+    def test_review_snapshot_tampering_survives_manifest_refresh_detection(
+        self,
+    ) -> None:
+        research = self.new_research("review-snapshot")
+        self.prepare_for_conclusion(research)
+        snapshot = research.parent / "snapshots" / "synthesis-v001.md"
+        snapshot.write_text(
+            snapshot.read_text(encoding="utf-8").replace(
+                "## Executive Conclusion",
+                "Tampered review content.\n\n## Executive Conclusion",
+            ),
+            encoding="utf-8",
+        )
+
+        self.run_cli("sync-research", "R-001")
+        result = self.run_cli("validate", expected=1)
+
+        self.assertIn("review_ready Synthesis payload changed", result.stderr)
+
+    def test_unassigned_owner_blocks_conclusion(self) -> None:
+        research = self.new_research("unowned", "--owner", "")
+        self.prepare_for_conclusion(research)
+
+        denied = self.run_cli(
+            "conclude-research",
+            "R-001",
+            "--approved-by",
+            "Someone",
+            "--approval-ref",
+            "test:no-owner",
+            expected=2,
+        )
+
+        self.assertIn("assigned owner", denied.stderr)
+        self.assertTrue(research.is_file())
 
     def test_controller_contract_paths_cannot_traverse(self) -> None:
         research = self.new_research("unsafe-controller")
@@ -180,6 +322,10 @@ class ResearchctlTestCase(unittest.TestCase):
             "cancelled",
             "--reason",
             "Unsafe fixture.",
+            "--approved-by",
+            "Test Research Owner",
+            "--approval-ref",
+            "test:explicit-owner-approval",
             expected=2,
         )
 
@@ -205,7 +351,7 @@ class ResearchctlTestCase(unittest.TestCase):
             (research.parent / "RESEARCH_MANIFEST.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["mode"], "linked")
-        self.assertEqual(len(manifest["documents"]), 2)
+        self.assertEqual(len(manifest["documents"]), 3)
         entrypoints = [
             item for item in manifest["documents"] if item["role"] == "entrypoint"
         ]
@@ -239,9 +385,9 @@ class ResearchctlTestCase(unittest.TestCase):
             )
         )
 
-        self.assertEqual(len(manifest["roots"]), 2)
+        self.assertEqual(len(manifest["roots"]), 4)
         self.assertEqual(len(manifest["entrypoints"]), 2)
-        self.assertEqual(len(manifest["documents"]), 3)
+        self.assertEqual(len(manifest["documents"]), 4)
         self.assertEqual(
             sum(item["role"] == "entrypoint" for item in manifest["documents"]),
             2,
@@ -311,16 +457,13 @@ class ResearchctlTestCase(unittest.TestCase):
         )
         self.prepare_for_conclusion(research)
 
-        result = self.run_cli(
-            "archive-research",
-            "R-001",
-            "--outcome",
-            "concluded",
-        )
-        completed = Path(result.stdout.strip())
+        completed = self.conclude_research()
         manifest_path = completed.parent / "RESEARCH_MANIFEST.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        snapshot = completed.parent / manifest["documents"][0]["path"]
+        snapshotted_source = next(
+            item for item in manifest["documents"] if item.get("source_path")
+        )
+        snapshot = completed.parent / snapshotted_source["path"]
 
         self.assertEqual(manifest["status"], "sealed")
         self.assertEqual(manifest["mode"], "snapshot")
@@ -350,20 +493,16 @@ class ResearchctlTestCase(unittest.TestCase):
             "corpus/index.md",
         )
         self.prepare_for_conclusion(research)
-        completed = Path(
-            self.run_cli(
-                "archive-research",
-                "R-001",
-                "--outcome",
-                "concluded",
-            ).stdout.strip()
-        )
+        completed = self.conclude_research()
         manifest = json.loads(
             (completed.parent / "RESEARCH_MANIFEST.json").read_text(
                 encoding="utf-8"
             )
         )
-        snapshot = completed.parent / manifest["documents"][0]["path"]
+        snapshotted_source = next(
+            item for item in manifest["documents"] if item.get("source_path")
+        )
+        snapshot = completed.parent / snapshotted_source["path"]
         replacement = self.repo / "replacement.md"
         replacement.write_bytes(snapshot.read_bytes())
         snapshot.unlink()
@@ -382,14 +521,7 @@ class ResearchctlTestCase(unittest.TestCase):
         self.run_cli("sync-research", "R-001")
         self.prepare_for_conclusion(research)
 
-        completed = Path(
-            self.run_cli(
-                "archive-research",
-                "R-001",
-                "--outcome",
-                "concluded",
-            ).stdout.strip()
-        )
+        completed = self.conclude_research()
         manifest = json.loads(
             (completed.parent / "RESEARCH_MANIFEST.json").read_text(encoding="utf-8")
         )
@@ -434,23 +566,19 @@ class ResearchctlTestCase(unittest.TestCase):
 
     def test_cancelled_research_requires_reason(self) -> None:
         research = self.new_research("cancelled")
-        missing = self.run_cli(
-            "archive-research",
-            "R-001",
-            "--outcome",
-            "cancelled",
-            expected=2,
-        )
-        self.assertIn("requires --reason", missing.stderr)
+        missing = self.run_cli("cancel-research", "R-001", expected=2)
+        self.assertIn("--reason", missing.stderr)
 
         completed = Path(
             self.run_cli(
-                "archive-research",
+                "cancel-research",
                 "R-001",
-                "--outcome",
-                "cancelled",
                 "--reason",
                 "The premise was withdrawn.",
+                "--approved-by",
+                "Test Research Owner",
+                "--approval-ref",
+                "test:explicit-owner-approval",
             ).stdout.strip()
         )
         self.assertTrue(completed.is_file())
@@ -463,14 +591,7 @@ class ResearchctlTestCase(unittest.TestCase):
         note.write_text("# Result\n", encoding="utf-8")
         self.run_cli("sync-research", "R-001")
         self.prepare_for_conclusion(research)
-        completed = Path(
-            self.run_cli(
-                "archive-research",
-                "R-001",
-                "--outcome",
-                "concluded",
-            ).stdout.strip()
-        )
+        completed = self.conclude_research()
 
         adr = Path(
             self.run_epctl(
@@ -525,14 +646,7 @@ class ResearchctlTestCase(unittest.TestCase):
         note.write_text("# Result\n", encoding="utf-8")
         self.run_cli("sync-research", "R-001")
         self.prepare_for_conclusion(research)
-        completed = Path(
-            self.run_cli(
-                "archive-research",
-                "R-001",
-                "--outcome",
-                "concluded",
-            ).stdout.strip()
-        )
+        completed = self.conclude_research()
         manifest_path = completed.parent / "RESEARCH_MANIFEST.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["status"] = "active"

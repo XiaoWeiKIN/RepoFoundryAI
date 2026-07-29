@@ -81,6 +81,10 @@ class RepositoryContractTestCase(unittest.TestCase):
                     "cache-topology",
                     "--title",
                     "Research tenant settings cache topology",
+                    "--owner",
+                    "Cache Platform Owner",
+                    "--author",
+                    "Example Researcher",
                     "--corpus-root",
                     "research-input/cache-topology",
                     "--entrypoint",
@@ -92,7 +96,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(len(active_manifest["documents"]), 4)
+            self.assertEqual(len(active_manifest["documents"]), 5)
             self.assertEqual(
                 sum(
                     item["role"] == "entrypoint"
@@ -101,7 +105,11 @@ class RepositoryContractTestCase(unittest.TestCase):
                 1,
             )
             for document in active_manifest["documents"]:
-                source = repository / document["path"]
+                source = (
+                    repository
+                    if document["base"] == "repo"
+                    else research.parent
+                ) / document["path"]
                 self.assertEqual(document["bytes"], source.stat().st_size)
 
             synthesis = research.parent / "SYNTHESIS.md"
@@ -125,14 +133,22 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ),
             )
             self.run_cli(RESEARCHCTL, repository, "sync-research", "R-001")
+            self.run_cli(
+                RESEARCHCTL,
+                repository,
+                "mark-review-ready",
+                "R-001",
+            )
             completed_research = Path(
                 self.run_cli(
                     RESEARCHCTL,
                     repository,
-                    "archive-research",
+                    "conclude-research",
                     "R-001",
-                    "--outcome",
-                    "concluded",
+                    "--approved-by",
+                    "Cache Platform Owner",
+                    "--approval-ref",
+                    "example:explicit-owner-approval",
                 ).stdout.strip()
             )
             sealed_manifest = json.loads(
@@ -142,7 +158,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             )
             self.assertEqual(sealed_manifest["status"], "sealed")
             self.assertEqual(sealed_manifest["mode"], "snapshot")
-            self.assertEqual(len(sealed_manifest["documents"]), 4)
+            self.assertEqual(len(sealed_manifest["documents"]), 6)
 
             adr = Path(
                 self.run_cli(

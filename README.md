@@ -35,9 +35,14 @@ Research 与实施治理的触发条件、工具和内容增长方式不同。
 Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当目的、Owner、
 结束时间或下游消费者可以独立变化时，再拆成多个 Research。
 
+同一个 Research 也可以有多轮深入分析。第一版完成后继续讨论、补证据或复核
+某个结论时创建 `RR-NNN` Round，并保留阶段性 Synthesis snapshot；只有
+Research Owner 明确授权后才结束 Research。
+
 这种边界也控制文档膨胀：
 
 - `RESEARCH.md` 只保留目的、问题、当前路线和发现索引；
+- `rounds/` 只记录每轮焦点、证据增量和结论变化；
 - 主题分析进入 managed `notes/`，已有文档目录以 linked corpus 注册；
 - `RESEARCH_MANIFEST.json` 明确成员、入口、大小和 SHA-256；
 - `SYNTHESIS.md` 只保留下游决策所需结论；
@@ -131,7 +136,10 @@ flowchart LR
 ```bash
 python3 "$RESEARCHCTL" --repo . new-research \
   --slug token-refresh-contract \
-  --title "Research token refresh contract"
+  --title "Research token refresh contract" \
+  --owner "API Platform Owner" \
+  --author "Codex" \
+  --research-type technical
 ```
 
 生成：
@@ -141,7 +149,9 @@ docs/research/active/r-001_token-refresh-contract/
 ├── RESEARCH.md
 ├── RESEARCH_MANIFEST.json
 ├── SYNTHESIS.md
+├── rounds/
 ├── notes/
+├── snapshots/
 └── artifacts/
 ```
 
@@ -159,6 +169,8 @@ python3 "$RESEARCHCTL" --repo . sync-research R-001
 python3 "$RESEARCHCTL" --repo . new-research \
   --slug spans-aggregate \
   --title "Research spans aggregate" \
+  --owner "Observability Owner" \
+  --author "Codex" \
   --corpus-root _bmad-output/planning-artifacts/research/spans-aggregate \
   --entrypoint _bmad-output/planning-artifacts/research/spans-aggregate/index.md
 ```
@@ -179,16 +191,33 @@ python3 "$RESEARCHCTL" --repo . validate
 python3 "$RESEARCHCTL" --repo . status
 ```
 
-完成 Research Questions 和 Synthesis 后封存：
+完成 Research Questions 和当前 Synthesis 后先创建评审版本：
 
 ```bash
-python3 "$RESEARCHCTL" --repo . archive-research R-001 \
-  --outcome concluded
+python3 "$RESEARCHCTL" --repo . mark-review-ready R-001
+```
+
+Research 此时仍位于 `active/`。如果评审要求深入某一点：
+
+```bash
+python3 "$RESEARCHCTL" --repo . new-round R-001 \
+  --slug http-security \
+  --title "Deep dive into HTTP security" \
+  --author "Security Reviewer"
+```
+
+只有 Research Owner 明确授权结束后才能封存：
+
+```bash
+python3 "$RESEARCHCTL" --repo . conclude-research R-001 \
+  --approved-by "Observability Owner" \
+  --approval-ref "review:OBS-123"
 ```
 
 managed 文档原地封存；linked 文档会复制到 completed Research 的
 `artifacts/research-snapshot/`，源文档不变。Manifest 和 Synthesis 都会写入
-可验证摘要。取消 Research 必须给出原因，且不能满足下游 Research Gate。
+可验证摘要。取消 Research 同样需要 Owner 明确授权和原因，且不能满足下游
+Research Gate。
 
 ### 3. 形成 ADR
 
@@ -357,6 +386,8 @@ CI 文件不得复制这些子命令：
 - 旧 Research 包没有 `RESEARCH_MANIFEST.json` 时仍可被两个验证器读取。
 - `epctl new-research`、`archive-research` 等旧命令暂时保留，但新工作应使用
   `engineering-research`；这是迁移兼容面，不是新的职责边界。
+- Research schema 1 继续按 legacy 契约读取；schema 1.1 增加人类可见元数据、
+  Round、Synthesis revision 和显式终止授权。
 - 两个 Skill 不通过相对 import、安装目录或运行时调用耦合。
 - Manifest 是可选的向后兼容字段；一旦出现，就必须满足版本化契约。
 - v2.0–v2.3 ExecPlan 继续按原 schema 读取；新计划使用 v2.4 Architecture

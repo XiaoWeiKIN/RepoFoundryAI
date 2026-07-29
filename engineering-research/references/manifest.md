@@ -47,6 +47,11 @@ An active root contains:
 `base` is `package` for managed content or `repo` for linked content. Paths
 always use `/` and contain no `.` or `..` components.
 
+Schema 1.1 Research declares package roots for `rounds/` and `snapshots/` in
+addition to managed `notes/` or linked repository roots. A root may set a
+default `role`, such as `round` or `snapshot`. Entrypoint role still takes
+precedence.
+
 An active document contains:
 
 ```json
@@ -88,7 +93,7 @@ set. Raw artifacts are not implicitly members.
 
 ## Reference diagnostics
 
-For each Markdown document:
+For each Markdown document other than an immutable Synthesis snapshot:
 
 - validate relative Markdown links and repository-relative local links;
 - ignore URL, mail, fragment-only, and data links;
@@ -104,10 +109,11 @@ correct.
 
 ## Sealing and snapshots
 
-Managed conclusion hashes documents in place. Linked conclusion copies every
-declared document into a temporary directory below
-`artifacts/research-snapshot/`, preserving root-relative structure. Only after
-all copies and hashes validate does the command replace the final snapshot.
+Managed conclusion hashes documents in place. Linked conclusion may contain
+both repository and package roots: repository documents are copied into a
+temporary directory below `artifacts/research-snapshot/`, while package-local
+Round and Synthesis snapshot documents remain in place. Only after all copies
+and hashes validate does the command replace the final snapshot.
 
 The sealed manifest:
 

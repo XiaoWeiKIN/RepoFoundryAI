@@ -76,12 +76,16 @@ stateDiagram-v2
     [*] --> active
     active --> blocked
     blocked --> active
-    active --> concluded
-    active --> cancelled
-    blocked --> cancelled
+    active --> active: "review-ready ↔ new Round"
+    active --> concluded: "Research Owner 明确批准"
+    active --> cancelled: "Research Owner 明确批准 + 原因"
+    blocked --> cancelled: "Research Owner 明确批准 + 原因"
 ```
 
-`concluded` 要求没有 open Research Question、open blocker 或 REQUIRED 标记，且 Synthesis 已完整填写。归档命令封存 Synthesis 并移动整个 Research 包。`cancelled` 需要原因，不能满足 Gate。
+`review_ready` 是 maturity，不是结束状态；第一版之后可以在同一个 Research
+中创建新 Round。`concluded` 除了没有 open Research Question、open blocker
+或 REQUIRED 标记，还必须记录 Research Owner 的明确授权。`cancelled` 同样
+需要授权和原因，不能满足 Gate。
 
 ### ADR
 
