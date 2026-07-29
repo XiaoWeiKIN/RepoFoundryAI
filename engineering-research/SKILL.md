@@ -1,7 +1,7 @@
 ---
 name: engineering-research
 description: |
-  创建、接管和迭代维护仓库内的工程 Research 与 Synthesis，包括研究问题、源码/文档/网络来源、实验与 prototype、多文档 corpus、研究轮次、阶段性 Synthesis revision、作者与研究类型元数据、入口索引、manifest、引用完整性、linked corpus 快照和显式授权后的结论封存。适用于用户要求先调研一个功能或技术方案、基于第一版继续深入、讨论某个研究点、比较选项、分析现有多篇研究文档、处理 BMAD/Deep Research 产物、生成决策级总结，或提到 Research、技术调研、证据、Synthesis、research corpus、research manifest。普通代码解释、方向已固定的局部实现或纯 ExecPlan 维护不触发本 skill。
+  创建、接管和迭代维护仓库内的工程 Research 与 Synthesis，包括研究问题、结构化专题文档、源码/文档/网络来源、实验与 prototype、多文档 corpus、研究轮次、阶段性 Synthesis revision、作者与研究类型元数据、入口索引、manifest、引用完整性、linked corpus 快照和显式授权后的结论封存。适用于用户要求先调研一个功能或技术方案、创建或评审专题研究文档、基于第一版继续深入、讨论某个研究点、比较选项、分析现有多篇研究文档、处理 BMAD/Deep Research 产物、生成决策级总结，或提到 Research、技术调研、专题文档、证据、Synthesis、research corpus、research manifest。普通代码解释、方向已固定的局部实现或纯 ExecPlan 维护不触发本 skill。
 ---
 
 # Engineering Research
@@ -42,6 +42,7 @@ Research 是“身份与生命周期 + 文档集合 + Synthesis”，不是某�
 
 执行 Research 前读取 `references/research.md`。注册 existing corpus、修改
 manifest 或处理归档完整性前再读取 `references/manifest.md`。
+创建或评审结构化专题文档前读取 `references/topic.md`。
 
 ## 仓库制品
 
@@ -52,7 +53,7 @@ docs/research/
 │   ├── RESEARCH_MANIFEST.json
 │   ├── SYNTHESIS.md
 │   ├── rounds/
-│   ├── notes/
+│   ├── notes/              # 结构化专题与其他 managed 分析
 │   ├── snapshots/
 │   └── artifacts/
 └── completed/
@@ -64,8 +65,11 @@ docs/research/
   `artifacts/research-snapshot/`，再封存 manifest 和 Synthesis。
 - 原始二进制、日志、trace、benchmark 数据仍走 `artifacts/`，不会因文档
   manifest 自动复制。
-- `SYNTHESIS.md` 是当前累积认识；每次 `mark-review-ready` 在
-  `snapshots/` 生成不可变 revision，但 Research 仍留在 `active/`。
+- `SYNTHESIS.md` 是当前累积认识；`mark-review-ready` 默认只递增 revision
+  并写入正文摘要，不复制文件。正式评审、对外交接或重大决策时追加
+  `--snapshot`，在 `snapshots/` 保存去重后的全量里程碑。
+- snapshot revision 允许稀疏；相同 Synthesis 正文复用已有文件。conclude
+  会在封存前确保最新唯一正文至少有一份全量快照。
 
 ## 优先使用 researchctl
 
@@ -89,7 +93,13 @@ python3 <skill-dir>/scripts/researchctl.py --repo . sync-research R-001
 python3 <skill-dir>/scripts/researchctl.py --repo . validate
 python3 <skill-dir>/scripts/researchctl.py --repo . status
 
+python3 <skill-dir>/scripts/researchctl.py --repo . new-topic R-001 \
+  --slug http-security --title "HTTP security boundary" \
+  --question RQ-002 --author "Security Researcher"
+
 python3 <skill-dir>/scripts/researchctl.py --repo . mark-review-ready R-001
+python3 <skill-dir>/scripts/researchctl.py --repo . \
+  mark-review-ready R-001 --snapshot
 python3 <skill-dir>/scripts/researchctl.py --repo . new-round R-001 \
   --slug http-security --title "Deep dive into HTTP security"
 
@@ -106,8 +116,9 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
 1. 先检查仓库代码、测试、已有文档和权威外部来源。
 2. 创建 Research，写清 Purpose、Scope、Decision Drivers 和所有 `RQ-NNN`。
    `owner`、`author` 和 `research_type` 必须真实；未知就保留未分配，禁止杜撰。
-3. 用 Round 组织每次有界研究迭代；managed 专题分析写到 `notes/`，existing
-   corpus 用 linked 模式登记。
+3. 用 Round 组织每次有界研究迭代；用 `new-topic` 创建关联 `RQ-NNN` 的
+   structured topic，其他 managed 分析写到 `notes/`，existing corpus 用 linked
+   模式登记。
 4. 每个关键主张保留可定位来源或可复现实验。区分 Observation 与
    Interpretation。
 5. 每次新增、删除、移动研究文档后运行 `sync-research`。
@@ -115,10 +126,11 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
    可移植替代或 provenance。
 7. 在 `SYNTHESIS.md` 直接回答研究目的，比较选项，保留负面证据、置信边界、
    剩余未知、推荐条件和下游约束。
-8. 没有 open Research Question、open blocker 或 REQUIRED 标记时，只执行
-   `mark-review-ready`。这不是结束授权。
-9. 用户要求继续深入或讨论某一点时，用 `new-round` 恢复研究；保留之前的
-   Synthesis snapshot。
+8. 没有 open Research Question、open blocker 或 REQUIRED 标记时，执行
+   `mark-review-ready`。普通轮次不加 `--snapshot`；正式评审、下游交接或重大
+   决策节点才加。两者都不是结束授权。
+9. 用户要求继续深入或讨论某一点时，用 `new-round` 恢复研究；保留已有
+   Synthesis milestone snapshot。默认发现与上下文装载不读取历史快照。
 10. 只有用户或声明的 Research Owner 明确说出结束、定稿、归档或 conclude，
     才执行 `conclude-research` 并记录 `approved_by` 与可审计 `approval_ref`。
 
@@ -130,6 +142,8 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 
 - 根控制页只服务当前接手，不复制全部专题内容。
 - Synthesis 只保存决策所需结论，不成为第二份全文。
+- snapshot 始终是可独立阅读的完整 Synthesis，但只在语义里程碑创建；不要为
+  每个普通 Round 留一份，也不要改成需要串联恢复的增量 patch。
 - concluded 的 snapshot、manifest 和 Synthesis 不可编辑。最终授权前的新证据
   创建同一 Research 的新 Round；最终授权后的新证据创建关联的新 Research。
 - 如果新证据改变已接受架构方向，由下游治理工具创建 superseding ADR。
@@ -140,6 +154,7 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 本 skill 不接受 ADR，也不创建 ExecPlan。它输出：
 
 - active Research 控制记录、Round 和 review-ready Synthesis revisions；
+- manifest 中 `role: topic` 的结构化专题文档；
 - concluded Research 控制记录；
 - sealed `RESEARCH_MANIFEST.json`；
 - sealed `SYNTHESIS.md`；

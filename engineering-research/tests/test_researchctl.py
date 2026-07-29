@@ -118,6 +118,46 @@ class ResearchctlTestCase(unittest.TestCase):
         )
         path.write_text(text, encoding="utf-8")
 
+    def complete_topic(self, path: Path) -> None:
+        self.complete_placeholders(path)
+        self.replace_section(
+            path,
+            "Evidence",
+            "\n".join(
+                (
+                    "### E-001 — The inspected contract is stable",
+                    "",
+                    "**Observation**",
+                    "",
+                    "The implementation and its tests use the same contract.",
+                    "",
+                    "**Evidence**",
+                    "",
+                    "`src/contract.py` and `tests/test_contract.py`.",
+                    "",
+                    "**Interpretation**",
+                    "",
+                    "The current option preserves observed behavior.",
+                    "",
+                    "**Confidence**",
+                    "",
+                    "High",
+                )
+            ),
+        )
+        self.replace_section(
+            path,
+            "Findings",
+            "\n".join(
+                (
+                    "| ID | Finding | Confidence | Evidence | Decision impact |",
+                    "|---|---|---|---|---|",
+                    "| F-001 | The contract is stable. | High | E-001 | "
+                    "Keep the current option. |",
+                )
+            ),
+        )
+
     def prepare_for_conclusion(self, research: Path) -> None:
         synthesis = research.parent / "SYNTHESIS.md"
         self.complete_placeholders(research)
@@ -180,6 +220,159 @@ class ResearchctlTestCase(unittest.TestCase):
         self.run_cli("sync-research", "R-001")
         self.run_cli("validate")
 
+    def test_new_topic_creates_auditable_round_evidence(self) -> None:
+        research = self.new_research("structured-topic")
+
+        topic = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "http-auth-boundary",
+                "--title",
+                "HTTP authentication boundary",
+                "--question",
+                "RQ-001",
+                "--author",
+                "Security Researcher",
+            ).stdout.strip()
+        )
+
+        self.assertEqual(topic.parent, research.parent / "notes")
+        topic_text = topic.read_text(encoding="utf-8")
+        self.assertIn("doc_type: research-topic", topic_text)
+        self.assertIn("parent_id: R-001", topic_text)
+        self.assertIn("round_id: RR-001", topic_text)
+        self.assertIn("`RQ-001`", topic_text)
+        self.assertIn("## Impact on Synthesis", topic_text)
+
+        round_text = (
+            research.parent / "rounds" / "rr-001_baseline.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "[HTTP authentication boundary]"
+            "(../notes/http-auth-boundary.md)",
+            round_text,
+        )
+
+        manifest = json.loads(
+            (research.parent / "RESEARCH_MANIFEST.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        topic_record = next(
+            item
+            for item in manifest["documents"]
+            if item["path"] == "notes/http-auth-boundary.md"
+        )
+        self.assertEqual(topic_record["role"], "topic")
+        self.run_cli("validate")
+
+        round_file = research.parent / "rounds" / "rr-001_baseline.md"
+        round_file.write_text(
+            round_text.replace(
+                "[HTTP authentication boundary]"
+                "(../notes/http-auth-boundary.md)",
+                "HTTP authentication boundary",
+            ),
+            encoding="utf-8",
+        )
+        missing_route = self.run_cli("validate", expected=1)
+        self.assertIn(
+            "RR-001 Evidence Added must link "
+            "../notes/http-auth-boundary.md",
+            missing_route.stderr,
+        )
+
+    def test_topic_quality_blocks_review_ready_until_complete(self) -> None:
+        research = self.new_research("topic-quality")
+        topic = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "cache-contract",
+                "--title",
+                "Cache contract",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        synthesis = research.parent / "SYNTHESIS.md"
+        self.complete_placeholders(research)
+        self.complete_placeholders(synthesis)
+        self.replace_section(
+            research,
+            "Research Questions",
+            "\n".join(
+                (
+                    "| ID | Status | Question | Answer or disposition | Evidence |",
+                    "|---|---|---|---|---|",
+                    "| RQ-001 | answered | Which contract works? | "
+                    "The stable contract works. | `notes/cache-contract.md` |",
+                )
+            ),
+        )
+
+        denied = self.run_cli("mark-review-ready", "R-001", expected=2)
+        self.assertIn("structured topic quality", denied.stderr)
+        self.assertIn("required topic placeholders remain", denied.stderr)
+
+        self.complete_topic(topic)
+        review_ready = Path(
+            self.run_cli("mark-review-ready", "R-001").stdout.strip()
+        )
+        self.assertEqual(review_ready.name, "SYNTHESIS.md")
+        self.assertEqual(list((research.parent / "snapshots").iterdir()), [])
+        snapshot = Path(
+            self.run_cli(
+                "mark-review-ready",
+                "R-001",
+                "--snapshot",
+            ).stdout.strip()
+        )
+        self.assertEqual(snapshot.name, "synthesis-v001.md")
+        self.run_cli("validate")
+
+        completed = self.conclude_research()
+        sealed_manifest = json.loads(
+            (completed.parent / "RESEARCH_MANIFEST.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        sealed_topic = next(
+            item
+            for item in sealed_manifest["documents"]
+            if item["path"] == "notes/cache-contract.md"
+        )
+        self.assertEqual(sealed_topic["role"], "topic")
+        self.assertTrue(
+            (completed.parent / "notes" / "cache-contract.md").is_file()
+        )
+        self.run_cli("validate")
+
+    def test_new_topic_rejects_unknown_question_without_mutation(self) -> None:
+        research = self.new_research("unknown-topic-question")
+
+        denied = self.run_cli(
+            "new-topic",
+            "R-001",
+            "--slug",
+            "invalid-question",
+            "--title",
+            "Invalid question",
+            "--question",
+            "RQ-999",
+            expected=2,
+        )
+
+        self.assertIn("unknown Research Questions: RQ-999", denied.stderr)
+        self.assertEqual(list((research.parent / "notes").iterdir()), [])
+        round_text = (
+            research.parent / "rounds" / "rr-001_baseline.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("invalid-question.md", round_text)
+
     def test_review_ready_never_concludes_without_explicit_approval(self) -> None:
         research = self.new_research("approval-gate")
         self.prepare_for_conclusion(research)
@@ -191,8 +384,9 @@ class ResearchctlTestCase(unittest.TestCase):
         self.assertIn("status: active", controller)
         self.assertIn("maturity: review_ready", controller)
         self.assertIn("status: review_ready", synthesis)
-        self.assertTrue(
-            (research.parent / "snapshots" / "synthesis-v001.md").is_file()
+        self.assertEqual(
+            list((research.parent / "snapshots").iterdir()),
+            [],
         )
 
         denied = self.run_cli(
@@ -216,6 +410,11 @@ class ResearchctlTestCase(unittest.TestCase):
         completed = self.conclude_research()
         completed_text = completed.read_text(encoding="utf-8")
         self.assertIn("status: concluded", completed_text)
+        self.assertTrue(
+            (
+                completed.parent / "snapshots" / "synthesis-v001.md"
+            ).is_file()
+        )
         self.assertIn('approved_by: "Test Research Owner"', completed_text)
         self.assertIn(
             'approval_ref: "test:explicit-owner-approval"', completed_text
@@ -224,6 +423,7 @@ class ResearchctlTestCase(unittest.TestCase):
     def test_review_ready_reopens_as_another_round(self) -> None:
         research = self.new_research("iterative")
         self.prepare_for_conclusion(research)
+        self.run_cli("mark-review-ready", "R-001", "--snapshot")
         first_snapshot = research.parent / "snapshots" / "synthesis-v001.md"
         first_snapshot_text = first_snapshot.read_text(encoding="utf-8")
 
@@ -257,14 +457,62 @@ class ResearchctlTestCase(unittest.TestCase):
         )
         self.run_cli("validate")
 
-        second_snapshot = Path(
+        second_review = Path(
             self.run_cli("mark-review-ready", "R-001").stdout.strip()
         )
-        self.assertEqual(second_snapshot.name, "synthesis-v002.md")
+        self.assertEqual(second_review.name, "SYNTHESIS.md")
         controller = research.read_text(encoding="utf-8")
         self.assertIn("maturity: review_ready", controller)
         self.assertIn('synthesis_revision: "2"', controller)
         self.assertIn("| RR-002 | HTTP security deep dive | completed |", controller)
+        self.assertFalse(
+            (research.parent / "snapshots" / "synthesis-v002.md").exists()
+        )
+        deduplicated = Path(
+            self.run_cli(
+                "mark-review-ready",
+                "R-001",
+                "--snapshot",
+            ).stdout.strip()
+        )
+        self.assertEqual(deduplicated, first_snapshot)
+        self.assertEqual(
+            [path.name for path in (research.parent / "snapshots").iterdir()],
+            ["synthesis-v001.md"],
+        )
+        self.run_cli("validate")
+
+    def test_sparse_snapshot_revision_gaps_are_valid(self) -> None:
+        research = self.new_research("sparse-snapshots")
+        self.prepare_for_conclusion(research)
+        self.run_cli(
+            "new-round",
+            "R-001",
+            "--slug",
+            "changed-conclusion",
+            "--title",
+            "Re-evaluate the conclusion",
+        )
+        synthesis = research.parent / "SYNTHESIS.md"
+        self.replace_section(
+            synthesis,
+            "Executive Conclusion",
+            "The second review has a materially different conclusion.",
+        )
+
+        snapshot = Path(
+            self.run_cli(
+                "mark-review-ready",
+                "R-001",
+                "--snapshot",
+            ).stdout.strip()
+        )
+
+        self.assertEqual(snapshot.name, "synthesis-v002.md")
+        self.assertFalse(
+            (research.parent / "snapshots" / "synthesis-v001.md").exists()
+        )
+        self.assertTrue(snapshot.is_file())
         self.run_cli("validate")
 
     def test_review_snapshot_tampering_survives_manifest_refresh_detection(
@@ -272,6 +520,7 @@ class ResearchctlTestCase(unittest.TestCase):
     ) -> None:
         research = self.new_research("review-snapshot")
         self.prepare_for_conclusion(research)
+        self.run_cli("mark-review-ready", "R-001", "--snapshot")
         snapshot = research.parent / "snapshots" / "synthesis-v001.md"
         snapshot.write_text(
             snapshot.read_text(encoding="utf-8").replace(
@@ -359,6 +608,57 @@ class ResearchctlTestCase(unittest.TestCase):
         self.assertTrue(index.exists())
         self.run_cli("validate")
 
+        # Simulate a schema 1.1 linked package created before package-local
+        # notes became a default manifest root.
+        manifest["roots"] = [
+            root
+            for root in manifest["roots"]
+            if not (
+                root.get("base") == "package"
+                and root.get("path") == "notes"
+            )
+        ]
+        (research.parent / "RESEARCH_MANIFEST.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        self.run_cli("validate")
+
+        structured_topic = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "linked-corpus-gap",
+                "--title",
+                "Linked corpus gap",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        self.assertEqual(structured_topic.parent, research.parent / "notes")
+        refreshed = json.loads(
+            (research.parent / "RESEARCH_MANIFEST.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        topic_record = next(
+            item
+            for item in refreshed["documents"]
+            if item["path"] == "notes/linked-corpus-gap.md"
+        )
+        self.assertEqual(topic_record["base"], "package")
+        self.assertEqual(topic_record["role"], "topic")
+        self.assertTrue(
+            any(
+                root.get("base") == "package"
+                and root.get("path") == "notes"
+                for root in refreshed["roots"]
+            )
+        )
+        self.run_cli("validate")
+
     def test_linked_corpus_supports_multiple_roots_and_entrypoints(self) -> None:
         first = self.repo / "research" / "request"
         second = self.repo / "research" / "storage"
@@ -385,7 +685,7 @@ class ResearchctlTestCase(unittest.TestCase):
             )
         )
 
-        self.assertEqual(len(manifest["roots"]), 4)
+        self.assertEqual(len(manifest["roots"]), 5)
         self.assertEqual(len(manifest["entrypoints"]), 2)
         self.assertEqual(len(manifest["documents"]), 4)
         self.assertEqual(

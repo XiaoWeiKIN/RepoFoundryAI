@@ -47,10 +47,19 @@ An active root contains:
 `base` is `package` for managed content or `repo` for linked content. Paths
 always use `/` and contain no `.` or `..` components.
 
-Schema 1.1 Research declares package roots for `rounds/` and `snapshots/` in
-addition to managed `notes/` or linked repository roots. A root may set a
-default `role`, such as `round` or `snapshot`. Entrypoint role still takes
-precedence.
+Schema 1.1 Research declares package roots for `notes/`, `rounds/`, and
+`snapshots/` in addition to any linked repository roots. This lets linked
+Research retain package-local analysis without modifying the adopted corpus. A
+root may set a default `role`, such as `round` or `snapshot`. Entrypoint role
+still takes precedence. A Markdown document declaring
+`doc_type: research-topic` receives `role: topic`.
+
+Synthesis snapshot membership is intentionally sparse. A package at
+`synthesis_revision: "7"` may contain only `synthesis-v002.md` and
+`synthesis-v007.md`. Validation requires each filename to match its embedded
+revision and forbids revisions newer than the controller; it does not require
+a contiguous `1..N` set. Repeated body digests are reported and the CLI reuses
+an existing full snapshot rather than creating another copy.
 
 An active document contains:
 
@@ -81,8 +90,8 @@ A snapshotted document additionally retains `source_path` for provenance while
 ## Discovery and refresh
 
 `sync-research` expands each root's include patterns, sorts paths
-lexicographically, computes byte size and SHA-256, assigns the entrypoint role,
-and atomically replaces the active manifest.
+lexicographically, computes byte size and SHA-256, assigns entrypoint and
+structured topic roles, and atomically replaces the active manifest.
 
 Validation rescans active roots. A changed membership set, size, or digest is
 manifest drift. Refresh is explicit so users can review new or removed
@@ -114,6 +123,11 @@ both repository and package roots: repository documents are copied into a
 temporary directory below `artifacts/research-snapshot/`, while package-local
 Round and Synthesis snapshot documents remain in place. Only after all copies
 and hashes validate does the command replace the final snapshot.
+
+Before conclusion seals the package, the current unique review-ready Synthesis
+body is preserved as a full milestone under `snapshots/`; an identical earlier
+snapshot is reused. This milestone snapshot is distinct from the linked-corpus
+copy under `artifacts/research-snapshot/`.
 
 The sealed manifest:
 

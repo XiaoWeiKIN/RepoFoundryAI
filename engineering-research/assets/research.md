@@ -118,8 +118,9 @@ authorization and a reason.
 - Manifest: `docs/research/active/{{DIR_NAME}}/RESEARCH_MANIFEST.json`
 - Synthesis: `docs/research/active/{{DIR_NAME}}/SYNTHESIS.md`
 - Round controllers belong under `rounds/`; managed analysis belongs under
-  `notes/`; immutable review snapshots belong under `snapshots/`; raw logs,
-  benchmarks, traces and captures belong under `artifacts/`.
+  `notes/`; sparse, immutable Synthesis milestone snapshots belong under
+  `snapshots/`; raw logs, benchmarks, traces and captures belong under
+  `artifacts/`.
 
 ## Revision Notes
 

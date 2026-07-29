@@ -23,11 +23,18 @@ python3 <skill-dir>/scripts/researchctl.py --repo . new-research \
   --research-type technical
 ```
 
-Write focused documents under the generated `notes/` directory, then refresh:
+Create decision-relevant deep dives as structured topics:
 
 ```bash
-python3 <skill-dir>/scripts/researchctl.py --repo . sync-research R-001
+python3 <skill-dir>/scripts/researchctl.py --repo . new-topic R-001 \
+  --slug eviction-semantics \
+  --title "Cache eviction semantics" \
+  --question RQ-001 --author "Codex"
 ```
+
+`new-topic` links the document from the current Round and refreshes the
+manifest. Ordinary notes may still be written under `notes/`; run
+`sync-research` after manually changing corpus membership.
 
 ## Adopt an existing corpus
 
@@ -42,12 +49,22 @@ python3 <skill-dir>/scripts/researchctl.py --repo . new-research \
 ```
 
 The source directory remains unchanged while active. Fix missing local
-references, fill the controller and Synthesis, then create a review checkpoint:
+references, fill the controller and Synthesis, then make it review-ready:
 
 ```bash
 python3 <skill-dir>/scripts/researchctl.py --repo . sync-research R-001
 python3 <skill-dir>/scripts/researchctl.py --repo . validate
 python3 <skill-dir>/scripts/researchctl.py --repo . mark-review-ready R-001
+```
+
+The default transition content-addresses the current Synthesis without copying
+another file. Add `--snapshot` for a formal review, downstream handoff, or
+material decision milestone. The flag also works while the Research is already
+review-ready:
+
+```bash
+python3 <skill-dir>/scripts/researchctl.py --repo . \
+  mark-review-ready R-001 --snapshot
 ```
 
 If review asks for deeper HTTP security analysis, continue the same Research:
@@ -59,6 +76,9 @@ python3 <skill-dir>/scripts/researchctl.py --repo . new-round R-001 \
   --author "Security Reviewer"
 ```
 
+Create any new structured topic only after `new-round`, so it is attributed to
+the new current Round.
+
 Only after the Research Owner explicitly authorizes conclusion:
 
 ```bash
@@ -67,9 +87,9 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
   --approval-ref "review:OBS-123"
 ```
 
-The completed package contains the linked corpus snapshot, Round history and
-review-ready Synthesis revisions; the original corpus still exists at its
-original path.
+The completed package contains the linked corpus snapshot, Round history,
+selected Synthesis milestones, and a sealed final Synthesis; the original
+corpus still exists at its original path.
 
 ## Multiple roots and entrypoints
 
@@ -95,9 +115,11 @@ Keep one ID when a first version is followed by focused discussion, source
 verification, a new experiment, or a challenge to one finding. Each
 `new-round` creates a small controller under `rounds/`; detailed work continues
 in any number of corpus documents. `SYNTHESIS.md` accumulates the latest view,
-while `snapshots/synthesis-vNNN.md` preserves each review checkpoint.
+while `snapshots/synthesis-vNNN.md` preserves only selected full milestones.
+Snapshot revisions may have gaps. Identical Synthesis bodies reuse the earlier
+snapshot, and conclusion ensures the latest unique review body is preserved.
 
-Do not run `conclude-research` merely because the first review snapshot is
+Do not run `conclude-research` merely because the first review revision is
 decision-ready.
 
 ## Process a Deep Research report

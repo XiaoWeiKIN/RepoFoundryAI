@@ -65,6 +65,22 @@ ROUND_SECTIONS = (
     "Next Inquiry",
     "Round Outcome",
 )
+TOPIC_SECTIONS = (
+    "Executive Takeaway",
+    "Question and Decision Relevance",
+    "Scope and Non-goals",
+    "Current Context",
+    "Method and Evidence Selection",
+    "Evidence",
+    "Analysis",
+    "Alternatives and Counterevidence",
+    "Findings",
+    "Uncertainty and Limitations",
+    "Impact on Synthesis",
+    "Next Inquiry",
+    "References and Artifacts",
+    "Revision Notes",
+)
 SYNTHESIS_SECTIONS = (
     "Executive Conclusion",
     "Supported Findings",
@@ -89,10 +105,19 @@ RESEARCH_TYPES = {
 }
 RESEARCH_MATURITY = {"exploratory", "evidence_building", "review_ready"}
 ROUND_STATUSES = {"active", "completed", "cancelled"}
+TOPIC_CONFIDENCE_LEVELS = {"high", "medium", "low"}
+TOPIC_EVIDENCE_LABELS = (
+    "Observation",
+    "Evidence",
+    "Interpretation",
+    "Confidence",
+)
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 RESEARCH_ID_RE = re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE)
 RESEARCH_QUESTION_ID_RE = re.compile(r"RQ-(\d{3,})", re.IGNORECASE)
 ROUND_ID_RE = re.compile(r"\bRR-(\d{3,})\b", re.IGNORECASE)
+TOPIC_EVIDENCE_ID_RE = re.compile(r"\bE-(\d{3,})\b", re.IGNORECASE)
+TOPIC_FINDING_ID_RE = re.compile(r"\bF-(\d{3,})\b", re.IGNORECASE)
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -681,6 +706,13 @@ def round_paths(package: Path) -> list[Path]:
     return sorted(root.glob("rr-*_*.md")) if root.exists() else []
 
 
+def topic_note_paths(package: Path) -> list[Path]:
+    root = package / "notes"
+    if not root.exists():
+        return []
+    return sorted({*root.rglob("*.md"), *root.rglob("*.markdown")})
+
+
 def find_round_path(package: Path, round_id: str) -> Path:
     canonical = round_id.strip().upper()
     matches: list[Path] = []
@@ -800,6 +832,20 @@ def relative_locator(base: str, root: Path, path: Path) -> dict[str, str]:
     return {"base": base, "path": path.relative_to(root).as_posix()}
 
 
+def inferred_document_role(path: Path, default_role: str) -> str:
+    if default_role != "document" or path.suffix.lower() not in {
+        ".md",
+        ".markdown",
+    }:
+        return default_role
+    try:
+        text = path.read_text(encoding="utf-8")
+        data, _, _ = parse_frontmatter(text)
+    except (OSError, UnicodeDecodeError, ResearchctlError):
+        return default_role
+    return "topic" if data.get("doc_type") == "research-topic" else default_role
+
+
 def discover_documents(
     repo: Path,
     package: Path,
@@ -853,7 +899,9 @@ def discover_documents(
                 documents[key] = {
                     **locator,
                     "role": (
-                        "entrypoint" if key in entrypoint_keys else default_role
+                        "entrypoint"
+                        if key in entrypoint_keys
+                        else inferred_document_role(candidate, default_role)
                     ),
                     "bytes": candidate.stat().st_size,
                     "sha256": sha256_file(candidate),
@@ -1166,13 +1214,15 @@ def new_research(
                 raise ResearchctlError(
                     "--entrypoint requires at least one --corpus-root"
                 )
-            root_specs.append(
-                {
-                    "base": "package",
-                    "path": "notes",
-                    "include": include_patterns,
-                }
-            )
+        root_specs.append(
+            {
+                "base": "package",
+                "path": "notes",
+                "include": (
+                    ["**/*.md"] if corpus_roots else include_patterns
+                ),
+            }
+        )
         root_specs.extend(
             (
                 {
@@ -1268,6 +1318,267 @@ def validate_sections(path: Path, text: str, headings: Iterable[str]) -> list[st
         elif len(values) > 1:
             errors.append(f"{path}: duplicate ## {heading}")
     return errors
+
+
+def validate_section_order(
+    path: Path,
+    text: str,
+    headings: tuple[str, ...],
+) -> list[str]:
+    if any(len(section_values(text, heading)) != 1 for heading in headings):
+        return []
+    required = set(headings)
+    observed = tuple(
+        heading for heading, _ in markdown_sections(text) if heading in required
+    )
+    if observed != headings:
+        return [f"{path}: required topic sections are out of order"]
+    return []
+
+
+def topic_evidence_records(text: str) -> list[tuple[str, str]]:
+    body = section(text, "Evidence") or ""
+    matches = list(
+        re.finditer(
+            r"(?m)^###\s+(E-\d{3,})\b[^\n]*(?:\n|$)",
+            body,
+            re.IGNORECASE,
+        )
+    )
+    return [
+        (
+            match.group(1).upper(),
+            body[
+                match.end() : (
+                    matches[index + 1].start()
+                    if index + 1 < len(matches)
+                    else len(body)
+                )
+            ].strip(),
+        )
+        for index, match in enumerate(matches)
+    ]
+
+
+def topic_finding_rows(text: str) -> list[list[str]]:
+    body = section(text, "Findings") or ""
+    rows: list[list[str]] = []
+    for line in visible_markdown_lines(body):
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = split_table_row(line)
+        if not cells or cells[0].lower() == "id" or set(cells[0]) == {"-"}:
+            continue
+        rows.append(cells)
+    return rows
+
+
+def declares_topic_document(text: str) -> bool:
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---\n", 4)
+    frontmatter = text[4:end] if end >= 0 else text[4:]
+    return bool(
+        re.search(
+            r"(?m)^doc_type\s*:\s*[\"']?research-topic[\"']?\s*$",
+            frontmatter,
+        )
+    )
+
+
+def validate_topic_document(
+    path: Path,
+    text: str,
+    data: dict[str, str],
+    parent_id: str,
+    valid_round_ids: set[str],
+    valid_question_ids: set[str],
+    quality_mode: str,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if data.get("schema_version") != "1":
+        errors.append(f"{path}: topic schema_version must be 1")
+    if data.get("doc_type") != "research-topic":
+        errors.append(f"{path}: doc_type must be research-topic")
+    if data.get("parent_id") != parent_id:
+        errors.append(f"{path}: parent_id must be {parent_id}")
+    round_id = data.get("round_id", "").upper()
+    if not ROUND_ID_RE.fullmatch(round_id):
+        errors.append(f"{path}: invalid topic round_id {round_id!r}")
+    elif round_id not in valid_round_ids:
+        errors.append(f"{path}: topic round_id {round_id} does not exist")
+    for field in ("title", "author", "created", "updated"):
+        if field not in data:
+            errors.append(f"{path}: missing topic frontmatter field {field}")
+    if not data.get("title"):
+        errors.append(f"{path}: topic title must not be empty")
+    if not data.get("author"):
+        warnings.append(f"{path}: topic author is unassigned")
+    if not SLUG_RE.fullmatch(path.stem):
+        errors.append(f"{path}: topic filename must be lowercase kebab-case")
+
+    errors.extend(validate_sections(path, text, TOPIC_SECTIONS))
+    errors.extend(validate_section_order(path, text, TOPIC_SECTIONS))
+
+    question_body = section(text, "Question and Decision Relevance") or ""
+    question_ids = {
+        f"RQ-{int(value):03d}"
+        for value in RESEARCH_QUESTION_ID_RE.findall(question_body)
+    }
+    if not question_ids:
+        errors.append(f"{path}: topic must reference at least one RQ-NNN")
+    for question_id in sorted(question_ids - valid_question_ids):
+        errors.append(
+            f"{path}: topic references unknown Research Question {question_id}"
+        )
+
+    quality_issues: list[str] = []
+    if marker_names(text):
+        quality_issues.append(f"{path}: required topic placeholders remain")
+    if quality_mode == "strict":
+        for heading in TOPIC_SECTIONS:
+            if heading in {"Evidence", "Findings"}:
+                continue
+            body = section(text, heading)
+            visible = (
+                re.sub(r"<!--[\s\S]*?-->", "", body).strip()
+                if body is not None
+                else ""
+            )
+            if not visible:
+                quality_issues.append(
+                    f"{path}: ## {heading} needs substantive content"
+                )
+
+    evidence_records = topic_evidence_records(text)
+    if not evidence_records:
+        quality_issues.append(f"{path}: topic needs at least one E-NNN record")
+    seen_evidence: set[str] = set()
+    for evidence_id, body in evidence_records:
+        if evidence_id in seen_evidence:
+            errors.append(f"{path}: duplicate topic evidence id {evidence_id}")
+        seen_evidence.add(evidence_id)
+        for label in TOPIC_EVIDENCE_LABELS:
+            if not re.search(
+                rf"\*\*{re.escape(label)}:?\*\*",
+                body,
+                re.IGNORECASE,
+            ):
+                quality_issues.append(
+                    f"{path}: {evidence_id} is missing {label}"
+                )
+        confidence = re.search(
+            r"\*\*Confidence:?\*\*\s*(?:\n\s*)?(high|medium|low)\b",
+            body,
+            re.IGNORECASE,
+        )
+        if not confidence:
+            quality_issues.append(
+                f"{path}: {evidence_id} needs high, medium, or low confidence"
+            )
+
+    finding_rows = topic_finding_rows(text)
+    if not finding_rows:
+        quality_issues.append(f"{path}: topic needs at least one F-NNN finding")
+    seen_findings: set[str] = set()
+    for cells in finding_rows:
+        if len(cells) < 5:
+            errors.append(f"{path}: topic Finding rows need five columns")
+            continue
+        finding_id = cells[0].upper()
+        if not TOPIC_FINDING_ID_RE.fullmatch(finding_id):
+            errors.append(f"{path}: invalid topic Finding id {cells[0]!r}")
+        elif finding_id in seen_findings:
+            errors.append(f"{path}: duplicate topic Finding id {finding_id}")
+        seen_findings.add(finding_id)
+        if not cells[1]:
+            quality_issues.append(f"{path}: {finding_id} needs a finding")
+        if cells[2].lower() not in TOPIC_CONFIDENCE_LEVELS:
+            quality_issues.append(
+                f"{path}: {finding_id} confidence must be high, medium, or low"
+            )
+        if not cells[3]:
+            quality_issues.append(f"{path}: {finding_id} needs evidence")
+        if not cells[4]:
+            quality_issues.append(f"{path}: {finding_id} needs decision impact")
+
+    if quality_mode == "strict":
+        errors.extend(quality_issues)
+    elif quality_mode == "warning":
+        warnings.extend(quality_issues)
+    return errors, warnings
+
+
+def validate_research_topics(
+    research_path: Path,
+    research_text: str,
+    data: dict[str, str],
+    quality_mode: str,
+) -> tuple[list[str], list[str], list[Path]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    topics: list[Path] = []
+    valid_question_ids = {
+        cells[0].upper()
+        for cells in research_question_rows(research_text)
+        if cells and RESEARCH_QUESTION_ID_RE.fullmatch(cells[0].upper())
+    }
+    round_documents: dict[str, str] = {}
+    for round_path in round_paths(research_path.parent):
+        try:
+            round_text = round_path.read_text(encoding="utf-8")
+            round_data, _, _ = parse_frontmatter(round_text)
+        except (OSError, ResearchctlError):
+            continue
+        round_id = round_data.get("id", "").upper()
+        if ROUND_ID_RE.fullmatch(round_id):
+            round_documents[round_id] = round_text
+    valid_round_ids = set(round_documents)
+
+    for topic_path in topic_note_paths(research_path.parent):
+        try:
+            topic_text = topic_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(f"{topic_path}: {exc}")
+            continue
+        declared = declares_topic_document(topic_text)
+        if not declared:
+            continue
+        try:
+            topic_data, _, _ = parse_frontmatter(topic_text)
+        except ResearchctlError as exc:
+            errors.append(f"{topic_path}: {exc}")
+            continue
+        topics.append(topic_path)
+        topic_errors, topic_warnings = validate_topic_document(
+            topic_path,
+            topic_text,
+            topic_data,
+            data.get("id", ""),
+            valid_round_ids,
+            valid_question_ids,
+            quality_mode,
+        )
+        errors.extend(topic_errors)
+        warnings.extend(topic_warnings)
+        round_id = topic_data.get("round_id", "").upper()
+        if round_id in round_documents:
+            expected_target = (
+                "../notes/"
+                + topic_path.relative_to(
+                    research_path.parent / "notes"
+                ).as_posix()
+            )
+            evidence_added = (
+                section(round_documents[round_id], "Evidence Added") or ""
+            )
+            if expected_target not in local_markdown_targets(evidence_added):
+                errors.append(
+                    f"{topic_path}: {round_id} Evidence Added must link "
+                    f"{expected_target}"
+                )
+    return errors, warnings, topics
 
 
 def validate_questions(path: Path, text: str) -> list[str]:
@@ -1438,11 +1749,12 @@ def validate_synthesis(
 def validate_synthesis_snapshots(
     package: Path,
     parent_id: str,
-    expected_revision: int,
+    current_revision: int,
 ) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     found: set[int] = set()
+    payloads: dict[str, Path] = {}
     snapshot_root = package / "snapshots"
     for path in sorted(snapshot_root.glob("synthesis-v*.md")):
         match = re.fullmatch(r"synthesis-v(\d{3,})\.md", path.name)
@@ -1468,11 +1780,19 @@ def validate_synthesis_snapshots(
             errors.append(f"{path}: review snapshot must be review_ready")
         if snapshot_data.get("revision") != str(number):
             errors.append(f"{path}: revision must match snapshot filename")
-    expected = set(range(1, expected_revision + 1))
-    if found != expected:
+        snapshot_payload = payload_sha256(path.read_text(encoding="utf-8"))
+        if snapshot_payload in payloads:
+            warnings.append(
+                f"{path}: duplicates Synthesis payload already preserved by "
+                f"{payloads[snapshot_payload]}"
+            )
+        else:
+            payloads[snapshot_payload] = path
+    future = sorted(number for number in found if number > current_revision)
+    if future:
         errors.append(
-            f"{snapshot_root}: expected Synthesis snapshots "
-            f"{sorted(expected)}, found {sorted(found)}"
+            f"{snapshot_root}: snapshot revisions {future} exceed current "
+            f"Synthesis revision {current_revision}"
         )
     return errors, warnings
 
@@ -1649,6 +1969,21 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
         )
     )
     errors.extend(validate_questions(path, text))
+    topic_quality_mode = (
+        "ignore"
+        if status == "cancelled"
+        else "strict"
+        if status == "concluded" or data.get("maturity") == "review_ready"
+        else "warning"
+    )
+    topic_errors, topic_warnings, structured_topics = validate_research_topics(
+        path,
+        text,
+        data,
+        topic_quality_mode,
+    )
+    errors.extend(topic_errors)
+    warnings.extend(topic_warnings)
     blockers = open_blockers(text)
     if status == "blocked" and not blockers:
         errors.append(f"{path}: blocked status requires an open blocker")
@@ -1694,7 +2029,7 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
         if data.get("manifest") != MANIFEST_NAME:
             errors.append(f"{path}: manifest must be {MANIFEST_NAME}")
         else:
-            manifest_errors, manifest_warnings, _ = validate_manifest(
+            manifest_errors, manifest_warnings, checked_manifest = validate_manifest(
                 repository_from_artifact(path),
                 path,
                 research_id,
@@ -1702,6 +2037,25 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
             )
             errors.extend(manifest_errors)
             warnings.extend(manifest_warnings)
+            manifest_documents = checked_manifest.get("documents", [])
+            document_roles = {
+                locator_key(document): document.get("role")
+                for document in manifest_documents
+                if isinstance(document, dict)
+            }
+            for topic_path in structured_topics:
+                topic_key = (
+                    "package",
+                    topic_path.relative_to(path.parent).as_posix(),
+                )
+                if topic_key not in document_roles:
+                    errors.append(
+                        f"{topic_path}: structured topic is missing from manifest"
+                    )
+                elif document_roles[topic_key] != "topic":
+                    errors.append(
+                        f"{topic_path}: manifest role must be topic"
+                    )
     if status == "concluded":
         if open_research_questions(text):
             errors.append(f"{path}: concluded Research has open questions")
@@ -1780,6 +2134,184 @@ def set_round_status(path: Path, status: str, outcome: str) -> str:
     )
     candidate = replace_section(candidate, "Round Outcome", outcome)
     return candidate
+
+
+def canonical_question_ids(values: list[str]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        match = RESEARCH_QUESTION_ID_RE.fullmatch(value.strip().upper())
+        if not match:
+            raise ResearchctlError(f"Invalid Research Question ID: {value!r}")
+        question_id = f"RQ-{int(match.group(1)):03d}"
+        if question_id in result:
+            raise ResearchctlError(
+                f"Duplicate Research Question ID: {question_id}"
+            )
+        result.append(question_id)
+    if not result:
+        raise ResearchctlError("A topic requires at least one --question")
+    return result
+
+
+def ensure_topic_manifest_root(
+    manifest: dict[str, object],
+    topic_filename: str,
+) -> None:
+    roots = manifest.get("roots")
+    if not isinstance(roots, list):
+        raise ResearchctlError("Manifest roots must be an array")
+    topic_root: dict[str, object] | None = None
+    for root in roots:
+        if (
+            isinstance(root, dict)
+            and root.get("base") == "package"
+            and root.get("path") == "notes"
+        ):
+            topic_root = root
+            break
+    if topic_root is None:
+        topic_root = {
+            "base": "package",
+            "path": "notes",
+            "include": ["**/*.md"],
+        }
+        insert_at = next(
+            (
+                index
+                for index, root in enumerate(roots)
+                if isinstance(root, dict)
+                and root.get("base") == "package"
+                and root.get("path") in {"rounds", "snapshots"}
+            ),
+            len(roots),
+        )
+        roots.insert(insert_at, topic_root)
+        return
+    includes = topic_root.get("include")
+    if not isinstance(includes, list) or not all(
+        isinstance(value, str) and value for value in includes
+    ):
+        raise ResearchctlError("Manifest notes root has invalid include patterns")
+    if not any(
+        value in {topic_filename, "*.md", "**/*.md", "**/*"}
+        for value in includes
+    ):
+        includes.append(topic_filename)
+
+
+def new_topic(
+    repo: Path,
+    research_id: str,
+    slug: str,
+    title: str,
+    author: str,
+    question_values: list[str],
+) -> Path:
+    validate_slug(slug)
+    if not title.strip():
+        raise ResearchctlError("Topic title must not be empty")
+    question_ids = canonical_question_ids(question_values)
+    with repo_lock(repo):
+        research_path = find_research(repo, research_id, "active")
+        research_text = research_path.read_text(encoding="utf-8")
+        data, _, _ = parse_frontmatter(research_text)
+        require_iterative_research(research_path, research_text, data)
+        if data.get("maturity") == "review_ready":
+            raise ResearchctlError(
+                "Start a new round before adding a topic to review-ready Research"
+            )
+        valid_questions = {
+            cells[0].upper()
+            for cells in research_question_rows(research_text)
+            if cells and RESEARCH_QUESTION_ID_RE.fullmatch(cells[0].upper())
+        }
+        unknown = [value for value in question_ids if value not in valid_questions]
+        if unknown:
+            raise ResearchctlError(
+                "Topic references unknown Research Questions: "
+                + ", ".join(unknown)
+            )
+        pre_errors, _ = validate_research(research_path)
+        if pre_errors:
+            raise ResearchctlError(
+                "Research is invalid before creating a topic:\n- "
+                + "\n- ".join(pre_errors)
+            )
+
+        current_round = data.get("current_round", "")
+        round_file = find_round_path(research_path.parent, current_round)
+        round_text = round_file.read_text(encoding="utf-8")
+        round_data, _, _ = parse_frontmatter(round_text)
+        if round_data.get("status") != "active":
+            raise ResearchctlError(
+                "Current Research Round must be active before adding a topic"
+            )
+
+        notes = research_path.parent / "notes"
+        reject_symlink_path(repo, notes)
+        notes.mkdir(exist_ok=True)
+        topic_path = notes / f"{slug}.md"
+        reject_symlink_path(repo, topic_path)
+        if topic_path.exists():
+            raise ResearchctlError(f"Topic destination already exists: {topic_path}")
+
+        topic_author = author.strip() or data.get("author", "")
+        topic_text = render_asset(
+            "topic.md",
+            {
+                "PARENT_ID": data["id"],
+                "ROUND_ID": current_round,
+                "TITLE": yaml_string(title.strip()),
+                "AUTHOR": yaml_string(topic_author),
+                "DATE": date_string(),
+                "TIMESTAMP": timestamp_string(),
+                "QUESTION_LIST": "\n".join(
+                    f"- `{question_id}`" for question_id in question_ids
+                ),
+            },
+        )
+        safe_title = title.strip().replace("[", r"\[").replace("]", r"\]")
+        round_candidate = append_section_entry(
+            round_text,
+            "Evidence Added",
+            f"- [{safe_title}](../notes/{topic_path.name}) — addresses "
+            + ", ".join(f"`{question_id}`" for question_id in question_ids)
+            + ".",
+        )
+        round_candidate = update_frontmatter(
+            round_candidate,
+            {"updated": date_string()},
+        )
+
+        manifest_file = manifest_path(research_path, data)
+        manifest_before = manifest_file.read_text(encoding="utf-8")
+        manifest = load_manifest(manifest_file)
+        if manifest.get("status") != "active":
+            raise ResearchctlError("Only active Research can add a topic")
+        ensure_topic_manifest_root(manifest, topic_path.name)
+        try:
+            atomic_write(topic_path, topic_text)
+            atomic_write(round_file, round_candidate)
+            atomic_write(manifest_file, manifest_text(manifest))
+            _, reference_errors, _ = refresh_manifest(repo, research_path)
+            if reference_errors:
+                raise ResearchctlError(
+                    "Topic references are invalid:\n- "
+                    + "\n- ".join(reference_errors)
+                )
+            post_errors, _ = validate_research(research_path)
+            if post_errors:
+                raise ResearchctlError(
+                    "Creating a topic produced invalid artifacts:\n- "
+                    + "\n- ".join(post_errors)
+                )
+        except Exception:
+            if topic_path.exists():
+                topic_path.unlink()
+            atomic_write(round_file, round_text)
+            atomic_write(manifest_file, manifest_before)
+            raise
+        return topic_path
 
 
 def new_round(
@@ -1893,7 +2425,107 @@ def new_round(
         return round_file
 
 
-def mark_review_ready(repo: Path, research_id: str) -> Path:
+def matching_synthesis_snapshot(package: Path, synthesis_text: str) -> Path | None:
+    expected_payload = payload_sha256(synthesis_text)
+    for path in sorted((package / "snapshots").glob("synthesis-v*.md")):
+        try:
+            snapshot_text = path.read_text(encoding="utf-8")
+            snapshot_data, _, _ = parse_frontmatter(snapshot_text)
+        except (OSError, UnicodeDecodeError, ResearchctlError):
+            continue
+        if (
+            snapshot_data.get("status") == "review_ready"
+            and snapshot_data.get("payload_sha256") == expected_payload
+            and payload_sha256(snapshot_text) == expected_payload
+        ):
+            return path
+    return None
+
+
+def plan_synthesis_snapshot(
+    package: Path,
+    synthesis_text: str,
+    revision: int,
+) -> tuple[Path, bool]:
+    if revision <= 0:
+        raise ResearchctlError(
+            "A milestone snapshot requires a positive Synthesis revision"
+        )
+    matching = matching_synthesis_snapshot(package, synthesis_text)
+    if matching is not None:
+        return matching, False
+    snapshot_file = package / "snapshots" / f"synthesis-v{revision:03d}.md"
+    if snapshot_file.exists():
+        raise ResearchctlError(
+            f"Synthesis snapshot already exists with another payload: {snapshot_file}"
+        )
+    return snapshot_file, True
+
+
+def snapshot_review_ready_synthesis(
+    repo: Path,
+    research_path: Path,
+    data: dict[str, str],
+) -> Path:
+    synthesis_file = synthesis_path(research_path, data)
+    synthesis_text = synthesis_file.read_text(encoding="utf-8")
+    synthesis_data, _, _ = parse_frontmatter(synthesis_text)
+    if synthesis_data.get("status") != "review_ready":
+        raise ResearchctlError("Only a review_ready Synthesis can be snapshotted")
+    try:
+        revision = int(data.get("synthesis_revision", "0"))
+    except ValueError as exc:
+        raise ResearchctlError(
+            "Research has an invalid Synthesis revision"
+        ) from exc
+    if revision <= 0 or synthesis_data.get("revision") != str(revision):
+        raise ResearchctlError(
+            "Current Synthesis revision does not match the Research controller"
+        )
+    pre_errors, _ = validate_research(research_path)
+    if pre_errors:
+        raise ResearchctlError(
+            "Research is invalid before creating a milestone snapshot:\n- "
+            + "\n- ".join(pre_errors)
+        )
+    snapshot_file, should_create = plan_synthesis_snapshot(
+        research_path.parent,
+        synthesis_text,
+        revision,
+    )
+    if not should_create:
+        return snapshot_file
+    manifest_file = manifest_path(research_path, data)
+    manifest_before = manifest_file.read_text(encoding="utf-8")
+    try:
+        atomic_write(snapshot_file, synthesis_text)
+        _, reference_errors, _ = refresh_manifest(repo, research_path)
+        if reference_errors:
+            raise ResearchctlError(
+                "Milestone snapshot exposed invalid corpus references:\n- "
+                + "\n- ".join(reference_errors)
+            )
+        rebuild_index(repo)
+        post_errors, _ = validate_research(research_path)
+        if post_errors:
+            raise ResearchctlError(
+                "Creating a milestone snapshot produced invalid artifacts:\n- "
+                + "\n- ".join(post_errors)
+            )
+    except Exception:
+        if snapshot_file.exists():
+            snapshot_file.unlink()
+        atomic_write(manifest_file, manifest_before)
+        rebuild_index(repo)
+        raise
+    return snapshot_file
+
+
+def mark_review_ready(
+    repo: Path,
+    research_id: str,
+    snapshot: bool = False,
+) -> Path:
     with repo_lock(repo):
         research_path = find_research(repo, research_id, "active")
         research_text = research_path.read_text(encoding="utf-8")
@@ -1902,6 +2534,8 @@ def mark_review_ready(repo: Path, research_id: str) -> Path:
         if data.get("status") != "active":
             raise ResearchctlError("Resolve blockers before requesting review")
         if data.get("maturity") == "review_ready":
+            if snapshot:
+                return snapshot_review_ready_synthesis(repo, research_path, data)
             raise ResearchctlError("Research is already review_ready")
         questions = open_research_questions(research_text)
         blockers = open_blockers(research_text)
@@ -1920,6 +2554,17 @@ def mark_review_ready(repo: Path, research_id: str) -> Path:
         if marker_names(research_text) or marker_names(synthesis_text):
             raise ResearchctlError(
                 "Review readiness blocked by required placeholders"
+            )
+        topic_errors, _, _ = validate_research_topics(
+            research_path,
+            research_text,
+            data,
+            "strict",
+        )
+        if topic_errors:
+            raise ResearchctlError(
+                "Review readiness blocked by structured topic quality:\n- "
+                + "\n- ".join(topic_errors)
             )
         synthesis_data, _, _ = parse_frontmatter(synthesis_text)
         if synthesis_data.get("status") != "draft":
@@ -1955,20 +2600,23 @@ def mark_review_ready(repo: Path, research_id: str) -> Path:
             synthesis_candidate,
             {"payload_sha256": payload_sha256(synthesis_candidate)},
         )
-        snapshot_file = (
-            research_path.parent
-            / "snapshots"
-            / f"synthesis-v{revision:03d}.md"
-        )
-        if snapshot_file.exists():
-            atomic_write(manifest_file, manifest_before)
-            raise ResearchctlError(
-                f"Synthesis snapshot already exists: {snapshot_file}"
+        snapshot_file: Path | None = None
+        create_snapshot = False
+        if snapshot:
+            snapshot_file, create_snapshot = plan_synthesis_snapshot(
+                research_path.parent,
+                synthesis_candidate,
+                revision,
             )
+        snapshot_note = (
+            f"Milestone snapshot: `{snapshot_file.relative_to(research_path.parent)}`."
+            if snapshot_file is not None
+            else "No physical milestone snapshot was requested."
+        )
         round_candidate = set_round_status(
             round_file,
             "completed",
-            f"- {date_string()} — Completed for Synthesis revision v{revision}.",
+            f"- {date_string()} — Completed for Synthesis review v{revision}.",
         )
         research_candidate = update_round_row_status(
             research_text, current_round, "completed"
@@ -1985,20 +2633,23 @@ def mark_review_ready(repo: Path, research_id: str) -> Path:
             research_candidate,
             "Outcome",
             f"Research is review-ready at Synthesis v{revision}, but remains "
-            "active. Only explicit Research Owner authorization may conclude it.",
+            "active. "
+            f"{snapshot_note} Only explicit Research Owner authorization may "
+            "conclude it.",
         )
         research_candidate = append_section_entry(
             research_candidate,
             "Revision Notes",
             f"- {timestamp_string()} — Marked review-ready at Synthesis "
-            f"v{revision}; Research remains active.",
+            f"v{revision}; {snapshot_note} Research remains active.",
         )
         research_candidate = sync_research_metadata(research_candidate)
         try:
             atomic_write(round_file, round_candidate)
             atomic_write(research_path, research_candidate)
             atomic_write(synthesis_file, synthesis_candidate)
-            atomic_write(snapshot_file, synthesis_candidate)
+            if snapshot_file is not None and create_snapshot:
+                atomic_write(snapshot_file, synthesis_candidate)
             refresh_manifest(repo, research_path)
             rebuild_index(repo)
             post_errors, _ = validate_research(research_path)
@@ -2012,11 +2663,15 @@ def mark_review_ready(repo: Path, research_id: str) -> Path:
             atomic_write(research_path, research_text)
             atomic_write(synthesis_file, synthesis_text)
             atomic_write(manifest_file, manifest_before)
-            if snapshot_file.exists():
+            if (
+                snapshot_file is not None
+                and create_snapshot
+                and snapshot_file.exists()
+            ):
                 snapshot_file.unlink()
             rebuild_index(repo)
             raise
-        return snapshot_file
+        return snapshot_file if snapshot_file is not None else synthesis_file
 
 
 def snapshot_linked_documents(
@@ -2174,7 +2829,9 @@ def archive_research(
             )
         manifest_file = manifest_path(path, data)
         manifest_text_before = manifest_file.read_text(encoding="utf-8")
-        snapshot_path: Path | None = None
+        linked_snapshot_path: Path | None = None
+        review_snapshot_file: Path | None = None
+        create_review_snapshot = False
 
         manifest, reference_errors, _ = refresh_manifest(repo, path)
         if outcome == "concluded":
@@ -2199,12 +2856,27 @@ def archive_research(
                 raise ResearchctlError(
                     "Research conclusion blocked by required placeholders"
                 )
-            if manifest.get("mode") == "linked":
-                manifest_candidate, snapshot_path = snapshot_linked_documents(
-                    repo, path, manifest
+            milestone_clause = ""
+            if data.get("schema_version") == "1.1":
+                try:
+                    synthesis_revision = int(
+                        data.get("synthesis_revision", "0")
+                    )
+                except ValueError as exc:
+                    raise ResearchctlError(
+                        "Research has an invalid Synthesis revision"
+                    ) from exc
+                review_snapshot_file, create_review_snapshot = (
+                    plan_synthesis_snapshot(
+                        path.parent,
+                        synthesis_text,
+                        synthesis_revision,
+                    )
                 )
-            else:
-                manifest_candidate = seal_managed_manifest(manifest)
+                milestone_clause = (
+                    "; preserved the latest unique review payload as "
+                    f"`{review_snapshot_file.relative_to(path.parent)}`"
+                )
             synthesis_candidate = update_frontmatter(
                 synthesis_text,
                 {"status": "sealed", "updated": date_string()},
@@ -2216,7 +2888,7 @@ def archive_research(
             outcome_body = (
                 f"- {date_string()} — Concluded with explicit authorization "
                 f"from {approved_by.strip()} ({approval_ref.strip()}); sealed "
-                f"`{MANIFEST_NAME}` and `SYNTHESIS.md`."
+                f"`{MANIFEST_NAME}` and `SYNTHESIS.md`{milestone_clause}."
             )
             research_candidate = replace_section(text, "Outcome", outcome_body)
         else:
@@ -2250,6 +2922,23 @@ def archive_research(
             f"docs/research/completed/{directory.name}",
         )
         try:
+            if outcome == "concluded":
+                if create_review_snapshot:
+                    assert review_snapshot_file is not None
+                    atomic_write(review_snapshot_file, synthesis_text)
+                    manifest, reference_errors, _ = refresh_manifest(repo, path)
+                    if reference_errors:
+                        raise ResearchctlError(
+                            "Final milestone snapshot exposed invalid corpus "
+                            "references:\n- "
+                            + "\n- ".join(reference_errors)
+                        )
+                if manifest.get("mode") == "linked":
+                    manifest_candidate, linked_snapshot_path = (
+                        snapshot_linked_documents(repo, path, manifest)
+                    )
+                else:
+                    manifest_candidate = seal_managed_manifest(manifest)
             atomic_write(path, research_candidate)
             atomic_write(research_synthesis_path, synthesis_candidate)
             atomic_write(manifest_file, manifest_text(manifest_candidate))
@@ -2268,8 +2957,17 @@ def archive_research(
             atomic_write(path, text)
             atomic_write(research_synthesis_path, synthesis_text)
             atomic_write(manifest_file, manifest_text_before)
-            if snapshot_path is not None and snapshot_path.exists():
-                shutil.rmtree(snapshot_path)
+            if (
+                linked_snapshot_path is not None
+                and linked_snapshot_path.exists()
+            ):
+                shutil.rmtree(linked_snapshot_path)
+            if (
+                create_review_snapshot
+                and review_snapshot_file is not None
+                and review_snapshot_file.exists()
+            ):
+                review_snapshot_file.unlink()
             rebuild_index(repo)
             raise
         return destination / "RESEARCH.md"
@@ -2344,6 +3042,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sync_parser.add_argument("research_id")
 
+    topic_parser = subparsers.add_parser(
+        "new-topic",
+        help="Create a structured topic document in the current Research round",
+    )
+    topic_parser.add_argument("research_id")
+    topic_parser.add_argument("--slug", required=True)
+    topic_parser.add_argument("--title", required=True)
+    topic_parser.add_argument("--author", default="")
+    topic_parser.add_argument("--question", action="append", required=True)
+
     round_parser = subparsers.add_parser(
         "new-round", help="Start another focused round in review-ready Research"
     )
@@ -2354,9 +3062,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     review_parser = subparsers.add_parser(
         "mark-review-ready",
-        help="Seal a review snapshot without concluding Research",
+        help="Content-address a review-ready Synthesis without concluding Research",
     )
     review_parser.add_argument("research_id")
+    review_parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        help="Preserve this review as a deduplicated full milestone snapshot",
+    )
 
     conclude_parser = subparsers.add_parser(
         "conclude-research",
@@ -2437,6 +3150,17 @@ def main(argv: list[str] | None = None) -> int:
                     ensure_ascii=False,
                 )
             )
+        elif args.command == "new-topic":
+            print(
+                new_topic(
+                    repo,
+                    args.research_id,
+                    args.slug,
+                    args.title,
+                    args.author,
+                    args.question,
+                )
+            )
         elif args.command == "new-round":
             print(
                 new_round(
@@ -2448,7 +3172,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         elif args.command == "mark-review-ready":
-            print(mark_review_ready(repo, args.research_id))
+            print(mark_review_ready(repo, args.research_id, args.snapshot))
         elif args.command == "conclude-research":
             print(
                 archive_research(
