@@ -146,14 +146,16 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
 
 1. 如果仍有会改变路线的未知，先使用 `engineering-research` 或其他兼容流程。
 2. 只让 `concluded` Research 满足 Gate；cancelled 或 active Research 都不能。
-3. 验证 sealed `SYNTHESIS.md` 正文摘要。
-4. 如果控制页声明 `RESEARCH_MANIFEST.json`，还必须验证：
+3. schema 1.1 Research 还必须有 `owner`、`maturity: review_ready` 和完整
+   `approved_by/approved_at/approval_ref`；decision-ready 本身不是结束授权。
+4. 验证 sealed `SYNTHESIS.md` 正文摘要。
+5. 如果控制页声明 `RESEARCH_MANIFEST.json`，还必须验证：
    - schema 与 Research ID；
    - sealed manifest payload；
    - package-relative 文档存在且 bytes/SHA-256 匹配；
    - entrypoint 属于文档集合。
-5. 兼容没有 manifest 的既有 v1 Research，但不要把这种兼容当作新制品模板。
-6. 在 ADR 与 ExecPlan 中复述关键结论、置信边界、负面证据、成立条件和剩余未知。
+6. 兼容没有 manifest 的既有 v1 Research，但不要把这种兼容当作新制品模板。
+7. 在 ADR 与 ExecPlan 中复述关键结论、置信边界、负面证据、成立条件和剩余未知。
 
 本仓库的 `epctl` 暂时保留 legacy Research 创建/归档命令，供既有自动化迁移；
 新 Research 不再从本 skill 的主流程创建。

@@ -107,6 +107,11 @@ Do not force downstream readers to load the complete corpus. Restate:
 The manifest provides auditability; the sealed Synthesis provides bounded
 decision context.
 
+Schema 1.1 concluded Research additionally carries `owner`, `maturity:
+review_ready`, `approved_by`, `approved_at`, and `approval_ref`. Consumers
+require these fields so an Agent cannot turn mere decision readiness into a
+terminal Research state. Schema 1 remains readable only as a legacy contract.
+
 ## Compatibility
 
 `epctl` retains legacy Research creation commands temporarily so existing

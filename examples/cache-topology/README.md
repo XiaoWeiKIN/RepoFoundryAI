@@ -1,13 +1,15 @@
 # 端到端示例：用多文档 Research 决定缓存拓扑
 
-这个示例展示一条完整主线：注册四篇现有研究文档，形成 sealed Synthesis，经过
-明确的架构授权，再创建可恢复的 ExecPlan。
+这个示例展示一条完整主线：注册四篇现有研究文档，形成 review-ready
+Synthesis，经过 Research Owner 明确结束授权后封存，再经过架构授权创建可恢复
+的 ExecPlan。
 
 ```mermaid
 flowchart LR
     C["4 篇现有文档"] --> R["R-001<br/>linked Research"]
-    R --> S["sealed snapshot<br/>Synthesis + Manifest"]
-    S --> A["ADR-001<br/>proposed"]
+    R --> S["review-ready<br/>Synthesis v1"]
+    S --> H1["Research Owner<br/>明确结束"]
+    H1 --> A["sealed Research<br/>ADR-001 proposed"]
     A --> H["Decision Owner<br/>明确接受"]
     H --> E["EP-001<br/>实施 L1 + Redis"]
 ```
@@ -53,6 +55,9 @@ python3 "$EPCTL" --repo . init
 python3 "$RESEARCHCTL" --repo . new-research \
   --slug cache-topology \
   --title "Research tenant settings cache topology" \
+  --owner "Cache Platform Owner" \
+  --author "Example Researcher" \
+  --research-type technical \
   --corpus-root research-input/cache-topology \
   --entrypoint research-input/cache-topology/index.md
 
@@ -69,7 +74,9 @@ docs/research/active/r-001_cache-topology/
 ├── RESEARCH.md
 ├── RESEARCH_MANIFEST.json
 ├── SYNTHESIS.md
+├── rounds/
 ├── notes/
+├── snapshots/
 └── artifacts/
 ```
 
@@ -98,8 +105,9 @@ docs/research/active/r-001_cache-topology/
 }
 ```
 
-实际 manifest 必须包含四篇文档，其中 `index.md` 的 role 是 `entrypoint`；
-`bytes` 与完整 `sha256` 由 `researchctl` 根据源文件生成，不在说明文档中手抄。
+实际 active manifest 包含四篇输入文档和一个 `RR-001` Round；`index.md` 的
+role 是 `entrypoint`。`bytes` 与完整 `sha256` 由 `researchctl` 根据源文件
+生成，不在说明文档中手抄。
 
 ## Research 的结论应压缩证据，不复制 corpus
 
@@ -124,13 +132,30 @@ docs/research/active/r-001_cache-topology/
 - 两层缓存增加运维和排障复杂度。
 - Redis outage 与 invalidation backlog 尚未测试，必须进入 EP 验收。
 
-完成控制页和 Synthesis 中所有 REQUIRED 内容后刷新并封存：
+完成控制页和 Synthesis 中所有 REQUIRED 内容后刷新并生成评审版本：
 
 ```bash
 python3 "$RESEARCHCTL" --repo . sync-research R-001
 python3 "$RESEARCHCTL" --repo . validate
-python3 "$RESEARCHCTL" --repo . archive-research R-001 \
-  --outcome concluded
+python3 "$RESEARCHCTL" --repo . mark-review-ready R-001
+```
+
+这会生成 `snapshots/synthesis-v001.md`，但 R-001 仍然是 active。需要继续验证
+Redis outage 时，可以在同一个 Research 中创建下一轮：
+
+```bash
+python3 "$RESEARCHCTL" --repo . new-round R-001 \
+  --slug redis-outage \
+  --title "Validate Redis outage behavior" \
+  --author "Reliability Reviewer"
+```
+
+本示例假设 Cache Platform Owner 已明确表示“结束并归档 R-001”，再记录该授权：
+
+```bash
+python3 "$RESEARCHCTL" --repo . conclude-research R-001 \
+  --approved-by "Cache Platform Owner" \
+  --approval-ref "example:explicit-owner-approval"
 ```
 
 linked corpus 的源文件仍留在 `research-input/cache-topology/`。completed 包中会
@@ -141,6 +166,8 @@ docs/research/completed/r-001_cache-topology/
 ├── RESEARCH.md
 ├── RESEARCH_MANIFEST.json
 ├── SYNTHESIS.md
+├── rounds/
+├── snapshots/
 └── artifacts/
     └── research-snapshot/
         └── research-input/cache-topology/
@@ -253,5 +280,5 @@ python3 "$EPCTL" --repo . status
   命令完成后，它才是带 revision/evidence 的 sealed `completed`。
 - 两个 validate 命令没有 error。
 
-这个例子刻意保留人工编辑和明确授权步骤。Research 结论与 ADR 接受不能由演示
-脚本代替。
+这个例子刻意保留人工编辑、Research Owner 结束授权和 Decision Owner 架构
+授权三个不同步骤。Research 结论与 ADR 接受都不能由演示脚本自行推断。

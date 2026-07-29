@@ -2,22 +2,56 @@
 
 ## Contents
 
-- Purpose and routing
+- Identity and routing
+- Metadata and authority
 - Research Questions
+- Iterative rounds and Synthesis revisions
 - Evidence and experiments
 - Multi-document organization
 - Synthesis
-- Conclusion and refresh
+- Review, conclusion, and cancellation
 
-## Purpose and routing
+## Identity and routing
 
 Create one Research identity for one decision purpose. A Research may contain
-many documents and entrypoints. Split identities when ownership, conclusion
+many documents, entrypoints, discussions, experiments, and investigation
+rounds. Split identities only when ownership, decision purpose, conclusion
 timing, or downstream reuse is independent.
+
+Continue under the same `R-NNN` when a user asks to deepen the first version,
+challenge one finding, discuss a focused point, add sources, or rerun an
+experiment for the same decision purpose. Create another `R-NNN` after a true
+conclusion or when the decision purpose diverges.
 
 Research reduces uncertainty; it does not silently make a durable architecture
 decision. A Synthesis may recommend an option, while acceptance belongs to the
 downstream decision authority.
+
+## Metadata and authority
+
+Schema 1.1 Research keeps canonical machine-readable metadata in
+`RESEARCH.md` frontmatter and projects it into the visible `Research Metadata`
+table. Run `sync-research` after editing metadata by hand.
+
+| Field | Meaning |
+|---|---|
+| `research_type` | `technical`, `architecture`, `feasibility`, `comparative`, `incident`, `domain`, or `other` |
+| `owner` | Human or team accountable for scope and terminal lifecycle authorization |
+| `author` | Person, team, or agent that prepared the current Research |
+| `status` | Lifecycle: `active`, `blocked`, `concluded`, or `cancelled` |
+| `maturity` | Content maturity: `exploratory`, `evidence_building`, or `review_ready` |
+| `current_round` | Current `RR-NNN` iteration |
+| `synthesis_revision` | Latest immutable review revision; starts at `0` |
+| `approved_by`, `approved_at`, `approval_ref` | Audit record for an explicitly authorized terminal transition |
+
+Do not invent an owner, author, approval, date, or role. An unassigned Owner is
+valid while active but mechanically blocks conclusion and cancellation.
+
+`approval_ref` records where explicit authorization can be audited, such as a
+task message, issue comment, review, meeting decision, or signed change
+request. A CLI flag cannot create authorization: the agent may pass it only
+after the user or declared Research Owner explicitly authorizes the exact
+terminal transition.
 
 ## Research Questions
 
@@ -29,8 +63,53 @@ Use stable `RQ-NNN` rows in `RESEARCH.md`:
   explicit future destination or trigger.
 - `invalidated`: its premise is false or no longer relevant, with evidence.
 
-Concluded Research cannot contain open questions or open blockers. Completion
-depends on decision readiness, not document count.
+Review-ready or concluded Research cannot contain open questions or open
+blockers. Readiness depends on decision quality, not document count.
+
+Starting a new round may add new questions or reopen an answered question.
+Update the existing stable row instead of renumbering it.
+
+## Iterative rounds and Synthesis revisions
+
+A Research Round is one bounded pass over the shared decision purpose. Its
+controller under `rounds/` records:
+
+- focus and new or reopened questions;
+- scope and non-goals;
+- evidence added;
+- change to the accumulated Synthesis;
+- exact next inquiry;
+- round outcome.
+
+Round controllers index work; they do not duplicate detailed notes. One round
+may reference any number of managed or linked corpus documents.
+
+```mermaid
+stateDiagram-v2
+    state "Evidence building" as Building
+    state "Review ready" as Review
+    state "Concluded" as Concluded
+    state "Cancelled" as Cancelled
+
+    [*] --> Building
+    Building --> Review: "mark-review-ready"
+    Review --> Building: "new-round"
+    Review --> Concluded: "explicit Owner authorization"
+    Building --> Cancelled: "explicit Owner authorization + reason"
+    Review --> Cancelled: "explicit Owner authorization + reason"
+```
+
+`mark-review-ready`:
+
+1. verifies questions, blockers, placeholders, references, and manifest;
+2. completes the current Round;
+3. increments `synthesis_revision`;
+4. content-addresses `SYNTHESIS.md` as `review_ready`;
+5. copies it to `snapshots/synthesis-vNNN.md`;
+6. leaves the Research under `active/`.
+
+`new-round` preserves prior snapshots, makes the current Synthesis editable
+again, and returns maturity to `evidence_building`.
 
 ## Evidence and experiments
 
@@ -52,28 +131,28 @@ instead of averaging it away.
 
 ## Multi-document organization
 
-Use the corpus documents for focused topics, sources, matrices, experiments,
-or interface contracts. Keep an existing `index.md` when it already provides
-a useful reading route. Do not rename or flatten documents merely to satisfy a
+Use corpus documents for focused topics, sources, matrices, experiments, or
+interface contracts. Keep an existing `index.md` when it already provides a
+useful reading route. Do not rename or flatten documents merely to satisfy a
 template.
 
 Keep `RESEARCH.md` small:
 
+- human-visible metadata and current Round;
 - purpose and downstream decision;
 - Current Snapshot and exact next inquiry;
 - all decision-relevant Research Questions;
-- method and source-selection logic;
-- concise findings and evidence paths;
-- contradictions, uncertainty, drivers, options, blockers, and progress.
+- concise findings and evidence routes;
+- contradictions, options, blockers, progress, and revision history.
 
 Use `sync-research` after membership changes. Resolve missing local references
-before conclusion. Absolute source paths are provenance warnings because other
-machines cannot reproduce them without an alternate source.
+before review readiness. Absolute source paths are provenance warnings because
+other machines cannot reproduce them without an alternate source.
 
 ## Synthesis
 
-`SYNTHESIS.md` is the single bounded handoff even when the corpus contains many
-documents. It contains:
+`SYNTHESIS.md` is the single bounded, accumulated handoff even when the corpus
+contains many documents. It contains:
 
 - direct answer to the Research purpose;
 - supported findings with confidence and manifest paths;
@@ -83,24 +162,48 @@ documents. It contains:
 - recommendation and preconditions;
 - durable downstream constraints and audit-only evidence.
 
-Do not copy the corpus into Synthesis. A reader should understand the
-recommendation without loading all evidence, while still being able to audit
-each claim.
+Do not copy the corpus into Synthesis. A reader should understand the current
+recommendation without loading every source, while still being able to audit
+each load-bearing claim.
 
-## Conclusion and refresh
+A `review_ready` Synthesis is immutable until `new-round` returns it to draft.
+It is a review checkpoint, not a terminal lifecycle state.
 
-Before `archive-research --outcome concluded`:
+## Review, conclusion, and cancellation
+
+Before `mark-review-ready`:
 
 1. Run `sync-research`.
 2. Run `validate`.
-3. Answer or dispose every Research Question.
+3. Answer or explicitly dispose every Research Question.
 4. Resolve every blocker.
-5. Remove all REQUIRED markers from controller and Synthesis.
-6. Confirm the recommendation is decision-ready.
+5. Remove REQUIRED markers from controller and Synthesis.
+6. Confirm the current recommendation is ready for human review.
 
-The command snapshots linked documents, seals the manifest and Synthesis, and
-moves the control package to `completed/`. New evidence that changes the
-conclusion creates a new Research identity; never edit a sealed conclusion.
+After review, either:
 
-Cancelled Research requires a reason, remains auditable, and cannot satisfy a
-downstream Research Gate.
+- use `new-round` when the Owner asks to deepen, challenge, or discuss a point;
+- keep the Research active while awaiting feedback;
+- use `conclude-research` only after explicit Owner authorization.
+
+Decision readiness is necessary but never sufficient for conclusion. “The
+first version is complete”, “decision-ready”, “continue”, “looks good”, or the
+absence of open questions must not be interpreted as authorization to
+conclude. When authorization is ambiguous, leave the Research active.
+
+`conclude-research` requires:
+
+- active schema 1.1 Research with `maturity: review_ready`;
+- non-empty `owner`;
+- `--approved-by` and `--approval-ref` backed by explicit authorization;
+- valid review-ready Synthesis and corpus.
+
+It then seals the manifest and Synthesis and moves the package to
+`completed/`. `cancel-research` also requires explicit authorization plus a
+reason. Cancelled Research remains auditable but cannot satisfy a downstream
+Research Gate.
+
+After an authorized conclusion, never edit the sealed package. New evidence
+creates a linked follow-up Research identity. If a package was concluded
+without valid authorization, treat that as a migration/audit repair; do not
+silently rewrite its hashes.

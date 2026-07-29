@@ -1011,13 +1011,13 @@ def marker_block(kind: str) -> str:
         return (
             "\n\n## epctl managed Research index\n\n### Active\n\n"
             "<!-- RCTL:ACTIVE:START -->\n"
-            "| ID | Title | Status | Updated | Synthesis | Path |\n"
-            "|---|---|---|---|---|---|\n"
+            "| ID | Title | Type | Status | Maturity | Owner | Updated | Synthesis | Path |\n"
+            "|---|---|---|---|---|---|---|---|---|\n"
             "<!-- RCTL:ACTIVE:END -->\n\n"
             "### Completed\n\n"
             "<!-- RCTL:COMPLETED:START -->\n"
-            "| ID | Title | Status | Updated | Synthesis | Path |\n"
-            "|---|---|---|---|---|---|\n"
+            "| ID | Title | Type | Status | Maturity | Owner | Updated | Synthesis | Path |\n"
+            "|---|---|---|---|---|---|---|---|---|\n"
             "<!-- RCTL:COMPLETED:END -->\n"
         )
     if kind == "ADR":
@@ -1091,8 +1091,8 @@ def index_header(kind: str) -> tuple[str, str]:
         )
     if kind == "R":
         return (
-            "| ID | Title | Status | Updated | Synthesis | Path |",
-            "|---|---|---|---|---|---|",
+            "| ID | Title | Type | Status | Maturity | Owner | Updated | Synthesis | Path |",
+            "|---|---|---|---|---|---|---|---|---|",
         )
     if kind == "ADR":
         return (
@@ -1208,9 +1208,13 @@ def research_index_row(repo: Path, path: Path) -> str:
     synthesis = (path.parent / data.get("synthesis", "SYNTHESIS.md")).relative_to(
         repo / "docs"
     ).as_posix()
+    research_type = data.get("research_type", "legacy").replace("_", " ").title()
+    owner = data.get("owner", "") or "Unassigned"
     return (
         f"| {item_id} | {md_cell(data.get('title', item_id))} | "
-        f"{md_cell(data.get('status', ''))} | {md_cell(data.get('updated', ''))} | "
+        f"{md_cell(research_type)} | {md_cell(data.get('status', ''))} | "
+        f"{md_cell(data.get('maturity', 'legacy'))} | {md_cell(owner)} | "
+        f"{md_cell(data.get('updated', ''))} | "
         f"[Synthesis]({synthesis}) | [Research]({relative}) |"
     )
 
@@ -2625,8 +2629,9 @@ def validate_synthesis(
         data, _, _ = parse_frontmatter(text)
     except EpctlError as exc:
         return [f"{path}: {exc}"], warnings
-    if data.get("schema_version") != "1":
-        errors.append(f"{path}: synthesis schema_version must be 1")
+    schema_version = data.get("schema_version")
+    if schema_version not in {"1", "1.1"}:
+        errors.append(f"{path}: synthesis schema_version must be 1 or 1.1")
     if data.get("parent_id") != parent_id:
         errors.append(f"{path}: parent_id must be {parent_id}")
     if not data.get("title"):
@@ -2638,22 +2643,29 @@ def validate_synthesis(
         except ValueError:
             errors.append(f"{path}: {field} must be an ISO date, got {value!r}")
     status = data.get("status", "")
-    if status not in {"draft", "sealed"}:
+    allowed_statuses = (
+        {"draft", "review_ready", "sealed"}
+        if schema_version == "1.1"
+        else {"draft", "sealed"}
+    )
+    if status not in allowed_statuses:
         errors.append(f"{path}: invalid synthesis status {status!r}")
     errors.extend(validate_required_sections(path, text, SYNTHESIS_SECTIONS))
     required = bool(marker_names(text))
     if require_sealed and status != "sealed":
         errors.append(f"{path}: concluded Research requires sealed Synthesis")
-    if status == "sealed":
+    if status in {"review_ready", "sealed"}:
         if required:
-            errors.append(f"{path}: sealed Synthesis has required placeholders")
+            errors.append(
+                f"{path}: {status} Synthesis has required placeholders"
+            )
         expected = data.get("payload_sha256", "")
         actual = payload_sha256(text)
         if not expected:
-            errors.append(f"{path}: sealed Synthesis requires payload_sha256")
+            errors.append(f"{path}: {status} Synthesis requires payload_sha256")
         elif expected != actual:
             errors.append(
-                f"{path}: sealed Synthesis payload changed "
+                f"{path}: {status} Synthesis payload changed "
                 f"(expected {expected}, got {actual})"
             )
     elif data.get("payload_sha256"):
@@ -2676,8 +2688,9 @@ def validate_research(
         return [f"{path}: {exc}"], warnings
     research_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "R"))
-    if data.get("schema_version") != "1":
-        errors.append(f"{path}: Research schema_version must be 1")
+    schema_version = data.get("schema_version")
+    if schema_version not in {"1", "1.1"}:
+        errors.append(f"{path}: Research schema_version must be 1 or 1.1")
     location = "completed" if "/completed/" in path.as_posix() else "active"
     allowed = (
         RESEARCH_COMPLETED_STATUSES
@@ -2742,6 +2755,16 @@ def validate_research(
             )
         if marker_names(text):
             errors.append(f"{path}: concluded Research has required placeholders")
+        if schema_version == "1.1":
+            if data.get("maturity") != "review_ready":
+                errors.append(
+                    f"{path}: concluded Research must have review_ready maturity"
+                )
+            for field in ("owner", "approved_by", "approved_at", "approval_ref"):
+                if not data.get(field):
+                    errors.append(
+                        f"{path}: concluded Research requires {field}"
+                    )
     elif marker_names(text) and status != "cancelled":
         warnings.append(f"{path}: required placeholders remain")
     root_bytes = len(text.encode("utf-8"))

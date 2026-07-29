@@ -29,15 +29,26 @@ python3 <execution-plan-dir>/scripts/epctl.py --repo . init
 ```bash
 python3 <engineering-research-dir>/scripts/researchctl.py --repo . new-research \
   --slug token-refresh-contract \
-  --title "Research token refresh contract"
+  --title "Research token refresh contract" \
+  --owner "API Platform Owner" \
+  --author "Codex"
 ```
 
 填写 `RESEARCH.md`，把聚焦分析写到 `notes/`，把完整命令输出写到
-`artifacts/`。所有 `RQ-NNN` 已回答或明确处置、Synthesis 决策就绪后：
+`artifacts/`。所有 `RQ-NNN` 已回答或明确处置、Synthesis 决策就绪后，只生成
+评审版本：
 
 ```bash
-python3 <engineering-research-dir>/scripts/researchctl.py --repo . archive-research R-001 \
-  --outcome concluded
+python3 <engineering-research-dir>/scripts/researchctl.py --repo . mark-review-ready R-001
+```
+
+若 Owner 要求继续深入，就用 `new-round` 保持同一个 R-001。只有 Owner 明确
+授权结束后：
+
+```bash
+python3 <engineering-research-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
+  --approved-by "API Platform Owner" \
+  --approval-ref "review:API-123"
 ```
 
 公共契约具有架构意义，创建 proposed ADR：
