@@ -45,7 +45,8 @@ flowchart LR
 4. 每次都读取 [source-evidence.md](references/source-evidence.md)。根据文章类型
    读取 [article-patterns.md](references/article-patterns.md)。成文后必须读取
    [review.md](references/review.md) 并完成复核。输出英文或双语时还必须读取
-   [language.md](references/language.md)。
+   [language.md](references/language.md)。需要选择文章类型、组织用户输入或展示
+   完整调用方式时读取 [Prompt 示例](references/examples.md)。
 
 ## 选择文章类型
 

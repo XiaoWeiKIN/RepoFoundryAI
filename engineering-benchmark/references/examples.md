@@ -10,6 +10,17 @@ architecture route, add the sealed Run references to an active Engineering
 Research and let its Synthesis compare them with code and operational evidence.
 Do not accept an ADR from the Benchmark.
 
+```text
+Use $engineering-benchmark to compare spans-placement order-key strategy A
+and B. Predeclare the falsifier, controlled environment, repetitions,
+correctness checks, metrics, and decision rules before executing either
+variant. Seal every Run, including negative or inconclusive outcomes.
+
+Because this evidence may change the architecture route, hand the sealed Run
+references to $engineering-research for interpretation. Stop Research at
+review-ready and do not accept an ADR.
+```
+
 ```mermaid
 flowchart LR
     B["B-001 placement"] --> S["BS-001 A vs B"]
@@ -30,15 +41,14 @@ and threshold.
 
 Declare the full set before implementation:
 
-```bash
-python3 <execution-plan-skill-dir>/scripts/epctl.py --repo . new-ep \
-  --slug implement-placement \
-  --title "Implement spans placement" \
-  --research R-006 \
-  --adr ADR-011 \
-  --benchmark-scenario BS-003 \
-  --benchmark-scenario BS-004 \
-  --benchmark-scenario BS-007
+```text
+Use $engineering-execution-plan to create "Implement spans placement" from
+concluded R-006 and accepted ADR-011.
+
+Before implementation, declare BS-003 for p95, BS-004 for sustained
+throughput, and BS-007 for recovery as three independent completion gates.
+Explain which milestone each Scenario governs. Do not merge them into one
+score or execute the measurements yet.
 ```
 
 Run all three Scenarios against the same final implementation revision:
@@ -66,6 +76,13 @@ acceptance dimension still fails. Do not average unlike Scenarios into one
 score. No new Research is needed unless a result exposes route uncertainty or
 contradicts the evidence that supported the decision.
 
+```text
+Use $engineering-benchmark to run BS-003, BS-004, and BS-007 against the same
+final implementation revision. Preserve raw artifacts and seal each Run.
+Then use $engineering-execution-plan to verify EP-042. Archive it only when
+each declared Scenario has exactly one passed sealed Run for that revision.
+```
+
 ## Continuous regression
 
 For a nightly benchmark, keep one stable Scenario and create a new Run for each
@@ -75,6 +92,13 @@ schedule, retention, trend alerts, and operational response.
 Do not create one Research per nightly Run. Open or resume Research only when a
 regression cannot be explained operationally, evidence conflicts, or the team
 must reconsider an architectural choice.
+
+```text
+Use $engineering-benchmark to reuse BS-010 as the nightly capacity protocol
+for the current revision. Create and seal a new Run without changing the
+Scenario. Route the result to CI / Runbook. Open Research only if the
+regression conflicts with existing evidence or forces a route decision.
+```
 
 ## Failed harness
 
@@ -87,6 +111,13 @@ If the load generator crashes after setup:
 
 Do not overwrite the first directory or call the rerun a passing version of the
 same evidence.
+
+```text
+Continue $engineering-benchmark after the load generator crash.
+Preserve the partial logs and observations, seal the current Run as errored,
+and create a superseding Run only after the harness is fixed. Do not rewrite
+the first evidence bundle.
+```
 
 ## External load-test platform
 
@@ -102,9 +133,23 @@ Keep summary and stable metadata locally. In `RESULT.md`, record:
 The local Manifest protects local files. It cannot prove the continued
 availability of an external mutable URL, so the Result must state that boundary.
 
+```text
+Use $engineering-benchmark to register this external load-test job as one Run.
+Keep immutable job metadata, URI, digest, retention, and access boundaries in
+RESULT.md; preserve a small local export when policy permits. State clearly
+which remote evidence the local Manifest cannot protect.
+```
+
 ## Protocol correction
 
 If the original Scenario used the wrong percentile aggregation, do not edit the
 sealed Scenario snapshot. Create a new Scenario because the interpretation rule
 changed materially, then execute new Runs. Research may explain why the two
 protocols are not directly comparable.
+
+```text
+Use $engineering-benchmark to correct the percentile protocol.
+Keep the sealed old Run unchanged, create a new Scenario with the corrected
+aggregation rule, and execute new Runs. Ask $engineering-research to explain
+the non-comparability only if that difference affects a decision.
+```
