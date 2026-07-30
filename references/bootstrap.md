@@ -2,17 +2,20 @@
 
 ## 目标
 
-`engineering-workflow` Bootstrap 建立 Codex 可导航、EP 可治理、CI 可验证的
+`repo-foundry` Bootstrap 建立 Codex 可导航、EP 可治理、CI 可验证的
 项目文档控制面。它负责知识入口、组合初始化和文件契约，不负责生成未经验证的
 项目事实。
 
 ```mermaid
 flowchart LR
-    P["engineeringctl 仓库预检"] --> I["epctl init<br/>ADR / ExecPlan 制品"]
+    P["foundryctl 仓库预检"] --> I["epctl init<br/>ADR / ExecPlan 制品"]
     P --> C["Codex profile<br/>AGENTS.md + 架构与治理入口"]
+    P --> S["Spec Resolver<br/>Core + detected languages"]
     I --> E["docs/.epctl/<br/>EP 状态"]
     C --> M["docs/.engineering/harness.json"]
-    M --> V["engineeringctl validate --harness"]
+    S --> L["specs.json + lock<br/>本地 managed Specs"]
+    L --> C
+    M --> V["foundryctl validate --harness"]
 ```
 
 ## `init` 与 `bootstrap`
@@ -21,7 +24,7 @@ flowchart LR
 只创建 EP 自己拥有的目录、索引和 ID 状态。它的行为不能因 Codex profile
 改变。
 
-`engineering-workflow` 的 `bootstrap` 是显式选择的项目级操作：
+`repo-foundry` 的 `bootstrap` 是显式选择的项目级操作：
 
 - 默认 dry-run；
 - 只在 `--apply` 时写入；
@@ -29,6 +32,8 @@ flowchart LR
 - 只创建缺失路径；
 - 将 `docs/design-docs` 注册为 architecture root；
 - 创建并启用 Harness manifest；
+- 安装必选 Core Spec 和检测到的 Go、TypeScript、Python Spec；
+- 生成 Spec manifest、lock、本地副本与按作用域路由索引；
 - 写入后立即执行 Harness 验证。
 
 已有内容文档保持字节不变。唯一允许修改的既有 managed file 是
@@ -40,7 +45,7 @@ Bootstrap 不隐式运行 `reindex`。
 在目标仓库根目录运行：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex
 ```
 
@@ -57,7 +62,7 @@ python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
 显式 `--dry-run` 与默认行为相同。确认预览后执行：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex --apply
 ```
 
@@ -69,6 +74,15 @@ Codex profile 在 EP 布局之外增加：
 AGENTS.md
 ARCHITECTURE.md
 docs/
+├── .engineering/
+│   ├── harness.json
+│   ├── specs.json
+│   └── specs.lock.json
+├── agent-guides/
+│   └── managed/
+│       ├── index.md
+│       ├── core/semantic-naming.md
+│       └── languages/<selected-language>.md
 ├── index.md
 ├── QUALITY_SCORE.md
 ├── RELIABILITY.md
@@ -84,6 +98,45 @@ Bootstrap templates 是明确标记的 scaffold。Agent 应在同一初始化工
 README、代码、构建文件、测试和 CI，再用真实事实替换
 `BOOTSTRAP_TODO`。无法验证的字段保持 `unknown`，不能猜测命令、边界、Owner、
 SLO 或安全控制。
+
+## Engineering Specs
+
+Catalog 与规范正文位于独立的
+[EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
+Git 仓库。默认源是该仓库的 `main`；首次 Bootstrap 可通过
+`--spec-repository` 与 `--spec-ref` 覆盖。Bootstrap 永远选择
+`core/semantic-naming`，并根据 `go.mod` / `*.go`、
+`tsconfig.json` / TypeScript 源文件、`pyproject.toml` / Python 源文件选择语言
+Spec。多语言仓库组合多个语言 Spec，不加载未匹配语言。
+
+项目选择保存在 `docs/.engineering/specs.json`；精确版本、Catalog digest、
+解析后的完整 Git commit、内容 SHA-256 和本地路径保存在
+`specs.lock.json`。Catalog 内容原样物化到 `docs/agent-guides/managed/`，
+生成的 `index.md` 把文件作用域映射到对应 Spec。根 `AGENTS.md` 只保留一条
+读取该索引的短路由。
+
+项目特有规则不进入托管目录。在 `specs.json` 的 `project_specs` 中登记已有
+Markdown 路径、作用域和说明，`index.md` 会引用它，工具不复制或修改正文。
+
+Spec 操作同样 preview-first：
+
+```bash
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec plan
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync --apply
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec validate
+```
+
+`sync` 使用 lock 已记录的 commit；lock 缺失时才从 manifest ref 建立初始解析。
+`update` 重新解析 manifest ref、加入新检测到的语言并刷新内容，但不自动移除选择。
+显式 applied Spec 操作可以在预览后替换生成的 lock、index 和 managed Spec；
+Bootstrap 本身遇到内容漂移仍报告 conflict。`spec validate` 只检查 manifest、
+lock 与本地文件，完全不访问网络。
+
+解析器通过临时 bare Git object store 读取 Catalog 与 Markdown，不 checkout、
+不执行远程代码。Git 凭据只能来自用户已有的 credential helper 或 SSH agent；
+RepoFoundry AI 不接收、不打印、不保存 token。
 
 ## `AGENTS.md` 硬约束
 
@@ -111,6 +164,8 @@ apply 前检查全部目标：
 - 文件和目录类型相反：conflict；
 - 任意 managed path 穿过 symlink：conflict；
 - 已有 Harness manifest 与当前 schema 不一致：conflict；
+- Spec manifest、Catalog、依赖图或项目 Spec 引用无效：conflict；
+- 已有 lock、路由索引或 managed Spec 与期望 bytes 不同：conflict；
 - 已有 `AGENTS.md` 超过 100 行：conflict；
 - architecture config 无效：conflict。
 
@@ -124,7 +179,7 @@ apply 前检查全部目标：
 ```json
 {
   "version": 1,
-  "owner": "engineering-workflow",
+  "owner": "repo-foundry",
   "profile": "codex",
   "components": [
     "engineering-execution-plan"
@@ -147,6 +202,9 @@ apply 前检查全部目标：
 }
 ```
 
+owner 为 `engineering-workflow` 的既有 Manifest 继续以兼容模式读取，并产生
+`HARNESS_LEGACY_OWNER` warning；新 Manifest 一律写入 `repo-foundry`。
+
 项目级 Manifest 与 `docs/.epctl/config.json` 分属不同状态目录。
 `config.json` 继续只负责 EP 的 architecture roots；不要借 Bootstrap 静默升级
 其 schema。
@@ -156,7 +214,7 @@ apply 前检查全部目标：
 显式要求 Harness：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . validate --harness
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . validate --harness
 ```
 
 只要 manifest 已存在，普通 `validate` 也会自动检查：
@@ -165,13 +223,17 @@ python3 <workflow-dir>/scripts/engineeringctl.py --repo . validate --harness
 - required file 是否存在且为非 symlink regular file；
 - `docs/design-docs` 是否已注册；
 - `AGENTS.md` 物理行数；
+- Spec manifest、Catalog digest、lock 和 managed content；
+- 项目 Spec 路径与生成的作用域路由索引；
 - scaffold TODO。
 
 缺文件、manifest 无效、未注册 architecture root 和超过 100 行属于 error。
 `BOOTSTRAP_TODO` 以及 81–100 行的 instruction file 属于 warning。
+已有 `AGENTS.md` 缺少 Spec index 路由也属于 warning，工具不会为修复路由而
+改写项目文件。
 
 ## 边界
 
-Bootstrap 当前只建立文档控制面。Worktree、浏览器控制、可观测性环境、权限、
-部署和自动合并属于运行时 Harness；在出现独立生命周期前，不把它们隐式加入
-本命令。
+Bootstrap 当前只建立文档与 Engineering Spec 控制面。Worktree、浏览器控制、
+可观测性环境、权限、远程 Catalog 获取、部署和自动合并属于运行时 Harness；
+在出现独立生命周期前，不把它们隐式加入本命令。

@@ -1,0 +1,13 @@
+Command:
+  python3 -B -m unittest tests.test_repository_contracts
+
+Result:
+  8 tests passed.
+  Exit status: 0.
+
+Covered behavior:
+  - Bundled Catalog validation.
+  - Root AGENTS.md line budget and Spec index route.
+  - Independently installed Engineering Workflow package includes the Catalog,
+    bootstraps local Specs, and passes both Harness and Spec validation.
+  - Existing cross-Skill and CI adapter repository contracts remain valid.

@@ -1,8 +1,8 @@
 ---
 doc_type: design
-title: EngineeringWorkflow design documents
+title: RepoFoundry AI design documents
 status: current
-updated: 2026-07-30
+updated: 2026-07-31
 ---
 
 # Design Documents
@@ -13,5 +13,9 @@ how accepted choices are realized.
 
 ## Current
 
-- [EngineeringWorkflow skill packaging](engineering-workflow-packaging.md)
+- [RepoFoundry AI system identity and packaging](repo-foundry-system.md)
+- [Aggregation Skill packaging baseline](engineering-workflow-packaging.md) —
+  ADR-004/005 boundaries; public naming is amended by the RepoFoundry AI
+  identity document.
 - [Codex project documentation bootstrap](codex-project-bootstrap.md)
+- [Engineering Spec resolution and project materialization](engineering-spec-management.md)

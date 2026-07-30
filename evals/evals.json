@@ -1,10 +1,10 @@
 {
-  "skill_name": "engineering-workflow",
+  "skill_name": "repo-foundry",
   "evals": [
     {
       "id": 1,
       "prompt": "帮我把这个仓库初始化成 Codex agent-first 项目：先预览要创建的文档，再应用。保留已有文件，AGENTS.md 无论如何不能超过 100 行。",
-      "expected_output": "先用 engineeringctl bootstrap --profile codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，并组合 engineering-execution-plan 初始化。已有文件保持字节不变，docs/.engineering/harness.json 注册 AGENTS.md max_lines=100，最终 engineeringctl validate --harness 通过。",
+      "expected_output": "先用 foundryctl bootstrap --profile codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，并组合 engineering-execution-plan 初始化。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
       "files": [],
       "assertions": [
         {
@@ -32,7 +32,7 @@
     {
       "id": 2,
       "prompt": "我们还不知道缓存方案是否正确传播 trace context，需要读源码、查规范并做最小实验。请先初始化项目，然后继续处理。",
-      "expected_output": "使用 engineering-workflow 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，再交给 engineering-execution-plan。",
+      "expected_output": "使用 repo-foundry 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，再交给 engineering-execution-plan。",
       "files": [],
       "assertions": [
         {
@@ -58,6 +58,50 @@
         {
           "name": "routes_execution_artifacts",
           "description": "ADR、ExecPlan 和 Task 生命周期由 engineering-execution-plan 持有"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "初始化这个 Go 后端和 TypeScript 前端的仓库。通用命名规范必须安装，两种语言规范按需落到本地；现有 handler-pattern.md 是项目规则，不要覆盖。",
+      "expected_output": "先预览 Codex Bootstrap；从独立 EngineeringSpecifications Git 仓库选择 core/semantic-naming、languages/go 和 languages/typescript，生成 docs/.engineering/specs.json、记录完整 resolved commit 的 specs.lock.json，以及 docs/agent-guides/managed/ 本地副本和索引。把已有 handler-pattern.md 作为 project_specs 引用而不复制或改写，应用后离线运行 spec validate 与 Harness validation。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "selects_core_and_detected_languages",
+          "description": "Core 必选，只加入仓库证据匹配的 Go 与 TypeScript Spec"
+        },
+        {
+          "name": "materializes_versioned_local_specs",
+          "description": "Manifest 记录 Git URL/ref，lock 记录完整 commit，managed 内容和路由索引位于目标仓库并可用 SHA-256 校验"
+        },
+        {
+          "name": "preserves_project_specs",
+          "description": "项目规则通过 project_specs 引用，工具不复制、覆盖或改写其正文"
+        },
+        {
+          "name": "keeps_bootstrap_preview_first",
+          "description": "Bootstrap 与 Spec 更新先预览，发生 drift 或 path conflict 时不进行部分写入"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "EngineeringSpecifications 的 main 已经有新提交。项目现在要先恢复本地被删掉的规范，但暂时不能升级；确认后再升级到 main 最新版本。",
+      "expected_output": "先运行 spec sync 的 dry-run，它必须使用 specs.lock.json 中的旧 commit 恢复本地副本而不跟随 main；应用并离线验证后，再运行 spec update dry-run，明确展示新的 resolved commit 与内容变化，确认后 --apply。update 可以加入新检测语言但不能自动移除已有选择。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "sync_uses_locked_commit",
+          "description": "sync 从已有 lock 的 resolved commit 恢复内容，不因远程分支移动而升级"
+        },
+        {
+          "name": "update_resolves_manifest_ref",
+          "description": "update 才重新解析 manifest ref，并在预览中显示新 commit 与替换动作"
+        },
+        {
+          "name": "validation_is_offline",
+          "description": "spec validate 只检查 manifest、lock、项目规则和本地 managed 内容，不访问远程仓库"
         }
       ]
     }

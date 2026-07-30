@@ -2,13 +2,22 @@
 doc_type: design
 title: EngineeringWorkflow skill packaging
 status: current
-adr_refs: ["ADR-004"]
-updated: 2026-07-30
+adr_refs: ["ADR-004", "ADR-005"]
+updated: 2026-07-31
 ---
 
 # EngineeringWorkflow Skill Packaging
 
-Decision record: [ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md).
+This document remains current for the aggregation and professional-Skill
+boundaries adopted by ADR-004 and ADR-005. Its product identifiers and path
+examples record the original packaging baseline.
+[RepoFoundry AI system identity and packaging](repo-foundry-system.md) amends
+that naming while retaining these structural boundaries.
+
+Decision records:
+[ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md)
+and
+[ADR-005](../adr/adr-005_external-engineering-specifications.md).
 
 ## Purpose
 
@@ -25,6 +34,7 @@ flowchart TB
     W --> R["engineering-research"]
     W --> E["engineering-execution-plan"]
     W --> C["engineering-case-study"]
+    W -.->|"Git fetch + lock"| S["EngineeringSpecifications<br/>independent repository"]
     W --> H["engineeringctl<br/>Harness Bootstrap"]
     H --> I["epctl init<br/>EP-owned artifacts"]
 ```
@@ -39,6 +49,7 @@ EngineeringWorkflow/
 ├── references/bootstrap.md
 ├── scripts/
 │   ├── engineeringctl.py
+│   ├── spec_manager.py
 │   └── check.py
 ├── engineering-benchmark/
 ├── engineering-research/
@@ -54,7 +65,8 @@ distribution repository. Every professional Skill owns its `SKILL.md`,
 
 | Owner | Responsibilities |
 |---|---|
-| `engineering-workflow` | Project Harness templates, manifest, Bootstrap preflight, aggregate routing |
+| `engineering-workflow` | Project Harness templates, manifest, Bootstrap preflight, remote Engineering Spec resolution, aggregate routing |
+| `EngineeringSpecifications` | Catalog schema, normative Specs, content versions, digests, and releases |
 | `engineering-benchmark` | Suite, Scenario, Run, Result and evidence sealing |
 | `engineering-research` | Research questions, topics, corpus, snapshots and Synthesis |
 | `engineering-execution-plan` | ADR, ExecPlan, Task, Checkpoint, Bugfix and technical debt |
@@ -71,6 +83,9 @@ component is absent.
 scripts/engineeringctl.py
   bootstrap --profile codex [--dry-run | --apply]
   validate --harness
+  spec plan
+  spec sync / update [--dry-run | --apply]
+  spec validate
 
 engineering-execution-plan/scripts/epctl.py
   init
@@ -87,6 +102,8 @@ the bundled `epctl` contract, runs its idempotent `init`, and registers
 ## State Boundaries
 
 - `docs/.engineering/harness.json` records the project-level Harness.
+- `docs/.engineering/specs.json` records project Spec selection and overlays.
+- `docs/.engineering/specs.lock.json` records resolved versions and digests.
 - `docs/.engineering/lock` serializes Harness changes.
 - `docs/.epctl/state.json` and `docs/.epctl/config.json` remain EP state.
 - `benchmarks/.benchctl/` remains Benchmark state.
@@ -116,7 +133,10 @@ The README carries the explicit migration path.
 
 - Validate all five Skill metadata packages and four eval catalogs.
 - Run `engineeringctl` dry-run, apply, idempotence, preservation and line-limit
-  tests.
+  tests, plus Core, language, polyglot, lock, drift, and project Spec tests.
+- Reject bundled normative Spec content and prove an independently installed
+  Workflow Skill resolves a temporary or public Git-backed Catalog.
+- Prove locked sync remains pinned and explicit update adopts a moved Git ref.
 - Run the independently installed `engineering-execution-plan` test suite.
 - Copy the root aggregation package with its bundled EP component and prove
   Bootstrap works without private host paths.

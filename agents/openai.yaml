@@ -1,4 +1,4 @@
 interface:
-  display_name: "Engineering Workflow"
-  short_description: "Bootstrap and route an agent-first engineering workflow"
-  default_prompt: "Use $engineering-workflow to bootstrap the repository Codex Harness and route follow-up work to the appropriate engineering skill."
+  display_name: "RepoFoundry AI"
+  short_description: "Turn any repo into an AI-ready engineering system"
+  default_prompt: "Use $repo-foundry to inventory the repository, preview and apply its Harness scaffold, fetch and lock applicable Engineering Specs, validate the result, and route follow-up work."

@@ -1,0 +1,26 @@
+Command:
+  python3 -B scripts/check.py
+
+Verified revision:
+  git:eb2a433
+
+Verification environment:
+  Detached temporary worktree containing exactly the verified revision.
+
+Result:
+  Exit status: 0.
+  [check] all integrity checks passed
+
+Suites:
+  - Engineering Research: 29 passed.
+  - Engineering Benchmark: 8 passed.
+  - Engineering Execution Plan: 37 passed.
+  - Engineering Workflow, Spec Manager, and repository contracts: 25 passed.
+
+Additional checks:
+  - Five Skill packages and eval catalogs.
+  - Engineering Spec Catalog schema and SHA-256 content.
+  - Markdown links.
+  - Research and Execution Plan repository validation.
+  - Generated indexes.
+  - Git whitespace validation.

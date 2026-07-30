@@ -1,4 +1,4 @@
-# Prompt-driven EngineeringWorkflow examples
+# Prompt-driven RepoFoundry AI examples
 
 [简体中文](README.zh-CN.md) | English
 
@@ -11,7 +11,7 @@ through every Skill.
 
 ```mermaid
 flowchart LR
-    U["User prompt"] --> W["$engineering-workflow<br/>bootstrap or route"]
+    U["User prompt"] --> W["$repo-foundry<br/>bootstrap or route"]
     W --> B["$engineering-benchmark<br/>measure"]
     W --> R["$engineering-research<br/>explain unknowns"]
     W --> E["$engineering-execution-plan<br/>decide and deliver"]
@@ -27,7 +27,7 @@ flowchart LR
 
 | User intent | Start with | Typical continuation |
 |---|---|---|
-| Initialize an Agent-first repository or decide where work belongs | `$engineering-workflow` | Route to one professional Skill |
+| Initialize an Agent-first repository or decide where work belongs | `$repo-foundry` | Route to one professional Skill |
 | Produce reproducible performance, capacity, reliability, or regression evidence | `$engineering-benchmark` | Research, EP, or CI / Runbook |
 | Investigate unknowns, reconcile sources, or maintain a Research corpus | `$engineering-research` | Proposed ADR or another Research Round |
 | Record a decision, create an ExecPlan, track a Bugfix, or drive implementation | `$engineering-execution-plan` | Benchmark gates and completion evidence |
@@ -38,7 +38,7 @@ flowchart LR
 Start with a non-mutating preview:
 
 ```text
-Use $engineering-workflow to inspect this repository and preview a Codex
+Use $repo-foundry to inspect this repository and preview a Codex
 project Harness bootstrap.
 
 Report which files would be created, preserved, registered, or blocked by a
@@ -50,7 +50,7 @@ that should own measurement, unknowns, decisions, and implementation.
 After reviewing the preview:
 
 ```text
-Use $engineering-workflow to apply exactly the previously reviewed Harness
+Use $repo-foundry to apply exactly the previously reviewed Harness
 bootstrap. Stop if the repository changed or a conflict appears. Validate the
 result and report the created entrypoints and the recommended next Skill.
 ```
@@ -64,7 +64,7 @@ their behalf.
 Use this when the request is ambiguous:
 
 ```text
-Use $engineering-workflow only to route this request:
+Use $repo-foundry only to route this request:
 "Our p95 rose after the storage migration. I need to know whether the
 architecture is wrong and then fix it."
 

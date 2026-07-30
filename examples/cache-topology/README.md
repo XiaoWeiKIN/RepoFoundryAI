@@ -21,7 +21,7 @@ flowchart LR
 ## 第一条 Prompt：让 Codex 接管现有 corpus
 
 先把示例 corpus 放到目标仓库的 `research-input/cache-topology/`。如果它仍在
-EngineeringWorkflow 发行仓库中，也可以把源路径和目标路径直接告诉 Codex，让
+RepoFoundry 发行仓库中，也可以把源路径和目标路径直接告诉 Codex，让
 它只复制 corpus，不修改发行仓库。
 
 在目标仓库中发起对话：

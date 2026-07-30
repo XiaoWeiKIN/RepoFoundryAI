@@ -144,7 +144,7 @@ def skill_frontmatter(path: Path) -> dict[str, str]:
 
 def validate_skill_packages() -> None:
     skills = (
-        (ROOT, "engineering-workflow"),
+        (ROOT, "repo-foundry"),
         (
             ROOT / "engineering-execution-plan",
             "engineering-execution-plan",
@@ -268,7 +268,7 @@ def validate_eval_catalog(path: Path, expected_skill_name: str) -> None:
 
 def validate_eval_catalogs() -> None:
     catalogs = (
-        (ROOT / "evals" / "evals.json", "engineering-workflow"),
+        (ROOT / "evals" / "evals.json", "repo-foundry"),
         (
             ROOT
             / "engineering-execution-plan"
@@ -287,6 +287,16 @@ def validate_eval_catalogs() -> None:
     )
     for path, expected_skill_name in catalogs:
         validate_eval_catalog(path, expected_skill_name)
+
+
+def validate_engineering_spec_catalog() -> None:
+    bundled = ROOT / "engineering-specs"
+    if bundled.exists():
+        raise CheckError(
+            "Normative Engineering Specs must live in the independent "
+            "EngineeringSpecifications repository, not engineering-specs/"
+        )
+    print("[check] external Engineering Spec ownership", flush=True)
 
 
 def copy_repository(destination: Path) -> None:
@@ -381,6 +391,7 @@ def main() -> int:
     try:
         validate_skill_packages()
         validate_eval_catalogs()
+        validate_engineering_spec_catalog()
         validate_markdown_links()
         run(
             "Engineering Research tests",
@@ -428,7 +439,7 @@ def main() -> int:
             ],
         )
         run(
-            "Engineering Workflow and repository contract tests",
+            "RepoFoundry AI and repository contract tests",
             [
                 sys.executable,
                 "-B",

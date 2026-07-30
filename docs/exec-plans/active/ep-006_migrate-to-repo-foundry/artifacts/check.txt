@@ -1,0 +1,18 @@
+RepoFoundry AI canonical repository check evidence
+Recorded: 2026-07-31
+
+Command:
+python3 -B scripts/check.py
+
+Result:
+- exit code: 0
+- Engineering Research tests: 29 passed
+- Engineering Benchmark tests: 8 passed
+- Engineering Execution Plan tests: 37 passed
+- RepoFoundry AI and repository contract tests: 34 passed
+- repository Research validation: 0 errors, 0 warnings
+- repository ExecPlan validation: 0 errors, 0 warnings
+- index projection and whitespace checks: passed
+- final message: [check] all integrity checks passed
+
+The canonical check executed 108 unit and contract tests in total.

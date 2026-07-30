@@ -2,7 +2,7 @@
 doc_type: design
 title: Codex project documentation bootstrap
 status: current
-adr_refs: ["ADR-002", "ADR-004"]
+adr_refs: ["ADR-002", "ADR-004", "ADR-005"]
 updated: 2026-07-30
 ---
 
@@ -10,18 +10,24 @@ updated: 2026-07-30
 
 Decision records:
 [ADR-002](../adr/adr-002_codex-project-documentation-bootstrap.md) and
-[ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md).
+[ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md),
+with external Spec ownership fixed by
+[ADR-005](../adr/adr-005_external-engineering-specifications.md).
 This document describes their selected implementation.
 
 ## Purpose
 
-Add a repository-aware bootstrap surface to Engineering Workflow. It creates
+Add a repository-aware bootstrap surface to RepoFoundry AI. It creates
 the minimum documentation control plane needed for Codex to navigate a project
 and composes the deterministic, idempotent `epctl init` contract for EP-owned
 artifacts.
 
 The bootstrap establishes navigation and verification structure. It does not
 claim that generic templates contain verified project facts.
+
+Engineering Spec selection and materialization extend this control plane. The
+detailed catalog, manifest, lock, routing, and update contracts are defined in
+[Engineering Spec resolution](engineering-spec-management.md).
 
 ## Scope
 
@@ -35,8 +41,12 @@ The first version provides one optional profile, `codex`, with these behaviors:
 - register `docs/design-docs` as an architecture root;
 - record the enabled profile and required files in
   `docs/.engineering/harness.json`;
+- install required Core guidance and language guidance detected from repository
+  evidence;
+- materialize selected Specs with a versioned manifest, content lock, and local
+  routing index;
 - validate the Harness automatically after bootstrap and through
-  `engineeringctl validate`;
+  `foundryctl validate`;
 - enforce a maximum of 100 physical lines for each registered Agent instruction
   file.
 
@@ -52,6 +62,8 @@ files must be registered explicitly before the validator owns their limit.
   providers, deployment, or auto-merge.
 - Create product-specific documents such as `FRONTEND.md` or
   `PRODUCT_SENSE.md` without repository evidence.
+- Store or prompt for Git credentials, execute remote Spec repository code, or
+  rewrite project-owned Specs.
 - Turn `AGENTS.md` into a complete manual.
 
 ## CLI Contract
@@ -59,14 +71,14 @@ files must be registered explicitly before the validator owns their limit.
 Preview is the safe default:
 
 ```bash
-python3 scripts/engineeringctl.py --repo . bootstrap --profile codex
-python3 scripts/engineeringctl.py --repo . bootstrap --profile codex --dry-run
+python3 scripts/foundryctl.py --repo . bootstrap --profile codex
+python3 scripts/foundryctl.py --repo . bootstrap --profile codex --dry-run
 ```
 
 Apply is explicit:
 
 ```bash
-python3 scripts/engineeringctl.py --repo . bootstrap --profile codex --apply
+python3 scripts/foundryctl.py --repo . bootstrap --profile codex --apply
 ```
 
 `--apply` and `--dry-run` are mutually exclusive. The command emits JSON with:
@@ -85,7 +97,7 @@ any conflict exists.
 Harness verification is available explicitly:
 
 ```bash
-python3 scripts/engineeringctl.py --repo . validate --harness
+python3 scripts/foundryctl.py --repo . validate --harness
 ```
 
 Normal `validate` also checks the Harness whenever
@@ -100,6 +112,14 @@ The `codex` profile adds the following paths to the existing EP layout:
 AGENTS.md
 ARCHITECTURE.md
 docs/
+├── .engineering/
+│   ├── harness.json
+│   ├── specs.json
+│   └── specs.lock.json
+├── agent-guides/
+│   └── managed/
+│       ├── index.md
+│       └── <selected-spec-id>.md
 ├── index.md
 ├── QUALITY_SCORE.md
 ├── RELIABILITY.md
@@ -117,7 +137,10 @@ docs/
 ```
 
 `AGENTS.md` is a short routing map. Detailed architecture, quality, reliability,
-security, research, decisions, and plans remain in the linked documents.
+security, engineering Specs, research, decisions, and plans remain in the
+linked documents. One stable route points implementation and review work to
+`docs/agent-guides/managed/index.md`, where file scopes select the applicable
+local Specs.
 
 The only intentional mutation of an existing managed file is adding
 `docs/design-docs` to `docs/.epctl/config.json`. Bootstrap does not rebuild
@@ -133,7 +156,7 @@ Schema version 1:
 ```json
 {
   "version": 1,
-  "owner": "engineering-workflow",
+  "owner": "repo-foundry",
   "profile": "codex",
   "components": [
     "engineering-execution-plan"
@@ -210,38 +233,48 @@ value, and required value so an Agent can remediate the problem directly.
 ```mermaid
 flowchart LR
     I["epctl init"] --> E["EP-owned artifact storage"]
-    B["engineeringctl bootstrap --profile codex"] --> K["Project knowledge entrypoints"]
+    B["foundryctl bootstrap --profile codex"] --> K["Project knowledge entrypoints"]
     B --> M["Harness manifest"]
     K --> A["AGENTS.md: routing only"]
     K --> D["Architecture and governance docs"]
     E --> D
-    M --> V["engineeringctl validate"]
+    M --> V["foundryctl validate"]
     A --> V
     D --> V
 ```
 
 `engineering-execution-plan` owns EP directories, indexes, configuration and ID
-state. `engineering-workflow` owns creation of missing Harness entrypoints and
+state. `repo-foundry` owns creation of missing Harness entrypoints and
 its manifest. Once a document exists, its content is repository-owned;
 bootstrap will not rewrite it.
 
 ## Implementation Surface
 
-- `scripts/engineeringctl.py`
+- `scripts/foundryctl.py`
   - own bootstrap planning, apply, manifest loading, and Harness validation;
+  - expose `spec plan`, `spec sync`, `spec update`, and `spec validate`;
   - load the bundled EP initialization contract only during composition.
+- `scripts/spec_manager.py`
+  - fetch Catalog objects from an external Git repository without checkout;
+  - parse remote Catalog and project data into strict internal structures;
+  - detect languages, resolve dependencies, plan managed writes, and validate
+    local locks and content.
+- `https://github.com/XiaoWeiKIN/EngineeringSpecifications`
+  - own Catalog schema, normative Core/language Specs, versions, digests, and
+    its independent canonical check.
 - `engineering-execution-plan/scripts/epctl.py`
   - preserve `init_repo` and all EP lifecycle behavior;
   - expose no Bootstrap or Harness validation command.
 - `assets/`
   - add Codex Harness templates.
-- `tests/test_engineeringctl.py`
+- `tests/test_foundryctl.py`
   - add dry-run, apply, idempotence, preservation, conflict, manifest, and line
     limit tests.
 - `engineering-execution-plan/tests/test_epctl.py`
   - retain the EP lifecycle regression suite without Harness tests.
 - `tests/test_repository_contracts.py`
-  - verify packaged assets and the bundled `AGENTS.md` line budget.
+  - verify packaged assets, the absence of normative Specs, and the bundled
+    `AGENTS.md` line budget.
 - `SKILL.md`, `README.md`, and `references/bootstrap.md`
   - document routing, commands, safety, and ownership.
 
@@ -250,7 +283,13 @@ bootstrap will not rewrite it.
 - Existing `init` tests and behavior remain unchanged.
 - Preview produces no repository changes.
 - Apply creates the declared structure and passes
-  `engineeringctl validate --harness`.
+  `foundryctl validate --harness`.
+- Empty repositories select Core only; Go, TypeScript, Python, and polyglot
+  Git fixtures select exactly the matching language Specs.
+- Lock files record the full resolved remote commit; sync remains pinned while
+  update adopts a moved branch.
+- `foundryctl spec validate` proves manifest, lock, local content, project
+  references, and routing integrity.
 - Repeating apply produces no content changes.
 - Existing files remain byte-identical.
 - A 100-line `AGENTS.md` passes.

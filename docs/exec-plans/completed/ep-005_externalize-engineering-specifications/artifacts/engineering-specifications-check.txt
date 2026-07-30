@@ -1,0 +1,6 @@
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.002s
+
+OK
+CHECK_OK: io.github.xiaoweikin.engineering-specifications@0.1.0 (4 specifications)

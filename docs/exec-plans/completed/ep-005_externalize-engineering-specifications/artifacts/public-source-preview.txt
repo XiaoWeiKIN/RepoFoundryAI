@@ -1,0 +1,40 @@
+{
+  "operation": "plan",
+  "mode": "dry-run",
+  "catalog": {
+    "catalog_id": "io.github.xiaoweikin.engineering-specifications",
+    "catalog_version": "0.1.0",
+    "sha256": "ad068f3666fd223178b76ede73025b82933b223cec4319a71f170d7a2a1c9369",
+    "source": {
+      "kind": "git",
+      "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
+      "ref": "main"
+    },
+    "resolved_revision": "e93a0a3043d26be15a74d7f65c310f873a9569d0"
+  },
+  "detected_specs": [],
+  "selected_specs": [
+    "core/semantic-naming"
+  ],
+  "actions": [
+    {
+      "action": "create_file",
+      "path": "docs/.engineering/specs.json"
+    },
+    {
+      "action": "create_file",
+      "path": "docs/.engineering/specs.lock.json"
+    },
+    {
+      "action": "create_file",
+      "path": "docs/agent-guides/managed/core/semantic-naming.md"
+    },
+    {
+      "action": "create_file",
+      "path": "docs/agent-guides/managed/index.md"
+    }
+  ],
+  "warnings": [],
+  "created": [],
+  "updated": []
+}

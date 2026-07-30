@@ -1,14 +1,14 @@
 ---
 name: engineering-execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis 与 sealed Benchmark evidence，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务，并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 engineering-workflow；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis 与 sealed Benchmark evidence，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务，并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Engineering Execution Plan
 
 把复杂工程工作组织成可追溯、可恢复、可机械验证的仓库制品。默认工作流是：
 
-项目级 Harness 初始化属于 `engineering-workflow`；本 skill 的 `init` 只创建
+项目级 Harness 初始化属于 `repo-foundry`；本 skill 的 `init` 只创建
 ADR、ExecPlan、Bugfix 等执行治理制品。
 
 ```mermaid

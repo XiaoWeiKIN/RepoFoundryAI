@@ -1,0 +1,16 @@
+RepoFoundry AI brand asset evidence
+Recorded: 2026-07-31
+
+Commands:
+python3 -B -m unittest \
+  tests.test_repository_contracts.RepositoryContractTestCase.test_repofoundry_ai_brand_assets_are_valid
+sips -g pixelWidth -g pixelHeight -g format -g hasAlpha \
+  assets/brand/repofoundry-icon.png
+
+Result:
+- brand contract test: 1 passed
+- repofoundry-mark.svg: valid XML, viewBox 0 0 256 256
+- repofoundry-icon.svg: valid XML, viewBox 0 0 256 256
+- repofoundry-icon.png: PNG, 256 x 256, alpha channel present
+- 32 x 32 visual inspection: braces and orange core remain distinguishable
+- palette: graphite #17202A, forge orange #FF6B2C, warm white #F7F4ED

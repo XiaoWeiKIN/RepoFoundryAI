@@ -1,17 +1,19 @@
 ---
-name: engineering-workflow
+name: repo-foundry
 description: |
-  初始化和验证 Agent-first 工程项目的版本化 Harness，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，应用时只创建缺失文件并组合 engineering-execution-plan 的初始化，不覆盖已有仓库内容。
+  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化和验证版本化 Repository Harness，从独立 Git 仓库解析并同步通用、语言级和项目级 Engineering Specs，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go/TypeScript/Python 语言规范、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，应用时只创建缺失文件、物化匹配的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
 ---
 
-# Engineering Workflow
+# RepoFoundry AI
 
-把仓库级 Harness 与四个专业工程 Skill 连接起来。根 Skill 只负责项目初始化、
-统一入口和工作路由，不接管专业制品的生命周期。
+把普通代码仓库锻造成 AI Agent 可导航、规范可组合、证据可追溯、交付可验证的
+工程系统。RepoFoundry AI 的根 Skill 负责 Inventory、Scaffold、Repository
+Harness、Spec 解析和能力路由；专业制品生命周期仍由四个独立 Skill 持有。
 
 ```mermaid
 flowchart LR
-    W["engineering-workflow<br/>Harness + routing"]
+    W["repo-foundry<br/>Inventory + Scaffold + Harness"]
+    W -.->|"Git fetch + immutable lock"| S["EngineeringSpecifications<br/>Core + language guidance"]
     W --> B["engineering-benchmark<br/>可复现测量"]
     W --> R["engineering-research<br/>问题与证据综合"]
     W --> E["engineering-execution-plan<br/>ADR 与实施"]
@@ -20,17 +22,20 @@ flowchart LR
 
 ## 初始化项目
 
-使用确定性脚本。把 `<workflow-dir>` 解析为本 Skill 所在目录：
+使用确定性脚本。把 `<repo-foundry-dir>` 解析为本 Skill 所在目录：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex
 
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex --apply
 
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
   validate --harness
+
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
+  spec validate
 ```
 
 执行顺序：
@@ -43,12 +48,36 @@ python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
    [bootstrap.md](references/bootstrap.md)。
 
 Codex profile 创建短 `AGENTS.md`、`ARCHITECTURE.md`、文档索引、质量、可靠性、
-安全和 Design Doc 入口。未知项目事实保留 `BOOTSTRAP_TODO`，不得编造命令、
-Owner、架构、SLO 或安全控制。
+安全、Design Doc 入口和本地 Engineering Specs。Core Spec 必选；Go、
+TypeScript 和 Python Spec 只在仓库证据匹配时选择。选择写入
+`docs/.engineering/specs.json`，精确版本与 SHA-256 写入
+`specs.lock.json`；lock 同时记录解析后的完整 Git commit。Codex 从
+`docs/agent-guides/managed/index.md` 按作用域读取。
+项目规则通过 manifest 引用，工具不改写其内容。未知项目事实保留
+`BOOTSTRAP_TODO`，不得编造命令、Owner、架构、SLO 或安全控制。
 
 所有注册的 Agent instruction 文件按物理行计数。根 `AGENTS.md` 必须不超过
 100 行；模板目标不超过 80 行，为项目维护保留余量。Harness 契约写入
 `docs/.engineering/harness.json`，EP 状态继续写入 `docs/.epctl/`。
+
+## 管理 Engineering Specs
+
+所有写操作默认只预览：
+
+```bash
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec plan
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync --apply
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec validate
+```
+
+默认 Catalog 来自
+`https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`。首次初始化可用
+`--spec-repository` 与 `--spec-ref` 覆盖；manifest 保存 Git URL/ref。
+`sync` 使用已有 lock 的 commit；`update` 重新解析 manifest ref、刷新内容并加入
+新检测到的语言，但不自动移除现有选择。`spec validate` 完全离线。Bootstrap
+不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
+`docs/agent-guides/managed/`。
 
 ## 路由专业工作
 
@@ -60,17 +89,20 @@ Owner、架构、SLO 或安全控制。
 | 基于真实代码和过程证据撰写工程分享 | `engineering-case-study` |
 
 一次请求可以按证据流依次经过多个 Skill，但不要让聚合 Skill 伪造其输出。专业
-Skill 必须保持可独立安装和运行；只有 `engineering-workflow` 可以显式组合仓库内
+Skill 必须保持可独立安装和运行；只有 `repo-foundry` 可以显式组合仓库内
 的子 Skill。
 
 需要向用户展示独立入口、跨 Skill 交接或完整工作流时，读取
 [Prompt 示例集](examples/README.zh-CN.md)。从用户 Prompt 开始说明，不把
-`engineeringctl`、`benchctl`、`researchctl` 或 `epctl` 命令当作端到端入口。
+`foundryctl`、`benchctl`、`researchctl` 或 `epctl` 命令当作端到端入口。
 
 ## 边界
 
 - 不在本 Skill 接受或拒绝 ADR。
 - 不在本 Skill 创建 Research、Benchmark Run、ExecPlan 或 Case Study。
 - 不覆盖、搬迁或重写已有项目文档。
+- 不把规范正文内置到 RepoFoundry；不执行远程仓库内容。
+- 不接收、记录或管理 Git 凭据；只使用用户已有的 credential helper / SSH agent。
+- 不把项目自定义 Spec 复制进托管目录或改写其内容。
 - 不把某个 Agent、代码托管平台或本机安装路径写入文件契约。
 - 不把 Harness manifest 放进 `.epctl`；项目级状态与 EP 状态分开持有。
