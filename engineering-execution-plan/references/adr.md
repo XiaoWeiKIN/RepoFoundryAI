@@ -148,7 +148,7 @@ ExecPlan 只能通过以下方式满足 Gate：
 
 proposed、rejected 和 superseded ADR 都不能满足 Gate。
 
-Architecture Gate satisfied 时，EP v2.4 的输入集合由以下内容组成：
+Architecture Gate satisfied 时，EP v2.4+ 的输入集合由以下内容组成：
 
 - `adr_refs`：直接需要的 ADR 以及 `depends_on` / `amends` 传递闭包。
 - `design_refs`：EP 直接需要的 Design Docs，以及 ADR 声明的全部 Design Docs。

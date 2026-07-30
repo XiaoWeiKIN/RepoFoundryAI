@@ -24,7 +24,8 @@ flowchart LR
     U --> B["engineering-benchmark<br/>Suite + Scenario + Run"]
     B --> M0["sealed Evidence Bundle<br/>Result + artifacts + Manifest"]
     M0 -->|"路线未知或证据矛盾"| R["engineering-research<br/>Research Questions + Corpus"]
-    M0 -->|"最终 revision 验收"| E
+    M0 -->|"最终 revision 验收"| G["Benchmark Gate Set<br/>0..N 个 Scenario"]
+    G --> E
     M0 -->|"持续回归与容量"| O["CI / Runbook"]
     U --> R
     R --> M["sealed contract<br/>Manifest + Synthesis"]
@@ -54,7 +55,9 @@ flowchart LR
 Benchmark 不需要全部合并进 Research：探索性对比和会改变路线的实验进入
 Research；已决定路线的最终 revision 验收直接成为 EP evidence；夜间回归与容量
 趋势留在 CI 或 Runbook。只有出现路线未知、证据矛盾或需要重新决策时，持续
-Benchmark 才升级为 Research。
+Benchmark 才升级为 Research。一个 EP 可以由多个独立 Scenario 共同驱动：
+Scenario 集合在实现前声明，每个门禁由一个同 revision 的 passed sealed Run
+覆盖，不把不同协议或环境的结果揉成一个总分。
 
 一项 Research 可以包含多篇文档。只要它们服务同一决策目的、共享 Research
 Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当目的、Owner、
@@ -192,6 +195,10 @@ python3 "$BENCHCTL" --repo . new-suite \
 python3 "$BENCHCTL" --repo . new-scenario B-001 \
   --slug placement-order-key \
   --title "Compare placement order-key strategies"
+
+python3 "$BENCHCTL" --repo . new-scenario B-001 \
+  --slug sustained-throughput \
+  --title "Verify sustained placement throughput"
 ```
 
 Scenario 必须在看到结果前写清 hypothesis、falsifier、受控变量、数据集、环境、
@@ -410,7 +417,7 @@ flowchart LR
     A12["ADR-012<br/>环境路由"] -->|"depends_on"| A10
     D1["Design Doc<br/>查询细节"] --> A11
     D2["Design Doc<br/>路由细节"] --> A12
-    A10 --> EP["EP v2.4"]
+    A10 --> EP["EP v2.5"]
     A11 --> EP
     A12 --> EP
     D1 --> EP
@@ -436,13 +443,30 @@ python3 "$EPCTL" --repo . new-ep \
   --research R-001 \
   --adr ADR-001 \
   --design docs/design-docs/token-refresh.md \
-  --architecture-entrypoint docs/design-docs/index.md
+  --architecture-entrypoint docs/design-docs/index.md \
+  --benchmark-scenario BS-001 \
+  --benchmark-scenario BS-002
 ```
 
 在 `Research and Architecture Inputs` 中复述关键证据、架构约束、负面后果和
 剩余未知，再填写里程碑、Concrete Steps、验收和恢复方法。ADR 有
 `depends_on` 或 `amends` 时，`--adr` 必须显式列出完整传递闭包；ADR 引用的
-Design Docs 也必须进入 `--design`。
+Design Docs 也必须进入 `--design`。对每个必需 Benchmark Scenario 重复
+`--benchmark-scenario`；生成的 `required_benchmark_scenarios` 和
+`Benchmark Gate Set` 会把多个压测与同一个 EP 建立可机械验证的多对一关系。
+
+完成时为每个 Scenario 附一个 Run，所有 Run 必须来自同一个最终 revision：
+
+```bash
+python3 "$EPCTL" --repo . archive-ep EP-001 \
+  --outcome completed \
+  --verified-revision "git:<final-commit>" \
+  --evidence "benchmark:BR-001@sha256:<payload>" \
+  --evidence "benchmark:BR-002@sha256:<payload>"
+```
+
+缺少一个 Scenario、一个 Scenario 附了两个 accepted Run、Run 属于未声明
+Scenario，或任一 `subject_revision` 不一致，都会原子阻止归档。
 
 只有在输入已经充分且没有会改变路线的未知时才能 fast track，并要记录可核查
 理由：
@@ -558,8 +582,8 @@ CI 文件不得复制这些子命令：
 - 原始 Benchmark artifacts 不强制统一格式；`RESULT.md` 与
   `EVIDENCE_MANIFEST.json` 提供统一消费和完整性边界。
 - Manifest 是可选的向后兼容字段；一旦出现，就必须满足版本化契约。
-- v2.0–v2.3 ExecPlan 继续按原 schema 读取；新计划使用 v2.4 Architecture
-  Input Set。
+- v2.0–v2.4 ExecPlan 继续按原 schema 读取；新计划使用 v2.5 Architecture
+  Input Set 与 `required_benchmark_scenarios`。
 - 既有 accepted ADR 可以从注册目录只读接入；严格的新 ADR 使用 schema 1.1。
 
 ## 开发与验证

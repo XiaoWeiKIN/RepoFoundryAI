@@ -211,6 +211,10 @@ A consumer resolves a Run by repository identity, then:
 5. preserves negative and inconclusive results;
 6. never assumes the producer Skill or CLI is installed.
 
-Research may cite several Runs and decide what they mean together. EP may use a
-Run as final-revision verification only when the Scenario matches the accepted
-criteria and `subject_revision` is the revision being accepted.
+Research may cite several Runs and decide what they mean together. ExecPlan
+v2.5 may predeclare several Scenario IDs as independent completion gates. Its
+accepted Benchmark references must cover that exact Scenario set one-to-one;
+every Run must be `passed`, sealed, and have `subject_revision` equal to the
+single EP `verified_revision`. The EP does not aggregate unlike Scenarios into a
+score. Older or exploratory Runs remain auditable evidence but do not satisfy
+an undeclared completion gate.

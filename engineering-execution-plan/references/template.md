@@ -22,6 +22,8 @@
 7. **保持有界**：根文档优先服务当前接手，旧事件封存到 checkpoint，完整证据外置。
 8. **输入已决**：Research 与 Architecture Gate 有可验证引用或具体的
    not-required 理由；上游结论和约束已在根计划重述。
+9. **测量门禁已预声明**：需要 Benchmark 验收时，完整 Scenario 集合在实现前
+   声明，并映射到具体开发决定或里程碑。
 
 目标与步骤承担不同职责：目标定义成功，步骤提供当前可执行路线。步骤可以随发现修订，不能用模糊清单替代研究。
 
@@ -34,6 +36,7 @@
 | Context and Orientation | 术语、现状、模块关系、完整仓库相对路径 |
 | Constraints and References | 当前任务所需约束摘要与权威入口 |
 | Research and Architecture Inputs | Gate、关键证据、ADR 后果、执行约束、剩余未知和跳过理由 |
+| Benchmark Gate Set | 预声明 Scenario、它驱动的开发决定或里程碑、完成契约 |
 | Plan of Work | 当前准备怎样修改以及为什么 |
 | Milestones | 每阶段新增能力、改动范围、验证命令与预期结果 |
 | Concrete Steps | 工作目录、精确命令、关键编辑位置 |
@@ -49,7 +52,7 @@
 | Revision Notes | 对当前事实的每次修订及原因 |
 
 使用 `assets/execplan.md` 作为唯一新建模板。新计划使用
-`schema_version: "2.4"`；v2.0–v2.3 只做兼容读取，不因普通编辑静默迁移。
+`schema_version: "2.5"`；v2.0–v2.4 只做兼容读取，不因普通编辑静默迁移。
 
 ## Research 与 Architecture Inputs
 
@@ -72,6 +75,7 @@
 
 - Purpose、Context、Constraints
 - Research and Architecture Inputs
+- Benchmark Gate Set
 - Current Snapshot
 - Plan of Work、Milestones、Concrete Steps
 - Validation、Recovery
@@ -110,8 +114,11 @@ active 计划必须保持为空。归档时 CLI 还会写入 `archive_sha256`，
 如果验收来自 Engineering Benchmark，使用
 `benchmark:BR-NNN@sha256:<manifest-payload-sha256>`。CLI 会验证 sealed
 Manifest、精确文件清单、每个本地文件摘要、`passed` outcome，并要求 Run 的
-`subject_revision` 等于 `verified_revision`。Benchmark 可能改变架构路线时应先
-进入 Research；这里只有路线已固定的 final-revision 验收。
+`subject_revision` 等于 `verified_revision`。v2.5 用
+`required_benchmark_scenarios` 预声明零个或多个 Scenario；归档时每个必需
+Scenario 必须恰好有一个有效 Run，且不能夹带未声明 Scenario 的 Run。多个指标
+分别保持独立 gate，不合并成跨环境、跨协议的总分。Benchmark 可能改变架构路线
+时应先进入 Research；这里只有路线已固定的 final-revision 验收。
 
 ## 上下文与长期知识
 
@@ -129,7 +136,7 @@ accepted ADR 的约束属于当前事实。若 ADR 后续 superseded，active v2
 ExecPlan 必须重新评估路线并更新引用、Inputs、Plan 和 Validation；验证器会拒绝
 superseded ADR 继续满足 Gate。
 
-EP v2.4 的 `adr_refs` 必须依赖闭合：每个引用 ADR 的 `depends_on` 和 `amends`
+EP v2.4+ 的 `adr_refs` 必须依赖闭合：每个引用 ADR 的 `depends_on` 和 `amends`
 传递目标都要显式出现在数组中。ADR 的 `design_refs` 也必须进入 EP 的
 `design_refs`。这样根计划能展示准确输入边界，验证器不需要隐式猜测。
 

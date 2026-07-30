@@ -30,7 +30,8 @@ flowchart LR
     U --> B["engineering-benchmark<br/>Suite + Scenario + Run"]
     B --> M0["sealed Evidence Bundle<br/>Result + artifacts + Manifest"]
     M0 -->|"route unknown or evidence conflicts"| R["engineering-research<br/>Research Questions + Corpus"]
-    M0 -->|"final-revision acceptance"| E
+    M0 -->|"final-revision acceptance"| G["Benchmark Gate Set<br/>0..N Scenarios"]
+    G --> E
     M0 -->|"continuous regression and capacity"| O["CI / Runbook"]
     U --> R
     R --> M["sealed contract<br/>Manifest + Synthesis"]
@@ -63,7 +64,10 @@ and route-changing experiments enter Research. Final-revision acceptance for an
 already selected route becomes direct EP evidence. Nightly regression and
 capacity trends stay in CI or a Runbook. A continuous Benchmark becomes
 Research only when the route is unknown, evidence conflicts, or a new decision
-is required.
+is required. One EP can be driven by several independent Scenarios: declare the
+complete set before implementation, cover each gate with one passed sealed Run
+from the same revision, and never collapse unlike protocols or environments
+into one aggregate score.
 
 One Research package may contain many documents when they serve the same
 decision purpose, share Research Questions, conclude together, and feed the
@@ -217,6 +221,10 @@ python3 "$BENCHCTL" --repo . new-suite \
 python3 "$BENCHCTL" --repo . new-scenario B-001 \
   --slug placement-order-key \
   --title "Compare placement order-key strategies"
+
+python3 "$BENCHCTL" --repo . new-scenario B-001 \
+  --slug sustained-throughput \
+  --title "Verify sustained placement throughput"
 ```
 
 Before results are visible, the Scenario must define its hypothesis, falsifier,
@@ -455,7 +463,7 @@ flowchart LR
     A12["ADR-012<br/>environment routing"] -->|"depends_on"| A10
     D1["Design Doc<br/>query details"] --> A11
     D2["Design Doc<br/>routing details"] --> A12
-    A10 --> EP["EP v2.4"]
+    A10 --> EP["EP v2.5"]
     A11 --> EP
     A12 --> EP
     D1 --> EP
@@ -483,7 +491,9 @@ python3 "$EPCTL" --repo . new-ep \
   --research R-001 \
   --adr ADR-001 \
   --design docs/design-docs/token-refresh.md \
-  --architecture-entrypoint docs/design-docs/index.md
+  --architecture-entrypoint docs/design-docs/index.md \
+  --benchmark-scenario BS-001 \
+  --benchmark-scenario BS-002
 ```
 
 In `Research and Architecture Inputs`, restate the decisive evidence,
@@ -491,6 +501,25 @@ architecture constraints, negative consequences, and remaining unknowns. Then
 complete milestones, Concrete Steps, acceptance, and recovery. When an ADR has
 `depends_on` or `amends`, `--adr` must list the complete transitive closure.
 Design Docs referenced by those ADRs must also appear through `--design`.
+Repeat `--benchmark-scenario` for every required Benchmark Scenario. The
+generated `required_benchmark_scenarios` and `Benchmark Gate Set` create a
+mechanically verifiable many-to-one relationship between measurements and the
+EP.
+
+At completion, attach one Run for each Scenario. Every Run must use the same
+final revision:
+
+```bash
+python3 "$EPCTL" --repo . archive-ep EP-001 \
+  --outcome completed \
+  --verified-revision "git:<final-commit>" \
+  --evidence "benchmark:BR-001@sha256:<payload>" \
+  --evidence "benchmark:BR-002@sha256:<payload>"
+```
+
+Archival fails atomically when a Scenario is missing, one Scenario has two
+accepted Runs, a Run belongs to an undeclared Scenario, or any
+`subject_revision` differs.
 
 Fast-track only when inputs are sufficient and no unknown could change the
 route. Record an auditable reason:
@@ -621,8 +650,8 @@ tier, while the CI merge gate remains available. See
   boundary.
 - Manifest is an optional backward-compatible field; once present, it must
   satisfy the versioned contract.
-- ExecPlan v2.0 through v2.3 remain readable. New plans use the v2.4
-  Architecture Input Set.
+- ExecPlan v2.0 through v2.4 remain readable. New plans use the v2.5
+  Architecture Input Set and `required_benchmark_scenarios`.
 - Existing accepted ADRs can enter read-only from registered directories.
   Strict new ADRs use schema 1.1.
 

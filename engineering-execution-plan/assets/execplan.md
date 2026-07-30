@@ -1,5 +1,5 @@
 ---
-schema_version: "2.4"
+schema_version: "2.5"
 id: {{ID}}
 title: "{{TITLE}}"
 status: active
@@ -12,6 +12,7 @@ design_refs: {{DESIGN_REFS}}
 architecture_entrypoint: "{{ARCHITECTURE_ENTRYPOINT}}"
 architecture_gate: {{ARCHITECTURE_GATE}}
 architecture_gate_reason: "{{ARCHITECTURE_GATE_REASON}}"
+required_benchmark_scenarios: {{REQUIRED_BENCHMARK_SCENARIOS}}
 verified_revision:
 verification_evidence: []
 archive_sha256:
@@ -60,6 +61,17 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 
 <!-- REQUIRED: Restate the Research conclusions, accepted ADR consequences, implementation constraints, and remaining unknowns needed to execute this plan without opening upstream artifacts. Explain each not-required reason when a gate was explicitly skipped. -->
 
+## Benchmark Gate Set
+
+- Required Scenario IDs: {{REQUIRED_BENCHMARK_SCENARIOS}}.
+
+| Scenario | Development decision or milestone gated | Completion contract |
+|---|---|---|
+{{BENCHMARK_GATE_ROWS}}
+
+This set is declared before implementation. Do not replace one Scenario with
+another after observing results; change the plan and record the reason first.
+
 ## Plan of Work
 
 <!-- REQUIRED: Describe the current sequence of edits and additions in prose, including files, functions or modules and why. -->
@@ -79,6 +91,10 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 <!-- REQUIRED: Replace every placeholder with observable behavior, exact commands, expected results, and evidence. -->
 
 - [ ] From `<repo-root>`, run `<command>`; expect `<observable result>`. Evidence: `<path or concise transcript>`.
+
+### Required Benchmark Scenario Gates
+
+{{BENCHMARK_ACCEPTANCE_ITEMS}}
 
 Completion writes `verified_revision` and `verification_evidence` through
 `archive-ep`. Archival also seals the complete document with `archive_sha256`;

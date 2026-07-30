@@ -1,4 +1,4 @@
 interface:
   display_name: "Engineering Benchmark"
   short_description: "Design, run, and seal reproducible benchmark evidence"
-  default_prompt: "Use $engineering-benchmark to design a reproducible benchmark scenario, execute a run, and seal its evidence without making an architecture decision."
+  default_prompt: "Use $engineering-benchmark to design reproducible benchmark scenarios, execute runs, and seal evidence that can independently gate one ExecPlan without making an architecture decision."
