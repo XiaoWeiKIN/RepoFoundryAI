@@ -290,16 +290,13 @@ def validate_eval_catalogs() -> None:
 
 
 def validate_engineering_spec_catalog() -> None:
-    run(
-        "Engineering Spec catalog",
-        [
-            sys.executable,
-            "-B",
-            str(ROOT / "scripts" / "spec_manager.py"),
-            "--check-catalog",
-            str(ROOT / "engineering-specs"),
-        ],
-    )
+    bundled = ROOT / "engineering-specs"
+    if bundled.exists():
+        raise CheckError(
+            "Normative Engineering Specs must live in the independent "
+            "EngineeringSpecifications repository, not engineering-specs/"
+        )
+    print("[check] external Engineering Spec ownership", flush=True)
 
 
 def copy_repository(destination: Path) -> None:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -11,19 +10,29 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINEERINGCTL = ROOT / "scripts" / "engineeringctl.py"
-SPEC_CATALOG = ROOT / "engineering-specs"
 EPCTL = (
     ROOT
     / "engineering-execution-plan"
     / "scripts"
     / "epctl.py"
 )
+from tests.spec_git_fixture import (  # noqa: E402
+    commit_all,
+    create_git_catalog,
+    update_go_spec,
+)
 
 
 class EngineeringctlTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.repo = Path(self.temporary.name)
+        self.base = Path(self.temporary.name)
+        self.repo = self.base / "target"
+        self.repo.mkdir()
+        (
+            self.catalog_repository,
+            self.catalog_commit,
+        ) = create_git_catalog(self.base)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -33,6 +42,25 @@ class EngineeringctlTestCase(unittest.TestCase):
         *arguments: str,
         expected: int = 0,
     ) -> subprocess.CompletedProcess[str]:
+        selected_arguments = list(arguments)
+        needs_source = (
+            selected_arguments
+            and selected_arguments[0] == "bootstrap"
+        ) or (
+            len(selected_arguments) >= 2
+            and selected_arguments[0] == "spec"
+            and selected_arguments[1] in {"plan", "sync", "update"}
+        )
+        if needs_source:
+            if "--spec-repository" not in selected_arguments:
+                selected_arguments.extend(
+                    [
+                        "--spec-repository",
+                        self.catalog_repository.resolve().as_uri(),
+                    ]
+                )
+            if "--spec-ref" not in selected_arguments:
+                selected_arguments.extend(["--spec-ref", "main"])
         result = subprocess.run(
             [
                 sys.executable,
@@ -40,11 +68,11 @@ class EngineeringctlTestCase(unittest.TestCase):
                 str(ENGINEERINGCTL),
                 "--repo",
                 str(self.repo),
-                *arguments,
+                *selected_arguments,
             ],
             text=True,
             capture_output=True,
-            timeout=30,
+            timeout=60,
         )
         if result.returncode != expected:
             self.fail(
@@ -172,6 +200,18 @@ class EngineeringctlTestCase(unittest.TestCase):
         self.assertEqual(
             [item["id"] for item in spec_lock["specs"]],
             ["core/semantic-naming"],
+        )
+        self.assertEqual(
+            spec_lock["catalog"]["resolved_revision"],
+            self.catalog_commit,
+        )
+        self.assertEqual(
+            spec_lock["catalog"]["source"],
+            {
+                "kind": "git",
+                "url": self.catalog_repository.resolve().as_uri(),
+                "ref": "main",
+            },
         )
         self.assertTrue(
             (
@@ -375,7 +415,7 @@ class EngineeringctlTestCase(unittest.TestCase):
         )
         for item in lock["specs"]:
             installed = self.repo / item["installed_path"]
-            source = SPEC_CATALOG / item["source_path"]
+            source = self.catalog_repository / item["source_path"]
             self.assertEqual(installed.read_bytes(), source.read_bytes())
         index = (
             self.repo / "docs" / "agent-guides" / "managed" / "index.md"
@@ -442,6 +482,93 @@ class EngineeringctlTestCase(unittest.TestCase):
         )
         self.run_cli("spec", "validate")
 
+    def test_spec_sync_pins_commit_and_update_moves_to_ref_head(self) -> None:
+        (self.repo / "go.mod").write_text(
+            "module example.test/pinned\n",
+            encoding="utf-8",
+        )
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        managed = (
+            self.repo
+            / "docs"
+            / "agent-guides"
+            / "managed"
+            / "languages"
+            / "go.md"
+        )
+        original = managed.read_bytes()
+        new_commit = update_go_spec(self.catalog_repository)
+        self.assertNotEqual(new_commit, self.catalog_commit)
+
+        sync_preview = json.loads(self.run_cli("spec", "sync").stdout)
+        self.assertEqual(
+            sync_preview["catalog"]["resolved_revision"],
+            self.catalog_commit,
+        )
+        self.run_cli("spec", "sync", "--apply")
+        self.assertEqual(managed.read_bytes(), original)
+        locked = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "specs.lock.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            locked["catalog"]["resolved_revision"],
+            self.catalog_commit,
+        )
+
+        update_preview = json.loads(self.run_cli("spec", "update").stdout)
+        self.assertEqual(
+            update_preview["catalog"]["resolved_revision"],
+            new_commit,
+        )
+        self.assertIn(
+            {
+                "action": "replace_file",
+                "path": "docs/agent-guides/managed/languages/go.md",
+            },
+            update_preview["actions"],
+        )
+        self.run_cli("spec", "update", "--apply")
+        self.assertEqual(
+            managed.read_bytes(),
+            (
+                self.catalog_repository
+                / "specification"
+                / "languages"
+                / "go.md"
+            ).read_bytes(),
+        )
+        locked = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "specs.lock.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            locked["catalog"]["resolved_revision"],
+            new_commit,
+        )
+
+    def test_spec_validation_is_offline(self) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        unavailable = self.base / "specification-source-unavailable"
+        self.catalog_repository.rename(unavailable)
+
+        self.run_cli("spec", "validate")
+        self.run_cli("validate", "--harness")
+
+    def test_unreachable_initial_ref_is_non_destructive(self) -> None:
+        result = self.run_cli(
+            "spec",
+            "plan",
+            "--spec-ref",
+            "refs/heads/missing",
+            expected=2,
+        )
+
+        self.assertIn("SPEC_GIT_FETCH_FAILED", result.stderr)
+        self.assertEqual(list(self.repo.iterdir()), [])
+
     def test_spec_drift_requires_explicit_sync(self) -> None:
         (self.repo / "go.mod").write_text(
             "module example.test/drift\n",
@@ -486,7 +613,12 @@ class EngineeringctlTestCase(unittest.TestCase):
         self.run_cli("spec", "sync", "--apply")
         self.assertEqual(
             managed.read_bytes(),
-            (SPEC_CATALOG / "languages" / "go.md").read_bytes(),
+            (
+                self.catalog_repository
+                / "specification"
+                / "languages"
+                / "go.md"
+            ).read_bytes(),
         )
         self.run_cli("spec", "validate")
 
@@ -524,12 +656,14 @@ class EngineeringctlTestCase(unittest.TestCase):
         self.assertEqual(project_spec.read_text(encoding="utf-8"), original)
         self.run_cli("spec", "validate")
 
-    def test_path_catalog_digest_failure_is_non_destructive(self) -> None:
-        local_catalog = self.repo / "catalog"
-        shutil.copytree(SPEC_CATALOG, local_catalog)
+    def test_git_catalog_digest_failure_is_non_destructive(self) -> None:
         (
-            local_catalog / "core" / "semantic-naming.md"
+            self.catalog_repository
+            / "specification"
+            / "core"
+            / "semantic-naming.md"
         ).write_text("# drifted catalog\n", encoding="utf-8")
+        commit_all(self.catalog_repository, "commit invalid catalog drift")
         state = self.repo / "docs" / ".engineering"
         state.mkdir(parents=True)
         (state / "specs.json").write_text(
@@ -538,8 +672,9 @@ class EngineeringctlTestCase(unittest.TestCase):
                     "version": 1,
                     "owner": "engineering-workflow",
                     "catalog": {
-                        "kind": "path",
-                        "path": "catalog",
+                        "kind": "git",
+                        "url": self.catalog_repository.resolve().as_uri(),
+                        "ref": "main",
                     },
                     "specs": ["core/semantic-naming"],
                     "project_specs": [],

@@ -101,15 +101,19 @@ SLO 或安全控制。
 
 ## Engineering Specs
 
-Bundled Catalog 位于 Workflow distribution 的 `engineering-specs/`。Bootstrap
-永远选择 `core/semantic-naming`，并根据 `go.mod` / `*.go`、
+Catalog 与规范正文位于独立的
+[EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
+Git 仓库。默认源是该仓库的 `main`；首次 Bootstrap 可通过
+`--spec-repository` 与 `--spec-ref` 覆盖。Bootstrap 永远选择
+`core/semantic-naming`，并根据 `go.mod` / `*.go`、
 `tsconfig.json` / TypeScript 源文件、`pyproject.toml` / Python 源文件选择语言
 Spec。多语言仓库组合多个语言 Spec，不加载未匹配语言。
 
 项目选择保存在 `docs/.engineering/specs.json`；精确版本、Catalog digest、
-内容 SHA-256 和本地路径保存在 `specs.lock.json`。Catalog 内容原样物化到
-`docs/agent-guides/managed/`，生成的 `index.md` 把文件作用域映射到对应 Spec。
-根 `AGENTS.md` 只保留一条读取该索引的短路由。
+解析后的完整 Git commit、内容 SHA-256 和本地路径保存在
+`specs.lock.json`。Catalog 内容原样物化到 `docs/agent-guides/managed/`，
+生成的 `index.md` 把文件作用域映射到对应 Spec。根 `AGENTS.md` 只保留一条
+读取该索引的短路由。
 
 项目特有规则不进入托管目录。在 `specs.json` 的 `project_specs` 中登记已有
 Markdown 路径、作用域和说明，`index.md` 会引用它，工具不复制或修改正文。
@@ -124,14 +128,15 @@ python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec update --apply
 python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec validate
 ```
 
-`sync` 遵循已有 manifest；`update` 加入新检测到的语言并刷新已选 Catalog
-内容，但不自动移除选择。显式 applied Spec 操作可以在预览后替换生成的 lock、
-index 和 managed Spec；Bootstrap 本身遇到内容漂移仍报告 conflict。
+`sync` 使用 lock 已记录的 commit；lock 缺失时才从 manifest ref 建立初始解析。
+`update` 重新解析 manifest ref、加入新检测到的语言并刷新内容，但不自动移除选择。
+显式 applied Spec 操作可以在预览后替换生成的 lock、index 和 managed Spec；
+Bootstrap 本身遇到内容漂移仍报告 conflict。`spec validate` 只检查 manifest、
+lock 与本地文件，完全不访问网络。
 
-默认 Catalog 随 Workflow 打包。需要独立 Catalog 仓库时，先把它作为目标仓库内
-的 versioned checkout 或 submodule，再把 manifest source 设置为
-`{"kind": "path", "path": "<repository-relative-directory>"}`。V1 不在
-Bootstrap 中隐式联网、克隆 Git 或管理凭据。
+解析器通过临时 bare Git object store 读取 Catalog 与 Markdown，不 checkout、
+不执行远程代码。Git 凭据只能来自用户已有的 credential helper 或 SSH agent；
+Workflow 不接收、不打印、不保存 token。
 
 ## `AGENTS.md` 硬约束
 

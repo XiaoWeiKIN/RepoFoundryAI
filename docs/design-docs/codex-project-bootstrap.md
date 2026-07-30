@@ -2,7 +2,7 @@
 doc_type: design
 title: Codex project documentation bootstrap
 status: current
-adr_refs: ["ADR-002", "ADR-004"]
+adr_refs: ["ADR-002", "ADR-004", "ADR-005"]
 updated: 2026-07-30
 ---
 
@@ -10,7 +10,9 @@ updated: 2026-07-30
 
 Decision records:
 [ADR-002](../adr/adr-002_codex-project-documentation-bootstrap.md) and
-[ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md).
+[ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md),
+with external Spec ownership fixed by
+[ADR-005](../adr/adr-005_external-engineering-specifications.md).
 This document describes their selected implementation.
 
 ## Purpose
@@ -60,8 +62,8 @@ files must be registered explicitly before the validator owns their limit.
   providers, deployment, or auto-merge.
 - Create product-specific documents such as `FRONTEND.md` or
   `PRODUCT_SENSE.md` without repository evidence.
-- Fetch a remote Spec catalog, manage credentials, or rewrite project-owned
-  Specs.
+- Store or prompt for Git credentials, execute remote Spec repository code, or
+  rewrite project-owned Specs.
 - Turn `AGENTS.md` into a complete manual.
 
 ## CLI Contract
@@ -253,12 +255,13 @@ bootstrap will not rewrite it.
   - expose `spec plan`, `spec sync`, `spec update`, and `spec validate`;
   - load the bundled EP initialization contract only during composition.
 - `scripts/spec_manager.py`
-  - parse Catalog and project data into strict internal structures;
+  - fetch Catalog objects from an external Git repository without checkout;
+  - parse remote Catalog and project data into strict internal structures;
   - detect languages, resolve dependencies, plan managed writes, and validate
     local locks and content.
-- `engineering-specs/`
-  - provide the bundled Catalog, required semantic naming, and supported
-    language Specs as a repository-independent content package.
+- `https://github.com/XiaoWeiKIN/EngineeringSpecifications`
+  - own Catalog schema, normative Core/language Specs, versions, digests, and
+    its independent canonical check.
 - `engineering-execution-plan/scripts/epctl.py`
   - preserve `init_repo` and all EP lifecycle behavior;
   - expose no Bootstrap or Harness validation command.
@@ -270,7 +273,8 @@ bootstrap will not rewrite it.
 - `engineering-execution-plan/tests/test_epctl.py`
   - retain the EP lifecycle regression suite without Harness tests.
 - `tests/test_repository_contracts.py`
-  - verify packaged assets and the bundled `AGENTS.md` line budget.
+  - verify packaged assets, the absence of normative Specs, and the bundled
+    `AGENTS.md` line budget.
 - `SKILL.md`, `README.md`, and `references/bootstrap.md`
   - document routing, commands, safety, and ownership.
 
@@ -281,7 +285,9 @@ bootstrap will not rewrite it.
 - Apply creates the declared structure and passes
   `engineeringctl validate --harness`.
 - Empty repositories select Core only; Go, TypeScript, Python, and polyglot
-  fixtures select exactly the matching language Specs.
+  Git fixtures select exactly the matching language Specs.
+- Lock files record the full resolved remote commit; sync remains pinned while
+  update adopts a moved branch.
 - `engineeringctl spec validate` proves manifest, lock, local content, project
   references, and routing integrity.
 - Repeating apply produces no content changes.

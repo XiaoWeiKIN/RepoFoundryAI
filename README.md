@@ -194,10 +194,6 @@ EngineeringWorkflow/
 │   └── check.py                     # single repository check entrypoint
 ├── assets/
 │   └── harness-*.md
-├── engineering-specs/
-│   ├── catalog.json                 # portable Spec catalog contract
-│   ├── core/
-│   └── languages/
 ├── engineering-benchmark/
 │   ├── SKILL.md                     # engineering-benchmark Skill root
 │   └── scripts/benchctl.py
@@ -211,9 +207,14 @@ EngineeringWorkflow/
     └── SKILL.md                     # engineering-case-study Skill root
 ```
 
-Python 3.10+ is required. All four governance CLIs use only the standard
-library; Engineering Case Study needs no dedicated CLI. Clone the repository
-into any stable directory:
+Normative Specs are versioned independently in
+[EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications).
+This repository contains only the Git resolver, lock, materialization, and
+validation workflow.
+
+Python 3.10+ and Git are required. All four governance CLIs use only the Python
+standard library; Engineering Case Study needs no dedicated CLI. Clone the
+repository into any stable directory:
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/EngineeringWorkflow.git \
@@ -331,11 +332,15 @@ The first profile registers only the root `AGENTS.md`, and its template reserves
 at least 20 lines for project-specific guidance. An existing file over the hard
 limit is reported as a conflict before any write occurs.
 
-Bootstrap always installs `core/semantic-naming` and adds Go, TypeScript, and
-Python Specs only when repository evidence matches. The selection is stored in
-`docs/.engineering/specs.json`; exact versions and SHA-256 digests are stored
-in `specs.lock.json`; local content and the scope router live under
-`docs/agent-guides/managed/`.
+Bootstrap fetches the default
+[EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
+Git source, always installs `core/semantic-naming`, and adds Go, TypeScript,
+and Python Specs only when repository evidence matches. The selection and Git
+URL/ref are stored in `docs/.engineering/specs.json`; exact versions, the
+resolved full commit, and SHA-256 digests are stored in `specs.lock.json`.
+Local content and the scope router live under
+`docs/agent-guides/managed/`. Use `--spec-repository` and `--spec-ref` during
+the initial Bootstrap to select another Git source.
 
 Spec maintenance is also preview-first:
 
@@ -347,10 +352,11 @@ python3 "$WORKFLOWCTL" --repo . spec update --apply
 python3 "$WORKFLOWCTL" --repo . spec validate
 ```
 
-`sync` follows the existing project manifest. `update` additionally adds newly
-detected languages without silently removing existing selections. Projects can
-register project-owned guidance in `project_specs`; the generated index links
-it without copying or rewriting its content.
+`sync` follows the existing lock and remains pinned to its commit. `update`
+resolves the manifest ref again and additionally adds newly detected languages
+without silently removing existing selections. `spec validate` is offline.
+Projects can register project-owned guidance in `project_specs`; the generated
+index links it without copying or rewriting its content.
 
 ### Create and seal a Benchmark
 

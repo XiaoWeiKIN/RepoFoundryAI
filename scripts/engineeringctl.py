@@ -31,7 +31,10 @@ ASSET_DIR = SKILL_DIR / "assets"
 EXECUTION_PLAN_CTL = (
     SKILL_DIR / "engineering-execution-plan" / "scripts" / "epctl.py"
 )
-SPEC_CATALOG_DIR = SKILL_DIR / "engineering-specs"
+DEFAULT_SPEC_REPOSITORY = (
+    "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git"
+)
+DEFAULT_SPEC_REF = "main"
 
 HARNESS_VERSION = 1
 CODEX_HARNESS_PROFILE = "codex"
@@ -61,6 +64,14 @@ CODEX_REQUIRED_FILES = tuple(
 
 class EngineeringctlError(RuntimeError):
     pass
+
+
+def spec_source(repository: str, ref: str) -> dict[str, str]:
+    return {
+        "kind": "git",
+        "url": repository,
+        "ref": ref,
+    }
 
 
 def normalize_repo(value: str) -> Path:
@@ -275,7 +286,11 @@ def execution_plan_contract(
     return directories, files
 
 
-def bootstrap_plan(repo: Path, profile: str) -> dict[str, object]:
+def bootstrap_plan(
+    repo: Path,
+    profile: str,
+    initial_spec_source: dict[str, str],
+) -> dict[str, object]:
     if profile != CODEX_HARNESS_PROFILE:
         raise EngineeringctlError(
             f"Unsupported bootstrap profile {profile!r}; "
@@ -398,7 +413,7 @@ def bootstrap_plan(repo: Path, profile: str) -> dict[str, object]:
     try:
         spec_plan = specctl.plan_spec_state(
             repo,
-            SPEC_CATALOG_DIR,
+            initial_spec_source,
             operation="sync",
             allow_replace=False,
         )
@@ -523,7 +538,6 @@ def validate_codex_harness(
             )
     spec_errors, spec_warnings = specctl.validate_spec_state(
         repo,
-        SPEC_CATALOG_DIR,
         require_manifest=False,
     )
     errors.extend(spec_errors)
@@ -536,8 +550,9 @@ def bootstrap_repo(
     profile: str,
     *,
     apply_changes: bool,
+    initial_spec_source: dict[str, str],
 ) -> dict[str, object]:
-    planned = bootstrap_plan(repo, profile)
+    planned = bootstrap_plan(repo, profile, initial_spec_source)
     actions = planned["actions"]
     if not isinstance(actions, list):
         raise EngineeringctlError("Bootstrap plan returned invalid actions")
@@ -571,7 +586,7 @@ def bootstrap_repo(
     updated: list[str] = []
     harness_state_existed = (repo / HARNESS_STATE_DIRECTORY).is_dir()
     with repo_lock(repo):
-        second_plan = bootstrap_plan(repo, profile)
+        second_plan = bootstrap_plan(repo, profile, initial_spec_source)
         second_actions = second_plan["actions"]
         if not isinstance(second_actions, list):
             raise EngineeringctlError(
@@ -642,7 +657,7 @@ def bootstrap_repo(
 
                 spec_plan = specctl.plan_spec_state(
                     repo,
-                    SPEC_CATALOG_DIR,
+                    initial_spec_source,
                     operation="sync",
                     allow_replace=False,
                 )
@@ -688,11 +703,12 @@ def manage_specs(
     operation: str,
     *,
     apply_changes: bool,
+    initial_spec_source: dict[str, str],
 ) -> dict[str, object]:
     try:
         planned = specctl.plan_spec_state(
             repo,
-            SPEC_CATALOG_DIR,
+            initial_spec_source,
             operation=operation,
             allow_replace=True,
         )
@@ -712,7 +728,7 @@ def manage_specs(
         try:
             locked_plan = specctl.plan_spec_state(
                 repo,
-                SPEC_CATALOG_DIR,
+                initial_spec_source,
                 operation=operation,
                 allow_replace=True,
             )
@@ -730,7 +746,6 @@ def manage_specs(
 
     errors, validation_warnings = specctl.validate_spec_state(
         repo,
-        SPEC_CATALOG_DIR,
         require_manifest=True,
     )
     if errors:
@@ -754,6 +769,25 @@ def manage_specs(
     return payload
 
 
+def add_spec_source_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--spec-repository",
+        default=DEFAULT_SPEC_REPOSITORY,
+        help=(
+            "Initial Git specification repository when specs.json is absent "
+            f"(default: {DEFAULT_SPEC_REPOSITORY})"
+        ),
+    )
+    parser.add_argument(
+        "--spec-ref",
+        default=DEFAULT_SPEC_REF,
+        help=(
+            "Initial Git branch, tag, or commit when specs.json is absent "
+            f"(default: {DEFAULT_SPEC_REF})"
+        ),
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".", help="Target repository root")
@@ -768,6 +802,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=(CODEX_HARNESS_PROFILE,),
         default=CODEX_HARNESS_PROFILE,
     )
+    add_spec_source_arguments(bootstrap)
     bootstrap_mode = bootstrap.add_mutually_exclusive_group()
     bootstrap_mode.add_argument(
         "--apply",
@@ -798,10 +833,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="spec_command",
         required=True,
     )
-    spec_commands.add_parser(
+    plan_parser = spec_commands.add_parser(
         "plan",
         help="Preview the current or inferred Spec selection",
     )
+    add_spec_source_arguments(plan_parser)
     for command, help_text in (
         ("sync", "Materialize the explicit Spec selection"),
         (
@@ -810,6 +846,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     ):
         command_parser = spec_commands.add_parser(command, help=help_text)
+        add_spec_source_arguments(command_parser)
         command_mode = command_parser.add_mutually_exclusive_group()
         command_mode.add_argument(
             "--apply",
@@ -839,6 +876,10 @@ def main(argv: list[str] | None = None) -> int:
                         repo,
                         args.profile,
                         apply_changes=args.apply,
+                        initial_spec_source=spec_source(
+                            args.spec_repository,
+                            args.spec_ref,
+                        ),
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -864,7 +905,6 @@ def main(argv: list[str] | None = None) -> int:
             if args.spec_command == "validate":
                 errors, warnings = specctl.validate_spec_state(
                     repo,
-                    SPEC_CATALOG_DIR,
                     require_manifest=True,
                 )
                 for warning in warnings:
@@ -892,6 +932,10 @@ def main(argv: list[str] | None = None) -> int:
                         repo,
                         operation,
                         apply_changes=apply_changes,
+                        initial_spec_source=spec_source(
+                            args.spec_repository,
+                            args.spec_ref,
+                        ),
                     ),
                     ensure_ascii=False,
                     indent=2,

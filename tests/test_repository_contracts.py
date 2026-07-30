@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.spec_git_fixture import create_git_catalog
+
 
 ROOT = Path(__file__).resolve().parents[1]
 EPCTL = (
@@ -19,7 +21,6 @@ EPCTL = (
 )
 RESEARCHCTL = ROOT / "engineering-research" / "scripts" / "researchctl.py"
 BENCHCTL = ROOT / "engineering-benchmark" / "scripts" / "benchctl.py"
-SPEC_MANAGER = ROOT / "scripts" / "spec_manager.py"
 EXAMPLE = ROOT / "examples" / "cache-topology"
 
 
@@ -331,32 +332,16 @@ class RepositoryContractTestCase(unittest.TestCase):
             template.read_text(encoding="utf-8"),
         )
 
-    def test_engineering_spec_catalog_is_a_valid_content_package(self) -> None:
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                str(SPEC_MANAGER),
-                "--check-catalog",
-                str(ROOT / "engineering-specs"),
-            ],
-            text=True,
-            capture_output=True,
-            timeout=30,
+    def test_workflow_has_no_bundled_engineering_spec_content(self) -> None:
+        self.assertFalse((ROOT / "engineering-specs").exists())
+        engineeringctl = (
+            ROOT / "scripts" / "engineeringctl.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
+            engineeringctl,
         )
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        payload = json.loads(result.stdout)
-        self.assertEqual(payload["catalog_id"], "engineering-workflow")
-        self.assertEqual(
-            payload["specs"],
-            [
-                "core/semantic-naming",
-                "languages/go",
-                "languages/typescript",
-                "languages/python",
-            ],
-        )
+        self.assertNotIn("SPEC_CATALOG_DIR", engineeringctl)
 
     def test_execplan_consumes_sealed_benchmark_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -685,7 +670,6 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "SKILL.md",
                 "agents",
                 "assets",
-                "engineering-specs",
                 "references",
                 "scripts",
             ):
@@ -749,6 +733,7 @@ class RepositoryContractTestCase(unittest.TestCase):
 
             workflow_repo = base / "workflow-repo"
             workflow_repo.mkdir()
+            catalog_repository, _ = create_git_catalog(base)
             workflow_script = workflow_skill / "scripts" / "engineeringctl.py"
             self.run_cli(
                 workflow_script,
@@ -757,6 +742,10 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "--profile",
                 "codex",
                 "--apply",
+                "--spec-repository",
+                catalog_repository.resolve().as_uri(),
+                "--spec-ref",
+                "main",
             )
             self.run_cli(
                 workflow_script,

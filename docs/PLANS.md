@@ -15,6 +15,7 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 <!-- EPCTL:ACTIVE:START -->
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
+| EP-005 | Externalize engineering specifications and fetch by Git revision | active | 2026-07-30 | [EXECPLAN](exec-plans/active/ep-005_externalize-engineering-specifications/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed

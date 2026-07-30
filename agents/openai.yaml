@@ -1,4 +1,4 @@
 interface:
   display_name: "Engineering Workflow"
-  short_description: "Bootstrap Harnesses and versioned Engineering Specs"
-  default_prompt: "Use $engineering-workflow to bootstrap the repository Harness, install applicable Engineering Specs, and route follow-up work."
+  short_description: "Bootstrap Harnesses and fetch versioned Specs"
+  default_prompt: "Use $engineering-workflow to bootstrap the repository Harness, fetch and lock applicable Engineering Specs, and route follow-up work."

@@ -9,11 +9,13 @@ import json
 import os
 import posixpath
 import re
+import subprocess
 import sys
 import tempfile
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 CATALOG_SCHEMA_VERSION = 1
@@ -33,6 +35,13 @@ SPEC_ID_RE = re.compile(
 )
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+GIT_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+
+MAX_CATALOG_BYTES = 1024 * 1024
+MAX_SPEC_BYTES = 1024 * 1024
+MAX_SPEC_COUNT = 256
+MAX_TOTAL_SPEC_BYTES = 16 * 1024 * 1024
+GIT_TIMEOUT_SECONDS = 60
 
 EXCLUDED_DIRECTORY_NAMES = {
     ".git",
@@ -81,8 +90,11 @@ class CatalogSpec:
 @dataclass(frozen=True)
 class Catalog:
     catalog_id: str
+    catalog_version: str
     digest: str
-    root: Path
+    source: dict[str, str]
+    resolved_revision: str
+    contents: dict[str, bytes]
     ordered_specs: tuple[CatalogSpec, ...]
     by_id: dict[str, CatalogSpec]
 
@@ -102,6 +114,16 @@ class SpecManifest:
 
 
 @dataclass(frozen=True)
+class SpecLock:
+    catalog_id: str
+    catalog_version: str
+    catalog_digest: str
+    source: dict[str, str]
+    resolved_revision: str
+    specs: tuple[CatalogSpec, ...]
+
+
+@dataclass(frozen=True)
 class PlannedWrite:
     path: str
     content: bytes
@@ -112,7 +134,10 @@ class PlannedWrite:
 class SpecPlan:
     operation: str
     catalog_id: str
+    catalog_version: str
     catalog_digest: str
+    catalog_source: dict[str, str]
+    resolved_revision: str
     detected_spec_ids: tuple[str, ...]
     selected_spec_ids: tuple[str, ...]
     actions: tuple[dict[str, str], ...]
@@ -171,6 +196,10 @@ def _safe_relative(value: object, label: str) -> str:
     text = _expect_string(value, label)
     if "\\" in text:
         raise SpecError(f"{label}: backslashes are not portable")
+    if ":" in text or "\x00" in text or any(
+        ord(character) < 32 for character in text
+    ):
+        raise SpecError(f"{label}: unsafe path characters are not allowed")
     path = PurePosixPath(text)
     if path.is_absolute() or not path.parts:
         raise SpecError(f"{label}: expected a repository-relative path")
@@ -212,6 +241,13 @@ def _load_json(path: Path, label: str) -> object:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise SpecError(f"{label}: invalid JSON: {path}: {exc}") from exc
+
+
+def _load_json_bytes(value: bytes, label: str) -> object:
+    try:
+        return json.loads(value.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise SpecError(f"{label}: invalid UTF-8 JSON: {exc}") from exc
 
 
 def _reject_symlink_components(root: Path, relative: str, label: str) -> Path:
@@ -260,44 +296,69 @@ def _parse_detection(value: object, label: str) -> DetectionRule:
     return DetectionRule(filenames=filenames, extensions=extensions)
 
 
-def load_catalog(root: Path) -> Catalog:
-    if root.is_symlink() or not root.is_dir():
+def _parse_catalog(
+    raw_bytes: bytes,
+    read_content: Callable[[str, int], bytes],
+    *,
+    source: dict[str, str],
+    resolved_revision: str,
+) -> Catalog:
+    if len(raw_bytes) > MAX_CATALOG_BYTES:
         raise SpecError(
-            f"SPEC_CATALOG_INVALID: expected a non-symlink directory: {root}"
+            f"SPEC_CATALOG_TOO_LARGE: catalog.json exceeds "
+            f"{MAX_CATALOG_BYTES} bytes"
         )
-    catalog_path = root / "catalog.json"
-    raw_bytes: bytes
-    try:
-        raw_bytes = catalog_path.read_bytes()
-    except OSError as exc:
-        raise SpecError(
-            f"SPEC_CATALOG_INVALID: cannot read {catalog_path}: {exc}"
-        ) from exc
     data = _expect_object(
-        _load_json(catalog_path, "SPEC_CATALOG_INVALID"),
+        _load_json_bytes(raw_bytes, "SPEC_CATALOG_INVALID"),
         "SPEC_CATALOG_INVALID",
     )
     _expect_exact_keys(
         data,
-        required={"schema_version", "catalog_id", "specs"},
+        required={
+            "schema_version",
+            "catalog_id",
+            "catalog_version",
+            "specs",
+        },
         label="SPEC_CATALOG_INVALID",
     )
-    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
+    if (
+        type(data["schema_version"]) is not int
+        or data["schema_version"] != CATALOG_SCHEMA_VERSION
+    ):
         raise SpecError(
-            "SPEC_CATALOG_INVALID: schema_version must be 1"
+            "SPEC_CATALOG_INVALID.schema_version: must be "
+            f"{CATALOG_SCHEMA_VERSION}"
         )
     catalog_id = _expect_string(
         data["catalog_id"],
         "SPEC_CATALOG_INVALID.catalog_id",
     )
+    catalog_version = _expect_string(
+        data["catalog_version"],
+        "SPEC_CATALOG_INVALID.catalog_version",
+    )
+    if not SEMVER_RE.fullmatch(catalog_version):
+        raise SpecError(
+            "SPEC_CATALOG_INVALID.catalog_version: expected "
+            f"MAJOR.MINOR.PATCH: {catalog_version!r}"
+        )
     raw_specs = data["specs"]
     if not isinstance(raw_specs, list) or not raw_specs:
         raise SpecError(
             "SPEC_CATALOG_INVALID.specs: expected a non-empty array"
         )
+    if len(raw_specs) > MAX_SPEC_COUNT:
+        raise SpecError(
+            f"SPEC_CATALOG_TOO_LARGE: {len(raw_specs)} Specs exceeds "
+            f"{MAX_SPEC_COUNT}"
+        )
 
     ordered: list[CatalogSpec] = []
     by_id: dict[str, CatalogSpec] = {}
+    contents: dict[str, bytes] = {}
+    source_paths: set[str] = set()
+    total_content_bytes = 0
     for index, raw_spec in enumerate(raw_specs):
         label = f"SPEC_CATALOG_INVALID.specs[{index}]"
         item = _expect_object(raw_spec, label)
@@ -329,6 +390,9 @@ def load_catalog(root: Path) -> Catalog:
         source_path = _safe_relative(item["path"], f"{label}.path")
         if not source_path.endswith(".md"):
             raise SpecError(f"{label}.path: expected a Markdown file")
+        if source_path in source_paths:
+            raise SpecError(f"{label}.path: duplicate path: {source_path}")
+        source_paths.add(source_path)
         declared_digest = _expect_string(item["sha256"], f"{label}.sha256")
         if not SHA256_RE.fullmatch(declared_digest):
             raise SpecError(f"{label}.sha256: expected lowercase SHA-256")
@@ -356,13 +420,20 @@ def load_catalog(root: Path) -> Catalog:
             if "detection" in item
             else None
         )
-        source = _catalog_file(root, source_path, f"{label}.path")
-        actual_digest = _sha256_file(source)
+        content = read_content(source_path, MAX_SPEC_BYTES)
+        total_content_bytes += len(content)
+        if total_content_bytes > MAX_TOTAL_SPEC_BYTES:
+            raise SpecError(
+                "SPEC_CATALOG_TOO_LARGE: total Spec content exceeds "
+                f"{MAX_TOTAL_SPEC_BYTES} bytes"
+            )
+        actual_digest = _sha256_bytes(content)
         if actual_digest != declared_digest:
             raise SpecError(
                 f"SPEC_CATALOG_DIGEST_MISMATCH: {source_path}: "
                 f"declared {declared_digest}; actual {actual_digest}"
             )
+        contents[source_path] = content
         spec = CatalogSpec(
             spec_id=spec_id,
             version=version,
@@ -405,28 +476,341 @@ def load_catalog(root: Path) -> Catalog:
 
     return Catalog(
         catalog_id=catalog_id,
+        catalog_version=catalog_version,
         digest=_sha256_bytes(raw_bytes),
-        root=root,
+        source=dict(source),
+        resolved_revision=resolved_revision,
+        contents=contents,
         ordered_specs=tuple(ordered),
         by_id=by_id,
     )
 
 
+def load_catalog(root: Path) -> Catalog:
+    """Validate a local Catalog directory for repository authoring checks."""
+
+    if root.is_symlink() or not root.is_dir():
+        raise SpecError(
+            f"SPEC_CATALOG_INVALID: expected a non-symlink directory: {root}"
+        )
+    catalog_path = _catalog_file(
+        root,
+        "catalog.json",
+        "SPEC_CATALOG_INVALID",
+    )
+    try:
+        raw_bytes = catalog_path.read_bytes()
+    except OSError as exc:
+        raise SpecError(
+            f"SPEC_CATALOG_INVALID: cannot read {catalog_path}: {exc}"
+        ) from exc
+
+    def read_content(relative: str, maximum: int) -> bytes:
+        path = _catalog_file(root, relative, "SPEC_CATALOG_INVALID")
+        try:
+            size = path.stat().st_size
+            if size > maximum:
+                raise SpecError(
+                    f"SPEC_CATALOG_FILE_TOO_LARGE: {relative}: "
+                    f"{size} bytes exceeds {maximum}"
+                )
+            return path.read_bytes()
+        except OSError as exc:
+            raise SpecError(
+                f"SPEC_CATALOG_INVALID: cannot read {relative}: {exc}"
+            ) from exc
+
+    return _parse_catalog(
+        raw_bytes,
+        read_content,
+        source={"kind": "directory", "path": str(root)},
+        resolved_revision="local",
+    )
+
+
+def _validate_git_url(value: object, label: str) -> str:
+    url = _expect_string(value, label)
+    if url != url.strip() or len(url) > 2048:
+        raise SpecError(f"{label}: invalid Git URL")
+    if url.startswith("-") or any(ord(character) < 32 for character in url):
+        raise SpecError(f"{label}: unsafe Git URL")
+    if re.match(r"^[A-Za-z0-9._-]+@[^:\s]+:.+$", url):
+        return url
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in {"https", "http", "ssh", "git", "file"}:
+        raise SpecError(
+            f"{label}: expected https, http, ssh, git, file, or SCP-style URL"
+        )
+    if parsed.scheme != "file" and not parsed.hostname:
+        raise SpecError(f"{label}: Git URL must include a host")
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise SpecError(f"{label}: invalid Git URL port") from exc
+    if parsed.scheme in {"https", "http"} and (
+        parsed.username is not None or parsed.password is not None
+    ):
+        raise SpecError(
+            f"{label}: embedded credentials are not supported; "
+            "configure a Git credential helper"
+        )
+    return url
+
+
+def _validate_git_ref(value: object, label: str) -> str:
+    ref = _expect_string(value, label)
+    if ref != ref.strip() or len(ref) > 255 or ref.startswith("-"):
+        raise SpecError(f"{label}: invalid Git ref")
+    if (
+        any(ord(character) < 32 or character.isspace() for character in ref)
+        or "\\" in ref
+        or ":" in ref
+        or ".." in ref
+        or "@{" in ref
+        or ref.endswith(("/", "."))
+        or any(character in ref for character in "~^?*[")
+    ):
+        raise SpecError(f"{label}: unsafe Git ref: {ref!r}")
+    return ref
+
+
+def _redact_git_url(url: str) -> str:
+    if re.match(r"^[A-Za-z0-9._-]+@[^:\s]+:.+$", url):
+        user, remainder = url.split("@", 1)
+        return f"{user}@{remainder}"
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.username is None and parsed.password is None:
+        return url
+    host = parsed.hostname or ""
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    if port is not None:
+        host += f":{port}"
+    return urllib.parse.urlunsplit(
+        (parsed.scheme, host, parsed.path, parsed.query, parsed.fragment)
+    )
+
+
+def _run_git(
+    repository: Path,
+    arguments: list[str],
+    *,
+    label: str,
+    source_url: str,
+    maximum_output: int = 4 * 1024 * 1024,
+) -> bytes:
+    environment = os.environ.copy()
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    environment["LC_ALL"] = "C"
+    try:
+        result = subprocess.run(
+            ["git", *arguments],
+            cwd=repository,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise SpecError(
+            "SPEC_GIT_UNAVAILABLE: install Git and ensure it is on PATH"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise SpecError(
+            f"{label}: Git command timed out after "
+            f"{GIT_TIMEOUT_SECONDS} seconds"
+        ) from exc
+    if len(result.stdout) > maximum_output:
+        raise SpecError(
+            f"{label}: Git output exceeds {maximum_output} bytes"
+        )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        redacted = _redact_git_url(source_url)
+        if source_url:
+            stderr = stderr.replace(source_url, redacted)
+        if len(stderr) > 2000:
+            stderr = stderr[-2000:]
+        detail = f": {stderr}" if stderr else ""
+        raise SpecError(f"{label}{detail}")
+    return result.stdout
+
+
+def _read_git_blob(
+    repository: Path,
+    commit: str,
+    relative: str,
+    maximum: int,
+    *,
+    source_url: str,
+) -> bytes:
+    object_name = f"{commit}:{relative}"
+    tree_entry = _run_git(
+        repository,
+        ["ls-tree", "-z", commit, "--", relative],
+        label=f"SPEC_GIT_PATH_MISSING: {relative}",
+        source_url=source_url,
+        maximum_output=4096,
+    )
+    entries = [entry for entry in tree_entry.split(b"\x00") if entry]
+    if len(entries) != 1 or b"\t" not in entries[0]:
+        raise SpecError(
+            f"SPEC_GIT_PATH_INVALID: {relative}: expected one tree entry"
+        )
+    metadata, raw_path = entries[0].split(b"\t", 1)
+    try:
+        decoded_path = raw_path.decode("utf-8", errors="strict")
+    except UnicodeError as exc:
+        raise SpecError(
+            f"SPEC_GIT_PATH_INVALID: {relative}: path is not UTF-8"
+        ) from exc
+    if decoded_path != relative:
+        raise SpecError(
+            f"SPEC_GIT_PATH_INVALID: {relative}: tree path mismatch"
+        )
+    parts = metadata.split()
+    if len(parts) != 3 or parts[0] not in {b"100644", b"100755"}:
+        raise SpecError(
+            f"SPEC_GIT_PATH_INVALID: {relative}: "
+            "expected a regular Git blob, not a symbolic link"
+        )
+    size_bytes = _run_git(
+        repository,
+        ["cat-file", "-s", object_name],
+        label=f"SPEC_GIT_PATH_INVALID: {relative}",
+        source_url=source_url,
+        maximum_output=128,
+    )
+    try:
+        size = int(size_bytes.decode("ascii").strip())
+    except (UnicodeError, ValueError) as exc:
+        raise SpecError(
+            f"SPEC_GIT_PATH_INVALID: {relative}: invalid blob size"
+        ) from exc
+    if size > maximum:
+        raise SpecError(
+            f"SPEC_CATALOG_FILE_TOO_LARGE: {relative}: "
+            f"{size} bytes exceeds {maximum}"
+        )
+    content = _run_git(
+        repository,
+        ["show", object_name],
+        label=f"SPEC_GIT_READ_FAILED: {relative}",
+        source_url=source_url,
+        maximum_output=maximum,
+    )
+    if len(content) != size:
+        raise SpecError(
+            f"SPEC_GIT_READ_FAILED: {relative}: "
+            f"expected {size} bytes; read {len(content)}"
+        )
+    return content
+
+
+def resolve_git_catalog(
+    source: dict[str, str],
+    revision: str,
+) -> Catalog:
+    parsed_source = _parse_catalog_source(
+        source,
+        "SPEC_CATALOG_SOURCE_INVALID",
+    )
+    resolved_input = _validate_git_ref(
+        revision,
+        "SPEC_CATALOG_SOURCE_INVALID.revision",
+    )
+    source_url = parsed_source["url"]
+    with tempfile.TemporaryDirectory(
+        prefix="engineering-specifications-"
+    ) as temporary:
+        repository = Path(temporary)
+        _run_git(
+            repository,
+            ["init", "--bare", "--quiet"],
+            label="SPEC_GIT_INIT_FAILED",
+            source_url=source_url,
+        )
+        _run_git(
+            repository,
+            ["remote", "add", "origin", source_url],
+            label="SPEC_GIT_REMOTE_FAILED",
+            source_url=source_url,
+        )
+        _run_git(
+            repository,
+            [
+                "fetch",
+                "--quiet",
+                "--depth=1",
+                "--no-tags",
+                "origin",
+                resolved_input,
+            ],
+            label=(
+                "SPEC_GIT_FETCH_FAILED: "
+                f"{_redact_git_url(source_url)}#{resolved_input}"
+            ),
+            source_url=source_url,
+        )
+        commit_bytes = _run_git(
+            repository,
+            ["rev-parse", "--verify", "FETCH_HEAD^{commit}"],
+            label="SPEC_GIT_REVISION_INVALID",
+            source_url=source_url,
+            maximum_output=128,
+        )
+        commit = commit_bytes.decode("ascii", errors="strict").strip()
+        if not GIT_COMMIT_RE.fullmatch(commit):
+            raise SpecError(
+                f"SPEC_GIT_REVISION_INVALID: expected full commit; got "
+                f"{commit!r}"
+            )
+        raw_catalog = _read_git_blob(
+            repository,
+            commit,
+            "catalog.json",
+            MAX_CATALOG_BYTES,
+            source_url=source_url,
+        )
+
+        def read_content(relative: str, maximum: int) -> bytes:
+            return _read_git_blob(
+                repository,
+                commit,
+                relative,
+                maximum,
+                source_url=source_url,
+            )
+
+        return _parse_catalog(
+            raw_catalog,
+            read_content,
+            source=parsed_source,
+            resolved_revision=commit,
+        )
+
+
 def _parse_catalog_source(value: object, label: str) -> dict[str, str]:
     data = _expect_object(value, label)
-    kind = _expect_string(data.get("kind"), f"{label}.kind")
-    if kind == "bundled":
-        _expect_exact_keys(data, required={"kind"}, label=label)
-        return {"kind": "bundled"}
-    if kind == "path":
-        _expect_exact_keys(data, required={"kind", "path"}, label=label)
-        return {
-            "kind": "path",
-            "path": _safe_relative(data["path"], f"{label}.path"),
-        }
-    raise SpecError(
-        f"{label}.kind: supported values are 'bundled' and 'path'"
+    _expect_exact_keys(
+        data,
+        required={"kind", "url", "ref"},
+        label=label,
     )
+    kind = _expect_string(data["kind"], f"{label}.kind")
+    if kind != "git":
+        raise SpecError(
+            f"{label}.kind: only 'git' is supported; "
+            "migrate bundled/path sources to EngineeringSpecifications"
+        )
+    return {
+        "kind": "git",
+        "url": _validate_git_url(data["url"], f"{label}.url"),
+        "ref": _validate_git_ref(data["ref"], f"{label}.ref"),
+    }
 
 
 def _parse_project_spec(value: object, index: int) -> ProjectSpec:
@@ -522,26 +906,6 @@ def manifest_data(manifest: SpecManifest) -> dict[str, object]:
     }
 
 
-def resolve_catalog_root(
-    repo: Path,
-    bundled_catalog: Path,
-    source: dict[str, str],
-) -> Path:
-    if source["kind"] == "bundled":
-        return bundled_catalog
-    relative = source["path"]
-    path = _reject_symlink_components(
-        repo,
-        relative,
-        "SPEC_CATALOG_INVALID",
-    )
-    if not path.is_dir():
-        raise SpecError(
-            f"SPEC_CATALOG_INVALID: path catalog does not exist: {relative}"
-        )
-    return path
-
-
 def detect_specs(repo: Path, catalog: Catalog) -> tuple[str, ...]:
     candidates = tuple(
         spec for spec in catalog.ordered_specs if spec.detection is not None
@@ -553,12 +917,6 @@ def detect_specs(repo: Path, catalog: Catalog) -> tuple[str, ...]:
         PurePosixPath("docs/.engineering"),
         PurePosixPath(MANAGED_ROOT),
     }
-    try:
-        catalog_relative = catalog.root.relative_to(repo)
-    except ValueError:
-        pass
-    else:
-        managed_prefixes.add(PurePosixPath(catalog_relative.as_posix()))
 
     for root_text, directory_names, filenames in os.walk(
         repo,
@@ -648,7 +1006,11 @@ def resolve_selection(
     )
 
 
-def _initial_manifest(repo: Path, catalog: Catalog) -> tuple[
+def _initial_manifest(
+    repo: Path,
+    catalog: Catalog,
+    source: dict[str, str],
+) -> tuple[
     SpecManifest,
     tuple[str, ...],
 ]:
@@ -661,7 +1023,7 @@ def _initial_manifest(repo: Path, catalog: Catalog) -> tuple[
     )
     return (
         SpecManifest(
-            catalog={"kind": "bundled"},
+            catalog=dict(source),
             spec_ids=tuple(selected),
             project_specs=(),
         ),
@@ -700,8 +1062,10 @@ def lock_data(
         "owner": SPEC_OWNER,
         "catalog": {
             "catalog_id": catalog.catalog_id,
+            "catalog_version": catalog.catalog_version,
             "sha256": catalog.digest,
             "source": dict(manifest.catalog),
+            "resolved_revision": catalog.resolved_revision,
         },
         "specs": [
             {
@@ -719,12 +1083,190 @@ def lock_data(
     }
 
 
+def parse_lock(path: Path) -> SpecLock:
+    data = _expect_object(
+        _load_json(path, "SPEC_LOCK_INVALID"),
+        "SPEC_LOCK_INVALID",
+    )
+    _expect_exact_keys(
+        data,
+        required={"version", "owner", "catalog", "specs"},
+        label="SPEC_LOCK_INVALID",
+    )
+    if type(data["version"]) is not int or data["version"] != SPEC_LOCK_VERSION:
+        raise SpecError(
+            f"SPEC_LOCK_INVALID.version: must be {SPEC_LOCK_VERSION}"
+        )
+    if data["owner"] != SPEC_OWNER:
+        raise SpecError(f"SPEC_LOCK_INVALID.owner: must be {SPEC_OWNER!r}")
+    raw_catalog = _expect_object(
+        data["catalog"],
+        "SPEC_LOCK_INVALID.catalog",
+    )
+    _expect_exact_keys(
+        raw_catalog,
+        required={
+            "catalog_id",
+            "catalog_version",
+            "sha256",
+            "source",
+            "resolved_revision",
+        },
+        label="SPEC_LOCK_INVALID.catalog",
+    )
+    catalog_id = _expect_string(
+        raw_catalog["catalog_id"],
+        "SPEC_LOCK_INVALID.catalog.catalog_id",
+    )
+    catalog_version = _expect_string(
+        raw_catalog["catalog_version"],
+        "SPEC_LOCK_INVALID.catalog.catalog_version",
+    )
+    if not SEMVER_RE.fullmatch(catalog_version):
+        raise SpecError(
+            "SPEC_LOCK_INVALID.catalog.catalog_version: "
+            "expected MAJOR.MINOR.PATCH"
+        )
+    catalog_digest = _expect_string(
+        raw_catalog["sha256"],
+        "SPEC_LOCK_INVALID.catalog.sha256",
+    )
+    if not SHA256_RE.fullmatch(catalog_digest):
+        raise SpecError(
+            "SPEC_LOCK_INVALID.catalog.sha256: expected lowercase SHA-256"
+        )
+    source = _parse_catalog_source(
+        raw_catalog["source"],
+        "SPEC_LOCK_INVALID.catalog.source",
+    )
+    resolved_revision = _expect_string(
+        raw_catalog["resolved_revision"],
+        "SPEC_LOCK_INVALID.catalog.resolved_revision",
+    )
+    if not GIT_COMMIT_RE.fullmatch(resolved_revision):
+        raise SpecError(
+            "SPEC_LOCK_INVALID.catalog.resolved_revision: "
+            "expected a full lowercase Git commit"
+        )
+
+    raw_specs = data["specs"]
+    if not isinstance(raw_specs, list) or not raw_specs:
+        raise SpecError("SPEC_LOCK_INVALID.specs: expected a non-empty array")
+    if len(raw_specs) > MAX_SPEC_COUNT:
+        raise SpecError(
+            f"SPEC_LOCK_INVALID.specs: exceeds {MAX_SPEC_COUNT} entries"
+        )
+    specs: list[CatalogSpec] = []
+    by_id: dict[str, CatalogSpec] = {}
+    installed_paths: set[str] = set()
+    source_paths: set[str] = set()
+    for index, raw_spec in enumerate(raw_specs):
+        label = f"SPEC_LOCK_INVALID.specs[{index}]"
+        item = _expect_object(raw_spec, label)
+        _expect_exact_keys(
+            item,
+            required={
+                "id",
+                "version",
+                "source_path",
+                "installed_path",
+                "sha256",
+                "requires",
+                "applies_to",
+                "description",
+            },
+            label=label,
+        )
+        spec_id = _expect_string(item["id"], f"{label}.id")
+        if not SPEC_ID_RE.fullmatch(spec_id):
+            raise SpecError(f"{label}.id: invalid Spec ID: {spec_id!r}")
+        if spec_id in by_id:
+            raise SpecError(f"{label}.id: duplicate Spec ID: {spec_id}")
+        version = _expect_string(item["version"], f"{label}.version")
+        if not SEMVER_RE.fullmatch(version):
+            raise SpecError(f"{label}.version: expected MAJOR.MINOR.PATCH")
+        source_path = _safe_relative(
+            item["source_path"],
+            f"{label}.source_path",
+        )
+        if not source_path.endswith(".md"):
+            raise SpecError(f"{label}.source_path: expected Markdown")
+        if source_path in source_paths:
+            raise SpecError(
+                f"{label}.source_path: duplicate path: {source_path}"
+            )
+        source_paths.add(source_path)
+        installed_path = _safe_relative(
+            item["installed_path"],
+            f"{label}.installed_path",
+        )
+        expected_installed = _managed_path(spec_id)
+        if installed_path != expected_installed:
+            raise SpecError(
+                f"{label}.installed_path: expected {expected_installed!r}"
+            )
+        if installed_path in installed_paths:
+            raise SpecError(
+                f"{label}.installed_path: duplicate path: {installed_path}"
+            )
+        installed_paths.add(installed_path)
+        digest = _expect_string(item["sha256"], f"{label}.sha256")
+        if not SHA256_RE.fullmatch(digest):
+            raise SpecError(f"{label}.sha256: expected lowercase SHA-256")
+        requires = _expect_string_list(item["requires"], f"{label}.requires")
+        for dependency in requires:
+            if not SPEC_ID_RE.fullmatch(dependency):
+                raise SpecError(
+                    f"{label}.requires: invalid Spec ID: {dependency!r}"
+                )
+        applies_to = _expect_string_list(
+            item["applies_to"],
+            f"{label}.applies_to",
+        )
+        if not applies_to:
+            raise SpecError(f"{label}.applies_to: at least one scope is required")
+        spec = CatalogSpec(
+            spec_id=spec_id,
+            version=version,
+            source_path=source_path,
+            sha256=digest,
+            required=False,
+            requires=requires,
+            applies_to=applies_to,
+            description=_expect_string(
+                item["description"],
+                f"{label}.description",
+            ),
+            detection=None,
+        )
+        specs.append(spec)
+        by_id[spec_id] = spec
+    for spec in specs:
+        missing = sorted(set(spec.requires) - set(by_id))
+        if missing:
+            raise SpecError(
+                f"SPEC_LOCK_DEPENDENCY_MISSING: {spec.spec_id}: "
+                f"{', '.join(missing)}"
+            )
+    return SpecLock(
+        catalog_id=catalog_id,
+        catalog_version=catalog_version,
+        catalog_digest=catalog_digest,
+        source=source,
+        resolved_revision=resolved_revision,
+        specs=tuple(specs),
+    )
+
+
 def _markdown_cell(value: str) -> str:
     return value.replace("|", "\\|").replace("\n", " ")
 
 
 def render_index(
-    catalog: Catalog,
+    catalog_id: str,
+    catalog_version: str,
+    catalog_digest: str,
+    resolved_revision: str,
     selected: tuple[CatalogSpec, ...],
     project_specs: tuple[ProjectSpec, ...],
 ) -> bytes:
@@ -737,7 +1279,8 @@ def render_index(
         "the files being changed. More specific project guidance takes precedence",
         "only when it explicitly declares the override.",
         "",
-        f"Catalog: `{catalog.catalog_id}` (`sha256:{catalog.digest}`)",
+        f"Catalog: `{catalog_id}@{catalog_version}` "
+        f"(`git:{resolved_revision}`, `sha256:{catalog_digest}`)",
         "",
         "## Managed Specs",
         "",
@@ -808,41 +1351,73 @@ def _path_conflict(repo: Path, relative: str) -> str:
 
 def _prepare_manifest(
     repo: Path,
-    bundled_catalog: Path,
+    initial_source: dict[str, str],
     operation: str,
 ) -> tuple[SpecManifest, Catalog, tuple[str, ...], bytes | None]:
     manifest_path = repo / SPEC_MANIFEST
+    lock_path = repo / SPEC_LOCK
     if manifest_path.exists():
         manifest = parse_manifest(manifest_path)
-        catalog_root = resolve_catalog_root(
-            repo,
-            bundled_catalog,
-            manifest.catalog,
-        )
-        catalog = load_catalog(catalog_root)
-        detected = detect_specs(repo, catalog)
         manifest_write: bytes | None = None
-        if operation == "update":
-            updated_ids = list(manifest.spec_ids)
-            for spec_id in detected:
-                if spec_id not in updated_ids:
-                    updated_ids.append(spec_id)
-            if tuple(updated_ids) != manifest.spec_ids:
-                manifest = SpecManifest(
-                    catalog=manifest.catalog,
-                    spec_ids=tuple(updated_ids),
-                    project_specs=manifest.project_specs,
-                )
-                manifest_write = _json_bytes(manifest_data(manifest))
-        return manifest, catalog, detected, manifest_write
+    else:
+        if lock_path.exists():
+            raise SpecError(
+                f"SPEC_MANIFEST_MISSING: {SPEC_MANIFEST}: "
+                "a lock exists without its project manifest"
+            )
+        source = _parse_catalog_source(
+            initial_source,
+            "SPEC_CATALOG_SOURCE_INVALID",
+        )
+        catalog = resolve_git_catalog(source, source["ref"])
+        manifest, detected = _initial_manifest(repo, catalog, source)
+        return (
+            manifest,
+            catalog,
+            detected,
+            _json_bytes(manifest_data(manifest)),
+        )
 
-    catalog = load_catalog(bundled_catalog)
-    manifest, detected = _initial_manifest(repo, catalog)
+    locked: SpecLock | None = None
+    if lock_path.exists():
+        locked = parse_lock(lock_path)
+    if operation == "sync" and locked is not None:
+        if locked.source != manifest.catalog:
+            raise SpecError(
+                "SPEC_LOCK_SOURCE_MISMATCH: manifest source differs from "
+                "the lock; run engineeringctl spec update after review"
+            )
+        revision = locked.resolved_revision
+    else:
+        revision = manifest.catalog["ref"]
+    catalog = resolve_git_catalog(manifest.catalog, revision)
+    if (
+        operation == "sync"
+        and locked is not None
+        and catalog.resolved_revision != locked.resolved_revision
+    ):
+        raise SpecError(
+            "SPEC_LOCK_REVISION_MISMATCH: fetched revision differs from "
+            "the locked commit"
+        )
+    detected = detect_specs(repo, catalog)
+    if operation == "update":
+        updated_ids = list(manifest.spec_ids)
+        for spec_id in detected:
+            if spec_id not in updated_ids:
+                updated_ids.append(spec_id)
+        if tuple(updated_ids) != manifest.spec_ids:
+            manifest = SpecManifest(
+                catalog=manifest.catalog,
+                spec_ids=tuple(updated_ids),
+                project_specs=manifest.project_specs,
+            )
+            manifest_write = _json_bytes(manifest_data(manifest))
     return (
         manifest,
         catalog,
         detected,
-        _json_bytes(manifest_data(manifest)),
+        manifest_write,
     )
 
 
@@ -873,7 +1448,7 @@ def _stale_managed_warnings(
 
 def plan_spec_state(
     repo: Path,
-    bundled_catalog: Path,
+    initial_source: dict[str, str],
     *,
     operation: str,
     allow_replace: bool,
@@ -883,7 +1458,7 @@ def plan_spec_state(
     effective_operation = "sync" if operation == "plan" else operation
     manifest, catalog, detected, manifest_write = _prepare_manifest(
         repo,
-        bundled_catalog,
+        initial_source,
         effective_operation,
     )
     _validate_project_specs(repo, manifest.project_specs)
@@ -906,22 +1481,24 @@ def plan_spec_state(
         )
     )
     for spec in selected:
-        source = _catalog_file(
-            catalog.root,
-            spec.source_path,
-            "SPEC_CATALOG_INVALID",
-        )
         writes.append(
             PlannedWrite(
                 path=_managed_path(spec.spec_id),
-                content=source.read_bytes(),
+                content=catalog.contents[spec.source_path],
                 role="managed_spec",
             )
         )
     writes.append(
         PlannedWrite(
             path=MANAGED_INDEX,
-            content=render_index(catalog, selected, manifest.project_specs),
+            content=render_index(
+                catalog.catalog_id,
+                catalog.catalog_version,
+                catalog.digest,
+                catalog.resolved_revision,
+                selected,
+                manifest.project_specs,
+            ),
             role="index",
         )
     )
@@ -990,7 +1567,10 @@ def plan_spec_state(
     return SpecPlan(
         operation=operation,
         catalog_id=catalog.catalog_id,
+        catalog_version=catalog.catalog_version,
         catalog_digest=catalog.digest,
+        catalog_source=dict(manifest.catalog),
+        resolved_revision=catalog.resolved_revision,
         detected_spec_ids=detected,
         selected_spec_ids=tuple(spec.spec_id for spec in selected),
         actions=tuple(actions),
@@ -1065,7 +1645,6 @@ def apply_spec_plan(
 
 def validate_spec_state(
     repo: Path,
-    bundled_catalog: Path,
     *,
     require_manifest: bool,
 ) -> tuple[list[str], list[str]]:
@@ -1081,51 +1660,141 @@ def validate_spec_state(
             "run engineeringctl bootstrap --profile codex --apply"
         ]
     try:
-        plan = plan_spec_state(
-            repo,
-            bundled_catalog,
-            operation="sync",
-            allow_replace=True,
-        )
+        manifest = parse_manifest(manifest_path)
     except SpecError as exc:
         return [str(exc)], []
 
     errors: list[str] = []
-    warnings = list(plan.warnings)
-    for action in plan.actions:
-        kind = action.get("action")
-        path = action.get("path", "")
-        if kind == "preserve":
+    warnings: list[str] = []
+    lock_path = repo / SPEC_LOCK
+    if not lock_path.exists():
+        return [
+            f"SPEC_LOCK_MISSING: {SPEC_LOCK}: "
+            "run engineeringctl spec sync --apply"
+        ], warnings
+    try:
+        lock = parse_lock(lock_path)
+        _validate_project_specs(repo, manifest.project_specs)
+    except SpecError as exc:
+        return [str(exc)], warnings
+
+    if lock.source != manifest.catalog:
+        errors.append(
+            "SPEC_LOCK_SOURCE_MISMATCH: lock source differs from specs.json; "
+            "run engineeringctl spec update after review"
+        )
+    by_id = {spec.spec_id: spec for spec in lock.specs}
+    missing = sorted(set(manifest.spec_ids) - set(by_id))
+    if missing:
+        errors.append(
+            "SPEC_LOCK_SELECTION_MISSING: " + ", ".join(missing)
+        )
+    reachable: set[str] = set()
+    visiting: list[str] = []
+
+    def visit(spec_id: str) -> None:
+        if spec_id in reachable:
+            return
+        if spec_id in visiting:
+            cycle = " -> ".join((*visiting, spec_id))
+            raise SpecError(f"SPEC_LOCK_DEPENDENCY_CYCLE: {cycle}")
+        spec = by_id.get(spec_id)
+        if spec is None:
+            raise SpecError(f"SPEC_LOCK_DEPENDENCY_MISSING: {spec_id}")
+        visiting.append(spec_id)
+        for dependency in spec.requires:
+            visit(dependency)
+        visiting.pop()
+        reachable.add(spec_id)
+
+    try:
+        for spec_id in manifest.spec_ids:
+            if spec_id in by_id:
+                visit(spec_id)
+    except SpecError as exc:
+        errors.append(str(exc))
+    stale_lock_ids = sorted(set(by_id) - reachable)
+    if stale_lock_ids:
+        errors.append(
+            "SPEC_LOCK_SELECTION_EXTRA: " + ", ".join(stale_lock_ids)
+        )
+
+    for spec in lock.specs:
+        relative = _managed_path(spec.spec_id)
+        reason = _path_conflict(repo, relative)
+        if reason:
+            errors.append(f"SPEC_PATH_CONFLICT: {relative}: {reason}")
             continue
-        if kind == "create_file":
-            if path == SPEC_LOCK:
-                label = "SPEC_LOCK_MISSING"
-            elif path == MANAGED_INDEX:
-                label = "SPEC_INDEX_MISSING"
-            elif path == SPEC_MANIFEST:
-                label = "SPEC_MANIFEST_MISSING"
+        path = repo / relative
+        if not path.is_file():
+            errors.append(
+                f"SPEC_MANAGED_FILE_MISSING: {relative}: "
+                "run engineeringctl spec sync --apply"
+            )
+            continue
+        try:
+            actual = _sha256_file(path)
+        except OSError as exc:
+            errors.append(
+                f"SPEC_MANAGED_FILE_UNREADABLE: {relative}: {exc}"
+            )
+            continue
+        if actual != spec.sha256:
+            errors.append(
+                f"SPEC_MANAGED_CONTENT_DRIFT: {relative}: "
+                f"lock {spec.sha256}; actual {actual}; "
+                "run engineeringctl spec sync --apply after review"
+            )
+
+    expected_index = render_index(
+        lock.catalog_id,
+        lock.catalog_version,
+        lock.catalog_digest,
+        lock.resolved_revision,
+        lock.specs,
+        manifest.project_specs,
+    )
+    index_reason = _path_conflict(repo, MANAGED_INDEX)
+    if index_reason:
+        errors.append(
+            f"SPEC_PATH_CONFLICT: {MANAGED_INDEX}: {index_reason}"
+        )
+    else:
+        index_path = repo / MANAGED_INDEX
+        if not index_path.is_file():
+            errors.append(
+                f"SPEC_INDEX_MISSING: {MANAGED_INDEX}: "
+                "run engineeringctl spec sync --apply"
+            )
+        else:
+            try:
+                actual_index = index_path.read_bytes()
+            except OSError as exc:
+                errors.append(
+                    f"SPEC_INDEX_UNREADABLE: {MANAGED_INDEX}: {exc}"
+                )
             else:
-                label = "SPEC_MANAGED_FILE_MISSING"
-            errors.append(
-                f"{label}: {path}: run engineeringctl spec sync --apply"
+                if actual_index != expected_index:
+                    errors.append(
+                        f"SPEC_INDEX_DRIFT: {MANAGED_INDEX}: "
+                        "run engineeringctl spec sync --apply after review"
+                    )
+
+    warnings.extend(_stale_managed_warnings(repo, lock.specs))
+    agents = repo / "AGENTS.md"
+    if agents.is_file() and not agents.is_symlink():
+        try:
+            agents_text = agents.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            warnings.append(
+                f"SPEC_AGENTS_ROUTE_UNREADABLE: AGENTS.md: {exc}"
             )
-        elif kind in {"replace_file", "update_file"}:
-            if path == SPEC_LOCK:
-                label = "SPEC_LOCK_DRIFT"
-            elif path == MANAGED_INDEX:
-                label = "SPEC_INDEX_DRIFT"
-            elif path == SPEC_MANIFEST:
-                label = "SPEC_MANIFEST_DRIFT"
-            else:
-                label = "SPEC_MANAGED_CONTENT_DRIFT"
-            errors.append(
-                f"{label}: {path}: run engineeringctl spec sync --apply "
-                "after reviewing the plan"
-            )
-        elif kind == "conflict":
-            errors.append(
-                f"SPEC_PATH_CONFLICT: {path}: {action.get('reason', '')}"
-            )
+        else:
+            if AGENTS_ROUTE not in agents_text:
+                warnings.append(
+                    f"SPEC_AGENTS_ROUTE_MISSING: AGENTS.md: add a short route "
+                    f"to {AGENTS_ROUTE}"
+                )
     return errors, warnings
 
 
@@ -1141,7 +1810,10 @@ def plan_payload(
         "mode": mode,
         "catalog": {
             "catalog_id": plan.catalog_id,
+            "catalog_version": plan.catalog_version,
             "sha256": plan.catalog_digest,
+            "source": dict(plan.catalog_source),
+            "resolved_revision": plan.resolved_revision,
         },
         "detected_specs": list(plan.detected_spec_ids),
         "selected_specs": list(plan.selected_spec_ids),
@@ -1178,6 +1850,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(
             {
                 "catalog_id": catalog.catalog_id,
+                "catalog_version": catalog.catalog_version,
                 "sha256": catalog.digest,
                 "specs": [spec.spec_id for spec in catalog.ordered_specs],
             },

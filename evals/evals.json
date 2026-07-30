@@ -64,7 +64,7 @@
     {
       "id": 4,
       "prompt": "初始化这个 Go 后端和 TypeScript 前端的仓库。通用命名规范必须安装，两种语言规范按需落到本地；现有 handler-pattern.md 是项目规则，不要覆盖。",
-      "expected_output": "先预览 Codex Bootstrap；选择 core/semantic-naming、languages/go 和 languages/typescript，生成 docs/.engineering/specs.json、specs.lock.json 与 docs/agent-guides/managed/ 本地副本和索引。把已有 handler-pattern.md 作为 project_specs 引用而不复制或改写，应用后运行 spec validate 与 Harness validation。",
+      "expected_output": "先预览 Codex Bootstrap；从独立 EngineeringSpecifications Git 仓库选择 core/semantic-naming、languages/go 和 languages/typescript，生成 docs/.engineering/specs.json、记录完整 resolved commit 的 specs.lock.json，以及 docs/agent-guides/managed/ 本地副本和索引。把已有 handler-pattern.md 作为 project_specs 引用而不复制或改写，应用后离线运行 spec validate 与 Harness validation。",
       "files": [],
       "assertions": [
         {
@@ -73,7 +73,7 @@
         },
         {
           "name": "materializes_versioned_local_specs",
-          "description": "Manifest、lock、managed 内容和路由索引位于目标仓库并可用 SHA-256 校验"
+          "description": "Manifest 记录 Git URL/ref，lock 记录完整 commit，managed 内容和路由索引位于目标仓库并可用 SHA-256 校验"
         },
         {
           "name": "preserves_project_specs",
@@ -82,6 +82,26 @@
         {
           "name": "keeps_bootstrap_preview_first",
           "description": "Bootstrap 与 Spec 更新先预览，发生 drift 或 path conflict 时不进行部分写入"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "EngineeringSpecifications 的 main 已经有新提交。项目现在要先恢复本地被删掉的规范，但暂时不能升级；确认后再升级到 main 最新版本。",
+      "expected_output": "先运行 spec sync 的 dry-run，它必须使用 specs.lock.json 中的旧 commit 恢复本地副本而不跟随 main；应用并离线验证后，再运行 spec update dry-run，明确展示新的 resolved commit 与内容变化，确认后 --apply。update 可以加入新检测语言但不能自动移除已有选择。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "sync_uses_locked_commit",
+          "description": "sync 从已有 lock 的 resolved commit 恢复内容，不因远程分支移动而升级"
+        },
+        {
+          "name": "update_resolves_manifest_ref",
+          "description": "update 才重新解析 manifest ref，并在预览中显示新 commit 与替换动作"
+        },
+        {
+          "name": "validation_is_offline",
+          "description": "spec validate 只检查 manifest、lock、项目规则和本地 managed 内容，不访问远程仓库"
         }
       ]
     }

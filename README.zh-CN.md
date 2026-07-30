@@ -170,10 +170,6 @@ EngineeringWorkflow/
 │   └── check.py                     # 唯一仓库检查入口
 ├── assets/
 │   └── harness-*.md
-├── engineering-specs/
-│   ├── catalog.json                 # 可移植 Spec Catalog 契约
-│   ├── core/
-│   └── languages/
 ├── engineering-benchmark/
 │   ├── SKILL.md                     # engineering-benchmark Skill 根
 │   └── scripts/benchctl.py
@@ -187,8 +183,12 @@ EngineeringWorkflow/
     └── SKILL.md                     # engineering-case-study Skill 根
 ```
 
-要求 Python 3.10+；四个治理 CLI 都只使用标准库，分享写作 Skill 不需要专用
-CLI。仓库可以检出到任意稳定目录：
+规范正文独立版本化在
+[EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
+仓库。本仓库只保留 Git 解析、lock、本地物化与验证工作流。
+
+要求 Python 3.10+ 与 Git；四个治理 CLI 都只使用 Python 标准库，分享写作 Skill
+不需要专用 CLI。仓库可以检出到任意稳定目录：
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/EngineeringWorkflow.git \
@@ -297,10 +297,14 @@ Bootstrap 只创建缺失路径，不覆盖已有文件。每个注册的 Agent 
 按物理行计数必须不超过 100 行；首版只注册根 `AGENTS.md`，模板保留至少 20 行
 维护余量。现有文件超过上限时，工具报告冲突并拒绝写入。
 
-Bootstrap 永远安装 `core/semantic-naming`，并只在仓库证据匹配时加入 Go、
-TypeScript 和 Python Spec。选择保存在 `docs/.engineering/specs.json`；
-精确版本与 SHA-256 保存在 `specs.lock.json`；本地内容与作用域路由位于
-`docs/agent-guides/managed/`。
+Bootstrap 从默认的
+[EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
+Git 源拉取，永远安装 `core/semantic-naming`，并只在仓库证据匹配时加入 Go、
+TypeScript 和 Python Spec。选择与 Git URL/ref 保存在
+`docs/.engineering/specs.json`；精确版本、解析后的完整 commit 与 SHA-256
+保存在 `specs.lock.json`；本地内容与作用域路由位于
+`docs/agent-guides/managed/`。首次 Bootstrap 可用 `--spec-repository` 与
+`--spec-ref` 选择其他 Git 源。
 
 Spec 维护同样默认只预览：
 
@@ -312,9 +316,9 @@ python3 "$WORKFLOWCTL" --repo . spec update --apply
 python3 "$WORKFLOWCTL" --repo . spec validate
 ```
 
-`sync` 遵循已有项目 manifest；`update` 还会加入新检测到的语言，但不会静默移除
-现有选择。项目可在 `project_specs` 中登记自身规范；生成索引只引用它，不复制或
-改写正文。
+`sync` 遵循已有 lock，并保持锁定到其 commit；`update` 重新解析 manifest ref，
+同时加入新检测到的语言，但不会静默移除现有选择。`spec validate` 完全离线。
+项目可在 `project_specs` 中登记自身规范；生成索引只引用它，不复制或改写正文。
 
 ### 创建和封存 Benchmark
 

@@ -2,7 +2,7 @@
 doc_type: design
 title: Engineering Spec resolution and project materialization
 status: current
-adr_refs: ["ADR-002", "ADR-004"]
+adr_refs: ["ADR-002", "ADR-004", "ADR-005"]
 updated: 2026-07-30
 ---
 
@@ -11,22 +11,25 @@ updated: 2026-07-30
 ## Purpose
 
 Extend the Engineering Workflow Harness with versioned, composable engineering
-Specs. Bootstrap installs required common guidance and language guidance
-detected from repository evidence. Codex reads repository-local copies through
-a bounded `AGENTS.md` route rather than depending on mutable remote content at
-task time.
+Specs fetched from an independently governed Git repository. Bootstrap installs
+required common guidance and language guidance detected from repository
+evidence. Codex reads repository-local copies through a bounded `AGENTS.md`
+route rather than depending on remote content at task time.
 
-This design implements the ownership already accepted by ADR-002 and ADR-004:
-`engineering-workflow` owns project Bootstrap and routing, while
+This design implements the ownership accepted by ADR-002, ADR-004, and ADR-005:
+`engineering-workflow` owns project Bootstrap and Spec consumption,
+`EngineeringSpecifications` owns Catalog and normative content, while
 `engineering-execution-plan` remains Agent-neutral and owns only ADR, ExecPlan,
 Task, Checkpoint, Bugfix, and technical-debt artifacts.
 
 ```mermaid
 flowchart LR
-    C["Engineering Spec Catalog"] --> R["engineeringctl Spec Resolver"]
+    G["EngineeringSpecifications<br/>Git URL + ref"] --> F["Ephemeral bare fetch"]
+    F --> C["Catalog + exact content"]
+    C --> R["engineeringctl Spec Resolver"]
     D["Repository language evidence"] --> R
     P["Project Spec manifest"] --> R
-    R --> L["Pinned lock"]
+    R --> L["Pinned commit + content lock"]
     R --> M["Repository-local managed Specs"]
     L --> I["Managed routing index"]
     M --> I
@@ -40,7 +43,10 @@ flowchart LR
 - Select language Specs from deterministic repository evidence.
 - Support polyglot repositories without loading every language guide.
 - Materialize exact Spec content inside the target repository.
-- Record versions and SHA-256 digests in a lock file.
+- Record the immutable Git commit, versions, and SHA-256 digests in a lock file.
+- Give reusable Specs an independent contribution and release lifecycle.
+- Support public, private, self-hosted, branch, tag, and local Git sources
+  through standard Git transport.
 - Keep project-specific guidance repository-owned and independently editable.
 - Preserve Bootstrap dry-run, whole-plan preflight, idempotence, and
   non-destructive behavior.
@@ -49,36 +55,41 @@ flowchart LR
 
 ## Non-goals
 
-- Fetch arbitrary network URLs, manage credentials, or clone Git repositories
-  during Bootstrap.
-- Publish or govern a remote Spec repository.
+- Bundle normative Engineering Spec content with EngineeringWorkflow.
+- Fetch individual raw HTTP files or silently fall back to packaged content.
+- Store, prompt for, or manage Git credentials.
+- Check out or execute code from the specification repository.
+- Provide persistent catalog caching in version 1.
 - Infer frameworks, architecture, owners, build commands, or project facts.
 - Rewrite an existing `AGENTS.md` to insert a missing route.
 - Remove stale managed files automatically.
 - Move project-owned guidance into the central catalog.
 
-The bundled catalog format is intentionally repository-independent. It can be
-moved to a separate `engineering-specs` repository later. Version 1 also
-supports a project-relative catalog checkout through a `path` source, allowing
-a Git submodule or another versioned checkout without coupling
-`engineeringctl` to a Git provider.
+## Repository Layout
 
-## Package Layout
-
-The Engineering Workflow distribution contains:
+The independent
+[EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
+repository contains:
 
 ```text
-engineering-specs/
+EngineeringSpecifications/
 ├── catalog.json
-├── core/
-│   └── semantic-naming.md
-└── languages/
-    ├── go.md
-    ├── python.md
-    └── typescript.md
+├── schemas/
+│   └── catalog.schema.json
+├── specification/
+│   ├── core/
+│   │   └── semantic-naming.md
+│   └── languages/
+│       ├── go.md
+│       ├── python.md
+│       └── typescript.md
+├── scripts/
+│   └── check.py
+└── tests/
 ```
 
-The target project receives:
+EngineeringWorkflow contains no Catalog or normative Spec Markdown. The target
+project receives:
 
 ```text
 docs/
@@ -103,6 +114,7 @@ anywhere inside the repository and are referenced from `specs.json`.
 `catalog.json` schema version 1 contains:
 
 - a stable catalog ID;
+- a semantic catalog version;
 - one current entry for each Spec ID;
 - a semantic version and source-relative Markdown path;
 - the source file SHA-256;
@@ -112,8 +124,9 @@ anywhere inside the repository and are referenced from `specs.json`.
 
 Spec IDs use lowercase path segments, for example
 `core/semantic-naming` and `languages/go`. Source paths must be relative,
-remain inside the catalog root, identify non-symlink regular files, and match
-their declared digest. Dependency IDs must exist and form an acyclic graph.
+remain within the Git tree, contain no traversal or revision separators, and
+match their declared digest. Dependency IDs must exist and form an acyclic
+graph.
 
 Language detection may use marker filenames and source extensions. The resolver
 ignores generated, dependency, VCS, and Harness-managed directories. Detection
@@ -130,7 +143,9 @@ configuration:
   "version": 1,
   "owner": "engineering-workflow",
   "catalog": {
-    "kind": "bundled"
+    "kind": "git",
+    "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
+    "ref": "main"
   },
   "specs": [
     "core/semantic-naming",
@@ -146,18 +161,25 @@ configuration:
 }
 ```
 
-Supported catalog sources:
+The only source kind is `git`. `url` is passed as one argument to Git after
+validation; it may be an HTTPS, SSH, `git://`, `file://`, or SCP-style Git URL.
+`ref` is a branch, tag, or full commit-like ref accepted by `git fetch` and may
+not begin with `-`. The default source is:
 
-- `{"kind": "bundled"}` resolves the catalog shipped with
-  `engineering-workflow`;
-- `{"kind": "path", "path": "<repository-relative-directory>"}` resolves a
-  catalog checkout already present in the target repository.
+```json
+{
+  "kind": "git",
+  "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
+  "ref": "main"
+}
+```
 
 Bootstrap creates this file only when missing. Required catalog entries and
 detected languages form the initial `specs` selection. Once the manifest
-exists, `spec sync` treats the selection as explicit project policy.
-`spec update` may add newly detected language entries but never removes an
-existing selection.
+exists, the selection and source are explicit project policy. `spec sync`
+reuses an existing locked commit. `spec update` resolves the manifest ref
+again, may add newly detected language entries, and never removes an existing
+selection.
 
 Each project Spec path must remain inside the repository and identify a
 non-symlink regular Markdown file. Project Spec scopes and descriptions are
@@ -167,7 +189,8 @@ rendered into the routing index but their content is never copied or rewritten.
 
 `docs/.engineering/specs.lock.json` schema version 1 is generated and contains:
 
-- catalog identity and catalog digest;
+- catalog identity, semantic version, and catalog digest;
+- requested Git URL/ref and the resolved 40-character commit;
 - each resolved Spec ID and version;
 - source and installed repository-relative paths;
 - content SHA-256;
@@ -175,9 +198,31 @@ rendered into the routing index but their content is never copied or rewritten.
 - the selected dependency closure.
 
 The lock is the reproducibility and validation contract. Managed file bytes
-must match the recorded digest. A catalog change affects the project only after
-an explicit applied Spec operation or Bootstrap of a project without an
-existing lock.
+must match the recorded digest. Branch or tag movement affects the project only
+after `spec update --apply`; `spec sync` continues to resolve the locked commit.
+Changing the manifest source while retaining an old lock requires an explicit
+update.
+
+## Git Resolution
+
+Networked operations create a temporary bare Git repository, set the configured
+URL as `origin`, and fetch exactly one manifest ref or locked commit. They
+resolve `FETCH_HEAD^{commit}` and read `catalog.json` and selected Markdown with
+Git object commands. No working tree is checked out and no repository code,
+hooks, filters, or scripts are run.
+
+The resolver:
+
+- uses argument arrays without a shell;
+- sets `GIT_TERMINAL_PROMPT=0`;
+- applies bounded command timeouts and output sizes;
+- rejects URLs or refs that can be interpreted as command options;
+- validates remote JSON and paths before addressing Git objects;
+- verifies Catalog and file SHA-256 digests;
+- deletes the temporary object store after resolution.
+
+Existing Git credential helpers and SSH agents may satisfy authentication.
+EngineeringWorkflow never reads, accepts, logs, or persists credentials.
 
 ## CLI Contract
 
@@ -191,14 +236,17 @@ engineeringctl spec validate
 ```
 
 - `plan` resolves the current manifest, or previews the inferred initial
-  manifest when it is absent.
-- `sync` materializes the explicitly selected Spec set and its lock.
-- `update` additionally discovers newly introduced languages and refreshes
-  selected entries from the current catalog.
+  manifest when it is absent. With a lock, it previews the locked revision.
+- `sync` materializes the explicitly selected Spec set from the locked commit;
+  without a lock it resolves and creates one from the manifest ref.
+- `update` resolves the manifest ref again, refreshes the lock and selected
+  content, and additionally discovers newly introduced languages.
 - `validate` performs no writes and verifies the manifest, lock, managed
-  content, project Spec references, routing index, and `AGENTS.md` route.
+  content, project Spec references, routing index, and `AGENTS.md` route. It
+  performs no network or Git operation.
 
-`engineeringctl bootstrap --profile codex` includes the same Spec plan.
+`engineeringctl bootstrap --profile codex` includes the same Spec plan and
+accepts optional initial `--spec-repository` and `--spec-ref` values.
 Bootstrap apply may create missing files but does not replace an existing
 managed file with different bytes. An explicit `spec sync --apply` or
 `spec update --apply` may replace files inside the managed namespace after the
@@ -206,7 +254,7 @@ preview reports the replacement.
 
 ## Routing
 
-The bundled `AGENTS.md` contains one stable instruction:
+The Workflow `AGENTS.md` template contains one stable instruction:
 
 > Before implementation or review, read
 > `docs/agent-guides/managed/index.md` and follow every entry whose scope
@@ -229,6 +277,10 @@ flowchart TB
 ## Safety and Ownership
 
 - Catalog, manifest, lock, and installed paths reject traversal and symlinks.
+- Remote Git content is parsed as untrusted data and never checked out or
+  executed.
+- Git failures report the URL/ref and remediation without exposing credential
+  material.
 - Bootstrap stops before all writes when any Harness or Spec conflict exists.
 - Bootstrap never changes an existing manifest, lock, managed Spec, routing
   index, project Spec, or `AGENTS.md`.
@@ -241,16 +293,18 @@ flowchart TB
 ## Acceptance
 
 - Empty repositories preview without writes and install the required Core Spec
-  when applied.
+  from the default remote repository when applied.
 - Repositories containing Go, TypeScript, or Python evidence select only the
   applicable language Specs plus Core.
 - Polyglot repositories install multiple language Specs and route them by
   scope.
 - Repeated Bootstrap and Spec sync operations are byte-idempotent.
+- `spec sync` remains pinned after the tracked branch moves; `spec update`
+  adopts the new commit.
 - Catalog digest drift, managed-content drift, missing lock entries, traversal,
-  symlinks, dependency cycles, and missing project Specs fail validation.
+  dependency cycles, unreachable refs, and missing project Specs fail safely.
 - Existing `AGENTS.md` and project documentation remain byte-identical.
-- The independently installed `engineering-workflow` package includes the
-  catalog and can Bootstrap without private host paths.
-- The repository canonical check validates catalog structure and runs the
-  Spec lifecycle tests.
+- The independently installed `engineering-workflow` package contains no
+  normative Spec files and resolves the public default source.
+- EngineeringSpecifications and EngineeringWorkflow each have a canonical
+  check, and Workflow integration tests use isolated Git fixture repositories.

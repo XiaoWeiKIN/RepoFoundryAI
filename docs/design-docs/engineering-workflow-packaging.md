@@ -2,13 +2,16 @@
 doc_type: design
 title: EngineeringWorkflow skill packaging
 status: current
-adr_refs: ["ADR-004"]
+adr_refs: ["ADR-004", "ADR-005"]
 updated: 2026-07-30
 ---
 
 # EngineeringWorkflow Skill Packaging
 
-Decision record: [ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md).
+Decision records:
+[ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md)
+and
+[ADR-005](../adr/adr-005_external-engineering-specifications.md).
 
 ## Purpose
 
@@ -25,7 +28,7 @@ flowchart TB
     W --> R["engineering-research"]
     W --> E["engineering-execution-plan"]
     W --> C["engineering-case-study"]
-    W --> S["engineering-specs<br/>versioned content catalog"]
+    W -.->|"Git fetch + lock"| S["EngineeringSpecifications<br/>independent repository"]
     W --> H["engineeringctl<br/>Harness Bootstrap"]
     H --> I["epctl init<br/>EP-owned artifacts"]
 ```
@@ -37,10 +40,6 @@ EngineeringWorkflow/
 ├── SKILL.md
 ├── agents/openai.yaml
 ├── assets/harness-*.md
-├── engineering-specs/
-│   ├── catalog.json
-│   ├── core/
-│   └── languages/
 ├── references/bootstrap.md
 ├── scripts/
 │   ├── engineeringctl.py
@@ -60,7 +59,8 @@ distribution repository. Every professional Skill owns its `SKILL.md`,
 
 | Owner | Responsibilities |
 |---|---|
-| `engineering-workflow` | Project Harness templates, manifest, Bootstrap preflight, Engineering Spec resolution, aggregate routing |
+| `engineering-workflow` | Project Harness templates, manifest, Bootstrap preflight, remote Engineering Spec resolution, aggregate routing |
+| `EngineeringSpecifications` | Catalog schema, normative Specs, content versions, digests, and releases |
 | `engineering-benchmark` | Suite, Scenario, Run, Result and evidence sealing |
 | `engineering-research` | Research questions, topics, corpus, snapshots and Synthesis |
 | `engineering-execution-plan` | ADR, ExecPlan, Task, Checkpoint, Bugfix and technical debt |
@@ -128,8 +128,9 @@ The README carries the explicit migration path.
 - Validate all five Skill metadata packages and four eval catalogs.
 - Run `engineeringctl` dry-run, apply, idempotence, preservation and line-limit
   tests, plus Core, language, polyglot, lock, drift, and project Spec tests.
-- Validate the bundled `engineering-specs/catalog.json` and prove it remains a
-  portable content package in an independently installed Workflow Skill.
+- Reject bundled normative Spec content and prove an independently installed
+  Workflow Skill resolves a temporary or public Git-backed Catalog.
+- Prove locked sync remains pinned and explicit update adopts a moved Git ref.
 - Run the independently installed `engineering-execution-plan` test suite.
 - Copy the root aggregation package with its bundled EP component and prove
   Bootstrap works without private host paths.
