@@ -12,6 +12,7 @@ Synthesis；只有 Research Owner 明确授权后才封存并交给 ADR 或实�
 ```mermaid
 flowchart LR
     Q["Research Questions"] --> C["多文档 Corpus<br/>来源、专题、实验"]
+    B["engineering-benchmark<br/>sealed Run evidence"] --> C
     C --> R["Research Round<br/>焦点、证据增量、结论变化"]
     R --> M["Manifest<br/>成员、入口、引用、摘要"]
     M --> S["Review-ready Synthesis"]
@@ -65,6 +66,8 @@ docs/research/
   `artifacts/research-snapshot/`，再封存 manifest 和 Synthesis。
 - 原始二进制、日志、trace、benchmark 数据仍走 `artifacts/`，不会因文档
   manifest 自动复制。
+- 需要稳定 Scenario、重复执行、原始 artifacts 与封存摘要的测量，使用独立
+  `engineering-benchmark` 生成 sealed Run；Research 只引用并解释其证据。
 - `SYNTHESIS.md` 是当前累积认识；`mark-review-ready` 默认只递增 revision
   并写入正文摘要，不复制文件。正式评审、对外交接或重大决策时追加
   `--snapshot`，在 `snapshots/` 保存去重后的全量里程碑。
@@ -126,6 +129,9 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
    `A-NNN` 小节，标题先写可读主张、编号放末尾。正文用
    连续 prose、例子、反例、表格或 Mermaid 展开机制，并就近引用 `E-NNN`；
    `E-NNN` 在审计索引映射到 `S-NNN` 来源。单独记录哪些新证据会改变判断。
+   每个关键主张保留可定位来源或可复现实验，并区分 Observation 与
+   Interpretation。可复用或需要审计的实验使用 `engineering-benchmark`，在
+   Research 中记录 `BR-NNN` 与 Manifest payload SHA-256。
 5. 每次新增、删除、移动研究文档后运行 `sync-research`。
 6. 修复 manifest drift、缺失本地引用和不可解释的冲突；绝对来源路径至少记录
    可移植替代或 provenance。
@@ -167,6 +173,8 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 - sealed `RESEARCH_MANIFEST.json`；
 - sealed `SYNTHESIS.md`；
 - 可选的 snapshot、notes 和 artifacts。
+- 对路线有影响的 sealed Benchmark Run 引用及其研究级解释；Benchmark Bundle
+  本身仍由独立生产者维护。
 
 消费者必须依赖该文件契约，而不是本 skill 的安装路径。完整字段、摘要算法、
 引用诊断和兼容规则见 `references/manifest.md`；典型场景见

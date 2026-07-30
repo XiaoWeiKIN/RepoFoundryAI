@@ -1,0 +1,7 @@
+{
+  "architecture_roots": [
+    "docs/adr",
+    "docs/design-docs"
+  ],
+  "version": 1
+}

@@ -144,8 +144,13 @@ def skill_frontmatter(path: Path) -> dict[str, str]:
 
 def validate_skill_packages() -> None:
     skills = (
-        (ROOT, "execution-plan"),
+        (ROOT, "engineering-workflow"),
+        (
+            ROOT / "engineering-execution-plan",
+            "engineering-execution-plan",
+        ),
         (ROOT / "engineering-research", "engineering-research"),
+        (ROOT / "engineering-benchmark", "engineering-benchmark"),
         (ROOT / "engineering-case-study", "engineering-case-study"),
     )
     for directory, expected_name in skills:
@@ -169,8 +174,18 @@ def validate_skill_packages() -> None:
         ROOT / "README.md",
         ROOT / "SKILL.md",
         *sorted((ROOT / "references").glob("*.md")),
+        ROOT / "engineering-execution-plan" / "SKILL.md",
+        *sorted(
+            (
+                ROOT
+                / "engineering-execution-plan"
+                / "references"
+            ).glob("*.md")
+        ),
         ROOT / "engineering-research" / "SKILL.md",
         *sorted((ROOT / "engineering-research" / "references").glob("*.md")),
+        ROOT / "engineering-benchmark" / "SKILL.md",
+        *sorted((ROOT / "engineering-benchmark" / "references").glob("*.md")),
         ROOT / "engineering-case-study" / "SKILL.md",
         *sorted((ROOT / "engineering-case-study" / "references").glob("*.md")),
     ]
@@ -252,7 +267,18 @@ def validate_eval_catalog(path: Path, expected_skill_name: str) -> None:
 
 def validate_eval_catalogs() -> None:
     catalogs = (
-        (ROOT / "evals" / "evals.json", "execution-plan"),
+        (ROOT / "evals" / "evals.json", "engineering-workflow"),
+        (
+            ROOT
+            / "engineering-execution-plan"
+            / "evals"
+            / "evals.json",
+            "engineering-execution-plan",
+        ),
+        (
+            ROOT / "engineering-benchmark" / "evals" / "evals.json",
+            "engineering-benchmark",
+        ),
         (
             ROOT / "engineering-case-study" / "evals" / "evals.json",
             "engineering-case-study",
@@ -302,7 +328,12 @@ def validate_generated_indexes() -> None:
             [
                 sys.executable,
                 "-B",
-                str(copied / "scripts" / "epctl.py"),
+                str(
+                    copied
+                    / "engineering-execution-plan"
+                    / "scripts"
+                    / "epctl.py"
+                ),
                 "--repo",
                 str(copied),
                 "reindex",
@@ -366,7 +397,37 @@ def main() -> int:
             ],
         )
         run(
-            "Execution Plan and repository contract tests",
+            "Engineering Benchmark tests",
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "engineering-benchmark/tests",
+                "-p",
+                "test_*.py",
+                "-v",
+            ],
+        )
+        run(
+            "Engineering Execution Plan tests",
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "engineering-execution-plan/tests",
+                "-p",
+                "test_*.py",
+                "-v",
+            ],
+        )
+        run(
+            "Engineering Workflow and repository contract tests",
             [
                 sys.executable,
                 "-B",
@@ -392,11 +453,16 @@ def main() -> int:
             ],
         )
         run(
-            "Execution Plan repository validation",
+            "Engineering Execution Plan repository validation",
             [
                 sys.executable,
                 "-B",
-                str(ROOT / "scripts" / "epctl.py"),
+                str(
+                    ROOT
+                    / "engineering-execution-plan"
+                    / "scripts"
+                    / "epctl.py"
+                ),
                 "--repo",
                 str(ROOT),
                 "validate",

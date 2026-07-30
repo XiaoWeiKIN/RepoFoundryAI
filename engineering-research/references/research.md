@@ -140,6 +140,13 @@ Prefer source code and tests for implementation behavior. Record source
 freshness and confidence for external claims. Preserve contradictory evidence
 instead of averaging it away.
 
+For a repeatable measurement, load test, performance comparison, capacity
+experiment, or sealed evidence bundle, use the independent Engineering
+Benchmark contract. Record the `BR-NNN`, Manifest payload SHA-256, Scenario
+boundary, observations, and why the Run changes or does not change option
+ranking. Research interprets the evidence; it does not rewrite the sealed
+Result or artifacts.
+
 ## Multi-document organization
 
 Use corpus documents for focused topics, sources, matrices, experiments, or

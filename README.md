@@ -1,21 +1,32 @@
-# EngineeringPlan
+# EngineeringWorkflow
 
-EngineeringPlan 由三个可独立安装、独立触发的 Skill 组成：
+EngineeringWorkflow 由一个聚合 Skill 和四个专业 Skill 组成：
 
+- **Engineering Workflow**：初始化和验证 Agent-first 项目 Harness，并把后续
+  工作路由到合适的专业 Skill。
+- **Engineering Benchmark**：把外部压测、性能对比、容量验证和回归测试组织成
+  Suite、稳定 Scenario 与 sealed Evidence Bundle。
 - **Engineering Research**：把大量源码、文档、实验和外部研究组织成可审计的
   多文档 corpus，并输出 sealed Synthesis。
-- **Execution Plan**：消费已经完成的 Research，治理 ADR、ExecPlan、Task、
-  Checkpoint、Bugfix 和技术债务。
+- **Engineering Execution Plan**：消费已经完成的 Research，治理 ADR、
+  ExecPlan、Task、Checkpoint、Bugfix 和技术债务。
 - **Engineering Case Study**：在用户明确要求分享时，结合代码、Research、
   ADR 和 EP 过程记录，撰写中文、英文或中英双语的模块设计、最佳实践和交付案例。
 
-它们共享版本化文件契约，不互相导入，也不依赖彼此的安装位置。
+四个专业 Skill 共享版本化文件契约，可独立安装和运行。聚合 Skill 只在项目
+Bootstrap 时显式组合仓库内的 Engineering Execution Plan 初始化契约。
 
 ```mermaid
 flowchart LR
-    U["功能未知与工程问题"] --> R["engineering-research<br/>Research Questions + Corpus"]
+    W["engineering-workflow<br/>Harness + routing"] --> U["工程请求"]
+    U --> B["engineering-benchmark<br/>Suite + Scenario + Run"]
+    B --> M0["sealed Evidence Bundle<br/>Result + artifacts + Manifest"]
+    M0 -->|"路线未知或证据矛盾"| R["engineering-research<br/>Research Questions + Corpus"]
+    M0 -->|"最终 revision 验收"| E
+    M0 -->|"持续回归与容量"| O["CI / Runbook"]
+    U --> R
     R --> M["sealed contract<br/>Manifest + Synthesis"]
-    M --> A["execution-plan<br/>ADR + Decision Authority"]
+    M --> A["engineering-execution-plan<br/>ADR + Decision Authority"]
     A --> E["ExecPlan<br/>实现、验证、恢复"]
     E --> C["Checkpoint<br/>封存已完成历史"]
     R -. "手动触发分享" .-> S["engineering-case-study<br/>代码取证 + 工程叙事"]
@@ -26,15 +37,22 @@ flowchart LR
 `python3 -B scripts/check.py` 是唯一检查入口；GitHub Actions、GitLab CI 或
 其他 Pipeline 只负责调用它。
 
-## 为什么拆成三个 Skill
+## 为什么拆成四个专业 Skill
 
-Research、实施治理和分享写作的触发条件、证据责任与内容增长方式不同。
+测量取证、研究综合、实施治理和分享写作的触发条件、证据责任与内容增长方式不同。
 
 | Skill | 回答的问题 | 主要制品 | 不负责 |
 |---|---|---|---|
+| Engineering Workflow | 项目如何建立 Agent 可导航、可验证的工程入口？ | AGENTS、Architecture、Docs Map、Harness Manifest | 接受 ADR、生成专业制品 |
+| Engineering Benchmark | 怎样可复现地测量，某次执行相对预声明规则得到什么结果？ | Suite、Scenario、Run、Result、Evidence Manifest | 解释跨来源矛盾、接受 ADR、创建实施计划 |
 | Engineering Research | 我们知道什么，证据可靠吗，哪些选项成立？ | Research、Corpus Manifest、Synthesis、Snapshot | 接受 ADR、创建实施计划 |
-| Execution Plan | 已有证据支持什么决定，怎样实施并验收？ | ADR、ExecPlan、Task、Checkpoint、Bugfix | 搜集新证据、维护研究 corpus |
+| Engineering Execution Plan | 已有证据支持什么决定，怎样实施并验收？ | ADR、ExecPlan、Task、Checkpoint、Bugfix | 搜集新证据、维护研究 corpus |
 | Engineering Case Study | 哪个工程判断值得分享，代码和过程证据怎样讲清？ | 模块设计解读、最佳实践、交付案例 | 自动生成、改变事实制品、替代当前规范 |
+
+Benchmark 不需要全部合并进 Research：探索性对比和会改变路线的实验进入
+Research；已决定路线的最终 revision 验收直接成为 EP evidence；夜间回归与容量
+趋势留在 CI 或 Runbook。只有出现路线未知、证据矛盾或需要重新决策时，持续
+Benchmark 才升级为 Research。
 
 一项 Research 可以包含多篇文档。只要它们服务同一决策目的、共享 Research
 Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当目的、Owner、
@@ -55,52 +73,65 @@ Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当�
 
 ## 仓库布局与安装
 
-这个 Git 仓库同时是发行仓库和兼容入口：
+这个 Git 仓库同时是发行仓库和聚合 Skill：
 
 ```text
-EngineeringPlan/
-├── SKILL.md                         # execution-plan Skill 根
-├── scripts/epctl.py
+EngineeringWorkflow/
+├── SKILL.md                         # engineering-workflow 聚合 Skill
+├── scripts/
+│   ├── engineeringctl.py            # Harness Bootstrap 与验证
+│   └── check.py                     # 唯一仓库检查入口
+├── assets/
+│   └── harness-*.md
+├── engineering-benchmark/
+│   ├── SKILL.md                     # engineering-benchmark Skill 根
+│   └── scripts/benchctl.py
 ├── engineering-research/
 │   ├── SKILL.md                     # engineering-research Skill 根
 │   └── scripts/researchctl.py
+├── engineering-execution-plan/
+│   ├── SKILL.md                     # engineering-execution-plan Skill 根
+│   └── scripts/epctl.py
 └── engineering-case-study/
     └── SKILL.md                     # engineering-case-study Skill 根
 ```
 
-要求 Python 3.10+；两个治理 CLI 都只使用标准库，分享写作 Skill 不需要专用
+要求 Python 3.10+；四个治理 CLI 都只使用标准库，分享写作 Skill 不需要专用
 CLI。仓库可以检出到任意稳定目录：
 
 ```bash
-git clone https://github.com/XiaoWeiKIN/EngineeringPlan.git \
-  /absolute/path/to/EngineeringPlan
-export ENGINEERING_PLAN_HOME=/absolute/path/to/EngineeringPlan
+git clone https://github.com/XiaoWeiKIN/EngineeringWorkflow.git \
+  /absolute/path/to/EngineeringWorkflow
+export ENGINEERING_WORKFLOW_HOME=/absolute/path/to/EngineeringWorkflow
 ```
 
-按所用 Agent 或 Harness 的 Skill 发现机制，分别注册三个目录：
+按所用 Agent 或 Harness 的 Skill 发现机制，分别注册五个目录：
 
 ```text
-/absolute/path/to/EngineeringPlan/engineering-research
-/absolute/path/to/EngineeringPlan
-/absolute/path/to/EngineeringPlan/engineering-case-study
+/absolute/path/to/EngineeringWorkflow
+/absolute/path/to/EngineeringWorkflow/engineering-benchmark
+/absolute/path/to/EngineeringWorkflow/engineering-research
+/absolute/path/to/EngineeringWorkflow/engineering-execution-plan
+/absolute/path/to/EngineeringWorkflow/engineering-case-study
 ```
 
-三个目录依次是 Research、Execution Plan 和 Case Study Skill。目录扫描、
-符号链接、配置文件或其他注册方式均可；本项目不要求安装到任何特定 Agent 的
-私有目录。根目录保留 `execution-plan` 是为了兼容已有安装，三个注册目标之间
-没有运行时依赖。
+根目录是 Workflow 聚合 Skill；四个子目录依次是 Benchmark、Research、
+Execution Plan 和 Case Study 专业 Skill。目录扫描、符号链接、配置文件或其他
+注册方式均可；本项目不要求安装到任何特定 Agent 的私有目录。
 
 更新发行包：
 
 ```bash
-git -C "$ENGINEERING_PLAN_HOME" pull --ff-only
+git -C "$ENGINEERING_WORKFLOW_HOME" pull --ff-only
 ```
 
 如果宿主支持 `$<skill-name>` 调用语法，可以分别调用：
 
 ```text
+使用 $engineering-workflow 初始化项目 Harness 并路由后续工程工作。
+使用 $engineering-benchmark 为 spans placement 设计可复现 Scenario 并封存 Run。
 使用 $engineering-research 调研 spans 聚合方案并整理现有多文档 corpus。
-使用 $execution-plan 基于已完成的 Research 形成 ADR 和可恢复的开发计划。
+使用 $engineering-execution-plan 基于已完成的 Research 形成 ADR 和可恢复的开发计划。
 使用 $engineering-case-study 基于代码、Research 和 EP-038 写一篇模块设计分享。
 ```
 
@@ -111,16 +142,89 @@ git -C "$ENGINEERING_PLAN_HOME" pull --ff-only
 以下命令都在目标代码仓库根目录运行：
 
 ```bash
-ENGINEERING_PLAN_HOME=/absolute/path/to/EngineeringPlan
-RESEARCHCTL="$ENGINEERING_PLAN_HOME/engineering-research/scripts/researchctl.py"
-EPCTL="$ENGINEERING_PLAN_HOME/scripts/epctl.py"
+ENGINEERING_WORKFLOW_HOME=/absolute/path/to/EngineeringWorkflow
+WORKFLOWCTL="$ENGINEERING_WORKFLOW_HOME/scripts/engineeringctl.py"
+BENCHCTL="$ENGINEERING_WORKFLOW_HOME/engineering-benchmark/scripts/benchctl.py"
+RESEARCHCTL="$ENGINEERING_WORKFLOW_HOME/engineering-research/scripts/researchctl.py"
+EPCTL="$ENGINEERING_WORKFLOW_HOME/engineering-execution-plan/scripts/epctl.py"
 
+python3 "$BENCHCTL" --repo . init
 python3 "$RESEARCHCTL" --repo . init
 python3 "$EPCTL" --repo . init
 ```
 
-两个 `init` 都是幂等的，并共享 `docs/.epctl/state.json` 中的 Research ID
-高水位。
+三个 `init` 都是幂等的。Benchmark 使用独立的
+`benchmarks/.benchctl/state.json`；Research 与 Execution Plan 共享
+`docs/.epctl/state.json` 中的 Research ID 高水位。
+
+### 初始化 Codex 项目文档 Harness
+
+`init` 只创建各 Skill 自己拥有的制品结构。要同时建立短 `AGENTS.md`、架构地图、
+文档索引、质量、可靠性、安全和 Design Doc 入口，先预览：
+
+```bash
+python3 "$WORKFLOWCTL" --repo . bootstrap --profile codex
+```
+
+确认没有 conflict 后再应用并验证：
+
+```bash
+python3 "$WORKFLOWCTL" --repo . bootstrap --profile codex --apply
+python3 "$WORKFLOWCTL" --repo . validate --harness
+```
+
+Bootstrap 只创建缺失路径，不覆盖已有文件。每个注册的 Agent instruction file
+按物理行计数必须不超过 100 行；首版只注册根 `AGENTS.md`，模板保留至少 20 行
+维护余量。现有文件超过上限时，工具报告冲突并拒绝写入。
+
+### 创建和封存 Benchmark
+
+先创建长期 Suite，填写生成的 `BENCHMARK.md`，再创建可复用 Scenario：
+
+```bash
+python3 "$BENCHCTL" --repo . new-suite \
+  --slug spans-placement \
+  --title "Spans placement strategies" \
+  --owner "Observability Performance Owner"
+
+python3 "$BENCHCTL" --repo . new-scenario B-001 \
+  --slug placement-order-key \
+  --title "Compare placement order-key strategies"
+```
+
+Scenario 必须在看到结果前写清 hypothesis、falsifier、受控变量、数据集、环境、
+命令、warmup、重复策略、指标、正确性检查、判定规则和外推边界。完成后针对
+明确的被测 revision 与 harness revision 创建一次 Run：
+
+```bash
+python3 "$BENCHCTL" --repo . new-run BS-001 \
+  --slug candidate-a \
+  --title "Candidate A at 10k spans/s" \
+  --subject-revision "git:<subject-commit>" \
+  --harness-revision "git:<harness-commit>"
+```
+
+执行真实压测，把原始 CSV、JSON、日志、Trace、profile 或截图原样放入 Run 的
+`artifacts/`，再填写 `RESULT.md`。文件格式不要求全部统一；统一的是 Scenario、
+Result 和 Manifest 契约。完成后封存：
+
+```bash
+python3 "$BENCHCTL" --repo . seal-run BR-001 \
+  --outcome passed \
+  --executed-by "Benchmark Operator"
+```
+
+`passed`、`failed`、`inconclusive`、`errored` 都是可封存结果。Manifest 会清点
+`SCENARIO.md`、`RESULT.md` 和本地 artifacts 的字节数与 SHA-256；封存后任何
+增删改都会验证失败。修正或补证据要创建新 Run，并用
+`--supersedes BR-NNN` 建立替代链。
+
+生成下游可直接消费的引用：
+
+```bash
+python3 "$BENCHCTL" --repo . evidence-ref BR-001
+# benchmark:BR-001@sha256:<manifest-payload-sha256>
+```
 
 ### 手动生成分享案例
 
@@ -271,7 +375,7 @@ Research Gate。
 
 ### 3. 形成 ADR
 
-`execution-plan` 只接受 valid、concluded 的 Research。若 Research 带 manifest，
+`engineering-execution-plan` 只接受 valid、concluded 的 Research。若 Research 带 manifest，
 还必须是 sealed 且未被篡改：
 
 ```bash
@@ -387,6 +491,7 @@ python3 "$EPCTL" --repo . checkpoint EP-001 \
 ## 状态、验证与归档
 
 ```bash
+python3 "$BENCHCTL" --repo . validate
 python3 "$RESEARCHCTL" --repo . validate
 python3 "$EPCTL" --repo . validate
 python3 "$EPCTL" --repo . validate --fix-index
@@ -415,8 +520,8 @@ flowchart LR
     P --> G["受保护分支的合并门禁"]
 ```
 
-Canonical check 会运行两个治理 CLI 的测试与仓库验证、三个 Skill 包的
-可移植性检查、本地
+Canonical check 会运行四个治理 CLI 的测试、Research 与 Execution Plan
+仓库验证、五个 Skill 包的可移植性检查、本地
 Markdown 链接检查、cache-topology 端到端契约测试，以及索引 regeneration-diff。
 CI 文件不得复制这些子命令：
 
@@ -430,16 +535,27 @@ CI 文件不得复制这些子命令：
 设置属于仓库治理，不属于 Skill 的安装目录。GitLab Free 可用它路由 review；
 把 Code Owner approval 设为强制需要支持该能力的 GitLab tier，CI 合并门禁不受
 此限制。完整原则见
-[文档与代码完整性](./references/integrity.md)。
+[文档与代码完整性](./engineering-execution-plan/references/integrity.md)。
 
 ## 兼容性
 
+- 根 Skill 已从 `$execution-plan` 更名为 `$engineering-workflow`；原 EP Skill
+  位于 `engineering-execution-plan/`，调用方需把根 `scripts/epctl.py` 更新为
+  `engineering-execution-plan/scripts/epctl.py`。
+- GitHub 仓库合并后需要从 `EngineeringPlan` 重命名为
+  `EngineeringWorkflow`。GitHub 会重定向旧仓库 URL，但本地 clone 仍应更新
+  `origin`；参见
+  [GitHub 重命名说明](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)。
 - 旧 Research 包没有 `RESEARCH_MANIFEST.json` 时仍可被两个验证器读取。
 - `epctl new-research`、`archive-research` 等旧命令暂时保留，但新工作应使用
   `engineering-research`；这是迁移兼容面，不是新的职责边界。
 - Research schema 1 继续按 legacy 契约读取；schema 1.1 增加人类可见元数据、
   Round、Synthesis revision 和显式终止授权。
-- 三个 Skill 不通过相对 import、安装目录或运行时调用耦合。
+- 四个专业 Skill 不通过相对 import、安装目录或运行时调用耦合；聚合
+  `engineering-workflow` 只在 bundled distribution 中显式组合 EP 初始化。
+- Engineering Benchmark 是全新契约，不承担旧压测目录或历史报告格式的适配。
+- 原始 Benchmark artifacts 不强制统一格式；`RESULT.md` 与
+  `EVIDENCE_MANIFEST.json` 提供统一消费和完整性边界。
 - Manifest 是可选的向后兼容字段；一旦出现，就必须满足版本化契约。
 - v2.0–v2.3 ExecPlan 继续按原 schema 读取；新计划使用 v2.4 Architecture
   Input Set。
@@ -458,7 +574,18 @@ python3 -B scripts/check.py
 端到端：
 
 - [可运行的 cache-topology 端到端示例](./examples/cache-topology/README.md)
-- [多 ADR / Design Doc Architecture Input Set 示例](./examples/architecture-input-set/README.md)
+- [多 ADR / Design Doc Architecture Input Set 示例](./engineering-execution-plan/examples/architecture-input-set/README.md)
+
+Engineering Workflow：
+
+- [Skill 入口](./SKILL.md)
+- [Codex 项目文档 Bootstrap](./references/bootstrap.md)
+
+Engineering Benchmark：
+
+- [Skill 入口](./engineering-benchmark/SKILL.md)
+- [Suite / Scenario / Run 与 Manifest 契约](./engineering-benchmark/references/contract.md)
+- [Research、EP 与 CI 路由示例](./engineering-benchmark/references/examples.md)
 
 Engineering Research：
 
@@ -468,17 +595,18 @@ Engineering Research：
 - [Manifest 契约](./engineering-research/references/manifest.md)
 - [典型场景](./engineering-research/references/examples.md)
 
-Execution Plan：
+Engineering Execution Plan：
 
-- [Skill 入口](./SKILL.md)
-- [Research 消费契约](./references/research.md)
-- [ADR 与 Architecture Gate](./references/adr.md)
-- [ExecPlan 规范](./references/template.md)
-- [制品路由与状态机](./references/templates.md)
-- [Checkpoint 与有界工作集](./references/checkpoints.md)
-- [文档与代码完整性](./references/integrity.md)
-- [Bugfix 规则](./references/bugfix.md)
-- [完整示例](./references/examples.md)
+- [Skill 入口](./engineering-execution-plan/SKILL.md)
+- [Research 消费契约](./engineering-execution-plan/references/research.md)
+- [Benchmark final-revision evidence](./engineering-execution-plan/references/benchmark.md)
+- [ADR 与 Architecture Gate](./engineering-execution-plan/references/adr.md)
+- [ExecPlan 规范](./engineering-execution-plan/references/template.md)
+- [制品路由与状态机](./engineering-execution-plan/references/templates.md)
+- [Checkpoint 与有界工作集](./engineering-execution-plan/references/checkpoints.md)
+- [文档与代码完整性](./engineering-execution-plan/references/integrity.md)
+- [Bugfix 规则](./engineering-execution-plan/references/bugfix.md)
+- [完整示例](./engineering-execution-plan/references/examples.md)
 
 Engineering Case Study：
 

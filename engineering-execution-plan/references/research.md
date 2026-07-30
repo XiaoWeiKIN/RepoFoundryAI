@@ -11,7 +11,7 @@
 
 ## Ownership boundary
 
-`execution-plan` consumes concluded Research; it does not own evidence
+`engineering-execution-plan` consumes concluded Research; it does not own evidence
 acquisition, experiments, multi-document corpus maintenance, or Synthesis
 authoring. Use the independent `engineering-research` skill or any producer
 that emits the compatible repository file contract.
@@ -106,6 +106,12 @@ Do not force downstream readers to load the complete corpus. Restate:
 
 The manifest provides auditability; the sealed Synthesis provides bounded
 decision context.
+
+A sealed Engineering Benchmark Run may be one evidence source inside Research.
+When a Run can change option ranking or contradicts other sources, Research
+must interpret it before ADR or ExecPlan consumption. When the route is already
+accepted and the Run only verifies the final revision, the ExecPlan may consume
+the Benchmark contract directly without creating another Research.
 
 Schema 1.1 concluded Research additionally carries `owner`, `maturity:
 review_ready`, `approved_by`, `approved_at`, and `approval_ref`. Consumers

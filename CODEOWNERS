@@ -3,9 +3,17 @@
 
 # Contract and lifecycle changes always need the repository owner.
 /scripts/ @XiaoWeiKIN
+/engineering-execution-plan/scripts/ @XiaoWeiKIN
 /engineering-research/scripts/ @XiaoWeiKIN
+/engineering-benchmark/scripts/ @XiaoWeiKIN
 /assets/ @XiaoWeiKIN
+/engineering-execution-plan/assets/ @XiaoWeiKIN
 /engineering-research/assets/ @XiaoWeiKIN
+/engineering-benchmark/assets/ @XiaoWeiKIN
+/engineering-case-study/assets/ @XiaoWeiKIN
 /references/ @XiaoWeiKIN
+/engineering-execution-plan/references/ @XiaoWeiKIN
 /engineering-research/references/ @XiaoWeiKIN
+/engineering-benchmark/references/ @XiaoWeiKIN
+/engineering-case-study/references/ @XiaoWeiKIN
 /examples/ @XiaoWeiKIN

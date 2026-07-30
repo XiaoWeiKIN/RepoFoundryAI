@@ -1,0 +1,125 @@
+{
+  "skill_name": "engineering-benchmark",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "使用 $engineering-benchmark 比较 spans placement 的 order-key 方案 A 和 B，结果可能影响架构方向。",
+      "expected_output": "创建独立 Suite 和执行前完成的 Scenario，预声明变量、falsifier、指标、重复策略与判定规则；针对明确 revisions 创建 Run、保存原始 artifacts 并封存 Manifest。因为结果可能改变路线，只把 sealed evidence 交给 Engineering Research，不直接接受 ADR。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "predeclares_protocol",
+          "description": "在看到结果前固定假设、falsifier、变量、环境、指标、重复策略和判定规则"
+        },
+        {
+          "name": "separates_observation_and_decision",
+          "description": "Benchmark 记录观察和规则结果，但不形成架构决定"
+        },
+        {
+          "name": "routes_to_research",
+          "description": "路线未知时把 sealed Run 与 digest 交给 Research 解释"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "EP-042 的路线已经确定，请在最终 commit 上验证 p95 小于 120ms，然后作为归档证据。",
+      "expected_output": "复用或创建与 EP 验收条件完全一致的 Scenario，在 final subject revision 和固定 harness revision 上创建 Run，执行并封存；若通过，向 EP 提供 benchmark:BR-NNN@sha256:<payload>。除非出现路线未知或证据矛盾，不新建 Research。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "binds_final_revision",
+          "description": "Run 明确绑定最终 subject revision 和 harness revision"
+        },
+        {
+          "name": "matches_acceptance_rule",
+          "description": "Scenario 的环境、流量、正确性和 p95 阈值与 EP 验收条件一致"
+        },
+        {
+          "name": "routes_directly_to_ep",
+          "description": "已决定路线的最终验收直接进入 EP evidence，不机械创建 Research"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "把这个 benchmark 每晚跑一次，结果都合并到 Research 里。",
+      "expected_output": "使用稳定 Scenario，由 CI 或 Runbook 管理周期执行和每次 Run；不把每晚结果机械写进 Research。只有回归无法解释、来源矛盾或要重开路线决策时，才把相关 sealed Runs 升级给 Research。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "keeps_continuous_runs_operational",
+          "description": "定时执行、趋势和告警属于 CI、容量或 runbook 治理"
+        },
+        {
+          "name": "avoids_research_growth",
+          "description": "不会为每次周期 Run 创建或扩写 Research"
+        },
+        {
+          "name": "defines_escalation_rule",
+          "description": "只在路线未知、矛盾或需改变决策时升级 Research"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "压测工具中途崩了，删掉这次结果，修好后把同一个 BR 改成 passed。",
+      "expected_output": "保留日志和部分观察，将当前 Run 封存为 errored；修复 harness 后创建新 Run，并在同一 Scenario 下用 supersedes 指向旧 Run。禁止修改 sealed bundle 或把执行错误回写成 passed。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "preserves_negative_evidence",
+          "description": "errored、failed 和 inconclusive 都作为有效历史证据保留"
+        },
+        {
+          "name": "creates_superseding_run",
+          "description": "修复后创建新 Run，旧 Run 不被覆盖"
+        },
+        {
+          "name": "keeps_outcome_semantics",
+          "description": "passed 描述预声明规则满足，不是对失败历史的重命名"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "外部压测平台导出有 CSV、JSON、Trace 和一个很大的原始包，Benchmark 文件格式是不是都得统一？",
+      "expected_output": "统一 Suite、Scenario、Result 和 Manifest 的元数据与完整性契约，但保留原始 artifacts 的原生格式。大文件可用不可变 URI 或 job ID、digest、保留策略和访问条件登记；本地 Manifest 只封存实际纳入本地 bundle 的文件。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "standardizes_contract_not_payload",
+          "description": "统一可消费元数据和摘要，不要求所有工具输出同一种数据格式"
+        },
+        {
+          "name": "records_external_evidence",
+          "description": "外部证据包含不可变标识、digest、retention 与 access boundary"
+        },
+        {
+          "name": "does_not_overclaim_manifest",
+          "description": "不声称本地 Manifest 能证明外部可变 URL 永久有效"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "封存后发现 percentile 算法写错了，直接修改 SCENARIO.md 和 RESULT.md 就好。",
+      "expected_output": "拒绝修改 sealed evidence。因为聚合和判定协议发生实质变化，创建新 Scenario 和新 Runs；保留旧证据，由 Research 在需要时解释两个协议为什么不可直接比较。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "preserves_sealed_bundle",
+          "description": "不修改封存后的 Scenario snapshot、Result 或 artifacts"
+        },
+        {
+          "name": "creates_new_scenario",
+          "description": "协议和判定规则变化时创建新 Scenario，而不滥用 Run supersedes"
+        },
+        {
+          "name": "keeps_comparison_interpretive",
+          "description": "跨协议比较由 Research 解释，不由 Benchmark 强行合并"
+        }
+      ]
+    }
+  ]
+}

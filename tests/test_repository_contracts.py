@@ -11,8 +11,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EPCTL = ROOT / "scripts" / "epctl.py"
+EPCTL = (
+    ROOT
+    / "engineering-execution-plan"
+    / "scripts"
+    / "epctl.py"
+)
 RESEARCHCTL = ROOT / "engineering-research" / "scripts" / "researchctl.py"
+BENCHCTL = ROOT / "engineering-benchmark" / "scripts" / "benchctl.py"
 EXAMPLE = ROOT / "examples" / "cache-topology"
 
 
@@ -241,19 +247,33 @@ class RepositoryContractTestCase(unittest.TestCase):
 
     def test_project_brand_and_skill_names_are_independent(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertTrue(readme.startswith("# EngineeringPlan\n"))
+        self.assertTrue(readme.startswith("# EngineeringWorkflow\n"))
         self.assertIn(
-            "https://github.com/XiaoWeiKIN/EngineeringPlan.git",
+            "https://github.com/XiaoWeiKIN/EngineeringWorkflow.git",
             readme,
         )
         self.assertNotIn("XiaoWeiKIN/ExecutionPlan", readme)
         self.assertIn(
-            "name: execution-plan",
+            "name: engineering-workflow",
             (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "name: engineering-execution-plan",
+            (
+                ROOT
+                / "engineering-execution-plan"
+                / "SKILL.md"
+            ).read_text(encoding="utf-8"),
         )
         self.assertIn(
             "name: engineering-research",
             (ROOT / "engineering-research" / "SKILL.md").read_text(
+                encoding="utf-8"
+            ),
+        )
+        self.assertIn(
+            "name: engineering-benchmark",
+            (ROOT / "engineering-benchmark" / "SKILL.md").read_text(
                 encoding="utf-8"
             ),
         )
@@ -264,21 +284,178 @@ class RepositoryContractTestCase(unittest.TestCase):
             ),
         )
 
+    def test_codex_agents_bootstrap_template_has_reserved_line_budget(self) -> None:
+        template = ROOT / "assets" / "harness-agents.md"
+        line_count = len(template.read_text(encoding="utf-8").splitlines())
+
+        self.assertLessEqual(line_count, 80)
+        self.assertIn(
+            "at or below 100 physical lines",
+            template.read_text(encoding="utf-8"),
+        )
+
+    def test_execplan_consumes_sealed_benchmark_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            self.run_cli(BENCHCTL, repository, "init")
+            suite = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "new-suite",
+                    "--slug",
+                    "final-acceptance",
+                    "--title",
+                    "Final acceptance benchmark",
+                    "--owner",
+                    "Performance Owner",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(suite)
+            scenario = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "new-scenario",
+                    "B-001",
+                    "--slug",
+                    "p95",
+                    "--title",
+                    "Final revision p95",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(scenario)
+            result = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "new-run",
+                    "BS-001",
+                    "--slug",
+                    "verified-revision",
+                    "--title",
+                    "Verified revision",
+                    "--subject-revision",
+                    "git:verified-revision",
+                    "--harness-revision",
+                    "git:benchmark-harness",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(result)
+            artifact = result.parent / "artifacts" / "latency.json"
+            artifact.write_text('{"p95_ms":91}\n', encoding="utf-8")
+            manifest_path = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "seal-run",
+                    "BR-001",
+                    "--outcome",
+                    "passed",
+                    "--executed-by",
+                    "Contract Test Operator",
+                ).stdout.strip()
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            evidence = (
+                "benchmark:BR-001@sha256:"
+                + manifest["payload_sha256"]
+            )
+
+            self.run_cli(EPCTL, repository, "init")
+            plan = Path(
+                self.run_cli(
+                    EPCTL,
+                    repository,
+                    "new-ep",
+                    "--slug",
+                    "benchmark-acceptance",
+                    "--title",
+                    "Benchmark acceptance",
+                    "--research-not-required-reason",
+                    "The accepted route is already fixed.",
+                    "--architecture-not-required-reason",
+                    "This plan only verifies the fixed route.",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(plan)
+            mismatched = self.run_cli(
+                EPCTL,
+                repository,
+                "archive-ep",
+                "EP-001",
+                "--verified-revision",
+                "git:different-revision",
+                "--evidence",
+                evidence,
+                expected=2,
+            )
+            self.assertIn(
+                "does not match ExecPlan verified_revision",
+                mismatched.stderr,
+            )
+            self.assertTrue(plan.is_file())
+            archived = Path(
+                self.run_cli(
+                    EPCTL,
+                    repository,
+                    "archive-ep",
+                    "EP-001",
+                    "--verified-revision",
+                    "git:verified-revision",
+                    "--evidence",
+                    evidence,
+                ).stdout.strip()
+            )
+            archived_text = archived.read_text(encoding="utf-8")
+            self.assertIn(evidence, archived_text)
+            self.run_cli(EPCTL, repository, "validate")
+
+            artifact.write_text('{"p95_ms":191}\n', encoding="utf-8")
+            drift = self.run_cli(
+                EPCTL,
+                repository,
+                "validate",
+                expected=1,
+            )
+            self.assertIn(
+                "Benchmark evidence inventory or digest drift",
+                drift.stderr,
+            )
+
     def test_skills_work_when_installed_independently(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
-            execution_skill = base / "execution-plan"
-            execution_skill.mkdir()
-            for name in ("SKILL.md", "agents", "assets", "references", "scripts"):
+            workflow_skill = base / "engineering-workflow"
+            workflow_skill.mkdir()
+            for name in (
+                "SKILL.md",
+                "agents",
+                "assets",
+                "references",
+                "scripts",
+            ):
                 source = ROOT / name
-                destination = execution_skill / name
+                destination = workflow_skill / name
                 if source.is_dir():
                     shutil.copytree(source, destination)
                 else:
                     shutil.copy2(source, destination)
+            shutil.copytree(
+                ROOT / "engineering-execution-plan",
+                workflow_skill / "engineering-execution-plan",
+            )
+
+            execution_skill = base / "engineering-execution-plan"
+            shutil.copytree(
+                ROOT / "engineering-execution-plan",
+                execution_skill,
+            )
 
             research_skill = base / "engineering-research"
             shutil.copytree(ROOT / "engineering-research", research_skill)
+            benchmark_skill = base / "engineering-benchmark"
+            shutil.copytree(ROOT / "engineering-benchmark", benchmark_skill)
             case_study_skill = base / "engineering-case-study"
             shutil.copytree(
                 ROOT / "engineering-case-study",
@@ -299,6 +476,40 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "agents/openai.yaml",
             ):
                 self.assertTrue((case_study_skill / relative).is_file())
+
+            benchmark_text = (benchmark_skill / "SKILL.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("name: engineering-benchmark", benchmark_text)
+            for relative in (
+                "references/contract.md",
+                "references/examples.md",
+                "assets/benchmark-index.md",
+                "assets/suite.md",
+                "assets/scenario.md",
+                "assets/result.md",
+                "scripts/benchctl.py",
+                "agents/openai.yaml",
+            ):
+                self.assertTrue((benchmark_skill / relative).is_file())
+
+            workflow_repo = base / "workflow-repo"
+            workflow_repo.mkdir()
+            workflow_script = workflow_skill / "scripts" / "engineeringctl.py"
+            self.run_cli(
+                workflow_script,
+                workflow_repo,
+                "bootstrap",
+                "--profile",
+                "codex",
+                "--apply",
+            )
+            self.run_cli(
+                workflow_script,
+                workflow_repo,
+                "validate",
+                "--harness",
+            )
 
             execution_repo = base / "execution-repo"
             execution_repo.mkdir()
@@ -354,6 +565,21 @@ class RepositoryContractTestCase(unittest.TestCase):
                 research_repo,
                 "validate",
             )
+
+            benchmark_repo = base / "benchmark-repo"
+            benchmark_repo.mkdir()
+            benchmark_script = benchmark_skill / "scripts" / "benchctl.py"
+            self.run_cli(benchmark_script, benchmark_repo, "init")
+            self.run_cli(
+                benchmark_script,
+                benchmark_repo,
+                "new-suite",
+                "--slug",
+                "portable-install",
+                "--title",
+                "Portable install",
+            )
+            self.run_cli(benchmark_script, benchmark_repo, "validate")
 
     def test_ci_adapters_only_call_the_canonical_check(self) -> None:
         github = (ROOT / ".github" / "workflows" / "integrity.yml").read_text(
