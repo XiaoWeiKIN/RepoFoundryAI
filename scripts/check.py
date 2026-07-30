@@ -146,6 +146,7 @@ def validate_skill_packages() -> None:
     skills = (
         (ROOT, "execution-plan"),
         (ROOT / "engineering-research", "engineering-research"),
+        (ROOT / "engineering-benchmark", "engineering-benchmark"),
         (ROOT / "engineering-case-study", "engineering-case-study"),
     )
     for directory, expected_name in skills:
@@ -171,6 +172,8 @@ def validate_skill_packages() -> None:
         *sorted((ROOT / "references").glob("*.md")),
         ROOT / "engineering-research" / "SKILL.md",
         *sorted((ROOT / "engineering-research" / "references").glob("*.md")),
+        ROOT / "engineering-benchmark" / "SKILL.md",
+        *sorted((ROOT / "engineering-benchmark" / "references").glob("*.md")),
         ROOT / "engineering-case-study" / "SKILL.md",
         *sorted((ROOT / "engineering-case-study" / "references").glob("*.md")),
     ]
@@ -253,6 +256,10 @@ def validate_eval_catalog(path: Path, expected_skill_name: str) -> None:
 def validate_eval_catalogs() -> None:
     catalogs = (
         (ROOT / "evals" / "evals.json", "execution-plan"),
+        (
+            ROOT / "engineering-benchmark" / "evals" / "evals.json",
+            "engineering-benchmark",
+        ),
         (
             ROOT / "engineering-case-study" / "evals" / "evals.json",
             "engineering-case-study",
@@ -360,6 +367,21 @@ def main() -> int:
                 "discover",
                 "-s",
                 "engineering-research/tests",
+                "-p",
+                "test_*.py",
+                "-v",
+            ],
+        )
+        run(
+            "Engineering Benchmark tests",
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "engineering-benchmark/tests",
                 "-p",
                 "test_*.py",
                 "-v",

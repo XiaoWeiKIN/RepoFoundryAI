@@ -137,6 +137,9 @@ ID_RE = {
     "R": re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE),
     "ADR": re.compile(r"\bADR-(\d{3,})\b", re.IGNORECASE),
 }
+BENCHMARK_EVIDENCE_RE = re.compile(
+    r"^benchmark:(BR-\d{3,})@sha256:([0-9a-f]{64})$"
+)
 
 
 class EpctlError(RuntimeError):
@@ -2238,6 +2241,266 @@ def inline_text(value: str) -> str:
     return " ".join(value.strip().split())
 
 
+def plan_repository(path: Path) -> Path:
+    for parent in path.parents:
+        if parent.name == "docs":
+            return parent.parent
+    raise EpctlError(f"ExecPlan is not below a docs directory: {path}")
+
+
+def benchmark_manifest_digest(manifest: dict[str, object]) -> str:
+    payload = dict(manifest)
+    payload["payload_sha256"] = ""
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def benchmark_bundle_inventory(
+    repo: Path,
+    run_directory: Path,
+) -> tuple[list[dict[str, object]], list[str]]:
+    errors: list[str] = []
+    allowed_root_files = {
+        "SCENARIO.md",
+        "RESULT.md",
+        "EVIDENCE_MANIFEST.json",
+    }
+    try:
+        reject_symlink_path(repo, run_directory)
+    except EpctlError as exc:
+        return [], [str(exc)]
+    for child in sorted(run_directory.iterdir()):
+        try:
+            reject_symlink_path(repo, child)
+        except EpctlError as exc:
+            errors.append(str(exc))
+            continue
+        if child.is_file() and child.name not in allowed_root_files:
+            errors.append(
+                f"{child}: Benchmark Run files must be below artifacts/"
+            )
+        elif child.is_dir() and child.name != "artifacts":
+            errors.append(
+                f"{child}: unexpected Benchmark Run directory"
+            )
+    artifacts = run_directory / "artifacts"
+    if not artifacts.is_dir() or artifacts.is_symlink():
+        errors.append(f"{artifacts}: missing regular artifacts directory")
+        return [], errors
+
+    paths = [
+        run_directory / "RESULT.md",
+        run_directory / "SCENARIO.md",
+    ]
+    for root, directories, files in os.walk(artifacts, followlinks=False):
+        root_path = Path(root)
+        for name in directories:
+            candidate = root_path / name
+            if candidate.is_symlink():
+                errors.append(
+                    f"{candidate}: symlinked Benchmark artifact directory"
+                )
+        for name in files:
+            candidate = root_path / name
+            if candidate.is_symlink():
+                errors.append(f"{candidate}: symlinked Benchmark artifact")
+            elif candidate.is_file():
+                paths.append(candidate)
+            else:
+                errors.append(
+                    f"{candidate}: Benchmark artifact is not a regular file"
+                )
+    inventory: list[dict[str, object]] = []
+    for path in sorted(paths):
+        if not path.is_file() or path.is_symlink():
+            errors.append(f"{path}: missing regular Benchmark evidence file")
+            continue
+        content = path.read_bytes()
+        inventory.append(
+            {
+                "path": path.relative_to(run_directory).as_posix(),
+                "bytes": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+        )
+    return sorted(inventory, key=lambda item: str(item["path"])), errors
+
+
+def validate_benchmark_evidence_reference(
+    repo: Path,
+    reference: str,
+    verified_revision: str,
+) -> list[str]:
+    match = BENCHMARK_EVIDENCE_RE.fullmatch(reference)
+    if not match:
+        return [
+            "Benchmark evidence must use "
+            "benchmark:BR-NNN@sha256:<manifest-payload-sha256>"
+        ]
+    run_id, referenced_digest = match.groups()
+    manifest_paths = sorted(
+        (
+            repo
+            / "benchmarks"
+            / "suites"
+        ).glob(
+            f"*/runs/{run_id.lower()}_*/EVIDENCE_MANIFEST.json"
+        )
+    )
+    if len(manifest_paths) != 1:
+        return [
+            f"{reference}: expected exactly one local sealed {run_id}, "
+            f"found {len(manifest_paths)}"
+        ]
+    manifest_path = manifest_paths[0]
+    try:
+        reject_symlink_path(repo, manifest_path)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (EpctlError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [f"{manifest_path}: invalid Benchmark Manifest: {exc}"]
+    if not isinstance(manifest, dict):
+        return [f"{manifest_path}: Benchmark Manifest must be an object"]
+
+    errors: list[str] = []
+    expected_fields = {
+        "schema_version": "1",
+        "run_id": run_id,
+        "status": "sealed",
+        "outcome": "passed",
+    }
+    for field, expected in expected_fields.items():
+        if manifest.get(field) != expected:
+            errors.append(
+                f"{manifest_path}: {field} must be {expected!r}, "
+                f"found {manifest.get(field)!r}"
+            )
+    for field in (
+        "suite_id",
+        "scenario_id",
+        "created",
+        "sealed_at",
+        "executed_by",
+    ):
+        value = manifest.get(field)
+        if not isinstance(value, str) or not inline_text(value):
+            errors.append(
+                f"{manifest_path}: {field} must be a non-empty string"
+            )
+    payload = manifest.get("payload_sha256")
+    if payload != referenced_digest:
+        errors.append(
+            f"{manifest_path}: reference digest does not match payload_sha256"
+        )
+    if not isinstance(payload, str) or not re.fullmatch(
+        r"[0-9a-f]{64}",
+        payload,
+    ):
+        errors.append(f"{manifest_path}: invalid payload_sha256")
+    elif benchmark_manifest_digest(manifest) != payload:
+        errors.append(f"{manifest_path}: payload_sha256 mismatch")
+
+    expected_inventory, inventory_errors = benchmark_bundle_inventory(
+        repo,
+        manifest_path.parent,
+    )
+    errors.extend(inventory_errors)
+    if manifest.get("files") != expected_inventory:
+        errors.append(
+            f"{manifest_path}: Benchmark evidence inventory or digest drift"
+        )
+
+    result_path = manifest_path.parent / "RESULT.md"
+    if result_path.is_file() and not result_path.is_symlink():
+        try:
+            result_text = result_path.read_text(encoding="utf-8")
+            result_data, _, _ = parse_frontmatter(result_text)
+        except (EpctlError, OSError, UnicodeDecodeError) as exc:
+            errors.append(f"{result_path}: invalid Benchmark Result: {exc}")
+        else:
+            result_expectations = {
+                "schema_version": "1",
+                "id": run_id,
+                "suite_id": manifest.get("suite_id"),
+                "scenario_id": manifest.get("scenario_id"),
+                "status": "sealed",
+                "outcome": "passed",
+                "completed": manifest.get("sealed_at"),
+                "executed_by": manifest.get("executed_by"),
+            }
+            for field, expected in result_expectations.items():
+                if result_data.get(field) != expected:
+                    errors.append(
+                        f"{result_path}: {field} does not match the Manifest"
+                    )
+            if result_data.get("subject_revision") != verified_revision:
+                errors.append(
+                    f"{result_path}: subject_revision "
+                    f"{result_data.get('subject_revision')!r} does not match "
+                    f"ExecPlan verified_revision {verified_revision!r}"
+                )
+            if result_data.get("manifest") != "EVIDENCE_MANIFEST.json":
+                errors.append(
+                    f"{result_path}: manifest must be "
+                    "EVIDENCE_MANIFEST.json"
+                )
+            if marker_names(result_text):
+                errors.append(
+                    f"{result_path}: sealed Benchmark Result has "
+                    "required placeholders"
+                )
+    scenario_path = manifest_path.parent / "SCENARIO.md"
+    if scenario_path.is_file() and not scenario_path.is_symlink():
+        try:
+            scenario_text = scenario_path.read_text(encoding="utf-8")
+            scenario_data, _, _ = parse_frontmatter(scenario_text)
+        except (EpctlError, OSError, UnicodeDecodeError) as exc:
+            errors.append(
+                f"{scenario_path}: invalid Benchmark Scenario: {exc}"
+            )
+        else:
+            if scenario_data.get("schema_version") != "1":
+                errors.append(
+                    f"{scenario_path}: schema_version must be '1'"
+                )
+            if scenario_data.get("id") != manifest.get("scenario_id"):
+                errors.append(
+                    f"{scenario_path}: id does not match the Manifest"
+                )
+            if scenario_data.get("suite_id") != manifest.get("suite_id"):
+                errors.append(
+                    f"{scenario_path}: suite_id does not match the Manifest"
+                )
+            if marker_names(scenario_text):
+                errors.append(
+                    f"{scenario_path}: sealed Benchmark Scenario has "
+                    "required placeholders"
+                )
+    return errors
+
+
+def validate_benchmark_evidence(
+    repo: Path,
+    evidence: Iterable[str],
+    verified_revision: str,
+) -> list[str]:
+    errors: list[str] = []
+    for reference in evidence:
+        if reference.startswith("benchmark:"):
+            errors.extend(
+                validate_benchmark_evidence_reference(
+                    repo,
+                    reference,
+                    verified_revision,
+                )
+            )
+    return errors
+
+
 def archive_or_none(value: str) -> str:
     return "- None." if is_empty_history_body(value) else value.strip()
 
@@ -3307,6 +3570,13 @@ def validate_plan(
                     f"{path}: completed v{attestation_version} plan requires "
                     "verification_evidence"
                 )
+            errors.extend(
+                validate_benchmark_evidence(
+                    plan_repository(path),
+                    verification_evidence,
+                    verified_revision,
+                )
+            )
         elif status in PLAN_ACTIVE_STATUSES and (
             verified_revision or verification_evidence
         ):
@@ -4163,6 +4433,16 @@ def archive_ep(
             if not verification_evidence:
                 raise EpctlError(
                     "Completed v2.3+ EP requires at least one --evidence"
+                )
+            benchmark_errors = validate_benchmark_evidence(
+                repo,
+                verification_evidence,
+                verified_revision,
+            )
+            if benchmark_errors:
+                raise EpctlError(
+                    "Benchmark evidence is invalid:\n- "
+                    + "\n- ".join(benchmark_errors)
                 )
         container = path.parent
         destination = repo / "docs" / "exec-plans" / "completed" / container.name

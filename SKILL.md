@@ -1,7 +1,7 @@
 ---
 name: execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务。适用于把证据转成技术架构决策和可跨会话恢复的开发计划，也适用于用户提到 EP、ExecPlan、执行计划、ADR、架构决策、拆 task、压缩计划、记录/归档 bugfix、查状态、登记技术债务，或要求用 CI/契约测试防止工程文档与代码偏移。需要新的资料搜集、实验、多文档 Research corpus 或 Synthesis 时使用独立的 engineering-research skill；本 skill 只依赖版本化文件契约，不依赖其安装路径。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis 与 sealed Benchmark evidence，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务。适用于把证据转成技术架构决策和可跨会话恢复的开发计划，也适用于用户提到 EP、ExecPlan、执行计划、ADR、架构决策、拆 task、压缩计划、记录/归档 bugfix、查状态、登记技术债务，或要求用 CI/契约测试防止工程文档与代码偏移。需要新的可复现测量时使用独立的 engineering-benchmark skill；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用独立的 engineering-research skill。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Execution Plan
@@ -11,6 +11,9 @@ description: |
 ```mermaid
 flowchart LR
     F["功能目标"] --> Q{"存在决策相关未知？"}
+    F --> B["engineering-benchmark<br/>可选：预声明 Scenario + sealed Run"]
+    B -->|"路线未知或证据矛盾"| R
+    B -->|"最终 revision 验收"| EP
     Q -->|"是"| R["engineering-research 或兼容生产者<br/>问题、证据、多文档 corpus"]
     R --> S["Sealed Manifest + Synthesis<br/>版本化文件契约"]
     Q -->|"否，写明理由"| RG["Research Gate<br/>not_required"]
@@ -30,17 +33,25 @@ Engineering Research 负责减少未知并输出 sealed Manifest/Synthesis；本
 `engineering-research`、BMAD、其他 Deep Research 工具或人工流程，只要制品满足
 契约。引用提供审计链；下游制品仍需复述执行所需的结论和约束。
 
+Engineering Benchmark 负责可复现测量。会改变路线的 Benchmark 先由 Research
+解释；已决定路线的 final-revision Benchmark 可以直接进入 EP 验收。EP 用
+`benchmark:BR-NNN@sha256:<payload>` 引用 sealed evidence，并按文件契约验真，
+不调用 Benchmark Skill。
+
 ## 制品路由
 
 | 情况 | 制品 |
 |---|---|
 | 小型、上下文明确、一次会话可完成 | 线程内轻量计划 |
 | 用户明确要求记录的局部既有行为缺陷 | Bugfix |
+| 需要可复现测量、性能/容量对比或回归证据 | 切换到 `engineering-benchmark` |
 | 关键事实不清、需要比较方案或实验 | 切换到 `engineering-research` |
 | 存在影响长期边界且逆转成本较高的选择 | ADR |
 | 跨模块、多里程碑、需跨会话恢复或已有决策待实施 | ExecPlan |
 
-复杂功能默认先取得 concluded Research，尤其是涉及公共契约、安全、可靠性、数据、迁移、第三方选型、prototype 或 benchmark 时。需要创建或扩展 Research 时使用
+复杂功能默认先取得 concluded Research，尤其是涉及公共契约、安全、可靠性、
+数据、迁移、第三方选型、prototype，或 Benchmark 会改变架构路线时。新的可复现
+测量使用 `engineering-benchmark`；跨来源解释和 Synthesis 使用
 `engineering-research`。以下情况可直接进入 ExecPlan，但必须记录具体的
 Research Gate 跳过理由：
 
@@ -257,6 +268,9 @@ Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 4. 确认没有 open blocker。
 5. 填写 Outcomes & Retrospective。
 6. 取得实际通过验证的 repository/workspace revision 和证据引用。
+   sealed Benchmark 使用
+   `benchmark:BR-NNN@sha256:<manifest-payload-sha256>`；Run 的
+   `subject_revision` 必须等于 `verified_revision` 且 outcome 必须是 `passed`。
 7. 运行 `validate`，再运行：
 
 ```bash
@@ -284,11 +298,14 @@ candidate 本身都不构成生成案例的触发条件。
 - completed v2.3+ EP 必须保存 `verified_revision` 和至少一个
   `verification_evidence`，归档正文由 `archive_sha256` 封存；Checkpoint 必须
   保存 `repository_revision`。
+- `benchmark:` evidence 会验证本地 sealed Manifest、精确文件清单、SHA-256、
+  `passed` outcome 和 final revision；普通 `ci:` / `artifact:` 引用保持原语义。
 
 ## 参考
 
 - 制品路由、状态机、兼容策略 → `references/templates.md`
 - Research/Synthesis 消费契约与 manifest 兼容 → `references/research.md`
+- sealed Benchmark 作为 final-revision evidence → `references/benchmark.md`
 - ADR 门槛、授权、状态与 supersession → `references/adr.md`
 - 多 ADR / Design Doc Architecture Input Set 示例 →
   `examples/architecture-input-set/README.md`

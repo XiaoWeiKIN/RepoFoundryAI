@@ -107,6 +107,12 @@ run、日志或仓库制品写入 `verification_evidence`。字段由 `archive-e
 active 计划必须保持为空。归档时 CLI 还会写入 `archive_sha256`，封存 frontmatter
 和正文；后续变化必须通过新计划或明确的兼容迁移表达。
 
+如果验收来自 Engineering Benchmark，使用
+`benchmark:BR-NNN@sha256:<manifest-payload-sha256>`。CLI 会验证 sealed
+Manifest、精确文件清单、每个本地文件摘要、`passed` outcome，并要求 Run 的
+`subject_revision` 等于 `verified_revision`。Benchmark 可能改变架构路线时应先
+进入 Research；这里只有路线已固定的 final-revision 验收。
+
 ## 上下文与长期知识
 
 上下文地图按“入口优先、必读在前、按需在后”组织。ExecPlan 内仍需解释当前执行依赖的关键事实和术语。
