@@ -446,7 +446,8 @@ class EpctlTestCase(unittest.TestCase):
             ).stdout.strip()
         )
         content = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.4"', content)
+        self.assertIn('schema_version: "2.5"', content)
+        self.assertIn("required_benchmark_scenarios: []", content)
         self.assertIn("verified_revision:", content)
         self.assertIn("verification_evidence: []", content)
         self.assertIn("archive_sha256:", content)
@@ -595,7 +596,7 @@ relates_to:
             ).stdout.strip()
         )
         plan_text = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.4"', plan_text)
+        self.assertIn('schema_version: "2.5"', plan_text)
         self.assertIn('adr_refs: ["ADR-010", "ADR-011"]', plan_text)
         self.assertIn(f'design_refs: ["{design_ref}"]', plan_text)
         self.assertIn(
@@ -784,11 +785,47 @@ updated: 2026-07-28
         outcome_tamper = self.run_cli("validate", expected=1)
         self.assertIn("decided ADR payload changed", outcome_tamper.stderr)
 
+    def test_v24_execplan_remains_archive_compatible(self) -> None:
+        self.init()
+        plan = self.new_ep("v24-compatible")
+        text = plan.read_text(encoding="utf-8").replace(
+            'schema_version: "2.5"',
+            'schema_version: "2.4"',
+            1,
+        )
+        text = re.sub(
+            r"(?m)^required_benchmark_scenarios:.*\n",
+            "",
+            text,
+            count=1,
+        )
+        text = re.sub(
+            r"(?ms)^## Benchmark Gate Set\s*$.*?"
+            r"(?=^## Plan of Work\s*$)",
+            "",
+            text,
+            count=1,
+        )
+        plan.write_text(text, encoding="utf-8")
+        self.complete_all_placeholders(plan)
+
+        archived = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
+        archived_text = archived.read_text(encoding="utf-8")
+        self.assertIn('schema_version: "2.4"', archived_text)
+        self.assertNotIn("required_benchmark_scenarios:", archived_text)
+        self.run_cli("validate")
+
     def test_v21_execplan_remains_readable_and_valid(self) -> None:
         self.init()
         plan = self.new_ep("legacy-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.4"',
+            'schema_version: "2.5"',
             'schema_version: "2.1"',
             1,
         )
@@ -796,12 +833,20 @@ updated: 2026-07-28
             r"(?m)^(?:research_refs|research_gate|research_gate_reason|"
             r"adr_refs|design_refs|architecture_entrypoint|"
             r"architecture_gate|architecture_gate_reason|"
+            r"required_benchmark_scenarios|"
             r"verified_revision|verification_evidence|archive_sha256):.*\n",
             "",
             text,
         )
         text = re.sub(
             r"(?ms)^## Research and Architecture Inputs\s*$.*?"
+            r"(?=^## Benchmark Gate Set\s*$)",
+            "",
+            text,
+            count=1,
+        )
+        text = re.sub(
+            r"(?ms)^## Benchmark Gate Set\s*$.*?"
             r"(?=^## Plan of Work\s*$)",
             "",
             text,
@@ -821,15 +866,23 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v22-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.4"',
+            'schema_version: "2.5"',
             'schema_version: "2.2"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:verified_revision|verification_evidence|"
-            r"archive_sha256|design_refs|architecture_entrypoint):.*\n",
+            r"archive_sha256|design_refs|architecture_entrypoint|"
+            r"required_benchmark_scenarios):.*\n",
             "",
             text,
+        )
+        text = re.sub(
+            r"(?ms)^## Benchmark Gate Set\s*$.*?"
+            r"(?=^## Plan of Work\s*$)",
+            "",
+            text,
+            count=1,
         )
         plan.write_text(text, encoding="utf-8")
         self.complete_all_placeholders(plan)
@@ -846,7 +899,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v20-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.4"',
+            'schema_version: "2.5"',
             'schema_version: "2.0"',
             1,
         )
@@ -854,6 +907,7 @@ updated: 2026-07-28
             r"(?m)^(?:latest_checkpoint|research_refs|research_gate|"
             r"research_gate_reason|adr_refs|architecture_gate|"
             r"architecture_gate_reason|design_refs|architecture_entrypoint|"
+            r"required_benchmark_scenarios|"
             r"verified_revision|"
             r"verification_evidence|archive_sha256):.*\n",
             "",
@@ -861,7 +915,8 @@ updated: 2026-07-28
         )
         for heading, next_heading in (
             ("Current Snapshot", "Context and Orientation"),
-            ("Research and Architecture Inputs", "Plan of Work"),
+            ("Research and Architecture Inputs", "Benchmark Gate Set"),
+            ("Benchmark Gate Set", "Plan of Work"),
         ):
             text = re.sub(
                 rf"(?ms)^## {re.escape(heading)}\s*$.*?"
@@ -1073,7 +1128,7 @@ updated: 2026-07-28
             encoding="utf-8",
         )
         tampered = self.run_cli("validate", expected=1)
-        self.assertIn("archived v2.4 plan changed", tampered.stderr)
+        self.assertIn("archived v2.5 plan changed", tampered.stderr)
         plans_index = (self.repo / "docs" / "PLANS.md").read_text(
             encoding="utf-8"
         )

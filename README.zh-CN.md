@@ -4,16 +4,19 @@
 
 EngineeringWorkflow 由一个聚合 Skill 和四个专业 Skill 组成：
 
-- **Engineering Workflow**：初始化和验证 Agent-first 项目 Harness，并把后续
-  工作路由到合适的专业 Skill。
-- **Engineering Benchmark**：把外部压测、性能对比、容量验证和回归测试组织成
-  Suite、稳定 Scenario 与 sealed Evidence Bundle。
-- **Engineering Research**：把大量源码、文档、实验和外部研究组织成可审计的
-  多文档 corpus，并输出 sealed Synthesis。
-- **Engineering Execution Plan**：消费已经完成的 Research，治理 ADR、
-  ExecPlan、Task、Checkpoint、Bugfix 和技术债务。
-- **Engineering Case Study**：在用户明确要求分享时，结合代码、Research、
-  ADR 和 EP 过程记录，撰写中文、英文或中英双语的模块设计、最佳实践和交付案例。
+- **[Engineering Workflow](./SKILL.md)**：初始化和验证 Agent-first 项目
+  Harness，并把后续工作路由到合适的专业 Skill。
+- **[Engineering Benchmark](./engineering-benchmark/SKILL.md)**：把外部压测、
+  性能对比、容量验证和回归测试组织成 Suite、稳定 Scenario 与 sealed
+  Evidence Bundle。
+- **[Engineering Research](./engineering-research/SKILL.md)**：把大量源码、
+  文档、实验和外部研究组织成可审计的多文档 corpus，并输出 sealed Synthesis。
+- **[Engineering Execution Plan](./engineering-execution-plan/SKILL.md)**：
+  消费已经完成的 Research，治理 ADR、ExecPlan、Task、Checkpoint、Bugfix
+  和技术债务。
+- **[Engineering Case Study](./engineering-case-study/SKILL.md)**：在用户明确
+  要求分享时，结合代码、Research、ADR 和 EP 过程记录，撰写中文、英文或
+  中英双语的模块设计、最佳实践和交付案例。
 
 四个专业 Skill 共享版本化文件契约，可独立安装和运行。聚合 Skill 只在项目
 Bootstrap 时显式组合仓库内的 Engineering Execution Plan 初始化契约。
@@ -24,7 +27,8 @@ flowchart LR
     U --> B["engineering-benchmark<br/>Suite + Scenario + Run"]
     B --> M0["sealed Evidence Bundle<br/>Result + artifacts + Manifest"]
     M0 -->|"路线未知或证据矛盾"| R["engineering-research<br/>Research Questions + Corpus"]
-    M0 -->|"最终 revision 验收"| E
+    M0 -->|"最终 revision 验收"| G["Benchmark Gate Set<br/>0..N 个 Scenario"]
+    G --> E
     M0 -->|"持续回归与容量"| O["CI / Runbook"]
     U --> R
     R --> M["sealed contract<br/>Manifest + Synthesis"]
@@ -38,6 +42,19 @@ flowchart LR
 文档—代码完整性同样不依赖某个 Agent 或代码托管平台。仓库内
 `python3 -B scripts/check.py` 是唯一检查入口；GitHub Actions、GitLab CI 或
 其他 Pipeline 只负责调用它。
+
+## 从需要的制品开始阅读
+
+根 README 负责导航，不承载全部规范。先进入目标制品对应的专业 Skill，任务碰到
+具体边界时再打开更深一层契约。
+
+| 目标 | 从这里开始 | 契约或示例 |
+|---|---|---|
+| 初始化 Agent 可导航的项目 Harness | [Engineering Workflow](./SKILL.md) | [Bootstrap 契约](./references/bootstrap.md) |
+| 设计或执行可复现压测 | [Engineering Benchmark](./engineering-benchmark/SKILL.md) | [Suite / Scenario / Run 契约](./engineering-benchmark/references/contract.md) · [路由示例](./engineering-benchmark/references/examples.md) |
+| 调研未知、综合或解释证据 | [Engineering Research](./engineering-research/SKILL.md) | [Research 方法](./engineering-research/references/research.md) · [Manifest 契约](./engineering-research/references/manifest.md) |
+| 形成 ADR，或通过 EP 推动实施 | [Engineering Execution Plan](./engineering-execution-plan/SKILL.md) | [制品路由](./engineering-execution-plan/references/templates.md) · [Benchmark Gate](./engineering-execution-plan/references/benchmark.md) |
+| 把已验证的工程工作整理成分享 | [Engineering Case Study](./engineering-case-study/SKILL.md) | [来源与证据](./engineering-case-study/references/source-evidence.md) · [文章模式](./engineering-case-study/references/article-patterns.md) |
 
 ## 为什么拆成四个专业 Skill
 
@@ -54,7 +71,9 @@ flowchart LR
 Benchmark 不需要全部合并进 Research：探索性对比和会改变路线的实验进入
 Research；已决定路线的最终 revision 验收直接成为 EP evidence；夜间回归与容量
 趋势留在 CI 或 Runbook。只有出现路线未知、证据矛盾或需要重新决策时，持续
-Benchmark 才升级为 Research。
+Benchmark 才升级为 Research。一个 EP 可以由多个独立 Scenario 共同驱动：
+Scenario 集合在实现前声明，每个门禁由一个同 revision 的 passed sealed Run
+覆盖，不把不同协议或环境的结果揉成一个总分。
 
 一项 Research 可以包含多篇文档。只要它们服务同一决策目的、共享 Research
 Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当目的、Owner、
@@ -72,6 +91,61 @@ Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当�
 - `RESEARCH_MANIFEST.json` 明确成员、入口、大小和 SHA-256；
 - `SYNTHESIS.md` 只保留下游决策所需结论；
 - `EXECPLAN.md` 只保留当前事实与开放工作，已完成历史进入 sealed Checkpoint。
+
+## 目标代码仓库最终会出现这些制品
+
+各 Skill 把治理制品写入正在开发的目标代码仓库。下面是目标仓库结构；下一节的
+EngineeringWorkflow 目录则是 Skill 发行包结构：
+
+```text
+target-repository/
+├── AGENTS.md
+├── ARCHITECTURE.md
+├── benchmarks/
+│   ├── BENCHMARKS.md
+│   └── suites/b-NNN_slug/
+│       ├── BENCHMARK.md
+│       ├── scenarios/bs-NNN_slug.md
+│       └── runs/br-NNN_slug/
+│           ├── SCENARIO.md
+│           ├── RESULT.md
+│           ├── EVIDENCE_MANIFEST.json
+│           └── artifacts/
+└── docs/
+    ├── index.md
+    ├── RESEARCH.md
+    ├── DECISIONS.md
+    ├── PLANS.md
+    ├── BUGFIXES.md
+    ├── research/
+    │   ├── active/r-NNN_slug/
+    │   └── completed/
+    ├── adr/adr-NNN_slug.md
+    ├── design-docs/
+    ├── exec-plans/
+    │   ├── active/ep-NNN_slug/
+    │   └── completed/
+    ├── bugfixes/
+    │   ├── active/
+    │   └── completed/
+    └── case-studies/                 # 仅在用户要求分享时创建
+```
+
+`benchmarks/` 保存可重复验证的测量事实。Suite 定义主题与 Owner；Scenario
+预声明执行协议；Run 封存一次执行的 Scenario 快照、Result、原生 artifacts 和
+Manifest。已有压测实现可以继续放在 `scripts/bench/` 等代码目录；Scenario
+指向可执行入口，每个 Run 记录不可变的 `harness_revision`。
+
+`docs/` 保存解释、决策、实施治理和分享案例。Research 可以综合多个 sealed
+Run；ExecPlan 声明作为完成门禁的 Scenario ID，并要求每个门禁恰好由一个同
+subject revision 的 passed sealed Run 覆盖。根索引都是可重建投影；Suite、
+Scenario、Run bundle、Research package、ADR 和 ExecPlan 文件才是事实源。
+完整 schema 与生命周期参见
+[Benchmark 契约](./engineering-benchmark/references/contract.md)、
+[Research 方法](./engineering-research/references/research.md)和
+[ExecPlan 制品路由](./engineering-execution-plan/references/templates.md)。
+
+只有调用对应工作流后，相关路径才会出现。例如，Case Study 从不自动生成。
 
 ## 仓库布局与安装
 
@@ -183,6 +257,13 @@ Bootstrap 只创建缺失路径，不覆盖已有文件。每个注册的 Agent 
 
 先创建长期 Suite，填写生成的 `BENCHMARK.md`，再创建可复用 Scenario：
 
+生成目录、ID、生命周期与 Manifest digest 由
+[Benchmark 契约](./engineering-benchmark/references/contract.md)定义。
+[路由示例](./engineering-benchmark/references/examples.md)说明何时进入
+Research、直接作为 EP 验收或交给 CI / Runbook；同一个 EP 需要多个 Scenario
+门禁时读取
+[ExecPlan Benchmark 契约](./engineering-execution-plan/references/benchmark.md)。
+
 ```bash
 python3 "$BENCHCTL" --repo . new-suite \
   --slug spans-placement \
@@ -192,6 +273,10 @@ python3 "$BENCHCTL" --repo . new-suite \
 python3 "$BENCHCTL" --repo . new-scenario B-001 \
   --slug placement-order-key \
   --title "Compare placement order-key strategies"
+
+python3 "$BENCHCTL" --repo . new-scenario B-001 \
+  --slug sustained-throughput \
+  --title "Verify sustained placement throughput"
 ```
 
 Scenario 必须在看到结果前写清 hypothesis、falsifier、受控变量、数据集、环境、
@@ -410,7 +495,7 @@ flowchart LR
     A12["ADR-012<br/>环境路由"] -->|"depends_on"| A10
     D1["Design Doc<br/>查询细节"] --> A11
     D2["Design Doc<br/>路由细节"] --> A12
-    A10 --> EP["EP v2.4"]
+    A10 --> EP["EP v2.5"]
     A11 --> EP
     A12 --> EP
     D1 --> EP
@@ -436,13 +521,30 @@ python3 "$EPCTL" --repo . new-ep \
   --research R-001 \
   --adr ADR-001 \
   --design docs/design-docs/token-refresh.md \
-  --architecture-entrypoint docs/design-docs/index.md
+  --architecture-entrypoint docs/design-docs/index.md \
+  --benchmark-scenario BS-001 \
+  --benchmark-scenario BS-002
 ```
 
 在 `Research and Architecture Inputs` 中复述关键证据、架构约束、负面后果和
 剩余未知，再填写里程碑、Concrete Steps、验收和恢复方法。ADR 有
 `depends_on` 或 `amends` 时，`--adr` 必须显式列出完整传递闭包；ADR 引用的
-Design Docs 也必须进入 `--design`。
+Design Docs 也必须进入 `--design`。对每个必需 Benchmark Scenario 重复
+`--benchmark-scenario`；生成的 `required_benchmark_scenarios` 和
+`Benchmark Gate Set` 会把多个压测与同一个 EP 建立可机械验证的多对一关系。
+
+完成时为每个 Scenario 附一个 Run，所有 Run 必须来自同一个最终 revision：
+
+```bash
+python3 "$EPCTL" --repo . archive-ep EP-001 \
+  --outcome completed \
+  --verified-revision "git:<final-commit>" \
+  --evidence "benchmark:BR-001@sha256:<payload>" \
+  --evidence "benchmark:BR-002@sha256:<payload>"
+```
+
+缺少一个 Scenario、一个 Scenario 附了两个 accepted Run、Run 属于未声明
+Scenario，或任一 `subject_revision` 不一致，都会原子阻止归档。
 
 只有在输入已经充分且没有会改变路线的未知时才能 fast track，并要记录可核查
 理由：
@@ -558,8 +660,8 @@ CI 文件不得复制这些子命令：
 - 原始 Benchmark artifacts 不强制统一格式；`RESULT.md` 与
   `EVIDENCE_MANIFEST.json` 提供统一消费和完整性边界。
 - Manifest 是可选的向后兼容字段；一旦出现，就必须满足版本化契约。
-- v2.0–v2.3 ExecPlan 继续按原 schema 读取；新计划使用 v2.4 Architecture
-  Input Set。
+- v2.0–v2.4 ExecPlan 继续按原 schema 读取；新计划使用 v2.5 Architecture
+  Input Set 与 `required_benchmark_scenarios`。
 - 既有 accepted ADR 可以从注册目录只读接入；严格的新 ADR 使用 schema 1.1。
 
 ## 开发与验证
@@ -570,7 +672,9 @@ python3 -B scripts/check.py
 
 该命令只依赖仓库内容和 Python 3.10+，不依赖某个 Agent 的私有 Skill 目录。
 
-## 项目文档
+## 参考文档地图
+
+先读取 Skill 入口，任务确实需要某项细节时再打开对应契约或示例。
 
 端到端：
 

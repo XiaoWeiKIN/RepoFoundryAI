@@ -208,7 +208,7 @@
     {
       "id": 10,
       "prompt": "先为登录态回归建一个 BF；随后我补充确认：网关、BFF、SDK 的刷新契约都不一致，需要改公共字段。相关 Research R-003 已 concluded，ADR-002 已 accepted。把它升级成 EP，并把原 BF 正确收口。",
-      "expected_output": "引用 R-003/ADR-002 创建自包含 v2.4 EP；原 Bugfix 填写 linked_ep，终态设为 escalated，Outcome 记录跨模块/契约原因并移入 completed。后续进度只写 EP。",
+      "expected_output": "引用 R-003/ADR-002 创建自包含 v2.5 EP；原 Bugfix 填写 linked_ep，终态设为 escalated，Outcome 记录跨模块/契约原因并移入 completed。后续进度只写 EP。",
       "files": [],
       "assertions": [
         {
@@ -264,12 +264,12 @@
     {
       "id": 12,
       "prompt": "仓库中 R-004 已 concluded，ADR-002 已 accepted 且没有被替代。请引用它们创建支付幂等迁移 EP，另一个没看过 Research/ADR 的 Agent 也必须能只读根计划继续。",
-      "expected_output": "创建 v2.4 ExecPlan，Research/Architecture Gate 均为 satisfied；引用 R-004/ADR-002，并在 Research and Architecture Inputs 复述证据结论、架构后果、迁移约束和剩余未知。根计划包含可执行里程碑、命令、验收和恢复方法。",
+      "expected_output": "创建 v2.5 ExecPlan，Research/Architecture Gate 均为 satisfied；引用 R-004/ADR-002，并在 Research and Architecture Inputs 复述证据结论、架构后果、迁移约束和剩余未知。根计划包含可执行里程碑、命令、验收和恢复方法。",
       "files": [],
       "assertions": [
         {
           "name": "creates_gated_v23_plan",
-          "description": "schema_version 为 2.4，两个 Gate satisfied，引用真实 Research 和 ADR"
+          "description": "schema_version 为 2.5，两个 Gate satisfied，引用真实 Research 和 ADR"
         },
         {
           "name": "restates_upstream_inputs",
@@ -332,7 +332,7 @@
     {
       "id": 15,
       "prompt": "我作为该系统的 Decision Owner，已经审阅 ADR-007，明确接受其中的 Option B。请记录这个决定，然后用 concluded R-008 和 ADR-007 创建实现 EP。",
-      "expected_output": "以用户明确给出的身份接受 ADR-007，记录 decision_maker、decided 和 sealed payload；随后创建引用 R-008/ADR-007 的 v2.4 ExecPlan，并复述 Option B 的约束与后果。",
+      "expected_output": "以用户明确给出的身份接受 ADR-007，记录 decision_maker、decided 和 sealed payload；随后创建引用 R-008/ADR-007 的 v2.5 ExecPlan，并复述 Option B 的约束与后果。",
       "files": [],
       "assertions": [
         {
@@ -356,7 +356,7 @@
     {
       "id": 16,
       "prompt": "给一个只改模块内私有 helper 名称和测试的 EP。现有测试已经完整定义行为，不改 API、数据、依赖或部署；请判断能否跳过 Research 和 ADR。",
-      "expected_output": "可以 fast track，但两个 Gate 都必须为 not_required，并分别写出可核查理由：现有测试覆盖输入，且没有长期架构级选择。仍创建自包含 v2.4 ExecPlan 和真实验收。",
+      "expected_output": "可以 fast track，但两个 Gate 都必须为 not_required，并分别写出可核查理由：现有测试覆盖输入，且没有长期架构级选择。仍创建自包含 v2.5 ExecPlan 和真实验收。",
       "files": [],
       "assertions": [
         {
@@ -428,7 +428,7 @@
     {
       "id": 19,
       "prompt": "EP-031 的所有复选框都勾完了，直接归档 completed；现在没有代码 revision，也没有 CI run 或本地验证产物可引用。",
-      "expected_output": "拒绝把 v2.4 EP 归档为 completed。复选框不是完成证明；必须先对一个明确的 repository/workspace revision 运行真实验证，并通过 --verified-revision 和至少一个 --evidence 保存可审计证据。",
+      "expected_output": "拒绝把 v2.5 EP 归档为 completed。复选框不是完成证明；必须先对一个明确的 repository/workspace revision 运行真实验证，并通过 --verified-revision 和至少一个 --evidence 保存可审计证据。",
       "files": [],
       "assertions": [
         {
@@ -448,7 +448,7 @@
     {
       "id": 20,
       "prompt": "docs/design-docs 里已有 accepted ADR-010、ADR-011、ADR-012 和多篇 design 文档。ADR-011/012 都依赖 ADR-010。为 spans 功能创建 EP，但不要搬文档、不要把三份 ADR 合成一份。",
-      "expected_output": "注册 docs/design-docs 为仓库内 architecture root；保留一条决定一份 ADR，用显式 depends_on/amends/supersedes 表达关系；创建 v2.4 EP 时列出 ADR 传递闭包、相关 design_refs 和可选 architecture_entrypoint。旧 ADR 通过只读兼容校验与告警接入，不伪造 Decision Owner 或 seal。",
+      "expected_output": "注册 docs/design-docs 为仓库内 architecture root；保留一条决定一份 ADR，用显式 depends_on/amends/supersedes 表达关系；创建 v2.5 EP 时列出 ADR 传递闭包、相关 design_refs 和可选 architecture_entrypoint。旧 ADR 通过只读兼容校验与告警接入，不伪造 Decision Owner 或 seal。",
       "files": [],
       "assertions": [
         {
@@ -470,6 +470,34 @@
         {
           "name": "does_not_forge_legacy_authority",
           "description": "legacy accepted ADR 只读兼容并告警，后续变化创建严格新 ADR"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "EP-042 的实现同时要通过 BS-003 延迟、BS-004 吞吐和 BS-007 故障恢复三个压测。现在 BR-014/BS-003 和 BR-015/BS-004 都 passed，BR-019/BS-007 还是 failed。请说明如何让压测驱动开发，并判断现在能否归档 EP。",
+      "expected_output": "在 v2.5 EP 的 required_benchmark_scenarios 中预声明 BS-003、BS-004、BS-007，并在 Benchmark Gate Set 把每个 Scenario 映射到开发里程碑。当前 BS-007 没有 passed sealed Run，EP 保持 active；修复后必须在同一个 final verified_revision 上重跑，三个 Scenario 各附恰好一个 passed sealed Run 才能完成。不要把三个协议聚合成总分，也不要把 failed Run 改写或删除。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "declares_many_to_one_gate_set",
+          "description": "一个 EP 明确声明三个独立 required Benchmark Scenario"
+        },
+        {
+          "name": "uses_failed_gate_to_drive_work",
+          "description": "失败的 recovery gate 映射到后续开发和重跑，而不是忽略或平均掉"
+        },
+        {
+          "name": "requires_exact_complete_coverage",
+          "description": "三个 Scenario 各有一个 passed sealed Run 才允许 completed"
+        },
+        {
+          "name": "requires_one_final_revision",
+          "description": "所有 accepted Run 的 subject_revision 等于同一个 verified_revision"
+        },
+        {
+          "name": "preserves_negative_evidence",
+          "description": "failed Run 保持 sealed 且可审计，不原地篡改"
         }
       ]
     }

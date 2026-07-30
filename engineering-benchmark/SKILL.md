@@ -1,7 +1,7 @@
 ---
 name: engineering-benchmark
 description: |
-  设计、执行和封存可复现的工程 Benchmark 证据，包括 Benchmark Suite、稳定 Scenario、单次 Run、原始 artifacts、Result 与带 SHA-256 的 Evidence Manifest。适用于用户要求做性能压测、容量测试、方案对比、回归基线、故障注入、外部压测、验证某个 EP 验收指标，或提到 benchmark、load test、基准、吞吐、延迟、资源占用、回归证据。只负责生成事实证据，不解释跨来源冲突、不形成 Research Synthesis、不接受 ADR，也不替代 EP 的决策与实施治理。
+  设计、执行和封存可复现的工程 Benchmark 证据，包括 Benchmark Suite、稳定 Scenario、单次 Run、原始 artifacts、Result 与带 SHA-256 的 Evidence Manifest。适用于用户要求做性能压测、容量测试、方案对比、回归基线、故障注入、外部压测、让一个或多个压测 Scenario 驱动某个 EP 的验收，或提到 benchmark、load test、基准、吞吐、延迟、资源占用、回归证据。只负责生成事实证据，不解释跨来源冲突、不形成 Research Synthesis、不接受 ADR，也不替代 EP 的决策与实施治理。
 ---
 
 # Engineering Benchmark
@@ -15,7 +15,7 @@ flowchart LR
     C --> R["Run<br/>固定 revision 的一次执行"]
     R --> E["sealed Evidence Bundle<br/>Result + artifacts + Manifest"]
     E --> Q["engineering-research<br/>解释矛盾与形成 Synthesis"]
-    E --> P["engineering-execution-plan<br/>最终 revision 验收"]
+    E --> P["engineering-execution-plan<br/>0..N Scenario Gate 的最终 revision 验收"]
     E --> O["CI / Runbook<br/>持续回归与容量治理"]
 ```
 
@@ -121,14 +121,17 @@ python3 <skill-dir>/scripts/benchctl.py --repo . reindex
    重复次数、缓存状态、清理和失败恢复必须明确。
 4. 预声明指标与判定规则。看完结果后再改变规则属于新的 Scenario 或 Run，
    不能回写历史。
-5. 创建 Run，记录不可变的 subject revision 与 harness revision。
-6. 执行真实命令；保留 stdout、stderr、配置、Trace 和机器可读结果。Observation
+5. 如果这些测量是 EP 完成门禁，在实现前把所有必需 Scenario 通过
+   `epctl new-ep --benchmark-scenario BS-NNN` 声明到同一个 EP。一个 Scenario
+   对应一个独立门禁；不要把不同环境或判定规则压成一个总分。
+6. 创建 Run，记录不可变的 subject revision 与 harness revision。
+7. 执行真实命令；保留 stdout、stderr、配置、Trace 和机器可读结果。Observation
    与 Interpretation 分开写。
-7. 即使失败、无结论或工具报错，也保留 Run，并选择 `failed`、
+8. 即使失败、无结论或工具报错，也保留 Run，并选择 `failed`、
    `inconclusive` 或 `errored`，不要删除负面证据。
-8. `seal-run` 后不得修改 Result、Scenario snapshot 或本地 artifacts。修正错误
+9. `seal-run` 后不得修改 Result、Scenario snapshot 或本地 artifacts。修正错误
    或补证据时创建新 Run，并用 `--supersedes BR-NNN` 建立替代链。
-9. 把 `BR-NNN` 与 Manifest payload SHA-256 交给下游消费者。
+10. 把 `BR-NNN` 与 Manifest payload SHA-256 交给下游消费者。
    优先用 `evidence-ref` 生成已验真的标准引用。
 
 ## 封存规则
@@ -146,7 +149,9 @@ python3 <skill-dir>/scripts/benchctl.py --repo . reindex
 本 Skill 输出证据，不输出决定：
 
 - Research 引用 sealed Run，用它回答 Research Question、比较选项或解释矛盾；
-- EP 只在路线已经决定时，把 final-revision Run 作为 acceptance evidence；
+- EP 只在路线已经决定时，把所有预声明 Scenario 的 final-revision Run 作为
+  acceptance evidence；一个 EP 可以要求多个 Scenario，但每个门禁恰好由一个
+  `passed` Run 覆盖，且所有 Run 必须使用同一 subject revision；
 - CI / Runbook 使用稳定 Scenario 反复创建 Run，只有路线需要重新判断时才创建
   或恢复 Research。
 
