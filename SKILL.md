@@ -270,6 +270,10 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \
 
 归档只记录知识提升候选。新的架构决定仍需 proposed ADR 和独立明确授权；不要在“归档 EP”的隐含授权下接受 ADR 或修改 `AGENTS.md`。
 
+用户明确要求把模块设计、最佳实践或 EP 过程整理成分享材料时，使用独立的
+`engineering-case-study` Skill。EP 完成、归档或出现 knowledge promotion
+candidate 本身都不构成生成案例的触发条件。
+
 ## 状态与验证
 
 - `status` 汇总 Research 问题、Synthesis、ADR、Gate、验收、Task、blocker、Checkpoint 和文档大小。

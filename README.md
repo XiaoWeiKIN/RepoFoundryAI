@@ -1,11 +1,13 @@
 # EngineeringPlan
 
-EngineeringPlan 由两个可独立安装、独立触发的 Skill 组成：
+EngineeringPlan 由三个可独立安装、独立触发的 Skill 组成：
 
 - **Engineering Research**：把大量源码、文档、实验和外部研究组织成可审计的
   多文档 corpus，并输出 sealed Synthesis。
 - **Execution Plan**：消费已经完成的 Research，治理 ADR、ExecPlan、Task、
   Checkpoint、Bugfix 和技术债务。
+- **Engineering Case Study**：在用户明确要求分享时，结合代码、Research、
+  ADR 和 EP 过程记录，撰写中文、英文或中英双语的模块设计、最佳实践和交付案例。
 
 它们共享版本化文件契约，不互相导入，也不依赖彼此的安装位置。
 
@@ -16,20 +18,23 @@ flowchart LR
     M --> A["execution-plan<br/>ADR + Decision Authority"]
     A --> E["ExecPlan<br/>实现、验证、恢复"]
     E --> C["Checkpoint<br/>封存已完成历史"]
+    R -. "手动触发分享" .-> S["engineering-case-study<br/>代码取证 + 工程叙事"]
+    E -. "手动触发分享" .-> S
 ```
 
 文档—代码完整性同样不依赖某个 Agent 或代码托管平台。仓库内
 `python3 -B scripts/check.py` 是唯一检查入口；GitHub Actions、GitLab CI 或
 其他 Pipeline 只负责调用它。
 
-## 为什么拆成两个 Skill
+## 为什么拆成三个 Skill
 
-Research 与实施治理的触发条件、工具和内容增长方式不同。
+Research、实施治理和分享写作的触发条件、证据责任与内容增长方式不同。
 
 | Skill | 回答的问题 | 主要制品 | 不负责 |
 |---|---|---|---|
 | Engineering Research | 我们知道什么，证据可靠吗，哪些选项成立？ | Research、Corpus Manifest、Synthesis、Snapshot | 接受 ADR、创建实施计划 |
 | Execution Plan | 已有证据支持什么决定，怎样实施并验收？ | ADR、ExecPlan、Task、Checkpoint、Bugfix | 搜集新证据、维护研究 corpus |
+| Engineering Case Study | 哪个工程判断值得分享，代码和过程证据怎样讲清？ | 模块设计解读、最佳实践、交付案例 | 自动生成、改变事实制品、替代当前规范 |
 
 一项 Research 可以包含多篇文档。只要它们服务同一决策目的、共享 Research
 Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当目的、Owner、
@@ -56,12 +61,15 @@ Research Owner 明确授权后才结束 Research。
 EngineeringPlan/
 ├── SKILL.md                         # execution-plan Skill 根
 ├── scripts/epctl.py
-└── engineering-research/
-    ├── SKILL.md                     # engineering-research Skill 根
-    └── scripts/researchctl.py
+├── engineering-research/
+│   ├── SKILL.md                     # engineering-research Skill 根
+│   └── scripts/researchctl.py
+└── engineering-case-study/
+    └── SKILL.md                     # engineering-case-study Skill 根
 ```
 
-要求 Python 3.10+，两个 CLI 都只使用标准库。仓库可以检出到任意稳定目录：
+要求 Python 3.10+；两个治理 CLI 都只使用标准库，分享写作 Skill 不需要专用
+CLI。仓库可以检出到任意稳定目录：
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/EngineeringPlan.git \
@@ -69,17 +77,18 @@ git clone https://github.com/XiaoWeiKIN/EngineeringPlan.git \
 export ENGINEERING_PLAN_HOME=/absolute/path/to/EngineeringPlan
 ```
 
-按所用 Agent 或 Harness 的 Skill 发现机制，分别注册两个目录：
+按所用 Agent 或 Harness 的 Skill 发现机制，分别注册三个目录：
 
 ```text
 /absolute/path/to/EngineeringPlan/engineering-research
 /absolute/path/to/EngineeringPlan
+/absolute/path/to/EngineeringPlan/engineering-case-study
 ```
 
-第一个是 Research Skill，第二个是 Execution Plan Skill。目录扫描、符号链接、
-配置文件或其他注册方式均可；本项目不要求安装到任何特定 Agent 的私有目录。
-根目录保留 `execution-plan` 是为了兼容已有安装，两个注册目标本身没有运行时
-依赖。
+三个目录依次是 Research、Execution Plan 和 Case Study Skill。目录扫描、
+符号链接、配置文件或其他注册方式均可；本项目不要求安装到任何特定 Agent 的
+私有目录。根目录保留 `execution-plan` 是为了兼容已有安装，三个注册目标之间
+没有运行时依赖。
 
 更新发行包：
 
@@ -92,6 +101,7 @@ git -C "$ENGINEERING_PLAN_HOME" pull --ff-only
 ```text
 使用 $engineering-research 调研 spans 聚合方案并整理现有多文档 corpus。
 使用 $execution-plan 基于已完成的 Research 形成 ADR 和可恢复的开发计划。
+使用 $engineering-case-study 基于代码、Research 和 EP-038 写一篇模块设计分享。
 ```
 
 其他宿主使用自己的 Skill 调用约定即可。
@@ -111,6 +121,20 @@ python3 "$EPCTL" --repo . init
 
 两个 `init` 都是幂等的，并共享 `docs/.epctl/state.json` 中的 Research ID
 高水位。
+
+### 手动生成分享案例
+
+Case Study 没有后台任务或自动 hook。用户明确选择主题后再调用：
+
+```text
+使用 $engineering-case-study，结合当前代码、R-006 和 EP-042，
+把 spans aggregate 的 planner 设计写成一篇中英双语模块设计分享。
+```
+
+Skill 会先确认用户选择 `zh-CN`、`en` 还是 `bilingual`；未指定时必须询问，
+不会根据对话语言自行猜测。随后核对代码、测试、Research/ADR/EP 和 revision，
+再在仓库约定位置生成 `draft`。只有用户要求定稿且来源、链接和脱敏检查全部
+通过时，才标记为 `verified`。双语默认生成两份可独立阅读、证据一致的文章。
 
 ### 完整示例：从四篇文档到可执行 EP
 
@@ -365,7 +389,8 @@ flowchart LR
     P --> G["受保护分支的合并门禁"]
 ```
 
-Canonical check 会运行两个 CLI 的测试与仓库验证、Skill 包可移植性检查、本地
+Canonical check 会运行两个治理 CLI 的测试与仓库验证、三个 Skill 包的
+可移植性检查、本地
 Markdown 链接检查、cache-topology 端到端契约测试，以及索引 regeneration-diff。
 CI 文件不得复制这些子命令：
 
@@ -388,7 +413,7 @@ CI 文件不得复制这些子命令：
   `engineering-research`；这是迁移兼容面，不是新的职责边界。
 - Research schema 1 继续按 legacy 契约读取；schema 1.1 增加人类可见元数据、
   Round、Synthesis revision 和显式终止授权。
-- 两个 Skill 不通过相对 import、安装目录或运行时调用耦合。
+- 三个 Skill 不通过相对 import、安装目录或运行时调用耦合。
 - Manifest 是可选的向后兼容字段；一旦出现，就必须满足版本化契约。
 - v2.0–v2.3 ExecPlan 继续按原 schema 读取；新计划使用 v2.4 Architecture
   Input Set。
@@ -427,6 +452,14 @@ Execution Plan：
 - [文档与代码完整性](./references/integrity.md)
 - [Bugfix 规则](./references/bugfix.md)
 - [完整示例](./references/examples.md)
+
+Engineering Case Study：
+
+- [Skill 入口](./engineering-case-study/SKILL.md)
+- [来源与证据](./engineering-case-study/references/source-evidence.md)
+- [文章模式](./engineering-case-study/references/article-patterns.md)
+- [中英文写作](./engineering-case-study/references/language.md)
+- [发布前复核](./engineering-case-study/references/review.md)
 
 ## 设计来源
 

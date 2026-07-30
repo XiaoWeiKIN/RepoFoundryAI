@@ -1,0 +1,177 @@
+{
+  "skill_name": "engineering-case-study",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "使用 $engineering-case-study，把 pkg/services/entitymetrics 的 DAG Pipeline 设计整理成一篇中文模块设计分享。仓库里有相关 ADR、EP 和测试，请直接写入 docs/case-studies/。",
+      "expected_output": "先读取仓库约定、当前代码、测试、相关 ADR/EP 和已有案例，建立证据表并确定一个中心主张；生成带 source_revision 和 relates_to 的 draft Case Study，用 Mermaid 讲清真实执行流，更新案例索引，不编造性能或效率结果。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_multiple_source_roles",
+          "description": "代码与测试证明当前机制，ADR/EP 证明动机和过程，没有让单一 README 替代取证"
+        },
+        {
+          "name": "has_one_central_claim",
+          "description": "文章围绕一个可复用的设计判断组织，而不是按文件罗列模块"
+        },
+        {
+          "name": "records_revision_and_sources",
+          "description": "frontmatter 记录 source_revision，并在 relates_to 中列出真实代码与工程制品"
+        },
+        {
+          "name": "creates_manual_draft",
+          "description": "仅因用户明确触发才创建 docs/case-studies 下 language=zh-CN 的 draft，并更新现有索引"
+        },
+        {
+          "name": "does_not_invent_outcomes",
+          "description": "没有 benchmark 或运行证据时不编造性能、ROI、效率倍数或用户反馈"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "总结 OQL translator 开发中最值得团队复用的最佳实践，写成分享文章。不要新建 Research 或 EP。",
+      "expected_output": "用户没有指定输出语言，因此先询问“这篇分享希望用中文、英文，还是中英双语？”，收到选择前不创建文章。语言明确后，再从多个真实实现、测试、规范和历史记录中识别失败模式；普通代码取证不升级为持久 Research 或 ExecPlan。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "asks_for_language_first",
+          "description": "没有根据中文提问推断输出中文，而是在成文前询问中文、英文或中英双语"
+        },
+        {
+          "name": "creates_no_file_before_answer",
+          "description": "收到语言选择前不创建案例文件或默认语言草稿"
+        },
+        {
+          "name": "grounds_practice_in_real_cases",
+          "description": "语言确认后的最佳实践由真实代码、测试或多个案例支撑，不把单个偏好包装成通用原则"
+        },
+        {
+          "name": "includes_counterexample_and_boundary",
+          "description": "文章说明失败模式、反例或不适用条件，避免口号化"
+        },
+        {
+          "name": "keeps_research_and_ep_unchanged",
+          "description": "用户只要求分享写作时不创建或修改 Research、ADR、EP"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "基于 active 的 EP-042 和 review_ready 的 R-006 先写一版中文 spans aggregate 研发案例，后面定稿。",
+      "expected_output": "可以生成 draft，但明确 R-006 尚未 concluded、EP-042 尚未 completed；把研究推荐、计划目标、已实现代码和实际结果分开陈述，不将待验收内容写成完成事实。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "preserves_lifecycle_truth",
+          "description": "active、review_ready、accepted、completed 等状态没有被混写"
+        },
+        {
+          "name": "keeps_status_draft",
+          "description": "来源仍在演进且用户说后续定稿，因此文章保持 draft"
+        },
+        {
+          "name": "separates_plan_from_result",
+          "description": "EP 验收目标和真实代码/测试结果明确分开"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "EP-038 已经归档。以后每个 EP 完成时都自动生成一篇案例，这次先不用写具体文章。",
+      "expected_output": "不建立自动 hook、归档命令或批量生成机制；说明 engineering-case-study 只在用户明确要求某个分享主题时手动触发，本次不创建案例文件。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "rejects_automatic_generation",
+          "description": "不会把 EP completed 或 archived 视为自动生成触发器"
+        },
+        {
+          "name": "creates_no_case_study",
+          "description": "用户明确说本次不用写，因此不创建或更新案例文件"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "把刚才的模块设计案例定稿成可以对外分享的版本。",
+      "expected_output": "重新核对 source_revision、代码路径、测试证据、当前规范链接和文章主张，执行敏感信息与版权检查；只有全部通过后才把 status 改为 verified 并填写 last_verified，否则保留 draft 并列出缺口。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "revalidates_sources",
+          "description": "定稿前重新核对代码 revision、生命周期、链接和 outcome evidence"
+        },
+        {
+          "name": "performs_publication_safety_review",
+          "description": "检查凭据、内部域名、客户或个人数据、截图日志和第三方内容"
+        },
+        {
+          "name": "marks_verified_only_when_complete",
+          "description": "只有发布复核全部通过才写 verified 与 last_verified"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Use $engineering-case-study to write an English module-design article about the spans aggregate planner. The source Research and EP are mostly written in Chinese.",
+      "expected_output": "Use the same code, Research, ADR, EP, and verification evidence, but write an idiomatic English article with language=en. Preserve code identifiers, define project-specific concepts, record source_revision, and avoid translating Chinese sentences mechanically.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "honors_english_language",
+          "description": "The output is an English case study with language=en even though most source documents are Chinese"
+        },
+        {
+          "name": "rewrites_for_english_readers",
+          "description": "The article is independently structured for English technical readers rather than translated sentence by sentence"
+        },
+        {
+          "name": "preserves_source_terms",
+          "description": "Code symbols, API fields, revisions, and evidence retain their source spelling and meaning"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "把 EP-038 整理成中英双语分享，两种语言都要能独立阅读。",
+      "expected_output": "基于同一个 Claim–Evidence Ledger 生成中文和英文两个文件，分别带 language=zh-CN 与 language=en，互相填写 translation_of；中心主张、数字、revision、生命周期和证据一致，英文按目标读者重写。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "creates_two_independent_files",
+          "description": "双语模式生成中英文两个可独立阅读的文件，不在一个文档内逐段交错"
+        },
+        {
+          "name": "links_translation_pair",
+          "description": "两个文件使用 translation_of 相互关联"
+        },
+        {
+          "name": "keeps_evidence_parity",
+          "description": "中心主张、数字、revision、生命周期和证据在两种语言中保持一致"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "使用 $engineering-case-study 分享 entitymetrics 的设计。",
+      "expected_output": "主题已经明确，但输出语言未指定；只询问“这篇分享希望用中文、英文，还是中英双语？”，等待用户选择，不从中文请求推断语言，也不创建案例文件。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "asks_single_language_question",
+          "description": "只提出中文、英文或中英双语这一项必要问题"
+        },
+        {
+          "name": "does_not_infer_from_prompt_language",
+          "description": "不会因为用户使用中文提问就默认生成中文"
+        },
+        {
+          "name": "waits_before_writing",
+          "description": "在用户回答前不取代其选择、不生成草稿文件"
+        }
+      ]
+    }
+  ]
+}
