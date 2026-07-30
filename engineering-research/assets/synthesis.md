@@ -13,9 +13,10 @@ payload_sha256:
 
 This Synthesis is the bounded, living decision interface between a
 multi-document Research corpus and downstream decisions or plans.
-`review_ready` revisions are immutable review snapshots but do not conclude
-the parent Research. Once sealed, changing the body invalidates the recorded
-SHA-256.
+Each `review_ready` revision is content-addressed but does not conclude the
+parent Research. Selected milestones are preserved as complete, deduplicated
+files under `snapshots/`; once sealed, changing the body invalidates the
+recorded SHA-256.
 
 ## Executive Conclusion
 

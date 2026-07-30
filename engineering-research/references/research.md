@@ -41,7 +41,7 @@ table. Run `sync-research` after editing metadata by hand.
 | `status` | Lifecycle: `active`, `blocked`, `concluded`, or `cancelled` |
 | `maturity` | Content maturity: `exploratory`, `evidence_building`, or `review_ready` |
 | `current_round` | Current `RR-NNN` iteration |
-| `synthesis_revision` | Latest immutable review revision; starts at `0` |
+| `synthesis_revision` | Latest content-addressed review revision; starts at `0` and is independent of physical snapshot count |
 | `approved_by`, `approved_at`, `approval_ref` | Audit record for an explicitly authorized terminal transition |
 
 Do not invent an owner, author, approval, date, or role. An unassigned Owner is
@@ -92,7 +92,7 @@ stateDiagram-v2
     state "Cancelled" as Cancelled
 
     [*] --> Building
-    Building --> Review: "mark-review-ready"
+    Building --> Review: "mark-review-ready [--snapshot]"
     Review --> Building: "new-round"
     Review --> Concluded: "explicit Owner authorization"
     Building --> Cancelled: "explicit Owner authorization + reason"
@@ -105,11 +105,22 @@ stateDiagram-v2
 2. completes the current Round;
 3. increments `synthesis_revision`;
 4. content-addresses `SYNTHESIS.md` as `review_ready`;
-5. copies it to `snapshots/synthesis-vNNN.md`;
+5. with `--snapshot`, copies the complete Synthesis to
+   `snapshots/synthesis-vNNN.md`;
 6. leaves the Research under `active/`.
 
-`new-round` preserves prior snapshots, makes the current Synthesis editable
-again, and returns maturity to `evidence_building`.
+Physical snapshots are sparse milestones, not a mandatory file for every
+revision. Use `--snapshot` for a formal review, downstream handoff, or material
+decision boundary. It may also be added after the Research is already
+`review_ready`. If an earlier snapshot has the same Synthesis body digest, the
+CLI reuses it instead of creating another full copy. Snapshot filenames retain
+the review revision at which that unique body was first preserved, so gaps are
+valid.
+
+`new-round` preserves existing snapshots, makes the current Synthesis editable
+again, and returns maturity to `evidence_building`. Fine-grained revisions that
+were not selected as milestones remain available through repository history,
+not duplicate files in `snapshots/`.
 
 ## Evidence and experiments
 
@@ -136,6 +147,12 @@ interface contracts. Keep an existing `index.md` when it already provides a
 useful reading route. Do not rename or flatten documents merely to satisfy a
 template.
 
+For a new decision-relevant deep dive, prefer `new-topic` and follow
+`references/topic.md`. It creates an opt-in `doc_type: research-topic`
+document, allocates a stable Research-scoped `RT-NNN`, binds it to the current
+Round and stable Research Questions, and refreshes the manifest. Ordinary
+notes remain valid when the structured argument contract would add no value.
+
 Keep `RESEARCH.md` small:
 
 - human-visible metadata and current Round;
@@ -148,6 +165,11 @@ Keep `RESEARCH.md` small:
 Use `sync-research` after membership changes. Resolve missing local references
 before review readiness. Absolute source paths are provenance warnings because
 other machines cannot reproduce them without an alternate source.
+Structured topics may remain incomplete while evidence is building. Before
+review readiness, every schema 2.2 identity and semantic role, `A-NNN`
+analysis section, `E-NNN` evidence mapping, `S-NNN` source, and
+analysis-linked falsifier must be complete. Legacy schema 1, schema 2, and
+schema 2.1 topics retain their original validation requirements.
 
 ## Synthesis
 
@@ -199,9 +221,11 @@ conclude. When authorization is ambiguous, leave the Research active.
 - valid review-ready Synthesis and corpus.
 
 It then seals the manifest and Synthesis and moves the package to
-`completed/`. `cancel-research` also requires explicit authorization plus a
-reason. Cancelled Research remains auditable but cannot satisfy a downstream
-Research Gate.
+`completed/`. Before sealing, it preserves the latest unique review payload as
+a full milestone snapshot unless an identical snapshot already exists.
+`cancel-research` also requires explicit authorization plus a reason.
+Cancelled Research remains auditable but cannot satisfy a downstream Research
+Gate.
 
 After an authorized conclusion, never edit the sealed package. New evidence
 creates a linked follow-up Research identity. If a package was concluded

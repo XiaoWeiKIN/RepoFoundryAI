@@ -1,4 +1,4 @@
 interface:
   display_name: "Engineering Research"
-  short_description: "Run iterative, owner-governed engineering research"
-  default_prompt: "Use $engineering-research to investigate this engineering question across focused rounds, preserve a multi-document evidence corpus, and stop at review-ready until the Research Owner explicitly authorizes conclusion."
+  short_description: "Create auditable, iterative engineering research"
+  default_prompt: "Use $engineering-research to investigate this engineering question through learning-first topic documents and focused rounds. Lead with a decision brief, teach the mechanism through continuous evidence-linked analysis, keep the audit index after the reader path, and stop at review-ready until the Research Owner explicitly authorizes conclusion."

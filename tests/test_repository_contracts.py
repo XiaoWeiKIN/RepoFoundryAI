@@ -159,6 +159,13 @@ class RepositoryContractTestCase(unittest.TestCase):
             self.assertEqual(sealed_manifest["status"], "sealed")
             self.assertEqual(sealed_manifest["mode"], "snapshot")
             self.assertEqual(len(sealed_manifest["documents"]), 6)
+            self.assertTrue(
+                (
+                    completed_research.parent
+                    / "snapshots"
+                    / "synthesis-v001.md"
+                ).is_file()
+            )
 
             adr = Path(
                 self.run_cli(
@@ -316,16 +323,37 @@ class RepositoryContractTestCase(unittest.TestCase):
             research_repo.mkdir()
             research_script = research_skill / "scripts" / "researchctl.py"
             self.run_cli(research_script, research_repo, "init")
+            research = Path(
+                self.run_cli(
+                    research_script,
+                    research_repo,
+                    "new-research",
+                    "--slug",
+                    "portable-install",
+                    "--title",
+                    "Portable install",
+                ).stdout.strip()
+            )
+            topic = Path(
+                self.run_cli(
+                    research_script,
+                    research_repo,
+                    "new-topic",
+                    "R-001",
+                    "--slug",
+                    "portable-topic",
+                    "--title",
+                    "Portable topic",
+                    "--question",
+                    "RQ-001",
+                ).stdout.strip()
+            )
+            self.assertEqual(topic.parent, research.parent / "notes")
             self.run_cli(
                 research_script,
                 research_repo,
-                "new-research",
-                "--slug",
-                "portable-install",
-                "--title",
-                "Portable install",
+                "validate",
             )
-            self.run_cli(research_script, research_repo, "validate")
 
     def test_ci_adapters_only_call_the_canonical_check(self) -> None:
         github = (ROOT / ".github" / "workflows" / "integrity.yml").read_text(
