@@ -1,0 +1,14 @@
+Command:
+  python3 -B -m unittest tests.test_engineeringctl
+
+Result:
+  13 tests passed.
+  Exit status: 0.
+
+Covered behavior:
+  - Bootstrap dry-run, apply, idempotence, preservation, and conflicts.
+  - Core-only and Go/TypeScript/Python polyglot selection.
+  - Spec sync versus update language behavior.
+  - Managed-content drift and explicit restoration.
+  - Project Spec routing without content ownership.
+  - Path Catalog digest rejection before writes.

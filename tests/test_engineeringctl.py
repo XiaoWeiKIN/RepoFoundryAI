@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINEERINGCTL = ROOT / "scripts" / "engineeringctl.py"
+SPEC_CATALOG = ROOT / "engineering-specs"
 EPCTL = (
     ROOT
     / "engineering-execution-plan"
@@ -94,6 +96,14 @@ class EngineeringctlTestCase(unittest.TestCase):
             {"action": "register", "path": "docs/design-docs"},
             payload["actions"],
         )
+        self.assertEqual(payload["specs"], ["core/semantic-naming"])
+        self.assertIn(
+            {
+                "action": "create_file",
+                "path": "docs/.engineering/specs.json",
+            },
+            payload["actions"],
+        )
         self.assertEqual(payload["created"], [])
         self.assertEqual(payload["updated"], [])
         self.assertEqual(list(self.repo.iterdir()), [])
@@ -148,6 +158,35 @@ class EngineeringctlTestCase(unittest.TestCase):
             manifest["instruction_files"],
             [{"path": "AGENTS.md", "max_lines": 100}],
         )
+        spec_manifest = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "specs.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(spec_manifest["specs"], ["core/semantic-naming"])
+        spec_lock = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "specs.lock.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            [item["id"] for item in spec_lock["specs"]],
+            ["core/semantic-naming"],
+        )
+        self.assertTrue(
+            (
+                self.repo
+                / "docs"
+                / "agent-guides"
+                / "managed"
+                / "core"
+                / "semantic-naming.md"
+            ).is_file()
+        )
+        self.assertIn(
+            "docs/agent-guides/managed/index.md",
+            agents.read_text(encoding="utf-8"),
+        )
         config = json.loads(
             (
                 self.repo / "docs" / ".epctl" / "config.json"
@@ -155,6 +194,7 @@ class EngineeringctlTestCase(unittest.TestCase):
         )
         self.assertIn("docs/design-docs", config["architecture_roots"])
         self.run_cli("validate", "--harness")
+        self.run_cli("spec", "validate")
         self.run_ep_cli("validate")
 
         before = {
@@ -162,6 +202,10 @@ class EngineeringctlTestCase(unittest.TestCase):
             for relative in (
                 *required,
                 "docs/.engineering/harness.json",
+                "docs/.engineering/specs.json",
+                "docs/.engineering/specs.lock.json",
+                "docs/agent-guides/managed/index.md",
+                "docs/agent-guides/managed/core/semantic-naming.md",
                 "docs/.epctl/config.json",
             )
         }
@@ -285,6 +329,236 @@ class EngineeringctlTestCase(unittest.TestCase):
         )
         self.assertFalse((self.repo / "AGENTS.md").exists())
 
+    def test_spec_polyglot_selection(self) -> None:
+        (self.repo / "go.mod").write_text(
+            "module example.test/polyglot\n",
+            encoding="utf-8",
+        )
+        (self.repo / "tsconfig.json").write_text("{}\n", encoding="utf-8")
+        (self.repo / "pyproject.toml").write_text(
+            "[project]\nname = \"polyglot\"\n",
+            encoding="utf-8",
+        )
+
+        preview = json.loads(self.run_cli("spec", "plan").stdout)
+
+        expected = [
+            "core/semantic-naming",
+            "languages/go",
+            "languages/typescript",
+            "languages/python",
+        ]
+        self.assertEqual(preview["selected_specs"], expected)
+        self.assertEqual(
+            preview["detected_specs"],
+            expected[1:],
+        )
+        self.assertEqual(list(self.repo.glob("docs/**")), [])
+
+        applied = json.loads(
+            self.run_cli(
+                "bootstrap",
+                "--profile",
+                "codex",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(applied["specs"], expected)
+        lock = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "specs.lock.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            [item["id"] for item in lock["specs"]],
+            expected,
+        )
+        for item in lock["specs"]:
+            installed = self.repo / item["installed_path"]
+            source = SPEC_CATALOG / item["source_path"]
+            self.assertEqual(installed.read_bytes(), source.read_bytes())
+        index = (
+            self.repo / "docs" / "agent-guides" / "managed" / "index.md"
+        ).read_text(encoding="utf-8")
+        for spec_id in expected:
+            self.assertIn(spec_id, index)
+        self.run_cli("spec", "validate")
+
+    def test_spec_sync_and_update_have_distinct_language_behavior(self) -> None:
+        (self.repo / "go.mod").write_text(
+            "module example.test/update\n",
+            encoding="utf-8",
+        )
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        (self.repo / "tsconfig.json").write_text("{}\n", encoding="utf-8")
+
+        synced = json.loads(
+            self.run_cli("spec", "sync", "--apply").stdout
+        )
+        self.assertEqual(
+            synced["selected_specs"],
+            ["core/semantic-naming", "languages/go"],
+        )
+        self.assertIn(
+            "languages/typescript",
+            synced["detected_specs"],
+        )
+
+        preview = json.loads(self.run_cli("spec", "update").stdout)
+        self.assertEqual(
+            preview["selected_specs"],
+            [
+                "core/semantic-naming",
+                "languages/go",
+                "languages/typescript",
+            ],
+        )
+        self.assertIn(
+            {
+                "action": "update_file",
+                "path": "docs/.engineering/specs.json",
+            },
+            preview["actions"],
+        )
+        updated = json.loads(
+            self.run_cli("spec", "update", "--apply").stdout
+        )
+        self.assertIn(
+            "docs/.engineering/specs.json",
+            updated["updated"],
+        )
+        manifest = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "specs.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            manifest["specs"],
+            [
+                "core/semantic-naming",
+                "languages/go",
+                "languages/typescript",
+            ],
+        )
+        self.run_cli("spec", "validate")
+
+    def test_spec_drift_requires_explicit_sync(self) -> None:
+        (self.repo / "go.mod").write_text(
+            "module example.test/drift\n",
+            encoding="utf-8",
+        )
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        managed = (
+            self.repo
+            / "docs"
+            / "agent-guides"
+            / "managed"
+            / "languages"
+            / "go.md"
+        )
+        managed.write_text("# locally modified\n", encoding="utf-8")
+
+        bootstrap = self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--apply",
+            expected=2,
+        )
+        self.assertIn("SPEC_MANAGED_CONTENT_DRIFT", bootstrap.stderr)
+        self.assertEqual(
+            managed.read_text(encoding="utf-8"),
+            "# locally modified\n",
+        )
+        validation = self.run_cli("spec", "validate", expected=1)
+        self.assertIn("SPEC_MANAGED_CONTENT_DRIFT", validation.stderr)
+
+        preview = json.loads(self.run_cli("spec", "sync").stdout)
+        self.assertIn(
+            {
+                "action": "replace_file",
+                "path": (
+                    "docs/agent-guides/managed/languages/go.md"
+                ),
+            },
+            preview["actions"],
+        )
+        self.run_cli("spec", "sync", "--apply")
+        self.assertEqual(
+            managed.read_bytes(),
+            (SPEC_CATALOG / "languages" / "go.md").read_bytes(),
+        )
+        self.run_cli("spec", "validate")
+
+    def test_project_spec_is_routed_without_becoming_managed(self) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        project_spec = (
+            self.repo / "docs" / "agent-guides" / "handler-pattern.md"
+        )
+        project_spec.parent.mkdir(parents=True, exist_ok=True)
+        original = "# Project Handler Pattern\n"
+        project_spec.write_text(original, encoding="utf-8")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "specs.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["project_specs"] = [
+            {
+                "path": "docs/agent-guides/handler-pattern.md",
+                "applies_to": ["internal/http/**"],
+                "description": "Project HTTP Handler pattern",
+            }
+        ]
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        self.run_cli("spec", "sync", "--apply")
+
+        index = (
+            self.repo / "docs" / "agent-guides" / "managed" / "index.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("internal/http/**", index)
+        self.assertIn("handler-pattern.md", index)
+        self.assertEqual(project_spec.read_text(encoding="utf-8"), original)
+        self.run_cli("spec", "validate")
+
+    def test_path_catalog_digest_failure_is_non_destructive(self) -> None:
+        local_catalog = self.repo / "catalog"
+        shutil.copytree(SPEC_CATALOG, local_catalog)
+        (
+            local_catalog / "core" / "semantic-naming.md"
+        ).write_text("# drifted catalog\n", encoding="utf-8")
+        state = self.repo / "docs" / ".engineering"
+        state.mkdir(parents=True)
+        (state / "specs.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "owner": "engineering-workflow",
+                    "catalog": {
+                        "kind": "path",
+                        "path": "catalog",
+                    },
+                    "specs": ["core/semantic-naming"],
+                    "project_specs": [],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_cli("spec", "plan", expected=2)
+
+        self.assertIn("SPEC_CATALOG_DIGEST_MISMATCH", result.stderr)
+        self.assertFalse((state / "specs.lock.json").exists())
+        self.assertFalse(
+            (self.repo / "docs" / "agent-guides" / "managed").exists()
+        )
+
     def test_execution_plan_cli_does_not_own_harness_commands(self) -> None:
         help_result = subprocess.run(
             [sys.executable, "-B", str(EPCTL), "--help"],
@@ -296,6 +570,7 @@ class EngineeringctlTestCase(unittest.TestCase):
         self.assertEqual(help_result.returncode, 0)
         self.assertNotIn("bootstrap", help_result.stdout)
         self.assertNotIn("--harness", help_result.stdout)
+        self.assertNotIn(" spec ", help_result.stdout)
 
 
 if __name__ == "__main__":

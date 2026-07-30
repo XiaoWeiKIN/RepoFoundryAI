@@ -5,7 +5,8 @@
 EngineeringWorkflow 由一个聚合 Skill 和四个专业 Skill 组成：
 
 - **[Engineering Workflow](./SKILL.md)**：初始化和验证 Agent-first 项目
-  Harness，并把后续工作路由到合适的专业 Skill。
+  Harness，把匹配的通用与语言级 Engineering Specs 物化到项目本地，并把后续
+  工作路由到合适的专业 Skill。
 - **[Engineering Benchmark](./engineering-benchmark/SKILL.md)**：把外部压测、
   性能对比、容量验证和回归测试组织成 Suite、稳定 Scenario 与 sealed
   Evidence Bundle。
@@ -51,6 +52,7 @@ flowchart LR
 | 目标 | 从这里开始 | 契约或示例 |
 |---|---|---|
 | 初始化 Agent 可导航的项目 Harness | [Engineering Workflow](./SKILL.md) | [Bootstrap 契约](./references/bootstrap.md) |
+| 同步通用、语言级或项目级 Spec | [Engineering Workflow](./SKILL.md) | [Spec 解析设计](./docs/design-docs/engineering-spec-management.md) |
 | 设计或执行可复现压测 | [Engineering Benchmark](./engineering-benchmark/SKILL.md) | [Suite / Scenario / Run 契约](./engineering-benchmark/references/contract.md) · [路由示例](./engineering-benchmark/references/examples.md) |
 | 调研未知、综合或解释证据 | [Engineering Research](./engineering-research/SKILL.md) | [Research 方法](./engineering-research/references/research.md) · [Manifest 契约](./engineering-research/references/manifest.md) |
 | 形成 ADR，或通过 EP 推动实施 | [Engineering Execution Plan](./engineering-execution-plan/SKILL.md) | [制品路由](./engineering-execution-plan/references/templates.md) · [Benchmark Gate](./engineering-execution-plan/references/benchmark.md) |
@@ -62,7 +64,7 @@ flowchart LR
 
 | Skill | 回答的问题 | 主要制品 | 不负责 |
 |---|---|---|---|
-| Engineering Workflow | 项目如何建立 Agent 可导航、可验证的工程入口？ | AGENTS、Architecture、Docs Map、Harness Manifest | 接受 ADR、生成专业制品 |
+| Engineering Workflow | 项目如何建立 Agent 可导航、可验证的工程入口？ | AGENTS、Architecture、Docs Map、Harness 与 Spec Manifest | 接受 ADR、生成专业制品 |
 | Engineering Benchmark | 怎样可复现地测量，某次执行相对预声明规则得到什么结果？ | Suite、Scenario、Run、Result、Evidence Manifest | 解释跨来源矛盾、接受 ADR、创建实施计划 |
 | Engineering Research | 我们知道什么，证据可靠吗，哪些选项成立？ | Research、Corpus Manifest、Synthesis、Snapshot | 接受 ADR、创建实施计划 |
 | Engineering Execution Plan | 已有证据支持什么决定，怎样实施并验收？ | ADR、ExecPlan、Task、Checkpoint、Bugfix | 搜集新证据、维护研究 corpus |
@@ -112,6 +114,14 @@ target-repository/
 │           ├── EVIDENCE_MANIFEST.json
 │           └── artifacts/
 └── docs/
+    ├── .engineering/
+    │   ├── harness.json
+    │   ├── specs.json
+    │   └── specs.lock.json
+    ├── agent-guides/
+    │   └── managed/
+    │       ├── index.md
+    │       └── <selected-spec-id>.md
     ├── index.md
     ├── RESEARCH.md
     ├── DECISIONS.md
@@ -156,9 +166,14 @@ EngineeringWorkflow/
 ├── SKILL.md                         # engineering-workflow 聚合 Skill
 ├── scripts/
 │   ├── engineeringctl.py            # Harness Bootstrap 与验证
+│   ├── spec_manager.py              # Spec 解析与本地物化
 │   └── check.py                     # 唯一仓库检查入口
 ├── assets/
 │   └── harness-*.md
+├── engineering-specs/
+│   ├── catalog.json                 # 可移植 Spec Catalog 契约
+│   ├── core/
+│   └── languages/
 ├── engineering-benchmark/
 │   ├── SKILL.md                     # engineering-benchmark Skill 根
 │   └── scripts/benchctl.py
@@ -213,9 +228,37 @@ git -C "$ENGINEERING_WORKFLOW_HOME" pull --ff-only
 
 其他宿主使用自己的 Skill 调用约定即可。
 
-## 快速开始
+## Prompt 驱动的端到端示例
 
-以下命令都在目标代码仓库根目录运行：
+[cache-topology 端到端示例](./examples/cache-topology/README.md) 用一段连续对话，
+展示四篇源文档如何进入 gated ExecPlan：
+
+```mermaid
+flowchart LR
+    P["用户 Prompt"] --> R["$engineering-research<br/>linked R-001"]
+    R --> S["sealed Manifest + Synthesis"]
+    S --> A["$engineering-execution-plan<br/>proposed ADR-001"]
+    A -->|"Decision Owner 明确接受"| E["gated EP-001"]
+```
+
+第一条消息只需要告诉 Codex 决策上下文和停止边界：
+
+```text
+使用 $engineering-research 接管
+research-input/cache-topology/ 下的多文档 corpus，将其组织为一个 linked Research。
+完整阅读证据，保留反例和不确定性，形成决策就绪的 Synthesis。
+停在 review-ready，不要 conclude。
+```
+
+Codex 在内部调用控制脚本，并向用户报告创建的 ID、制品和校验结果。后续 Prompt
+分别承载 Research Owner 的结束授权和 Decision Owner 的决定；示例不会伪造
+任何人的授权。
+
+## 底层 CLI：供 Agent 与自动化使用
+
+大多数用户应从上面的 Skill Prompt 开始。本节命令是 Skill、CI 和维护者使用的
+确定性接口；只有编写自动化或排查控制层时才需要直接运行。以下命令都在目标代码
+仓库根目录运行：
 
 ```bash
 ENGINEERING_WORKFLOW_HOME=/absolute/path/to/EngineeringWorkflow
@@ -247,11 +290,31 @@ python3 "$WORKFLOWCTL" --repo . bootstrap --profile codex
 ```bash
 python3 "$WORKFLOWCTL" --repo . bootstrap --profile codex --apply
 python3 "$WORKFLOWCTL" --repo . validate --harness
+python3 "$WORKFLOWCTL" --repo . spec validate
 ```
 
 Bootstrap 只创建缺失路径，不覆盖已有文件。每个注册的 Agent instruction file
 按物理行计数必须不超过 100 行；首版只注册根 `AGENTS.md`，模板保留至少 20 行
 维护余量。现有文件超过上限时，工具报告冲突并拒绝写入。
+
+Bootstrap 永远安装 `core/semantic-naming`，并只在仓库证据匹配时加入 Go、
+TypeScript 和 Python Spec。选择保存在 `docs/.engineering/specs.json`；
+精确版本与 SHA-256 保存在 `specs.lock.json`；本地内容与作用域路由位于
+`docs/agent-guides/managed/`。
+
+Spec 维护同样默认只预览：
+
+```bash
+python3 "$WORKFLOWCTL" --repo . spec plan
+python3 "$WORKFLOWCTL" --repo . spec sync
+python3 "$WORKFLOWCTL" --repo . spec sync --apply
+python3 "$WORKFLOWCTL" --repo . spec update --apply
+python3 "$WORKFLOWCTL" --repo . spec validate
+```
+
+`sync` 遵循已有项目 manifest；`update` 还会加入新检测到的语言，但不会静默移除
+现有选择。项目可在 `project_specs` 中登记自身规范；生成索引只引用它，不复制或
+改写正文。
 
 ### 创建和封存 Benchmark
 
@@ -326,23 +389,6 @@ Skill 会先确认用户选择 `zh-CN`、`en` 还是 `bilingual`；未指定时�
 不会根据对话语言自行猜测。随后核对代码、测试、Research/ADR/EP 和 revision，
 再在仓库约定位置生成 `draft`。只有用户要求定稿且来源、链接和脱敏检查全部
 通过时，才标记为 `verified`。双语默认生成两份可独立阅读、证据一致的文章。
-
-### 完整示例：从四篇文档到可执行 EP
-
-[cache-topology 端到端示例](./examples/cache-topology/README.md) 提供四篇可复制
-的 corpus 文档，并展示：
-
-```mermaid
-flowchart LR
-    C["index + 3 篇专题文档"] --> R["linked R-001"]
-    R --> S["sealed Manifest + Synthesis"]
-    S --> A["proposed ADR-001"]
-    A -->|"Decision Owner 明确接受"| E["gated EP-001"]
-```
-
-示例给出具体 Research Questions、benchmark 数字、Synthesis 结论、ADR
-授权语句、Gate 字段和实施里程碑。注册 corpus 的命令可以直接运行；ADR
-仍会停在 `proposed`，不会用演示脚本伪造人的决定。
 
 ### 1. 创建 managed Research
 

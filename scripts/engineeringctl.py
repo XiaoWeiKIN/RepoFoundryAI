@@ -13,6 +13,8 @@ import tempfile
 from pathlib import Path
 from types import ModuleType
 
+import spec_manager as specctl
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - Windows fallback
@@ -29,6 +31,7 @@ ASSET_DIR = SKILL_DIR / "assets"
 EXECUTION_PLAN_CTL = (
     SKILL_DIR / "engineering-execution-plan" / "scripts" / "epctl.py"
 )
+SPEC_CATALOG_DIR = SKILL_DIR / "engineering-specs"
 
 HARNESS_VERSION = 1
 CODEX_HARNESS_PROFILE = "codex"
@@ -391,9 +394,31 @@ def bootstrap_plan(repo: Path, profile: str) -> dict[str, object]:
     else:
         actions.append({"action": "register", "path": "docs/design-docs"})
 
+    selected_specs: list[str] = []
+    try:
+        spec_plan = specctl.plan_spec_state(
+            repo,
+            SPEC_CATALOG_DIR,
+            operation="sync",
+            allow_replace=False,
+        )
+    except specctl.SpecError as exc:
+        actions.append(
+            {
+                "action": "conflict",
+                "path": specctl.SPEC_MANIFEST,
+                "reason": str(exc),
+            }
+        )
+    else:
+        actions.extend(spec_plan.actions)
+        warnings.extend(spec_plan.warnings)
+        selected_specs.extend(spec_plan.selected_spec_ids)
+
     return {
         "profile": profile,
         "components": ["engineering-execution-plan"],
+        "specs": selected_specs,
         "actions": actions,
         "warnings": warnings,
     }
@@ -496,6 +521,13 @@ def validate_codex_harness(
                 "HARNESS_ARCHITECTURE_ROOT_MISSING: docs/design-docs: "
                 "run engineeringctl bootstrap --profile codex --apply"
             )
+    spec_errors, spec_warnings = specctl.validate_spec_state(
+        repo,
+        SPEC_CATALOG_DIR,
+        require_manifest=False,
+    )
+    errors.extend(spec_errors)
+    warnings.extend(spec_warnings)
     return errors, warnings
 
 
@@ -518,6 +550,7 @@ def bootstrap_repo(
         "profile": profile,
         "mode": "apply" if apply_changes else "dry-run",
         "components": list(planned["components"]),
+        "specs": list(planned["specs"]),
         "actions": actions,
         "warnings": list(planned["warnings"]),
         "created": [],
@@ -606,8 +639,23 @@ def bootstrap_repo(
                         updated.append(config.relative_to(repo).as_posix())
                     else:
                         created.append(config.relative_to(repo).as_posix())
+
+                spec_plan = specctl.plan_spec_state(
+                    repo,
+                    SPEC_CATALOG_DIR,
+                    operation="sync",
+                    allow_replace=False,
+                )
+                spec_created, spec_updated = specctl.apply_spec_plan(
+                    repo,
+                    spec_plan,
+                )
+                created.extend(spec_created)
+                updated.extend(spec_updated)
         except EngineeringctlError:
             raise
+        except specctl.SpecError as exc:
+            raise EngineeringctlError(str(exc)) from exc
         except Exception as exc:
             raise EngineeringctlError(
                 f"engineering-execution-plan initialization failed: {exc}"
@@ -632,6 +680,77 @@ def bootstrap_repo(
     )
     payload["created"] = list(dict.fromkeys(created))
     payload["updated"] = list(dict.fromkeys(updated))
+    return payload
+
+
+def manage_specs(
+    repo: Path,
+    operation: str,
+    *,
+    apply_changes: bool,
+) -> dict[str, object]:
+    try:
+        planned = specctl.plan_spec_state(
+            repo,
+            SPEC_CATALOG_DIR,
+            operation=operation,
+            allow_replace=True,
+        )
+    except specctl.SpecError as exc:
+        raise EngineeringctlError(str(exc)) from exc
+    if planned.conflicts:
+        details = "; ".join(
+            f"{item.get('path')}: {item.get('reason')}"
+            for item in planned.conflicts
+        )
+        if apply_changes:
+            raise EngineeringctlError(f"Spec preflight failed: {details}")
+    if not apply_changes:
+        return specctl.plan_payload(planned, mode="dry-run")
+
+    with repo_lock(repo):
+        try:
+            locked_plan = specctl.plan_spec_state(
+                repo,
+                SPEC_CATALOG_DIR,
+                operation=operation,
+                allow_replace=True,
+            )
+        except specctl.SpecError as exc:
+            raise EngineeringctlError(str(exc)) from exc
+        if locked_plan != planned:
+            raise EngineeringctlError(
+                "Spec preflight changed while acquiring the Harness lock; "
+                "rerun the dry-run"
+            )
+        try:
+            created, updated = specctl.apply_spec_plan(repo, locked_plan)
+        except specctl.SpecError as exc:
+            raise EngineeringctlError(str(exc)) from exc
+
+    errors, validation_warnings = specctl.validate_spec_state(
+        repo,
+        SPEC_CATALOG_DIR,
+        require_manifest=True,
+    )
+    if errors:
+        raise EngineeringctlError(
+            "Spec validation failed after apply: " + "; ".join(errors)
+        )
+    payload = specctl.plan_payload(
+        planned,
+        mode="apply",
+        created=created,
+        updated=updated,
+    )
+    payload["warnings"] = list(
+        dict.fromkeys(
+            [
+                *list(planned.warnings),
+                *validation_warnings,
+            ]
+        )
+    )
     return payload
 
 
@@ -670,6 +789,42 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Require a bootstrapped Harness manifest",
     )
+
+    spec_parser = sub.add_parser(
+        "spec",
+        help="Plan, synchronize, update, or validate Engineering Specs",
+    )
+    spec_commands = spec_parser.add_subparsers(
+        dest="spec_command",
+        required=True,
+    )
+    spec_commands.add_parser(
+        "plan",
+        help="Preview the current or inferred Spec selection",
+    )
+    for command, help_text in (
+        ("sync", "Materialize the explicit Spec selection"),
+        (
+            "update",
+            "Add newly detected languages and refresh selected Specs",
+        ),
+    ):
+        command_parser = spec_commands.add_parser(command, help=help_text)
+        command_mode = command_parser.add_mutually_exclusive_group()
+        command_mode.add_argument(
+            "--apply",
+            action="store_true",
+            help="Apply the conflict-free preview",
+        )
+        command_mode.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Preview actions without writing; this is the default",
+        )
+    spec_commands.add_parser(
+        "validate",
+        help="Validate the Spec manifest, lock, local content, and routing",
+    )
     return parser
 
 
@@ -705,6 +860,43 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 1 if errors else 0
+        elif args.command == "spec":
+            if args.spec_command == "validate":
+                errors, warnings = specctl.validate_spec_state(
+                    repo,
+                    SPEC_CATALOG_DIR,
+                    require_manifest=True,
+                )
+                for warning in warnings:
+                    print(f"WARNING: {warning}", file=sys.stderr)
+                for error in errors:
+                    print(f"ERROR: {error}", file=sys.stderr)
+                print(
+                    json.dumps(
+                        {"errors": len(errors), "warnings": len(warnings)},
+                        ensure_ascii=False,
+                    )
+                )
+                return 1 if errors else 0
+            operation = (
+                "plan"
+                if args.spec_command == "plan"
+                else args.spec_command
+            )
+            apply_changes = bool(
+                args.spec_command != "plan" and args.apply
+            )
+            print(
+                json.dumps(
+                    manage_specs(
+                        repo,
+                        operation,
+                        apply_changes=apply_changes,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         else:  # pragma: no cover - argparse guarantees a command
             raise EngineeringctlError(f"Unknown command: {args.command}")
     except EngineeringctlError as exc:

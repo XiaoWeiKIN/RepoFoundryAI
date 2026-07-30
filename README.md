@@ -6,8 +6,9 @@ EngineeringWorkflow combines one aggregation Skill with four professional
 Skills:
 
 - **[Engineering Workflow](./SKILL.md)** bootstraps and validates an
-  agent-first project Harness, then routes follow-up work to the right
-  professional Skill.
+  agent-first project Harness, materializes applicable common and language
+  Engineering Specs, then routes follow-up work to the right professional
+  Skill.
 - **[Engineering Benchmark](./engineering-benchmark/SKILL.md)** organizes load
   tests, performance comparisons, capacity validation, and regression tests
   into Suites, stable Scenarios, and sealed Evidence Bundles.
@@ -58,6 +59,7 @@ only when the task reaches that boundary.
 | Intent | Start here | Contract or example |
 |---|---|---|
 | Bootstrap an agent-navigable project Harness | [Engineering Workflow](./SKILL.md) | [Bootstrap contract](./references/bootstrap.md) |
+| Synchronize common, language, or project Specs | [Engineering Workflow](./SKILL.md) | [Spec resolution design](./docs/design-docs/engineering-spec-management.md) |
 | Design or run a reproducible load test | [Engineering Benchmark](./engineering-benchmark/SKILL.md) | [Suite / Scenario / Run contract](./engineering-benchmark/references/contract.md) · [Routing examples](./engineering-benchmark/references/examples.md) |
 | Investigate an unknown or reconcile evidence | [Engineering Research](./engineering-research/SKILL.md) | [Research method](./engineering-research/references/research.md) · [Manifest contract](./engineering-research/references/manifest.md) |
 | Make an ADR or drive implementation through an EP | [Engineering Execution Plan](./engineering-execution-plan/SKILL.md) | [Artifact routing](./engineering-execution-plan/references/templates.md) · [Benchmark gates](./engineering-execution-plan/references/benchmark.md) |
@@ -70,7 +72,7 @@ have different triggers, evidence responsibilities, and growth patterns.
 
 | Skill | Question it answers | Primary artifacts | Out of scope |
 |---|---|---|---|
-| Engineering Workflow | How does a project expose an agent-navigable, verifiable engineering entrypoint? | AGENTS, Architecture, Docs Map, Harness Manifest | Accepting ADRs or generating professional artifacts |
+| Engineering Workflow | How does a project expose an agent-navigable, verifiable engineering entrypoint? | AGENTS, Architecture, Docs Map, Harness and Spec manifests | Accepting ADRs or generating professional artifacts |
 | Engineering Benchmark | How can we measure reproducibly, and what did one run produce against predeclared rules? | Suite, Scenario, Run, Result, Evidence Manifest | Explaining cross-source conflicts, accepting ADRs, or creating implementation plans |
 | Engineering Research | What do we know, how reliable is the evidence, and which options remain viable? | Research, Corpus Manifest, Synthesis, Snapshot | Accepting ADRs or creating implementation plans |
 | Engineering Execution Plan | Which decision does the evidence support, and how will we implement and accept it? | ADR, ExecPlan, Task, Checkpoint, Bugfix | Collecting new evidence or maintaining the research corpus |
@@ -131,6 +133,14 @@ target-repository/
 │           ├── EVIDENCE_MANIFEST.json
 │           └── artifacts/
 └── docs/
+    ├── .engineering/
+    │   ├── harness.json
+    │   ├── specs.json
+    │   └── specs.lock.json
+    ├── agent-guides/
+    │   └── managed/
+    │       ├── index.md
+    │       └── <selected-spec-id>.md
     ├── index.md
     ├── RESEARCH.md
     ├── DECISIONS.md
@@ -180,9 +190,14 @@ EngineeringWorkflow/
 ├── SKILL.md                         # engineering-workflow aggregation Skill
 ├── scripts/
 │   ├── engineeringctl.py            # Harness Bootstrap and validation
+│   ├── spec_manager.py              # Spec resolution and materialization
 │   └── check.py                     # single repository check entrypoint
 ├── assets/
 │   └── harness-*.md
+├── engineering-specs/
+│   ├── catalog.json                 # portable Spec catalog contract
+│   ├── core/
+│   └── languages/
 ├── engineering-benchmark/
 │   ├── SKILL.md                     # engineering-benchmark Skill root
 │   └── scripts/benchctl.py
@@ -241,9 +256,39 @@ Use $engineering-case-study to write a module-design article from the code, Rese
 
 Other hosts can use their own Skill invocation convention.
 
-## Quick start
+## Prompt-driven end-to-end example
 
-Run the following commands from the target repository root:
+The [cache-topology example](./examples/cache-topology/README.md) follows one
+conversation from four source documents to a gated ExecPlan:
+
+```mermaid
+flowchart LR
+    P["User prompt"] --> R["$engineering-research<br/>linked R-001"]
+    R --> S["sealed Manifest + Synthesis"]
+    S --> A["$engineering-execution-plan<br/>proposed ADR-001"]
+    A -->|"explicit Decision Owner acceptance"| E["gated EP-001"]
+```
+
+Start by giving Codex the decision context and stopping boundary:
+
+```text
+Use $engineering-research to take over
+research-input/cache-topology/ as one linked Research.
+Read the complete corpus, preserve counterevidence, and produce a
+decision-ready Synthesis. Stop at review-ready and do not conclude it.
+```
+
+Codex invokes the control scripts internally and reports the created IDs,
+artifacts, and validation results. Later prompts carry the Research Owner
+conclusion and Decision Owner acceptance; the example never fabricates either
+authority.
+
+## Low-level CLI for agents and automation
+
+Most users should start with the Skill prompts above. The commands in this
+section are the deterministic interface used by Skills, CI, and maintainers;
+run them directly only when building automation or debugging the control layer.
+Run them from the target repository root:
 
 ```bash
 ENGINEERING_WORKFLOW_HOME=/absolute/path/to/EngineeringWorkflow
@@ -277,6 +322,7 @@ Apply and validate only after the preview reports no conflicts:
 ```bash
 python3 "$WORKFLOWCTL" --repo . bootstrap --profile codex --apply
 python3 "$WORKFLOWCTL" --repo . validate --harness
+python3 "$WORKFLOWCTL" --repo . spec validate
 ```
 
 Bootstrap creates missing paths and never overwrites existing files. Every
@@ -284,6 +330,27 @@ registered agent instruction file must stay at or below 100 physical lines.
 The first profile registers only the root `AGENTS.md`, and its template reserves
 at least 20 lines for project-specific guidance. An existing file over the hard
 limit is reported as a conflict before any write occurs.
+
+Bootstrap always installs `core/semantic-naming` and adds Go, TypeScript, and
+Python Specs only when repository evidence matches. The selection is stored in
+`docs/.engineering/specs.json`; exact versions and SHA-256 digests are stored
+in `specs.lock.json`; local content and the scope router live under
+`docs/agent-guides/managed/`.
+
+Spec maintenance is also preview-first:
+
+```bash
+python3 "$WORKFLOWCTL" --repo . spec plan
+python3 "$WORKFLOWCTL" --repo . spec sync
+python3 "$WORKFLOWCTL" --repo . spec sync --apply
+python3 "$WORKFLOWCTL" --repo . spec update --apply
+python3 "$WORKFLOWCTL" --repo . spec validate
+```
+
+`sync` follows the existing project manifest. `update` additionally adds newly
+detected languages without silently removing existing selections. Projects can
+register project-owned guidance in `project_specs`; the generated index links
+it without copying or rewriting its content.
 
 ### Create and seal a Benchmark
 
@@ -365,24 +432,6 @@ checks code, tests, Research/ADR/EP artifacts, and the revision before writing a
 when the user requests finalization and source, link, and redaction checks pass.
 Bilingual output defaults to two independently readable articles backed by the
 same evidence.
-
-### End-to-end example: from four documents to an executable EP
-
-The [cache-topology example](./examples/cache-topology/README.md) provides four
-copyable corpus documents and demonstrates:
-
-```mermaid
-flowchart LR
-    C["index + three topic documents"] --> R["linked R-001"]
-    R --> S["sealed Manifest + Synthesis"]
-    S --> A["proposed ADR-001"]
-    A -->|"explicit Decision Owner acceptance"| E["gated EP-001"]
-```
-
-The example includes concrete Research Questions, benchmark numbers, Synthesis
-conclusions, an ADR authorization statement, Gate fields, and implementation
-milestones. Corpus registration commands are executable. The ADR remains
-`proposed`; the example never fabricates a human decision.
 
 ### 1. Create managed Research
 

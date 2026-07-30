@@ -289,6 +289,19 @@ def validate_eval_catalogs() -> None:
         validate_eval_catalog(path, expected_skill_name)
 
 
+def validate_engineering_spec_catalog() -> None:
+    run(
+        "Engineering Spec catalog",
+        [
+            sys.executable,
+            "-B",
+            str(ROOT / "scripts" / "spec_manager.py"),
+            "--check-catalog",
+            str(ROOT / "engineering-specs"),
+        ],
+    )
+
+
 def copy_repository(destination: Path) -> None:
     shutil.copytree(
         ROOT,
@@ -381,6 +394,7 @@ def main() -> int:
     try:
         validate_skill_packages()
         validate_eval_catalogs()
+        validate_engineering_spec_catalog()
         validate_markdown_links()
         run(
             "Engineering Research tests",

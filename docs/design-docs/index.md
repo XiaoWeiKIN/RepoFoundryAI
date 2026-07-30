@@ -15,3 +15,4 @@ how accepted choices are realized.
 
 - [EngineeringWorkflow skill packaging](engineering-workflow-packaging.md)
 - [Codex project documentation bootstrap](codex-project-bootstrap.md)
+- [Engineering Spec resolution and project materialization](engineering-spec-management.md)

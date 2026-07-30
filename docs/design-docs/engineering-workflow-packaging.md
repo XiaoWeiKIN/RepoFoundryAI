@@ -25,6 +25,7 @@ flowchart TB
     W --> R["engineering-research"]
     W --> E["engineering-execution-plan"]
     W --> C["engineering-case-study"]
+    W --> S["engineering-specs<br/>versioned content catalog"]
     W --> H["engineeringctl<br/>Harness Bootstrap"]
     H --> I["epctl init<br/>EP-owned artifacts"]
 ```
@@ -36,9 +37,14 @@ EngineeringWorkflow/
 ├── SKILL.md
 ├── agents/openai.yaml
 ├── assets/harness-*.md
+├── engineering-specs/
+│   ├── catalog.json
+│   ├── core/
+│   └── languages/
 ├── references/bootstrap.md
 ├── scripts/
 │   ├── engineeringctl.py
+│   ├── spec_manager.py
 │   └── check.py
 ├── engineering-benchmark/
 ├── engineering-research/
@@ -54,7 +60,7 @@ distribution repository. Every professional Skill owns its `SKILL.md`,
 
 | Owner | Responsibilities |
 |---|---|
-| `engineering-workflow` | Project Harness templates, manifest, Bootstrap preflight, aggregate routing |
+| `engineering-workflow` | Project Harness templates, manifest, Bootstrap preflight, Engineering Spec resolution, aggregate routing |
 | `engineering-benchmark` | Suite, Scenario, Run, Result and evidence sealing |
 | `engineering-research` | Research questions, topics, corpus, snapshots and Synthesis |
 | `engineering-execution-plan` | ADR, ExecPlan, Task, Checkpoint, Bugfix and technical debt |
@@ -71,6 +77,9 @@ component is absent.
 scripts/engineeringctl.py
   bootstrap --profile codex [--dry-run | --apply]
   validate --harness
+  spec plan
+  spec sync / update [--dry-run | --apply]
+  spec validate
 
 engineering-execution-plan/scripts/epctl.py
   init
@@ -87,6 +96,8 @@ the bundled `epctl` contract, runs its idempotent `init`, and registers
 ## State Boundaries
 
 - `docs/.engineering/harness.json` records the project-level Harness.
+- `docs/.engineering/specs.json` records project Spec selection and overlays.
+- `docs/.engineering/specs.lock.json` records resolved versions and digests.
 - `docs/.engineering/lock` serializes Harness changes.
 - `docs/.epctl/state.json` and `docs/.epctl/config.json` remain EP state.
 - `benchmarks/.benchctl/` remains Benchmark state.
@@ -116,7 +127,9 @@ The README carries the explicit migration path.
 
 - Validate all five Skill metadata packages and four eval catalogs.
 - Run `engineeringctl` dry-run, apply, idempotence, preservation and line-limit
-  tests.
+  tests, plus Core, language, polyglot, lock, drift, and project Spec tests.
+- Validate the bundled `engineering-specs/catalog.json` and prove it remains a
+  portable content package in an independently installed Workflow Skill.
 - Run the independently installed `engineering-execution-plan` test suite.
 - Copy the root aggregation package with its bundled EP component and prove
   Bootstrap works without private host paths.

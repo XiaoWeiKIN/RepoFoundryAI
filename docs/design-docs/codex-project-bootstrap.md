@@ -23,6 +23,10 @@ artifacts.
 The bootstrap establishes navigation and verification structure. It does not
 claim that generic templates contain verified project facts.
 
+Engineering Spec selection and materialization extend this control plane. The
+detailed catalog, manifest, lock, routing, and update contracts are defined in
+[Engineering Spec resolution](engineering-spec-management.md).
+
 ## Scope
 
 The first version provides one optional profile, `codex`, with these behaviors:
@@ -35,6 +39,10 @@ The first version provides one optional profile, `codex`, with these behaviors:
 - register `docs/design-docs` as an architecture root;
 - record the enabled profile and required files in
   `docs/.engineering/harness.json`;
+- install required Core guidance and language guidance detected from repository
+  evidence;
+- materialize selected Specs with a versioned manifest, content lock, and local
+  routing index;
 - validate the Harness automatically after bootstrap and through
   `engineeringctl validate`;
 - enforce a maximum of 100 physical lines for each registered Agent instruction
@@ -52,6 +60,8 @@ files must be registered explicitly before the validator owns their limit.
   providers, deployment, or auto-merge.
 - Create product-specific documents such as `FRONTEND.md` or
   `PRODUCT_SENSE.md` without repository evidence.
+- Fetch a remote Spec catalog, manage credentials, or rewrite project-owned
+  Specs.
 - Turn `AGENTS.md` into a complete manual.
 
 ## CLI Contract
@@ -100,6 +110,14 @@ The `codex` profile adds the following paths to the existing EP layout:
 AGENTS.md
 ARCHITECTURE.md
 docs/
+├── .engineering/
+│   ├── harness.json
+│   ├── specs.json
+│   └── specs.lock.json
+├── agent-guides/
+│   └── managed/
+│       ├── index.md
+│       └── <selected-spec-id>.md
 ├── index.md
 ├── QUALITY_SCORE.md
 ├── RELIABILITY.md
@@ -117,7 +135,10 @@ docs/
 ```
 
 `AGENTS.md` is a short routing map. Detailed architecture, quality, reliability,
-security, research, decisions, and plans remain in the linked documents.
+security, engineering Specs, research, decisions, and plans remain in the
+linked documents. One stable route points implementation and review work to
+`docs/agent-guides/managed/index.md`, where file scopes select the applicable
+local Specs.
 
 The only intentional mutation of an existing managed file is adding
 `docs/design-docs` to `docs/.epctl/config.json`. Bootstrap does not rebuild
@@ -229,7 +250,15 @@ bootstrap will not rewrite it.
 
 - `scripts/engineeringctl.py`
   - own bootstrap planning, apply, manifest loading, and Harness validation;
+  - expose `spec plan`, `spec sync`, `spec update`, and `spec validate`;
   - load the bundled EP initialization contract only during composition.
+- `scripts/spec_manager.py`
+  - parse Catalog and project data into strict internal structures;
+  - detect languages, resolve dependencies, plan managed writes, and validate
+    local locks and content.
+- `engineering-specs/`
+  - provide the bundled Catalog, required semantic naming, and supported
+    language Specs as a repository-independent content package.
 - `engineering-execution-plan/scripts/epctl.py`
   - preserve `init_repo` and all EP lifecycle behavior;
   - expose no Bootstrap or Harness validation command.
@@ -251,6 +280,10 @@ bootstrap will not rewrite it.
 - Preview produces no repository changes.
 - Apply creates the declared structure and passes
   `engineeringctl validate --harness`.
+- Empty repositories select Core only; Go, TypeScript, Python, and polyglot
+  fixtures select exactly the matching language Specs.
+- `engineeringctl spec validate` proves manifest, lock, local content, project
+  references, and routing integrity.
 - Repeating apply produces no content changes.
 - Existing files remain byte-identical.
 - A 100-line `AGENTS.md` passes.

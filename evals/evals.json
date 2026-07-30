@@ -60,6 +60,30 @@
           "description": "ADR、ExecPlan 和 Task 生命周期由 engineering-execution-plan 持有"
         }
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "初始化这个 Go 后端和 TypeScript 前端的仓库。通用命名规范必须安装，两种语言规范按需落到本地；现有 handler-pattern.md 是项目规则，不要覆盖。",
+      "expected_output": "先预览 Codex Bootstrap；选择 core/semantic-naming、languages/go 和 languages/typescript，生成 docs/.engineering/specs.json、specs.lock.json 与 docs/agent-guides/managed/ 本地副本和索引。把已有 handler-pattern.md 作为 project_specs 引用而不复制或改写，应用后运行 spec validate 与 Harness validation。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "selects_core_and_detected_languages",
+          "description": "Core 必选，只加入仓库证据匹配的 Go 与 TypeScript Spec"
+        },
+        {
+          "name": "materializes_versioned_local_specs",
+          "description": "Manifest、lock、managed 内容和路由索引位于目标仓库并可用 SHA-256 校验"
+        },
+        {
+          "name": "preserves_project_specs",
+          "description": "项目规则通过 project_specs 引用，工具不复制、覆盖或改写其正文"
+        },
+        {
+          "name": "keeps_bootstrap_preview_first",
+          "description": "Bootstrap 与 Spec 更新先预览，发生 drift 或 path conflict 时不进行部分写入"
+        }
+      ]
     }
   ]
 }

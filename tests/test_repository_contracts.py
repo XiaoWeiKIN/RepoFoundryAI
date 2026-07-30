@@ -19,6 +19,7 @@ EPCTL = (
 )
 RESEARCHCTL = ROOT / "engineering-research" / "scripts" / "researchctl.py"
 BENCHCTL = ROOT / "engineering-benchmark" / "scripts" / "benchctl.py"
+SPEC_MANAGER = ROOT / "scripts" / "spec_manager.py"
 EXAMPLE = ROOT / "examples" / "cache-topology"
 
 
@@ -324,6 +325,37 @@ class RepositoryContractTestCase(unittest.TestCase):
         self.assertIn(
             "at or below 100 physical lines",
             template.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "docs/agent-guides/managed/index.md",
+            template.read_text(encoding="utf-8"),
+        )
+
+    def test_engineering_spec_catalog_is_a_valid_content_package(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(SPEC_MANAGER),
+                "--check-catalog",
+                str(ROOT / "engineering-specs"),
+            ],
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["catalog_id"], "engineering-workflow")
+        self.assertEqual(
+            payload["specs"],
+            [
+                "core/semantic-naming",
+                "languages/go",
+                "languages/typescript",
+                "languages/python",
+            ],
         )
 
     def test_execplan_consumes_sealed_benchmark_contract(self) -> None:
@@ -653,6 +685,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "SKILL.md",
                 "agents",
                 "assets",
+                "engineering-specs",
                 "references",
                 "scripts",
             ):
@@ -730,6 +763,22 @@ class RepositoryContractTestCase(unittest.TestCase):
                 workflow_repo,
                 "validate",
                 "--harness",
+            )
+            self.run_cli(
+                workflow_script,
+                workflow_repo,
+                "spec",
+                "validate",
+            )
+            self.assertTrue(
+                (
+                    workflow_repo
+                    / "docs"
+                    / "agent-guides"
+                    / "managed"
+                    / "core"
+                    / "semantic-naming.md"
+                ).is_file()
             )
 
             execution_repo = base / "execution-repo"

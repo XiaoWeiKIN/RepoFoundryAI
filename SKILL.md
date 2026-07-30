@@ -1,17 +1,19 @@
 ---
 name: engineering-workflow
 description: |
-  初始化和验证 Agent-first 工程项目的版本化 Harness，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，应用时只创建缺失文件并组合 engineering-execution-plan 的初始化，不覆盖已有仓库内容。
+  初始化和验证 Agent-first 工程项目的版本化 Harness，解析并同步通用、语言级和项目级 Engineering Specs，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go/TypeScript/Python 语言规范、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，应用时只创建缺失文件、物化匹配的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
 ---
 
 # Engineering Workflow
 
-把仓库级 Harness 与四个专业工程 Skill 连接起来。根 Skill 只负责项目初始化、
-统一入口和工作路由，不接管专业制品的生命周期。
+把仓库级 Harness、可组合 Engineering Specs 与四个专业工程 Skill 连接起来。
+根 Skill 只负责项目初始化、Spec 解析、统一入口和工作路由，不接管专业制品的
+生命周期。
 
 ```mermaid
 flowchart LR
     W["engineering-workflow<br/>Harness + routing"]
+    W --> S["engineering-specs<br/>Core + language guidance"]
     W --> B["engineering-benchmark<br/>可复现测量"]
     W --> R["engineering-research<br/>问题与证据综合"]
     W --> E["engineering-execution-plan<br/>ADR 与实施"]
@@ -31,6 +33,9 @@ python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
 
 python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
   validate --harness
+
+python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+  spec validate
 ```
 
 执行顺序：
@@ -43,12 +48,32 @@ python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
    [bootstrap.md](references/bootstrap.md)。
 
 Codex profile 创建短 `AGENTS.md`、`ARCHITECTURE.md`、文档索引、质量、可靠性、
-安全和 Design Doc 入口。未知项目事实保留 `BOOTSTRAP_TODO`，不得编造命令、
-Owner、架构、SLO 或安全控制。
+安全、Design Doc 入口和本地 Engineering Specs。Core Spec 必选；Go、
+TypeScript 和 Python Spec 只在仓库证据匹配时选择。选择写入
+`docs/.engineering/specs.json`，精确版本与 SHA-256 写入
+`specs.lock.json`，Codex 从 `docs/agent-guides/managed/index.md` 按作用域读取。
+项目规则通过 manifest 引用，工具不改写其内容。未知项目事实保留
+`BOOTSTRAP_TODO`，不得编造命令、Owner、架构、SLO 或安全控制。
 
 所有注册的 Agent instruction 文件按物理行计数。根 `AGENTS.md` 必须不超过
 100 行；模板目标不超过 80 行，为项目维护保留余量。Harness 契约写入
 `docs/.engineering/harness.json`，EP 状态继续写入 `docs/.epctl/`。
+
+## 管理 Engineering Specs
+
+所有写操作默认只预览：
+
+```bash
+python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec plan
+python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec sync --apply
+python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec update --apply
+python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec validate
+```
+
+`sync` 遵循已有 manifest；`update` 还会加入新检测到的语言，但不自动移除现有
+选择。Bootstrap 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在
+预览后恢复 `docs/agent-guides/managed/`。Bundled Catalog 位于
+`engineering-specs/`；项目也可在 manifest 中引用仓库相对的 Catalog checkout。
 
 ## 路由专业工作
 
@@ -68,5 +93,7 @@ Skill 必须保持可独立安装和运行；只有 `engineering-workflow` 可�
 - 不在本 Skill 接受或拒绝 ADR。
 - 不在本 Skill 创建 Research、Benchmark Run、ExecPlan 或 Case Study。
 - 不覆盖、搬迁或重写已有项目文档。
+- 不在 Bootstrap 中联网、克隆远程 Catalog 或管理凭据。
+- 不把项目自定义 Spec 复制进托管目录或改写其内容。
 - 不把某个 Agent、代码托管平台或本机安装路径写入文件契约。
 - 不把 Harness manifest 放进 `.epctl`；项目级状态与 EP 状态分开持有。

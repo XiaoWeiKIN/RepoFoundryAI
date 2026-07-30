@@ -15,6 +15,7 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 <!-- EPCTL:ACTIVE:START -->
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
+| EP-004 | Add Engineering Spec management to Harness bootstrap | active | 2026-07-30 | [EXECPLAN](exec-plans/active/ep-004_add-spec-management/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed
