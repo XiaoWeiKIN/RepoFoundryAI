@@ -11,7 +11,7 @@
 
 ## Ownership boundary
 
-`execution-plan` consumes concluded Research; it does not own evidence
+`engineering-execution-plan` consumes concluded Research; it does not own evidence
 acquisition, experiments, multi-document corpus maintenance, or Synthesis
 authoring. Use the independent `engineering-research` skill or any producer
 that emits the compatible repository file contract.

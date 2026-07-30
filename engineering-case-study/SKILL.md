@@ -24,7 +24,7 @@ flowchart LR
 ## 边界
 
 - 手动触发。不要在 Research concluded、ADR accepted 或 EP completed 后自动运行。
-- 读取现有文件契约，不依赖 `engineering-research` 或 `execution-plan` 的安装路径。
+- 读取现有文件契约，不依赖 `engineering-research` 或 `engineering-execution-plan` 的安装路径。
 - 可以消费 active Research 或 active EP 作为过程材料，但必须标注其状态；不得把
   review-ready 当成已批准结论，也不得把计划目标写成已实现结果。
 - 没有 Research 或 EP 时仍可基于代码、测试和 Git 历史写作，明确哪些叙事来源

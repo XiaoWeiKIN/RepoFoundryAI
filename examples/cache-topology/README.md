@@ -22,13 +22,13 @@ flowchart LR
 准备一个空的示例仓库。以下路径都必须替换成真实绝对路径：
 
 ```bash
-export ENGINEERING_PLAN_HOME=/absolute/path/to/EngineeringPlan
+export ENGINEERING_WORKFLOW_HOME=/absolute/path/to/EngineeringWorkflow
 export EXAMPLE_REPO=/absolute/path/to/empty-cache-example
-export RESEARCHCTL="$ENGINEERING_PLAN_HOME/engineering-research/scripts/researchctl.py"
-export EPCTL="$ENGINEERING_PLAN_HOME/scripts/epctl.py"
+export RESEARCHCTL="$ENGINEERING_WORKFLOW_HOME/engineering-research/scripts/researchctl.py"
+export EPCTL="$ENGINEERING_WORKFLOW_HOME/engineering-execution-plan/scripts/epctl.py"
 
 mkdir -p "$EXAMPLE_REPO/research-input/cache-topology"
-cp -R "$ENGINEERING_PLAN_HOME/examples/cache-topology/corpus/." \
+cp -R "$ENGINEERING_WORKFLOW_HOME/examples/cache-topology/corpus/." \
   "$EXAMPLE_REPO/research-input/cache-topology/"
 cd "$EXAMPLE_REPO"
 ```

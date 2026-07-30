@@ -15,7 +15,7 @@ docs/adr/adr-NNN_slug.md
 新 ADR 只写入 `docs/adr/`。仓库已有其他架构目录时原地注册：
 
 ```bash
-python3 <execution-plan-dir>/scripts/epctl.py --repo . \
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
   register-architecture-root docs/design-docs
 ```
 
@@ -97,7 +97,7 @@ flowchart LR
 创建严格 ADR 的示例：
 
 ```bash
-python3 <execution-plan-dir>/scripts/epctl.py --repo . new-adr \
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-adr \
   --slug spans-routing \
   --title "Choose spans routing behavior" \
   --research R-004 \

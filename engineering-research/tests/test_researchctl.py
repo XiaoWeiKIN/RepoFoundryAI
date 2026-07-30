@@ -18,6 +18,12 @@ def find_epctl() -> Path | None:
     configured = os.environ.get("EXECUTION_PLAN_EPCTL")
     candidates = [
         Path(configured).expanduser() if configured else None,
+        (
+            SKILL_DIR.parent
+            / "engineering-execution-plan"
+            / "scripts"
+            / "epctl.py"
+        ),
         SKILL_DIR.parent / "scripts" / "epctl.py",
         SKILL_DIR.parent / "execution-plan" / "scripts" / "epctl.py",
     ]
@@ -63,7 +69,7 @@ class ResearchctlTestCase(unittest.TestCase):
     ) -> subprocess.CompletedProcess[str]:
         if EPCTL is None:
             self.skipTest(
-                "execution-plan consumer is not installed; "
+                "engineering-execution-plan consumer is not installed; "
                 "set EXECUTION_PLAN_EPCTL to run contract tests"
             )
         result = subprocess.run(

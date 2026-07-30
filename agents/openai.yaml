@@ -1,4 +1,4 @@
 interface:
-  display_name: "Execution Plan"
-  short_description: "Turn sealed research into ADRs and executable plans"
-  default_prompt: "Use $execution-plan to turn sealed engineering research into an authorized architecture decision and a resumable implementation plan."
+  display_name: "Engineering Workflow"
+  short_description: "Bootstrap and route an agent-first engineering workflow"
+  default_prompt: "Use $engineering-workflow to bootstrap the repository Codex Harness and route follow-up work to the appropriate engineering skill."
