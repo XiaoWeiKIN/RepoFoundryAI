@@ -36,8 +36,8 @@ Questions、结论时间和下游 Synthesis，就使用同一个 `R-NNN`；当�
 结束时间或下游消费者可以独立变化时，再拆成多个 Research。
 
 同一个 Research 也可以有多轮深入分析。第一版完成后继续讨论、补证据或复核
-某个结论时创建 `RR-NNN` Round，并保留阶段性 Synthesis snapshot；只有
-Research Owner 明确授权后才结束 Research。
+某个结论时创建 `RR-NNN` Round；Synthesis 全量快照只保留正式评审、交接和重大
+决策等稀疏里程碑。只有 Research Owner 明确授权后才结束 Research。
 
 这种边界也控制文档膨胀：
 
@@ -155,11 +155,23 @@ docs/research/active/r-001_token-refresh-contract/
 └── artifacts/
 ```
 
-专题文档放入 `notes/`。新增、移动或删除文档后刷新 manifest：
+用结构化专题文档把一个或多个紧密相关的 Research Questions 研究透：
 
 ```bash
-python3 "$RESEARCHCTL" --repo . sync-research R-001
+python3 "$RESEARCHCTL" --repo . new-topic R-001 \
+  --slug http-auth-boundary \
+  --title "HTTP authentication boundary" \
+  --question RQ-001 --author "Security Researcher"
 ```
+
+命令会分配 Research 内唯一且不可复用的 `RT-NNN`，把专题写入 `notes/`、
+挂接当前 Round 并刷新 manifest。新专题采用 learning-first 的 schema 2.2：
+首屏给出答案、置信度、适用边界与决策影响；正文先建立心智模型，再用
+`A-NNN` 连续分析讲清推导过程；Handoff 之后的 `E-NNN` 证据索引与 `S-NNN`
+来源服务审计。文件名保持语义化，跨专题引用使用
+`R-001/RT-001/A-002`。可见标题可以按读者和语言改写，隐藏 role 保持结构稳定。
+普通专题或来源笔记仍可直接放入 `notes/`；手工新增、移动或删除后运行
+`sync-research`。旧 schema 1、schema 2 和 schema 2.1 专题继续兼容。
 
 ### 2. 接管已有多文档 Research
 
@@ -197,6 +209,17 @@ python3 "$RESEARCHCTL" --repo . status
 python3 "$RESEARCHCTL" --repo . mark-review-ready R-001
 ```
 
+默认只递增 Synthesis revision 并记录正文 SHA-256，不复制一份 Markdown。正式
+评审、下游交接或重大决策节点才显式保存全量快照：
+
+```bash
+python3 "$RESEARCHCTL" --repo . \
+  mark-review-ready R-001 --snapshot
+```
+
+快照版本允许有空号；正文相同会复用已有快照。conclude 时会确保最新唯一正文
+至少保留一份全量里程碑。
+
 Research 此时仍位于 `active/`。如果评审要求深入某一点：
 
 ```bash
@@ -205,6 +228,9 @@ python3 "$RESEARCHCTL" --repo . new-round R-001 \
   --title "Deep dive into HTTP security" \
   --author "Security Reviewer"
 ```
+
+随后使用 `new-topic` 创建本轮专题；review-ready 状态下不能直接追加专题，
+从而避免新证据绕过 Round 和 Synthesis revision。
 
 只有 Research Owner 明确授权结束后才能封存：
 
@@ -413,6 +439,7 @@ Engineering Research：
 
 - [Skill 入口](./engineering-research/SKILL.md)
 - [Research 方法](./engineering-research/references/research.md)
+- [结构化专题文档](./engineering-research/references/topic.md)
 - [Manifest 契约](./engineering-research/references/manifest.md)
 - [典型场景](./engineering-research/references/examples.md)
 
