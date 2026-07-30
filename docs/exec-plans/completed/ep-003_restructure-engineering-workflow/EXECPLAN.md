@@ -2,7 +2,7 @@
 schema_version: "2.4"
 id: EP-003
 title: "Restructure EngineeringWorkflow skill ownership"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -12,9 +12,9 @@ design_refs: ["docs/design-docs/engineering-workflow-packaging.md", "docs/design
 architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
 architecture_gate_reason: ""
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:f3524a647c46eb4824897142ecdb5a6858bb8d3f"
+verification_evidence: ["local:python3-B-scripts-check.py@f3524a647c46eb4824897142ecdb5a6858bb8d3f", "pr:https://github.com/XiaoWeiKIN/EngineeringPlan/pull/7"]
+archive_sha256: 667d0a2b15f9b1b7b52fbd08d01822557e6f7cbb458a83e08a5f4a0a2aaa9cf6
 created: 2026-07-30
 updated: 2026-07-30
 owner: "EngineeringWorkflow Maintainer"
@@ -38,13 +38,14 @@ repository check.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 3, repository-wide validation and PR delivery.
+- Current milestone: Milestone 3 complete; recording archival evidence.
 - Current state: Workflow and EP package boundaries, CLI extraction, templates,
   tests and current documentation have been migrated. All five Skill packages,
   the four test suites, repository validators, links, generated indexes and
-  whitespace checks pass.
-- Next action: commit the validated tree, rerun the canonical check at that
-  revision, push the stacked branch and create the PR.
+  whitespace checks pass at `git:f3524a647c46eb4824897142ecdb5a6858bb8d3f`.
+  The implementation is pushed and PR #7 is open.
+- Next action: archive EP-003 with the verified revision, local check and PR
+  URL, then push the archival commit.
 - Open question: the GitHub repository rename is an administrative post-merge
   action and is not performed by this source PR.
 
@@ -198,8 +199,9 @@ report `Skill is valid!`. The canonical check must finish with
   36 Engineering Execution Plan and 15 Workflow/integration tests passed,
   followed by repository, link, projection and whitespace checks.
 - [x] Run `git diff --check`; the command produced no output.
-- [ ] Commit the validated tree, rerun the canonical check at that revision,
-  and record the commit plus PR URL as completion evidence.
+- [x] Commit the validated tree and rerun the canonical check at
+  `git:f3524a647c46eb4824897142ecdb5a6858bb8d3f`; push the branch and record
+  [PR #7](https://github.com/XiaoWeiKIN/EngineeringPlan/pull/7).
 
 Completion writes `verified_revision` and `verification_evidence` through
 `archive-ep`. Archival also seals the complete document with `archive_sha256`;
@@ -233,7 +235,9 @@ the commit.
   `engineeringctl`; targeted Workflow and EP tests pass.
 - [x] (2026-07-30) Completed five-package validation and the canonical
   repository check with no errors.
-- [ ] Commit the verified tree, rerun validation, push and create the PR.
+- [x] (2026-07-30) Committed and revalidated
+  `f3524a647c46eb4824897142ecdb5a6858bb8d3f`, pushed
+  `codex/engineering-workflow`, and opened PR #7.
 
 ## Surprises & Discoveries
 
@@ -264,10 +268,14 @@ the commit.
 
 The implemented boundary matches ADR-004: the root is a small Workflow
 aggregation Skill, all four professional Skills have parallel package
-ownership, and no compatibility alias duplicates EP. Bootstrap is now
-separately testable and keeps its manifest and lock outside `.epctl`.
+ownership, and no compatibility alias duplicates EP. Bootstrap is separately
+testable, preview-first, non-overwriting, and keeps its manifest and lock
+outside `.epctl`.
 
-Final commit, PR and archival evidence will be recorded after remote delivery.
+The verified implementation is
+`f3524a647c46eb4824897142ecdb5a6858bb8d3f`; review is tracked in
+[PR #7](https://github.com/XiaoWeiKIN/EngineeringPlan/pull/7). The GitHub
+repository rename remains a post-merge administrative operation, as planned.
 
 Pending final canonical validation and PR creation. The implemented behavior
 already demonstrates the intended package and CLI boundaries; this section
@@ -296,7 +304,7 @@ will be finalized before archival.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-003_restructure-engineering-workflow/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-003_restructure-engineering-workflow/EXECPLAN.md`
 - Decisions: `docs/adr/adr-004_separate-workflow-orchestration-from-execution-planning.md`
   and `docs/adr/adr-002_codex-project-documentation-bootstrap.md`
 - Design entrypoint: `docs/design-docs/index.md`
