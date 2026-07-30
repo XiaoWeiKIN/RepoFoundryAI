@@ -247,12 +247,31 @@ class RepositoryContractTestCase(unittest.TestCase):
 
     def test_project_brand_and_skill_names_are_independent(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        chinese_readme = (ROOT / "README.zh-CN.md").read_text(
+            encoding="utf-8"
+        )
         self.assertTrue(readme.startswith("# EngineeringWorkflow\n"))
+        self.assertTrue(
+            chinese_readme.startswith("# EngineeringWorkflow\n")
+        )
+        self.assertIn(
+            "[简体中文](README.zh-CN.md) | English",
+            readme.splitlines()[:5],
+        )
+        self.assertIn(
+            "简体中文 | [English](README.md)",
+            chinese_readme.splitlines()[:5],
+        )
         self.assertIn(
             "https://github.com/XiaoWeiKIN/EngineeringWorkflow.git",
             readme,
         )
+        self.assertIn(
+            "https://github.com/XiaoWeiKIN/EngineeringWorkflow.git",
+            chinese_readme,
+        )
         self.assertNotIn("XiaoWeiKIN/ExecutionPlan", readme)
+        self.assertNotIn("XiaoWeiKIN/ExecutionPlan", chinese_readme)
         self.assertIn(
             "name: engineering-workflow",
             (ROOT / "SKILL.md").read_text(encoding="utf-8"),
