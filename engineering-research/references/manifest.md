@@ -53,6 +53,22 @@ Research retain package-local analysis without modifying the adopted corpus. A
 root may set a default `role`, such as `round` or `snapshot`. Entrypoint role
 still takes precedence. A Markdown document declaring
 `doc_type: research-topic` receives `role: topic`.
+Schema 2.2 Topic records also contain their stable `topic_id`:
+
+```json
+{
+  "base": "package",
+  "path": "notes/http-security.md",
+  "role": "topic",
+  "topic_id": "RT-004",
+  "bytes": 1200,
+  "sha256": "..."
+}
+```
+
+Within one manifest, `topic_id` values are unique. The ID remains unchanged if
+the document path or title changes. Schema 2.1 and earlier Topic records may
+omit it for backward compatibility.
 
 Synthesis snapshot membership is intentionally sparse. A package at
 `synthesis_revision: "7"` may contain only `synthesis-v002.md` and

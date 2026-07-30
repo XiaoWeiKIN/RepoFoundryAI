@@ -1,7 +1,8 @@
 # Learning-first structured topic documents
 
 A structured topic is one auditable explanation inside a Research corpus.
-Schema 2.1 serves three readers without forcing them through the same path:
+Schema 2.2 gives each topic a stable `RT-NNN` identity and serves three readers
+without forcing them through the same path:
 
 - a decision-maker can stop after the brief and implications;
 - a learner can follow the mental model and continuous analysis;
@@ -13,6 +14,7 @@ evidence index audits it.
 ## Contents
 
 - Create a topic
+- Topic identity
 - Reader contract
 - Dual-speed reading flow
 - Semantic roles and visible titles
@@ -45,14 +47,40 @@ python3 <skill-dir>/scripts/researchctl.py --repo . new-topic R-001 \
 The command:
 
 - verifies every referenced `RQ-NNN`;
+- allocates the next non-reusable `RT-NNN` within the parent Research;
 - binds the topic to the current `RR-NNN`;
-- creates a schema 2.1 topic at `notes/<slug>.md`;
+- creates a schema 2.2 topic at `notes/<slug>.md`;
 - links it from the current Round's `Evidence Added`;
-- refreshes the manifest and assigns `role: topic`;
+- refreshes the manifest and records `role: topic` plus `topic_id`;
 - rolls back the topic, Round, and manifest together on failure.
 
 Start a new Round before adding a topic to review-ready Research. Do not edit a
 concluded package.
+
+## Topic identity
+
+`RT-NNN` is unique within one `R-NNN` and remains stable when the title, slug,
+file path, author, or Round changes. The filename stays semantic; identity
+lives in frontmatter and the manifest:
+
+```yaml
+schema_version: "2.2"
+doc_type: research-topic
+parent_id: R-001
+topic_id: RT-004
+round_id: RR-003
+```
+
+Display the identity at the start of the H1:
+
+```markdown
+# RT-004 · Stateless HTTP and MCP session model
+```
+
+Use `R-001/RT-004/A-003` for a cross-topic audit reference. Inside `RT-004`,
+the shorter `A-003`, `E-002`, and `S-001` forms remain readable and
+unambiguous. Never reuse a retired Topic ID or renumber Topics to change their
+reading order.
 
 ## Reader contract
 
@@ -198,9 +226,10 @@ changes them together.
 
 ## Validation and compatibility
 
-`researchctl validate` enforces the schema 2.1 structural floor:
+`researchctl validate` enforces the schema 2.2 structural floor:
 
-- schema, parent Research, Round, author field, and kebab-case filename;
+- schema, parent Research, stable unique Topic ID, visible H1 identity, Round,
+  author field, and kebab-case filename;
 - a real link from the declared Round's `Evidence Added`;
 - all semantic roles exactly once and in relative order;
 - at least one valid parent `RQ-NNN`;
@@ -209,15 +238,17 @@ changes them together.
 - bidirectional `A-NNN` ↔ `E-NNN` traceability;
 - valid evidence rows, source references, and confidence vocabulary;
 - analysis-linked falsifiers;
-- manifest membership and `role: topic`.
+- manifest membership, `role: topic`, and matching `topic_id`.
 
 During evidence building, unfinished quality requirements are warnings. Before
 `mark-review-ready`, they become errors. Structural contradictions such as
 duplicate IDs or references to unknown analysis/evidence remain errors.
 
 Existing schema 1 topics keep their original 14-section, `E-NNN`, and `F-NNN`
-contract. Existing schema 2 claim-card topics also remain valid. New topics use
-schema 2.1. Migrate an older topic only when an author is already revising it.
+contract. Existing schema 2 claim-card and schema 2.1 learning-first topics
+also remain valid without Topic IDs. New topics use schema 2.2. Migrate an
+older topic only when an author is already revising it; assign IDs in the
+intended reading order, then keep them stable.
 
 The validator cannot prove that prose teaches well, a source is authoritative,
 an inference is correct, or counterevidence is fair. Human review owns those

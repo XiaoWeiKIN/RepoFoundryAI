@@ -118,10 +118,12 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
    `owner`、`author` 和 `research_type` 必须真实；未知就保留未分配，禁止杜撰。
 3. 用 Round 组织每次有界研究迭代；用 `new-topic` 创建关联 `RQ-NNN` 的
    structured topic，其他 managed 分析写到 `notes/`，existing corpus 用 linked
-   模式登记。新 Topic 使用 schema 2.1 双速结构：首屏给答案、置信度、适用边界
-   和决策影响；正文先建立心智模型，再用连续分析帮助读者理解；证据索引放到
-   Handoff 之后供评审追溯。
-4. 每个推理单元使用一个 `A-NNN` 小节，标题先写可读主张、编号放末尾。正文用
+   模式登记。新 Topic 使用 schema 2.2，并自动获得 Research 内唯一且不可复用的
+   `RT-NNN`：首屏给答案、置信度、适用边界和决策影响；正文先建立心智模型，
+   再用连续分析帮助读者理解；证据索引放到 Handoff 之后供评审追溯。
+4. 保留 Topic 的 `RT-NNN`，改标题或移动文件时不得重编号。跨文档引用写成
+   `R-NNN/RT-NNN/A-NNN`；Topic 内部可使用短编号。每个推理单元使用一个
+   `A-NNN` 小节，标题先写可读主张、编号放末尾。正文用
    连续 prose、例子、反例、表格或 Mermaid 展开机制，并就近引用 `E-NNN`；
    `E-NNN` 在审计索引映射到 `S-NNN` 来源。单独记录哪些新证据会改变判断。
 5. 每次新增、删除、移动研究文档后运行 `sync-research`。

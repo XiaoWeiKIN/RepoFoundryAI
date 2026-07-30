@@ -125,18 +125,30 @@ class ResearchctlTestCase(unittest.TestCase):
         if end < 0:
             raise AssertionError("topic frontmatter not found")
         frontmatter = text[: end + len("\n---\n")]
-        return re.sub(
+        frontmatter = re.sub(
             r'(?m)^schema_version:\s*"[^"]+"$',
             f'schema_version: "{schema_version}"',
             frontmatter,
             count=1,
         )
+        if schema_version in {"1", "2", "2.1"}:
+            frontmatter = re.sub(
+                r"(?m)^topic_id:\s*RT-\d{3,}\n",
+                "",
+                frontmatter,
+                count=1,
+            )
+        return frontmatter
 
     def complete_topic(self, path: Path) -> None:
-        frontmatter = self.topic_frontmatter(path, "2.1")
-        body = """
+        frontmatter = self.topic_frontmatter(path, "2.2")
+        match = re.search(r"(?m)^topic_id:\s*(RT-\d{3,})$", frontmatter)
+        if not match:
+            raise AssertionError("topic_id not found")
+        topic_id = match.group(1)
+        body = f"""
 
-# Complete learning topic
+# {topic_id} · Complete learning topic
 
 ## 结论速览
 
@@ -228,7 +240,7 @@ Synthesis should retain the current contract. No ADR is ready yet.
 
 <!-- topic-role: revision-notes -->
 
-- Complete schema 2.1 fixture.
+- Complete schema 2.2 fixture.
 """
         path.write_text(frontmatter + body.lstrip("\n"), encoding="utf-8")
 
@@ -470,10 +482,15 @@ Synthesis should retain the current contract.
 
         self.assertEqual(topic.parent, research.parent / "notes")
         topic_text = topic.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.1"', topic_text)
+        self.assertIn('schema_version: "2.2"', topic_text)
         self.assertIn("doc_type: research-topic", topic_text)
         self.assertIn("parent_id: R-001", topic_text)
+        self.assertIn("topic_id: RT-001", topic_text)
         self.assertIn("round_id: RR-001", topic_text)
+        self.assertIn(
+            "# RT-001 · HTTP authentication boundary",
+            topic_text,
+        )
         self.assertIn("`RQ-001`", topic_text)
         topic_headings = re.findall(r"(?m)^## (.+)$", topic_text)
         self.assertEqual(topic_headings[0], "结论速览")
@@ -510,7 +527,7 @@ Synthesis should retain the current contract.
             research.parent / "rounds" / "rr-001_baseline.md"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "[HTTP authentication boundary]"
+            "**RT-001** — [HTTP authentication boundary]"
             "(../notes/http-auth-boundary.md)",
             round_text,
         )
@@ -526,12 +543,13 @@ Synthesis should retain the current contract.
             if item["path"] == "notes/http-auth-boundary.md"
         )
         self.assertEqual(topic_record["role"], "topic")
+        self.assertEqual(topic_record["topic_id"], "RT-001")
         self.run_cli("validate")
 
         round_file = research.parent / "rounds" / "rr-001_baseline.md"
         round_file.write_text(
             round_text.replace(
-                "[HTTP authentication boundary]"
+                "**RT-001** — [HTTP authentication boundary]"
                 "(../notes/http-auth-boundary.md)",
                 "HTTP authentication boundary",
             ),
@@ -542,6 +560,119 @@ Synthesis should retain the current contract.
             "RR-001 Evidence Added must link "
             "../notes/http-auth-boundary.md",
             missing_route.stderr,
+        )
+
+    def test_topic_ids_are_monotonic_and_unique_within_research(self) -> None:
+        research = self.new_research("topic-identities")
+        first = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "first-topic",
+                "--title",
+                "First topic",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        second = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "second-topic",
+                "--title",
+                "Second topic",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        self.assertIn(
+            "topic_id: RT-001",
+            first.read_text(encoding="utf-8"),
+        )
+        second_text = second.read_text(encoding="utf-8")
+        self.assertIn("topic_id: RT-002", second_text)
+        self.assertIn("# RT-002 · Second topic", second_text)
+
+        manifest = json.loads(
+            (research.parent / "RESEARCH_MANIFEST.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        topic_records = sorted(
+            (
+                item["topic_id"],
+                item["path"],
+            )
+            for item in manifest["documents"]
+            if item["role"] == "topic"
+        )
+        self.assertEqual(
+            topic_records,
+            [
+                ("RT-001", "notes/first-topic.md"),
+                ("RT-002", "notes/second-topic.md"),
+            ],
+        )
+        self.run_cli("validate")
+
+        second.write_text(
+            second_text.replace("RT-002", "RT-001"),
+            encoding="utf-8",
+        )
+        self.run_cli("sync-research", "R-001")
+        duplicate = self.run_cli("validate", expected=1)
+        self.assertIn("duplicate topic_id RT-001", duplicate.stderr)
+
+    def test_new_topic_continues_after_ids_in_linked_corpus(self) -> None:
+        linked_root = self.repo / "existing"
+        linked_root.mkdir()
+        (linked_root / "topic.md").write_text(
+            "\n".join(
+                (
+                    "---",
+                    'schema_version: "2.2"',
+                    "doc_type: research-topic",
+                    "parent_id: R-001",
+                    "topic_id: RT-007",
+                    "round_id: RR-001",
+                    'title: "Existing topic"',
+                    'author: "Researcher"',
+                    "created: 2026-07-30",
+                    "updated: 2026-07-30",
+                    "---",
+                    "",
+                    "# RT-007 · Existing topic",
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        self.new_research(
+            "linked-topic-identities",
+            "--corpus-root",
+            "existing",
+            "--entrypoint",
+            "existing/topic.md",
+        )
+
+        topic = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "managed-topic",
+                "--title",
+                "Managed topic",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        self.assertIn(
+            "topic_id: RT-008",
+            topic.read_text(encoding="utf-8"),
         )
 
     def test_topic_quality_blocks_review_ready_until_complete(self) -> None:
@@ -668,6 +799,7 @@ Synthesis should retain the current contract.
             if item["path"] == "notes/cache-contract.md"
         )
         self.assertEqual(sealed_topic["role"], "topic")
+        self.assertEqual(sealed_topic["topic_id"], "RT-001")
         self.assertTrue(
             (completed.parent / "notes" / "cache-contract.md").is_file()
         )
@@ -1129,6 +1261,7 @@ Synthesis should retain the current contract.
         )
         self.assertEqual(topic_record["base"], "package")
         self.assertEqual(topic_record["role"], "topic")
+        self.assertEqual(topic_record["topic_id"], "RT-001")
         self.assertTrue(
             any(
                 root.get("base") == "package"

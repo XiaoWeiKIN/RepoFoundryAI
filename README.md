@@ -164,12 +164,14 @@ python3 "$RESEARCHCTL" --repo . new-topic R-001 \
   --question RQ-001 --author "Security Researcher"
 ```
 
-命令会把专题写入 `notes/`、挂接当前 Round 并刷新 manifest。新专题采用
-learning-first 的 schema 2.1：首屏给出答案、置信度、适用边界与决策影响；
-正文先建立心智模型，再用 `A-NNN` 连续分析讲清推导过程；Handoff 之后的
-`E-NNN` 证据索引与 `S-NNN` 来源服务审计。可见标题可以按读者和语言改写，
-隐藏 role 保持结构稳定。普通专题或来源笔记仍可直接放入 `notes/`；手工新增、
-移动或删除后运行 `sync-research`。旧 schema 1 和 schema 2 专题继续兼容。
+命令会分配 Research 内唯一且不可复用的 `RT-NNN`，把专题写入 `notes/`、
+挂接当前 Round 并刷新 manifest。新专题采用 learning-first 的 schema 2.2：
+首屏给出答案、置信度、适用边界与决策影响；正文先建立心智模型，再用
+`A-NNN` 连续分析讲清推导过程；Handoff 之后的 `E-NNN` 证据索引与 `S-NNN`
+来源服务审计。文件名保持语义化，跨专题引用使用
+`R-001/RT-001/A-002`。可见标题可以按读者和语言改写，隐藏 role 保持结构稳定。
+普通专题或来源笔记仍可直接放入 `notes/`；手工新增、移动或删除后运行
+`sync-research`。旧 schema 1、schema 2 和 schema 2.1 专题继续兼容。
 
 ### 2. 接管已有多文档 Research
 

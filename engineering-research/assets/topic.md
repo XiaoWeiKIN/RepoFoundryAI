@@ -1,7 +1,8 @@
 ---
-schema_version: "2.1"
+schema_version: "2.2"
 doc_type: research-topic
 parent_id: {{PARENT_ID}}
+topic_id: {{TOPIC_ID}}
 round_id: {{ROUND_ID}}
 title: "{{TITLE}}"
 author: "{{AUTHOR}}"
@@ -9,7 +10,7 @@ created: {{DATE}}
 updated: {{DATE}}
 ---
 
-# {{TITLE}}
+# {{TOPIC_ID}} · {{TITLE}}
 
 <!-- Authoring note: Write for two reading speeds. Let a decision-maker stop
 after the brief and implications; let a learner follow the mental model and
@@ -115,4 +116,4 @@ surface for reviewers; it must not repeat the analysis narrative. -->
 
 <!-- topic-role: revision-notes -->
 
-- {{TIMESTAMP}} — Topic document created for {{ROUND_ID}}.
+- {{TIMESTAMP}} — {{TOPIC_ID}} created for {{ROUND_ID}}.

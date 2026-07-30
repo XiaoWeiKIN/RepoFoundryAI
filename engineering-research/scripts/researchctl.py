@@ -103,7 +103,7 @@ TOPIC_V21_ROLES = (
     "sources",
     "revision-notes",
 )
-TOPIC_SCHEMA_VERSIONS = {"1", "2", "2.1"}
+TOPIC_SCHEMA_VERSIONS = {"1", "2", "2.1", "2.2"}
 SYNTHESIS_SECTIONS = (
     "Executive Conclusion",
     "Supported Findings",
@@ -164,6 +164,7 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 RESEARCH_ID_RE = re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE)
 RESEARCH_QUESTION_ID_RE = re.compile(r"RQ-(\d{3,})", re.IGNORECASE)
 ROUND_ID_RE = re.compile(r"\bRR-(\d{3,})\b", re.IGNORECASE)
+TOPIC_ID_RE = re.compile(r"\bRT-(\d{3,})\b", re.IGNORECASE)
 TOPIC_EVIDENCE_ID_RE = re.compile(r"\bE-(\d{3,})\b", re.IGNORECASE)
 TOPIC_FINDING_ID_RE = re.compile(r"\bF-(\d{3,})\b", re.IGNORECASE)
 TOPIC_ANALYSIS_ID_RE = re.compile(r"\bA-(\d{3,})\b", re.IGNORECASE)
@@ -797,6 +798,52 @@ def next_round_id(package: Path) -> str:
     return f"RR-{max(numbers, default=0) + 1:03d}"
 
 
+def scan_topic_numbers(package: Path) -> set[int]:
+    numbers: set[int] = set()
+    for path in topic_note_paths(package):
+        try:
+            data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ResearchctlError):
+            continue
+        if data.get("doc_type") != "research-topic":
+            continue
+        match = TOPIC_ID_RE.fullmatch(data.get("topic_id", ""))
+        if match:
+            numbers.add(int(match.group(1)))
+    manifest_file = package / MANIFEST_NAME
+    if manifest_file.is_file():
+        try:
+            manifest = load_manifest(manifest_file)
+        except ResearchctlError:
+            manifest = {}
+        documents = manifest.get("documents", [])
+        if isinstance(documents, list):
+            for document in documents:
+                if not isinstance(document, dict):
+                    continue
+                raw_topic_id = document.get("topic_id")
+                if not isinstance(raw_topic_id, str):
+                    continue
+                match = TOPIC_ID_RE.fullmatch(raw_topic_id)
+                if match:
+                    numbers.add(int(match.group(1)))
+    return numbers
+
+
+def next_topic_id(repo: Path, package: Path, research_id: str) -> str:
+    state = load_state(repo)
+    high_water = state["high_water"]
+    assert isinstance(high_water, dict)
+    state_key = f"RT:{research_id}"
+    number = max(
+        max(scan_topic_numbers(package), default=0),
+        int(high_water.get(state_key, 0)),
+    ) + 1
+    high_water[state_key] = number
+    save_state(repo, state)
+    return f"RT-{number:03d}"
+
+
 def synthesis_path(
     research_path: Path,
     data: dict[str, str] | None = None,
@@ -886,18 +933,28 @@ def relative_locator(base: str, root: Path, path: Path) -> dict[str, str]:
     return {"base": base, "path": path.relative_to(root).as_posix()}
 
 
-def inferred_document_role(path: Path, default_role: str) -> str:
+def inferred_document_metadata(
+    path: Path,
+    default_role: str,
+) -> dict[str, str]:
+    metadata = {"role": default_role}
     if default_role != "document" or path.suffix.lower() not in {
         ".md",
         ".markdown",
     }:
-        return default_role
+        return metadata
     try:
         text = path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
     except (OSError, UnicodeDecodeError, ResearchctlError):
-        return default_role
-    return "topic" if data.get("doc_type") == "research-topic" else default_role
+        return metadata
+    if data.get("doc_type") != "research-topic":
+        return metadata
+    metadata["role"] = "topic"
+    topic_id = data.get("topic_id", "").upper()
+    if TOPIC_ID_RE.fullmatch(topic_id):
+        metadata["topic_id"] = f"RT-{int(topic_id.split('-')[1]):03d}"
+    return metadata
 
 
 def discover_documents(
@@ -950,16 +1007,23 @@ def discover_documents(
                 reject_symlink_path(repo, candidate)
                 locator = relative_locator(str(base), locator_root, candidate)
                 key = locator_key(locator)
-                documents[key] = {
+                metadata = inferred_document_metadata(
+                    candidate,
+                    str(default_role),
+                )
+                record: dict[str, object] = {
                     **locator,
                     "role": (
                         "entrypoint"
                         if key in entrypoint_keys
-                        else inferred_document_role(candidate, default_role)
+                        else metadata["role"]
                     ),
                     "bytes": candidate.stat().st_size,
                     "sha256": sha256_file(candidate),
                 }
+                if "topic_id" in metadata:
+                    record["topic_id"] = metadata["topic_id"]
+                documents[key] = record
     missing_entrypoints = entrypoint_keys - set(documents)
     if missing_entrypoints:
         rendered = ", ".join(f"{base}:{path}" for base, path in missing_entrypoints)
@@ -1928,6 +1992,29 @@ def validate_topic_document(
         errors.append(f"{path}: doc_type must be research-topic")
     if data.get("parent_id") != parent_id:
         errors.append(f"{path}: parent_id must be {parent_id}")
+    raw_topic_id = data.get("topic_id", "")
+    if schema_version == "2.2" and not raw_topic_id:
+        errors.append(f"{path}: schema 2.2 topic requires topic_id")
+    if raw_topic_id:
+        match = TOPIC_ID_RE.fullmatch(raw_topic_id)
+        if not match:
+            errors.append(f"{path}: invalid topic_id {raw_topic_id!r}")
+        else:
+            canonical_topic_id = f"RT-{int(match.group(1)):03d}"
+            if raw_topic_id != canonical_topic_id:
+                errors.append(
+                    f"{path}: topic_id must use canonical form "
+                    f"{canonical_topic_id}"
+                )
+            title_match = re.search(r"(?m)^#\s+(.+?)\s*$", text)
+            if not title_match or not re.match(
+                rf"^{re.escape(canonical_topic_id)}"
+                r"(?:\s*[·:—-]\s*|\s+)",
+                title_match.group(1),
+            ):
+                errors.append(
+                    f"{path}: H1 must begin with {canonical_topic_id}"
+                )
     round_id = data.get("round_id", "").upper()
     if not ROUND_ID_RE.fullmatch(round_id):
         errors.append(f"{path}: invalid topic round_id {round_id!r}")
@@ -1943,7 +2030,7 @@ def validate_topic_document(
     if not SLUG_RE.fullmatch(path.stem):
         errors.append(f"{path}: topic filename must be lowercase kebab-case")
 
-    if schema_version == "2.1":
+    if schema_version in {"2.1", "2.2"}:
         learning_errors, learning_warnings = (
             validate_learning_topic_document(
                 path,
@@ -2173,6 +2260,7 @@ def validate_research_topics(
     errors: list[str] = []
     warnings: list[str] = []
     topics: list[Path] = []
+    topic_ids: dict[str, Path] = {}
     valid_question_ids = {
         cells[0].upper()
         for cells in research_question_rows(research_text)
@@ -2205,6 +2293,17 @@ def validate_research_topics(
             errors.append(f"{topic_path}: {exc}")
             continue
         topics.append(topic_path)
+        raw_topic_id = topic_data.get("topic_id", "")
+        match = TOPIC_ID_RE.fullmatch(raw_topic_id)
+        if match:
+            topic_id = f"RT-{int(match.group(1)):03d}"
+            if topic_id in topic_ids:
+                errors.append(
+                    f"{topic_path}: duplicate topic_id {topic_id}; "
+                    f"already used by {topic_ids[topic_id]}"
+                )
+            else:
+                topic_ids[topic_id] = topic_path
         topic_errors, topic_warnings = validate_topic_document(
             topic_path,
             topic_text,
@@ -2479,6 +2578,40 @@ def validate_manifest(
     if not isinstance(documents, list):
         errors.append(f"{manifest_path(research_path)}: documents must be an array")
         documents = []
+    topic_id_documents: dict[str, tuple[str, str]] = {}
+    for document in documents:
+        if not isinstance(document, dict):
+            continue
+        raw_topic_id = document.get("topic_id")
+        if raw_topic_id is None:
+            continue
+        key = locator_key(document)
+        if not isinstance(raw_topic_id, str):
+            errors.append(
+                f"{manifest_path(research_path)}: document {key} has "
+                "non-string topic_id"
+            )
+            continue
+        match = TOPIC_ID_RE.fullmatch(raw_topic_id)
+        if not match:
+            errors.append(
+                f"{manifest_path(research_path)}: document {key} has "
+                f"invalid topic_id {raw_topic_id!r}"
+            )
+            continue
+        topic_id = f"RT-{int(match.group(1)):03d}"
+        if raw_topic_id != topic_id:
+            errors.append(
+                f"{manifest_path(research_path)}: document {key} topic_id "
+                f"must use canonical form {topic_id}"
+            )
+        if topic_id in topic_id_documents:
+            errors.append(
+                f"{manifest_path(research_path)}: duplicate topic_id "
+                f"{topic_id} in {topic_id_documents[topic_id]} and {key}"
+            )
+        else:
+            topic_id_documents[topic_id] = key
     if require_sealed and status != "sealed":
         errors.append(f"{manifest_path(research_path)}: manifest must be sealed")
     if status == "sealed":
@@ -2697,6 +2830,11 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
                 for document in manifest_documents
                 if isinstance(document, dict)
             }
+            document_topic_ids = {
+                locator_key(document): document.get("topic_id")
+                for document in manifest_documents
+                if isinstance(document, dict)
+            }
             for topic_path in structured_topics:
                 topic_key = (
                     "package",
@@ -2710,6 +2848,23 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
                     errors.append(
                         f"{topic_path}: manifest role must be topic"
                     )
+                else:
+                    try:
+                        topic_data, _, _ = parse_frontmatter(
+                            topic_path.read_text(encoding="utf-8")
+                        )
+                    except (OSError, ResearchctlError):
+                        topic_data = {}
+                    expected_topic_id = topic_data.get("topic_id")
+                    if (
+                        expected_topic_id
+                        and document_topic_ids.get(topic_key)
+                        != expected_topic_id
+                    ):
+                        errors.append(
+                            f"{topic_path}: manifest topic_id must be "
+                            f"{expected_topic_id}"
+                        )
     if status == "concluded":
         if open_research_questions(text):
             errors.append(f"{path}: concluded Research has open questions")
@@ -2909,11 +3064,17 @@ def new_topic(
         if topic_path.exists():
             raise ResearchctlError(f"Topic destination already exists: {topic_path}")
 
+        topic_id = next_topic_id(
+            repo,
+            research_path.parent,
+            data["id"],
+        )
         topic_author = author.strip() or data.get("author", "")
         topic_text = render_asset(
             "topic.md",
             {
                 "PARENT_ID": data["id"],
+                "TOPIC_ID": topic_id,
                 "ROUND_ID": current_round,
                 "TITLE": yaml_string(title.strip()),
                 "AUTHOR": yaml_string(topic_author),
@@ -2928,7 +3089,8 @@ def new_topic(
         round_candidate = append_section_entry(
             round_text,
             "Evidence Added",
-            f"- [{safe_title}](../notes/{topic_path.name}) — addresses "
+            f"- **{topic_id}** — "
+            f"[{safe_title}](../notes/{topic_path.name}) — addresses "
             + ", ".join(f"`{question_id}`" for question_id in question_ids)
             + ".",
         )
@@ -3369,6 +3531,8 @@ def snapshot_linked_documents(
                     "bytes": source.stat().st_size,
                     "sha256": sha256_file(source),
                 }
+                if "topic_id" in document:
+                    record["topic_id"] = document["topic_id"]
                 copied.append(record)
                 if locator_key(document) in entrypoint_keys:
                     copied_entrypoints.append(
@@ -3409,6 +3573,8 @@ def snapshot_linked_documents(
                 "bytes": temporary_target.stat().st_size,
                 "sha256": sha256_file(temporary_target),
             }
+            if "topic_id" in document:
+                record["topic_id"] = document["topic_id"]
             copied.append(record)
             if locator_key(document) in entrypoint_keys:
                 copied_entrypoints.append(

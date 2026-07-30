@@ -32,12 +32,13 @@ python3 <skill-dir>/scripts/researchctl.py --repo . new-topic R-001 \
   --question RQ-001 --author "Codex"
 ```
 
-`new-topic` links the document from the current Round and refreshes the
-manifest. It creates a schema 2.1, learning-first document: a brief for quick
-decisions, a mental model and continuous `A-NNN` analysis for learning, then an
-`E-NNN` evidence index and `S-NNN` sources for review. Ordinary notes may still
-be written under `notes/`; run `sync-research` after manually changing corpus
-membership.
+`new-topic` allocates a stable Research-scoped `RT-NNN`, links the document
+from the current Round, and refreshes the manifest. It creates a schema 2.2,
+learning-first document: a brief for quick decisions, a mental model and
+continuous `A-NNN` analysis for learning, then an `E-NNN` evidence index and
+`S-NNN` sources for review. Use a full cross-topic reference such as
+`R-001/RT-001/A-002`; ordinary notes may still be written under `notes/`.
+Run `sync-research` after manually changing corpus membership.
 
 ## Adopt an existing corpus
 

@@ -149,9 +149,9 @@ template.
 
 For a new decision-relevant deep dive, prefer `new-topic` and follow
 `references/topic.md`. It creates an opt-in `doc_type: research-topic`
-document, binds it to the current Round and stable Research Questions, and
-refreshes the manifest. Ordinary notes remain valid when the structured
-argument contract would add no value.
+document, allocates a stable Research-scoped `RT-NNN`, binds it to the current
+Round and stable Research Questions, and refreshes the manifest. Ordinary
+notes remain valid when the structured argument contract would add no value.
 
 Keep `RESEARCH.md` small:
 
@@ -166,10 +166,10 @@ Use `sync-research` after membership changes. Resolve missing local references
 before review readiness. Absolute source paths are provenance warnings because
 other machines cannot reproduce them without an alternate source.
 Structured topics may remain incomplete while evidence is building. Before
-review readiness, every schema 2.1 semantic role, `A-NNN` analysis section,
-`E-NNN` evidence mapping, `S-NNN` source, and analysis-linked falsifier must be
-complete. Legacy schema 1 and schema 2 topics retain their original validation
-requirements.
+review readiness, every schema 2.2 identity and semantic role, `A-NNN`
+analysis section, `E-NNN` evidence mapping, `S-NNN` source, and
+analysis-linked falsifier must be complete. Legacy schema 1, schema 2, and
+schema 2.1 topics retain their original validation requirements.
 
 ## Synthesis
 
