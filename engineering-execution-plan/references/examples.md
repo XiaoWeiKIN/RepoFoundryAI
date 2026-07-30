@@ -1,101 +1,86 @@
 # 使用示例
 
-以下命令都在目标仓库根目录运行。`<engineering-execution-plan-dir>` 是本 skill 目录；
-Research 的生产命令来自独立注册的 `<engineering-research-dir>`。两个目录之间
-没有固定相对路径。
+以下示例都从用户在 Codex 中输入的 Prompt 开始。用户负责表达目标、约束和授权；
+`engineering-research` 与 `engineering-execution-plan` 负责调用各自脚本、维护
+状态并验证制品。CLI 是 Agent 的确定性执行机制，不是端到端使用入口。
 
-## 可运行的端到端样例
+## Prompt 驱动的端到端样例
 
 发行仓库中的 `examples/cache-topology/README.md` 从四篇 linked corpus 文档
 开始，展示完整的 R-001、sealed Synthesis/Manifest、明确授权的 ADR-001 和
-gated EP-001。需要理解“每份制品实际写什么”时先读该例；以下章节继续作为命令
-与边界速查。
+gated EP-001。需要理解“用户怎么提问、Skill 如何交接、每份制品实际写什么”
+时先读该例。
 
 ## 初始化
 
-```bash
-python3 <engineering-research-dir>/scripts/researchctl.py --repo . init
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . init
+```text
+使用 $engineering-execution-plan 检查当前仓库是否已经具备 Research、ADR、
+ExecPlan、Bugfix 和技术债务控制面。缺失时安全初始化，只补缺失内容；
+不要覆盖现有文档。完成后报告创建、保留和冲突项。
 ```
 
 只补缺失目录、四个派生索引和技术债务登记册，不覆盖人工内容。
 
 ## 完整功能生命周期
 
-用户：“先充分研究网关、BFF、SDK 当前的 token 刷新契约，比较兼容方案，形成架构决定，再给开发计划。”
-
-创建 Research：
-
-```bash
-python3 <engineering-research-dir>/scripts/researchctl.py --repo . new-research \
-  --slug token-refresh-contract \
-  --title "Research token refresh contract" \
-  --owner "API Platform Owner" \
-  --author "Codex"
+```text
+先使用 $engineering-research 充分研究网关、BFF 和 SDK 当前的 token 刷新契约，
+比较兼容方案并形成决策就绪的 Synthesis。Research Owner 是
+API Platform Owner。不要提前创建 ADR 或开发计划，也不要 conclude。
 ```
 
 填写 `RESEARCH.md`，把聚焦分析写到 `notes/`，把完整命令输出写到
-`artifacts/`。所有 `RQ-NNN` 已回答或明确处置、Synthesis 决策就绪后，只生成
-评审版本：
+`artifacts/`。所有 `RQ-NNN` 已回答或明确处置、Synthesis 决策就绪后：
 
-```bash
-python3 <engineering-research-dir>/scripts/researchctl.py --repo . mark-review-ready R-001
+```text
+继续使用 $engineering-research 完成 R-001 的分析和证据核对。
+如果已经决策就绪，生成 review-ready revision；保留 counterevidence、
+兼容约束和未决风险，不要 conclude。
 ```
 
-若 Owner 要求继续深入，就用 `new-round` 保持同一个 R-001。只有 Owner 明确
-授权结束后：
+若 Owner 要求继续深入，Skill 在同一个 R-001 下开启新 Round。只有 Owner 明确
+授权结束后，用户才发出：
 
-```bash
-python3 <engineering-research-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
-  --approved-by "API Platform Owner" \
-  --approval-ref "review:API-123"
+```text
+我以 API Platform Owner 身份确认 R-001 已满足本次决策需要。
+请使用 $engineering-research 结束并归档 R-001，并记录本条授权。
 ```
 
 公共契约具有架构意义，创建 proposed ADR：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-adr \
-  --slug token-refresh-contract \
-  --title "Choose token refresh contract" \
-  --research R-001
+```text
+使用 $engineering-execution-plan 消费已 concluded 的 R-001，
+创建“Choose token refresh contract” ADR。比较可行选项、写清兼容义务、
+后果和确认方式。ADR 必须停在 proposed，等待 Decision Owner。
 ```
 
 Agent 写全 ADR 后停在 proposed。用户或 Decision Owner 明确接受该 ADR 时：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
-  --outcome accepted \
-  --decision-maker "API Architecture Council"
+```text
+我代表 API Architecture Council 接受 ADR-001。
+请使用 $engineering-execution-plan 记录决定和 Decision Owner，
+然后核对依赖与 supersession 关系。
 ```
 
 最后创建 gated ExecPlan：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-ep \
-  --slug implement-token-refresh \
-  --title "Implement token refresh contract" \
-  --research R-001 \
-  --adr ADR-001
+```text
+使用 $engineering-execution-plan，基于 R-001 和已接受的 ADR-001，
+创建“Implement token refresh contract” ExecPlan。
+复述兼容约束、迁移义务、负面后果和仍需验证的未知，并填写里程碑、
+Concrete Steps、验收、恢复方法和准确下一步。先评审计划，不要开始实现。
 ```
-
-在 `Research and Architecture Inputs` 复述兼容约束、迁移义务、负面后果和仍需验证的未知。随后填写里程碑、Concrete Steps、验收与恢复方法。
 
 ## 多份输入
 
-参数通过重复 flag 表示。先注册既有架构文档目录：
+先用 Prompt 明确全部输入：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
-  register-architecture-root docs/design-docs
-
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-ep \
-  --slug migrate-storage \
-  --title "Migrate storage" \
-  --research R-003 --research R-007 \
-  --adr ADR-004 --adr ADR-009 \
-  --design docs/design-docs/storage-schema.md \
-  --design docs/design-docs/storage-migration.md \
-  --architecture-entrypoint docs/design-docs/index.md
+```text
+使用 $engineering-execution-plan 创建“Migrate storage”计划。
+Research 输入是 R-003、R-007；ADR 输入是 ADR-004、ADR-009；
+Design Docs 是 docs/design-docs/storage-schema.md 和
+docs/design-docs/storage-migration.md，架构入口是 docs/design-docs/index.md。
+先注册并验证 Design Doc 根目录，再检查 ADR 依赖闭包；缺少输入时停止。
 ```
 
 ADR 引用的每份 Research 和 Design Doc 都必须出现在 ExecPlan 中。若 ADR-009
@@ -106,14 +91,11 @@ ADR 引用的每份 Research 和 Design Doc 都必须出现在 ExecPlan 中。�
 
 用户要求实现一个局部、可逆的 adapter 清理。现有 accepted ADR 已规定边界，没有新的架构选择：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-ep \
-  --slug clean-adapter \
-  --title "Clean adapter boundary" \
-  --research-not-required-reason \
-  "ADR-004 and current contract tests fully define the behavior." \
-  --architecture-not-required-reason \
-  "The change stays behind the accepted boundary and adds no durable choice."
+```text
+使用 $engineering-execution-plan 为 adapter boundary 清理创建一个 ExecPlan。
+现有 ADR-004 和 contract tests 已完整定义行为，因此 Research Gate 可标记
+not_required；改动保持在既有边界内且不产生持久新选择，因此 Architecture Gate
+也可标记 not_required。把这两个可核查理由写进计划。
 ```
 
 理由必须可核查。“任务很小”“用户说直接做”不足以说明为何 Gate 不需要。
@@ -125,11 +107,11 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-ep \
 1. 创建并 conclude 新 Research。
 2. 创建引用新 Research 的 proposed ADR-009。
 3. 获得明确授权并接受 ADR-009。
-4. 建立替代链：
+4. 用户要求 Skill 建立替代链：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . supersede-adr ADR-004 \
-  --by ADR-009
+```text
+使用 $engineering-execution-plan 将已接受的 ADR-009 记录为 ADR-004 的替代决定。
+更新引用旧决定的 active ExecPlan，并报告无法继续满足 Architecture Gate 的计划。
 ```
 
 引用 ADR-004 的 active ExecPlan 随后必须更新；superseded ADR 不能继续满足 Architecture Gate。
@@ -142,71 +124,67 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . supersede-adr
 
 ## 明确记录并升级 Bugfix
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-bugfix \
-  --slug cursor-boundary \
-  --title "Fix cursor generation at page-size boundary" \
-  --area spans-api
+```text
+使用 $engineering-execution-plan 为 spans-api 的 cursor page-size boundary
+问题创建一条持久 Bugfix 记录，并在修复过程中维护证据与状态。
 ```
 
 如果调查发现需要改变多个客户端的公共契约，先完成所需 Research/ADR，再创建 ExecPlan。随后：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . archive-bugfix BF-001 \
-  --outcome escalated \
-  --linked-ep EP-001 \
-  --reason "The fix changes a shared cursor contract."
+```text
+BF-001 已确认会改变共享 cursor contract。
+使用 $engineering-execution-plan 将它升级并归档为 escalated，关联 EP-001，
+把共享契约变更记录为升级原因。
 ```
 
 ## 拆 Task
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-task EP-001 \
-  --slug add-gateway-contract \
-  --title "Add gateway refresh contract"
+```text
+使用 $engineering-execution-plan 在 EP-001 下创建 Task
+“Add gateway refresh contract”。Task 只保存局部工作集；
+根 EXECPLAN.md 继续保存总体里程碑、接口和验收。
 ```
 
 Task 使用稳定父 ID。根 `EXECPLAN.md` 继续保存总体上下文、里程碑、接口和验收。
 
 ## 压缩增长中的 ExecPlan
 
-先把有效结论吸收到当前事实，把完整输出保存到 `artifacts/`，再预览：
+先把有效结论吸收到当前事实，把完整输出保存到 `artifacts/`，再请求预览：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . checkpoint EP-001 \
-  --slug milestone-one \
-  --title "Milestone 1 complete" \
-  --current-milestone "Milestone 2: adapter integration" \
-  --summary "契约层已完成；适配层尚未实现。" \
-  --next-action "编辑 src/adapter.ts 并运行 npm test。" \
-  --revision "git:<current-commit>" \
-  --dry-run
+```text
+使用 $engineering-execution-plan 为 EP-001 预览一个 Milestone 1 Checkpoint。
+当前事实：契约层已完成，适配层尚未实现。
+当前里程碑：Milestone 2 — adapter integration。
+准确下一步：编辑 src/adapter.ts 并运行 npm test。
+绑定当前真实 Git revision；先 dry-run，不要直接压缩。
 ```
 
-确认后去掉 `--dry-run`。未完成 Progress/Validation 和 open blocker 留在根计划；旧事件原文进入 sealed Checkpoint。
+确认预览后，用户再明确要求应用 Checkpoint。未完成 Progress/Validation 和
+open blocker 留在根计划；旧事件原文进入 sealed Checkpoint。
 
 ## 严格归档
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . validate
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
-  --outcome completed \
-  --verified-revision "git:<verified-commit>" \
-  --evidence "ci:<pipeline-or-job-url>"
+```text
+使用 $engineering-execution-plan 验证 EP-001。
+只有验收全部通过、Task 全部终态、没有 open blocker、复盘已填写时，
+才用实际 verified commit 和真实 CI job URL 归档为 completed。
+条件不足就保持 active，并准确列出缺口。
 ```
 
 未完成验收、非终态 Task、open blocker、未填写复盘或缺少 revision/evidence
 都会阻止 v2.3+ completed。明确停止时可以：
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
-  --outcome cancelled --reason "产品方向已改变"
+```text
+产品方向已经改变。使用 $engineering-execution-plan 取消 EP-001，
+记录取消原因，保留已完成证据和未完成范围，不要伪装成 completed。
 ```
 
 ## 修复派生索引
 
-```bash
-python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . validate --fix-index
+```text
+使用 $engineering-execution-plan 检查派生索引漂移。
+先报告差异；确认只是托管区投影过期后，重建 Research、Decision、Plan 和 Bugfix
+索引。不要修改事实制品或托管区外人工内容。
 ```
 
 该操作重建 `RESEARCH.md`、`DECISIONS.md`、`PLANS.md` 和 `BUGFIXES.md`
