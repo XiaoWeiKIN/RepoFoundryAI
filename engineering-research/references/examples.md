@@ -33,7 +33,9 @@ python3 <skill-dir>/scripts/researchctl.py --repo . new-topic R-001 \
 ```
 
 `new-topic` links the document from the current Round and refreshes the
-manifest. Ordinary notes may still be written under `notes/`; run
+manifest. It creates a schema 2, answer-first document whose evidence is
+organized around `C-NNN` claims rather than repeated Evidence, Analysis, and
+Findings sections. Ordinary notes may still be written under `notes/`; run
 `sync-research` after manually changing corpus membership.
 
 ## Adopt an existing corpus

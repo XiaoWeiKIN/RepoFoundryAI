@@ -118,9 +118,11 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
    `owner`、`author` 和 `research_type` 必须真实；未知就保留未分配，禁止杜撰。
 3. 用 Round 组织每次有界研究迭代；用 `new-topic` 创建关联 `RQ-NNN` 的
    structured topic，其他 managed 分析写到 `notes/`，existing corpus 用 linked
-   模式登记。
-4. 每个关键主张保留可定位来源或可复现实验。区分 Observation 与
-   Interpretation。
+   模式登记。新 Topic 按人类决策顺序写：首屏给答案、置信度、适用边界和决策
+   影响，然后给最小心智模型，再展开主张。
+4. 每个关键主张使用一个 `C-NNN` 块：标题直接写主张，正文把 Evidence、
+   Reasoning、Decision impact、Confidence 和 Falsifier 放在一起。区分观察与
+   推理，不要把同一结论重复拆进 Evidence、Analysis、Findings 等章节。
 5. 每次新增、删除、移动研究文档后运行 `sync-research`。
 6. 修复 manifest drift、缺失本地引用和不可解释的冲突；绝对来源路径至少记录
    可移植替代或 provenance。
@@ -141,6 +143,8 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 ## 有界性与变更
 
 - 根控制页只服务当前接手，不复制全部专题内容。
+- 专题文档服务阅读而不是表单合规：结论先行，每节只推进一个主张，证据贴近
+  主张；背景、方法和时间线仅在确实帮助理解时作为可选模块。
 - Synthesis 只保存决策所需结论，不成为第二份全文。
 - snapshot 始终是可独立阅读的完整 Synthesis，但只在语义里程碑创建；不要为
   每个普通 Round 留一份，也不要改成需要串联恢复的增量 patch。

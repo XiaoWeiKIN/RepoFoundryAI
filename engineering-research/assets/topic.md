@@ -1,5 +1,5 @@
 ---
-schema_version: "1"
+schema_version: "2"
 doc_type: research-topic
 parent_id: {{PARENT_ID}}
 round_id: {{ROUND_ID}}
@@ -11,72 +11,84 @@ updated: {{DATE}}
 
 # {{TITLE}}
 
-This document is one auditable argument unit inside {{PARENT_ID}}. Keep it
-focused on the declared Research Questions. Put raw logs, captures, benchmark
-output, and large generated material in `../artifacts/`; let `SYNTHESIS.md`
-combine findings across topics.
+<!-- Authoring note: This topic is one decision-relevant argument inside
+{{PARENT_ID}}. Let readers understand the answer from the first section and
+inspect reasoning by claim. Keep raw logs, captures, benchmark output, and
+large generated material in ../artifacts/. Delete this note before review. -->
 
-## Executive Takeaway
+## Decision Brief
 
-<!-- REQUIRED_TOPIC_TAKEAWAY: State the current answer, confidence, conditions, and effect on the parent Research in three to five sentences. -->
-
-## Question and Decision Relevance
+> **Answer:** <!-- REQUIRED_TOPIC_ANSWER: Give the direct answer in one or two sentences. Do not restate the question. -->
+>
+> **Confidence:** <!-- REQUIRED_TOPIC_CONFIDENCE: State high, medium, or low and name the main reason. -->
+>
+> **Decision impact:** <!-- REQUIRED_TOPIC_IMPACT: State what a decision-maker should do, avoid, or defer because of this answer. -->
+>
+> **Applies when:** <!-- REQUIRED_TOPIC_BOUNDARY: State the conditions and boundaries under which the answer holds. -->
 
 Related Research Questions:
 
 {{QUESTION_LIST}}
 
-<!-- REQUIRED_TOPIC_QUESTION: Explain why these questions materially affect the downstream decision. -->
+<!-- REQUIRED_TOPIC_RELEVANCE: In one short paragraph, explain why this topic changes or constrains the parent decision. -->
 
-## Scope and Non-goals
+## Model at a Glance
 
-<!-- REQUIRED_TOPIC_SCOPE: State what this topic covers and explicitly excludes. -->
+<!-- REQUIRED_TOPIC_MODEL: Give the smallest useful mental model. Prefer one diagram, protocol timeline, invariant list, or compact comparison table over a long background narrative. Define only terms needed by later claims. -->
 
-## Current Context
+## Claims and Evidence
 
-<!-- REQUIRED_TOPIC_CONTEXT: Provide only the system behavior, terminology, interfaces, or constraints needed to understand this topic. -->
+<!-- REQUIRED_TOPIC_CLAIMS: Organize the argument as C-NNN claim blocks. Make each level-three heading a complete, decision-relevant claim. Add more blocks only when they advance a distinct claim. -->
 
-## Method and Evidence Selection
+### C-001 — <!-- REQUIRED_TOPIC_CLAIM_TITLE: Write a complete, decision-relevant claim, not a category label. -->
 
-<!-- REQUIRED_TOPIC_METHOD: Explain which sources, code paths, tests, or experiments were selected, why they are suitable, their freshness, and material exclusions. -->
+**Evidence**
 
-## Evidence
+<!-- REQUIRED_TOPIC_CLAIM_EVIDENCE: State the observed facts and cite exact repository locations, authoritative sources, experiments, or artifact paths. Use S-NNN source IDs when helpful. -->
 
-<!-- REQUIRED_TOPIC_EVIDENCE: Add at least one E-NNN level-three evidence record. Every record must contain separate bold Observation, Evidence, Interpretation, and Confidence labels. -->
+**Reasoning**
 
-## Analysis
+<!-- REQUIRED_TOPIC_CLAIM_REASONING: Explain why the evidence supports this claim, including assumptions or contradictions. Do not repeat the evidence. -->
 
-<!-- REQUIRED_TOPIC_ANALYSIS: Connect the evidence into reasoning. Identify assumptions, contradictions, and the effect on option ranking without repeating the evidence records. -->
+**Decision impact**
 
-## Alternatives and Counterevidence
+<!-- REQUIRED_TOPIC_CLAIM_IMPACT: State how this claim changes an option, constraint, implementation choice, or priority. -->
 
-| Alternative or explanation | Supporting evidence | Counterevidence | Current assessment |
-|---|---|---|---|
+**Confidence**
 
-<!-- REQUIRED_TOPIC_ALTERNATIVES: Compare credible alternatives fairly. Preserve negative and contradictory evidence. Write "None" with a reason only when no credible alternative exists. -->
+<!-- REQUIRED_TOPIC_CLAIM_CONFIDENCE: State high, medium, or low and briefly justify the rating. -->
 
-## Findings
+**Falsifier**
 
-| ID | Finding | Confidence | Evidence | Decision impact |
+<!-- REQUIRED_TOPIC_CLAIM_FALSIFIER: Name the observation, test result, or boundary change that would overturn or materially weaken this claim. -->
+
+## Options and Trade-offs
+
+| Option or explanation | Evidence for | Evidence against | When it wins | Current assessment |
 |---|---|---|---|---|
 
-<!-- REQUIRED_TOPIC_FINDINGS: Add at least one F-NNN row. Confidence must be high, medium, or low; Evidence must reference E-NNN records or auditable paths. -->
+<!-- REQUIRED_TOPIC_OPTIONS: Compare only credible alternatives. Preserve negative and contradictory evidence. If there is no real choice, say so in one sentence and explain why. -->
 
-## Uncertainty and Limitations
+## Risks, Unknowns, and Validation
 
-<!-- REQUIRED_TOPIC_UNCERTAINTY: State remaining unknowns, evidence limitations, applicability boundaries, and observations that would overturn the findings. -->
+| Risk or unknown | Why it matters | How to resolve or monitor | Trigger / owner |
+|---|---|---|---|
 
-## Impact on Synthesis
+<!-- REQUIRED_TOPIC_RISKS: Record material limitations, unanswered questions, validation experiments, and monitoring triggers. Do not create a generic risk list. -->
 
-<!-- REQUIRED_TOPIC_SYNTHESIS: State exactly what the accumulated Synthesis should add, change, downgrade, or leave unchanged. -->
+## Handoff
 
-## Next Inquiry
+| Destination | Status | Exact change or constraint |
+|---|---|---|
+| Synthesis | pending | |
+| ADR / ExecPlan | pending | |
+| Prototype / monitoring | pending | |
 
-<!-- REQUIRED_TOPIC_NEXT: Name the next exact source, experiment, Owner question, or review action. If none is needed, state why the topic is ready for synthesis. -->
+<!-- REQUIRED_TOPIC_HANDOFF: State what Synthesis should add, change, downgrade, or leave unchanged. Record implementation or monitoring consequences only when the evidence supports them. Replace pending with integrated, unchanged, not-ready, or an exact revision reference as work progresses. -->
 
-## References and Artifacts
+## Sources
 
-<!-- REQUIRED_TOPIC_REFERENCES: List repository paths, stable authoritative sources, and artifact paths. Write "None required" only with a reason. -->
+<!-- REQUIRED_TOPIC_SOURCES: Register exact code paths, line or symbol anchors, authoritative documents, experiment commands, and artifact paths. Prefer stable locators such as "- S-001 — source — exact locator and relevance". Write "None required" only with a reason. -->
 
 ## Revision Notes
 

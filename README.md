@@ -164,9 +164,12 @@ python3 "$RESEARCHCTL" --repo . new-topic R-001 \
   --question RQ-001 --author "Security Researcher"
 ```
 
-命令会把专题写入 `notes/`、挂接当前 Round、刷新 manifest，并在评审前校验
-Evidence、Finding、反证、不确定性和 Synthesis 增量。普通专题或来源笔记仍可
-直接放入 `notes/`；手工新增、移动或删除后运行 `sync-research`。
+命令会把专题写入 `notes/`、挂接当前 Round 并刷新 manifest。新专题采用
+answer-first 的 schema 2：首屏给出答案、置信度、适用边界与决策影响，正文用
+`C-NNN` 把 Evidence、Reasoning、Decision impact、Confidence 和 Falsifier
+组织在同一个主张旁，避免重复的 Evidence / Analysis / Findings 章节。普通
+专题或来源笔记仍可直接放入 `notes/`；手工新增、移动或删除后运行
+`sync-research`。旧 schema 1 专题继续兼容。
 
 ### 2. 接管已有多文档 Research
 

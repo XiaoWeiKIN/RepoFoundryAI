@@ -65,7 +65,7 @@ ROUND_SECTIONS = (
     "Next Inquiry",
     "Round Outcome",
 )
-TOPIC_SECTIONS = (
+TOPIC_V1_SECTIONS = (
     "Executive Takeaway",
     "Question and Decision Relevance",
     "Scope and Non-goals",
@@ -81,6 +81,17 @@ TOPIC_SECTIONS = (
     "References and Artifacts",
     "Revision Notes",
 )
+TOPIC_V2_SECTIONS = (
+    "Decision Brief",
+    "Model at a Glance",
+    "Claims and Evidence",
+    "Options and Trade-offs",
+    "Risks, Unknowns, and Validation",
+    "Handoff",
+    "Sources",
+    "Revision Notes",
+)
+TOPIC_SCHEMA_VERSIONS = {"1", "2"}
 SYNTHESIS_SECTIONS = (
     "Executive Conclusion",
     "Supported Findings",
@@ -111,6 +122,19 @@ TOPIC_EVIDENCE_LABELS = (
     "Evidence",
     "Interpretation",
     "Confidence",
+)
+TOPIC_CLAIM_LABELS = (
+    "Evidence",
+    "Reasoning",
+    "Decision impact",
+    "Confidence",
+    "Falsifier",
+)
+TOPIC_BRIEF_LABELS = (
+    "Answer",
+    "Confidence",
+    "Decision impact",
+    "Applies when",
 )
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 RESEARCH_ID_RE = re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE)
@@ -1373,6 +1397,65 @@ def topic_finding_rows(text: str) -> list[list[str]]:
     return rows
 
 
+def topic_claim_records(text: str) -> list[tuple[str, str]]:
+    body = section(text, "Claims and Evidence") or ""
+    matches = list(
+        re.finditer(
+            r"(?m)^###\s+(C-\d{3,})\b[^\n]*(?:\n|$)",
+            body,
+            re.IGNORECASE,
+        )
+    )
+    return [
+        (
+            match.group(1).upper(),
+            body[
+                match.end() : (
+                    matches[index + 1].start()
+                    if index + 1 < len(matches)
+                    else len(body)
+                )
+            ].strip(),
+        )
+        for index, match in enumerate(matches)
+    ]
+
+
+def markdown_label_value(
+    text: str,
+    label: str,
+    labels: tuple[str, ...],
+) -> tuple[int, str] | None:
+    prefix = r"(?m)^\s*(?:>\s*)?"
+    label_pattern = (
+        rf"{prefix}\*\*{re.escape(label)}:?\*\*"
+    )
+    match = re.search(label_pattern, text, re.IGNORECASE)
+    if not match:
+        return None
+    next_positions = [
+        candidate.start()
+        for other_label in labels
+        for candidate in re.finditer(
+            rf"{prefix}\*\*{re.escape(other_label)}:?\*\*",
+            text[match.end() :],
+            re.IGNORECASE,
+        )
+    ]
+    end = (
+        match.end() + min(next_positions)
+        if next_positions
+        else len(text)
+    )
+    value = re.sub(
+        r"<!--[\s\S]*?-->",
+        "",
+        text[match.end() : end],
+    )
+    value = re.sub(r"(?m)^\s*>\s?", "", value).strip()
+    return match.start(), value
+
+
 def declares_topic_document(text: str) -> bool:
     if not text.startswith("---\n"):
         return False
@@ -1397,8 +1480,13 @@ def validate_topic_document(
 ) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
-    if data.get("schema_version") != "1":
-        errors.append(f"{path}: topic schema_version must be 1")
+    schema_version = data.get("schema_version", "")
+    if schema_version not in TOPIC_SCHEMA_VERSIONS:
+        errors.append(
+            f"{path}: topic schema_version must be one of "
+            f"{sorted(TOPIC_SCHEMA_VERSIONS)}"
+        )
+        schema_version = "1"
     if data.get("doc_type") != "research-topic":
         errors.append(f"{path}: doc_type must be research-topic")
     if data.get("parent_id") != parent_id:
@@ -1418,10 +1506,18 @@ def validate_topic_document(
     if not SLUG_RE.fullmatch(path.stem):
         errors.append(f"{path}: topic filename must be lowercase kebab-case")
 
-    errors.extend(validate_sections(path, text, TOPIC_SECTIONS))
-    errors.extend(validate_section_order(path, text, TOPIC_SECTIONS))
+    topic_sections = (
+        TOPIC_V2_SECTIONS if schema_version == "2" else TOPIC_V1_SECTIONS
+    )
+    errors.extend(validate_sections(path, text, topic_sections))
+    errors.extend(validate_section_order(path, text, topic_sections))
 
-    question_body = section(text, "Question and Decision Relevance") or ""
+    question_heading = (
+        "Decision Brief"
+        if schema_version == "2"
+        else "Question and Decision Relevance"
+    )
+    question_body = section(text, question_heading) or ""
     question_ids = {
         f"RQ-{int(value):03d}"
         for value in RESEARCH_QUESTION_ID_RE.findall(question_body)
@@ -1436,9 +1532,52 @@ def validate_topic_document(
     quality_issues: list[str] = []
     if marker_names(text):
         quality_issues.append(f"{path}: required topic placeholders remain")
+    if schema_version == "2":
+        brief_fields = {
+            label: markdown_label_value(
+                question_body,
+                label,
+                TOPIC_BRIEF_LABELS,
+            )
+            for label in TOPIC_BRIEF_LABELS
+        }
+        for label, field in brief_fields.items():
+            if field is None:
+                quality_issues.append(
+                    f"{path}: Decision Brief is missing {label}"
+                )
+            elif not field[1]:
+                quality_issues.append(
+                    f"{path}: Decision Brief has empty {label}"
+                )
+        brief_positions = [
+            field[0]
+            for field in brief_fields.values()
+            if field is not None
+        ]
+        if len(brief_positions) == len(TOPIC_BRIEF_LABELS):
+            if brief_positions != sorted(brief_positions):
+                quality_issues.append(
+                    f"{path}: Decision Brief fields are out of order"
+                )
+        brief_confidence = brief_fields["Confidence"]
+        if brief_confidence and not re.match(
+            r"(high|medium|low)\b",
+            brief_confidence[1],
+            re.IGNORECASE,
+        ):
+            quality_issues.append(
+                f"{path}: Decision Brief confidence must start with "
+                "high, medium, or low"
+            )
     if quality_mode == "strict":
-        for heading in TOPIC_SECTIONS:
-            if heading in {"Evidence", "Findings"}:
+        record_sections = (
+            {"Claims and Evidence"}
+            if schema_version == "2"
+            else {"Evidence", "Findings"}
+        )
+        for heading in topic_sections:
+            if heading in record_sections:
                 continue
             body = section(text, heading)
             visible = (
@@ -1451,57 +1590,122 @@ def validate_topic_document(
                     f"{path}: ## {heading} needs substantive content"
                 )
 
-    evidence_records = topic_evidence_records(text)
-    if not evidence_records:
-        quality_issues.append(f"{path}: topic needs at least one E-NNN record")
-    seen_evidence: set[str] = set()
-    for evidence_id, body in evidence_records:
-        if evidence_id in seen_evidence:
-            errors.append(f"{path}: duplicate topic evidence id {evidence_id}")
-        seen_evidence.add(evidence_id)
-        for label in TOPIC_EVIDENCE_LABELS:
-            if not re.search(
-                rf"\*\*{re.escape(label)}:?\*\*",
+    if schema_version == "2":
+        claim_records = topic_claim_records(text)
+        if not claim_records:
+            quality_issues.append(
+                f"{path}: topic needs at least one C-NNN claim"
+            )
+        seen_claims: set[str] = set()
+        for claim_id, body in claim_records:
+            if claim_id in seen_claims:
+                errors.append(f"{path}: duplicate topic claim id {claim_id}")
+            seen_claims.add(claim_id)
+            label_positions: list[int] = []
+            for label in TOPIC_CLAIM_LABELS:
+                field = markdown_label_value(
+                    body,
+                    label,
+                    TOPIC_CLAIM_LABELS,
+                )
+                if field is None:
+                    quality_issues.append(
+                        f"{path}: {claim_id} is missing {label}"
+                    )
+                else:
+                    label_positions.append(field[0])
+                    if not field[1]:
+                        quality_issues.append(
+                            f"{path}: {claim_id} has empty {label}"
+                        )
+            if len(label_positions) == len(TOPIC_CLAIM_LABELS):
+                if label_positions != sorted(label_positions):
+                    quality_issues.append(
+                        f"{path}: {claim_id} claim fields are out of order"
+                    )
+            confidence = markdown_label_value(
                 body,
+                "Confidence",
+                TOPIC_CLAIM_LABELS,
+            )
+            if confidence and not re.match(
+                r"(high|medium|low)\b",
+                confidence[1],
                 re.IGNORECASE,
             ):
                 quality_issues.append(
-                    f"{path}: {evidence_id} is missing {label}"
+                    f"{path}: {claim_id} needs high, medium, or low confidence"
                 )
-        confidence = re.search(
-            r"\*\*Confidence:?\*\*\s*(?:\n\s*)?(high|medium|low)\b",
-            body,
-            re.IGNORECASE,
-        )
-        if not confidence:
+    else:
+        evidence_records = topic_evidence_records(text)
+        if not evidence_records:
             quality_issues.append(
-                f"{path}: {evidence_id} needs high, medium, or low confidence"
+                f"{path}: topic needs at least one E-NNN record"
             )
+        seen_evidence: set[str] = set()
+        for evidence_id, body in evidence_records:
+            if evidence_id in seen_evidence:
+                errors.append(
+                    f"{path}: duplicate topic evidence id {evidence_id}"
+                )
+            seen_evidence.add(evidence_id)
+            for label in TOPIC_EVIDENCE_LABELS:
+                if not re.search(
+                    rf"\*\*{re.escape(label)}:?\*\*",
+                    body,
+                    re.IGNORECASE,
+                ):
+                    quality_issues.append(
+                        f"{path}: {evidence_id} is missing {label}"
+                    )
+            confidence = re.search(
+                r"\*\*Confidence:?\*\*\s*(?:\n\s*)?"
+                r"(high|medium|low)\b",
+                body,
+                re.IGNORECASE,
+            )
+            if not confidence:
+                quality_issues.append(
+                    f"{path}: {evidence_id} needs high, medium, or low confidence"
+                )
 
-    finding_rows = topic_finding_rows(text)
-    if not finding_rows:
-        quality_issues.append(f"{path}: topic needs at least one F-NNN finding")
-    seen_findings: set[str] = set()
-    for cells in finding_rows:
-        if len(cells) < 5:
-            errors.append(f"{path}: topic Finding rows need five columns")
-            continue
-        finding_id = cells[0].upper()
-        if not TOPIC_FINDING_ID_RE.fullmatch(finding_id):
-            errors.append(f"{path}: invalid topic Finding id {cells[0]!r}")
-        elif finding_id in seen_findings:
-            errors.append(f"{path}: duplicate topic Finding id {finding_id}")
-        seen_findings.add(finding_id)
-        if not cells[1]:
-            quality_issues.append(f"{path}: {finding_id} needs a finding")
-        if cells[2].lower() not in TOPIC_CONFIDENCE_LEVELS:
+        finding_rows = topic_finding_rows(text)
+        if not finding_rows:
             quality_issues.append(
-                f"{path}: {finding_id} confidence must be high, medium, or low"
+                f"{path}: topic needs at least one F-NNN finding"
             )
-        if not cells[3]:
-            quality_issues.append(f"{path}: {finding_id} needs evidence")
-        if not cells[4]:
-            quality_issues.append(f"{path}: {finding_id} needs decision impact")
+        seen_findings: set[str] = set()
+        for cells in finding_rows:
+            if len(cells) < 5:
+                errors.append(f"{path}: topic Finding rows need five columns")
+                continue
+            finding_id = cells[0].upper()
+            if not TOPIC_FINDING_ID_RE.fullmatch(finding_id):
+                errors.append(
+                    f"{path}: invalid topic Finding id {cells[0]!r}"
+                )
+            elif finding_id in seen_findings:
+                errors.append(
+                    f"{path}: duplicate topic Finding id {finding_id}"
+                )
+            seen_findings.add(finding_id)
+            if not cells[1]:
+                quality_issues.append(
+                    f"{path}: {finding_id} needs a finding"
+                )
+            if cells[2].lower() not in TOPIC_CONFIDENCE_LEVELS:
+                quality_issues.append(
+                    f"{path}: {finding_id} confidence must be "
+                    "high, medium, or low"
+                )
+            if not cells[3]:
+                quality_issues.append(
+                    f"{path}: {finding_id} needs evidence"
+                )
+            if not cells[4]:
+                quality_issues.append(
+                    f"{path}: {finding_id} needs decision impact"
+                )
 
     if quality_mode == "strict":
         errors.extend(quality_issues)
