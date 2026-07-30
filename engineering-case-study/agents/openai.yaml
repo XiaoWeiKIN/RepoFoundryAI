@@ -1,0 +1,4 @@
+interface:
+  display_name: "Engineering Case Study"
+  short_description: "从代码、Research 与 EP 撰写中英文工程分享"
+  default_prompt: "Use $engineering-case-study to write a source-backed module design, best-practice, or delivery case study in Chinese or English."

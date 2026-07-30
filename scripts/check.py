@@ -146,6 +146,7 @@ def validate_skill_packages() -> None:
     skills = (
         (ROOT, "execution-plan"),
         (ROOT / "engineering-research", "engineering-research"),
+        (ROOT / "engineering-case-study", "engineering-case-study"),
     )
     for directory, expected_name in skills:
         metadata = skill_frontmatter(directory / "SKILL.md")
@@ -170,6 +171,8 @@ def validate_skill_packages() -> None:
         *sorted((ROOT / "references").glob("*.md")),
         ROOT / "engineering-research" / "SKILL.md",
         *sorted((ROOT / "engineering-research" / "references").glob("*.md")),
+        ROOT / "engineering-case-study" / "SKILL.md",
+        *sorted((ROOT / "engineering-case-study" / "references").glob("*.md")),
     ]
     forbidden = ("~/.codex/skills", "~/.agents/skills")
     for path in portable_sources:
@@ -182,8 +185,7 @@ def validate_skill_packages() -> None:
     print("[check] Skill package metadata and portability", flush=True)
 
 
-def validate_eval_catalog() -> None:
-    path = ROOT / "evals" / "evals.json"
+def validate_eval_catalog(path: Path, expected_skill_name: str) -> None:
     try:
         catalog = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -194,9 +196,10 @@ def validate_eval_catalog() -> None:
 
     if not isinstance(catalog, dict):
         raise CheckError(f"{path.relative_to(ROOT)}: catalog must be an object")
-    if catalog.get("skill_name") != "execution-plan":
+    if catalog.get("skill_name") != expected_skill_name:
         raise CheckError(
-            f"{path.relative_to(ROOT)}: skill_name must be 'execution-plan'"
+            f"{path.relative_to(ROOT)}: skill_name must be "
+            f"{expected_skill_name!r}"
         )
     evals = catalog.get("evals")
     if not isinstance(evals, list) or not evals:
@@ -241,7 +244,22 @@ def validate_eval_catalog() -> None:
                     f"{assertion_prefix} duplicates name {assertion['name']!r}"
                 )
             assertion_names.add(assertion["name"])
-    print("[check] Eval catalog", flush=True)
+    print(
+        f"[check] {expected_skill_name} eval catalog",
+        flush=True,
+    )
+
+
+def validate_eval_catalogs() -> None:
+    catalogs = (
+        (ROOT / "evals" / "evals.json", "execution-plan"),
+        (
+            ROOT / "engineering-case-study" / "evals" / "evals.json",
+            "engineering-case-study",
+        ),
+    )
+    for path, expected_skill_name in catalogs:
+        validate_eval_catalog(path, expected_skill_name)
 
 
 def copy_repository(destination: Path) -> None:
@@ -330,7 +348,7 @@ def validate_git_whitespace() -> None:
 def main() -> int:
     try:
         validate_skill_packages()
-        validate_eval_catalog()
+        validate_eval_catalogs()
         validate_markdown_links()
         run(
             "Engineering Research tests",

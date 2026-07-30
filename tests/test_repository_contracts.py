@@ -257,6 +257,12 @@ class RepositoryContractTestCase(unittest.TestCase):
                 encoding="utf-8"
             ),
         )
+        self.assertIn(
+            "name: engineering-case-study",
+            (ROOT / "engineering-case-study" / "SKILL.md").read_text(
+                encoding="utf-8"
+            ),
+        )
 
     def test_skills_work_when_installed_independently(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -273,6 +279,26 @@ class RepositoryContractTestCase(unittest.TestCase):
 
             research_skill = base / "engineering-research"
             shutil.copytree(ROOT / "engineering-research", research_skill)
+            case_study_skill = base / "engineering-case-study"
+            shutil.copytree(
+                ROOT / "engineering-case-study",
+                case_study_skill,
+            )
+
+            case_study_text = (case_study_skill / "SKILL.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("name: engineering-case-study", case_study_text)
+            for relative in (
+                "references/source-evidence.md",
+                "references/article-patterns.md",
+                "references/language.md",
+                "references/review.md",
+                "assets/case-study.zh-CN.md",
+                "assets/case-study.en.md",
+                "agents/openai.yaml",
+            ):
+                self.assertTrue((case_study_skill / relative).is_file())
 
             execution_repo = base / "execution-repo"
             execution_repo.mkdir()
