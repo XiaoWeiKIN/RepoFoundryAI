@@ -213,31 +213,39 @@ git -C "$ENGINEERING_WORKFLOW_HOME" pull --ff-only
 
 其他宿主使用自己的 Skill 调用约定即可。
 
-## Prompt 驱动的端到端示例
+## Prompt 驱动的示例体系
 
-[cache-topology 端到端示例](./examples/cache-topology/README.md) 用一段连续对话，
-展示四篇源文档如何进入 gated ExecPlan：
+中英双语的 [Prompt 示例集](./examples/README.zh-CN.md) 覆盖全部五个 Skill，
+既展示独立入口，也展示证据怎样在 Skill 之间交接：
 
 ```mermaid
 flowchart LR
-    P["用户 Prompt"] --> R["$engineering-research<br/>linked R-001"]
-    R --> S["sealed Manifest + Synthesis"]
-    S --> A["$engineering-execution-plan<br/>proposed ADR-001"]
-    A -->|"Decision Owner 明确接受"| E["gated EP-001"]
+    P["用户 Prompt"] --> W["$engineering-workflow"]
+    W --> B["$engineering-benchmark"]
+    W --> R["$engineering-research"]
+    W --> E["$engineering-execution-plan"]
+    W --> C["$engineering-case-study"]
+    B -->|"路线仍有未知"| R
+    B -->|"最终版本门禁"| E
+    R --> E
+    E -->|"用户明确要求写作"| C
 ```
 
-第一条消息只需要告诉 Codex 决策上下文和停止边界：
+| 场景 | 第一条 Prompt |
+|---|---|
+| 初始化仓库或选择正确流程 | `使用 $engineering-workflow 预览 Harness，并路由这个请求……` |
+| 产生可复现测量 | `使用 $engineering-benchmark 预声明并执行这个 Scenario……` |
+| 调研未知或接管现有 corpus | `使用 $engineering-research 回答这些 Research Questions……` |
+| 记录决定或推动交付 | `使用 $engineering-execution-plan 创建 proposed ADR / ExecPlan / Bugfix……` |
+| 编写可分享工程文章 | `使用 $engineering-case-study 生成中文 / 英文 / 双语 draft……` |
 
-```text
-使用 $engineering-research 接管
-research-input/cache-topology/ 下的多文档 corpus，将其组织为一个 linked Research。
-完整阅读证据，保留反例和不确定性，形成决策就绪的 Synthesis。
-停在 review-ready，不要 conclude。
-```
+示例集包含仓库初始化、模糊请求路由、探索性 Benchmark、Research 到 ADR、
+多 Scenario EP 门禁、Bugfix 升级，以及四类 Case Study。
+[cache-topology 完整示例](./examples/cache-topology/README.md) 继续作为
+Research → ADR → ExecPlan 的深度演示。
 
-Codex 在内部调用控制脚本，并向用户报告创建的 ID、制品和校验结果。后续 Prompt
-分别承载 Research Owner 的结束授权和 Decision Owner 的决定；示例不会伪造
-任何人的授权。
+用户提供意图、上下文、停止边界和明确授权；Skill 在内部调用控制脚本，并报告
+生成的 ID、制品和校验结果。
 
 ## 底层 CLI：供 Agent 与自动化使用
 

@@ -241,32 +241,41 @@ Use $engineering-case-study to write a module-design article from the code, Rese
 
 Other hosts can use their own Skill invocation convention.
 
-## Prompt-driven end-to-end example
+## Prompt-driven examples
 
-The [cache-topology example](./examples/cache-topology/README.md) follows one
-conversation from four source documents to a gated ExecPlan:
+The bilingual [Prompt example catalog](./examples/README.md) covers all five
+Skills as standalone entrypoints and as evidence handoffs:
 
 ```mermaid
 flowchart LR
-    P["User prompt"] --> R["$engineering-research<br/>linked R-001"]
-    R --> S["sealed Manifest + Synthesis"]
-    S --> A["$engineering-execution-plan<br/>proposed ADR-001"]
-    A -->|"explicit Decision Owner acceptance"| E["gated EP-001"]
+    P["User prompt"] --> W["$engineering-workflow"]
+    W --> B["$engineering-benchmark"]
+    W --> R["$engineering-research"]
+    W --> E["$engineering-execution-plan"]
+    W --> C["$engineering-case-study"]
+    B -->|"route uncertainty"| R
+    B -->|"final revision gate"| E
+    R --> E
+    E -->|"explicit writing request"| C
 ```
 
-Start by giving Codex the decision context and stopping boundary:
+| Situation | First Prompt |
+|---|---|
+| Initialize a repository or choose the right process | `Use $engineering-workflow to preview the Harness and route this request…` |
+| Produce reproducible measurements | `Use $engineering-benchmark to predeclare and run this Scenario…` |
+| Investigate unknowns or an existing corpus | `Use $engineering-research to answer these Research Questions…` |
+| Record a decision or drive delivery | `Use $engineering-execution-plan to create a proposed ADR / ExecPlan / Bugfix…` |
+| Write a shareable engineering narrative | `Use $engineering-case-study to create a Chinese / English / bilingual draft…` |
 
-```text
-Use $engineering-research to take over
-research-input/cache-topology/ as one linked Research.
-Read the complete corpus, preserve counterevidence, and produce a
-decision-ready Synthesis. Stop at review-ready and do not conclude it.
-```
+The catalog includes repository bootstrap, ambiguous-request routing,
+exploratory benchmarks, Research-to-ADR, multi-Scenario EP gates, Bugfix
+escalation, and four Case Study modes. The
+[cache-topology walkthrough](./examples/cache-topology/README.md) remains the
+fully worked Research → ADR → ExecPlan example.
 
-Codex invokes the control scripts internally and reports the created IDs,
-artifacts, and validation results. Later prompts carry the Research Owner
-conclusion and Decision Owner acceptance; the example never fabricates either
-authority.
+Users provide intent, context, stopping boundaries, and explicit authority.
+Skills invoke control scripts internally and report the resulting IDs,
+artifacts, and validation results.
 
 ## Low-level CLI for agents and automation
 
