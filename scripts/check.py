@@ -172,6 +172,7 @@ def validate_skill_packages() -> None:
 
     portable_sources = [
         ROOT / "README.md",
+        ROOT / "README.zh-CN.md",
         ROOT / "SKILL.md",
         *sorted((ROOT / "references").glob("*.md")),
         ROOT / "engineering-execution-plan" / "SKILL.md",
