@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic repository operations for the execution-plan skill."""
+"""Deterministic repository operations for engineering-execution-plan."""
 
 from __future__ import annotations
 
@@ -31,6 +31,24 @@ ASSET_DIR = SKILL_DIR / "assets"
 STATE_VERSION = 1
 CONFIG_VERSION = 1
 DEFAULT_ARCHITECTURE_ROOT = "docs/adr"
+
+INIT_DIRECTORIES = (
+    "docs/.epctl",
+    "docs/exec-plans/active",
+    "docs/exec-plans/completed",
+    "docs/research/active",
+    "docs/research/completed",
+    "docs/adr",
+    "docs/bugfixes/active",
+    "docs/bugfixes/completed",
+)
+INIT_FILE_ASSETS = (
+    ("docs/PLANS.md", "plans-index.md"),
+    ("docs/RESEARCH.md", "research-index.md"),
+    ("docs/DECISIONS.md", "decisions-index.md"),
+    ("docs/BUGFIXES.md", "bugfixes-index.md"),
+    ("docs/exec-plans/tech-debt-tracker.md", "tech-debt-tracker.md"),
+)
 
 EXECPLAN_SECTIONS = (
     "Purpose / Big Picture",
@@ -435,38 +453,17 @@ def ensure_file(path: Path, asset: str, values: dict[str, str] | None = None) ->
 
 def init_repo(repo: Path) -> list[str]:
     created: list[str] = []
-    directories = (
-        "docs/.epctl",
-        "docs/exec-plans/active",
-        "docs/exec-plans/completed",
-        "docs/research/active",
-        "docs/research/completed",
-        "docs/adr",
-        "docs/bugfixes/active",
-        "docs/bugfixes/completed",
-    )
-    for relative in directories:
+    for relative in INIT_DIRECTORIES:
         path = repo / relative
         reject_symlink_path(repo, path)
         if not path.exists():
             path.mkdir(parents=True)
             created.append(relative + "/")
 
-    files = (
-        ("docs/PLANS.md", "plans-index.md", {}),
-        ("docs/RESEARCH.md", "research-index.md", {}),
-        ("docs/DECISIONS.md", "decisions-index.md", {}),
-        ("docs/BUGFIXES.md", "bugfixes-index.md", {}),
-        (
-            "docs/exec-plans/tech-debt-tracker.md",
-            "tech-debt-tracker.md",
-            {"DATE": date_string()},
-        ),
-    )
-    for relative, asset, values in files:
+    for relative, asset in INIT_FILE_ASSETS:
         path = repo / relative
         reject_symlink_path(repo, path)
-        if ensure_file(path, asset, values):
+        if ensure_file(path, asset, {"DATE": date_string()}):
             created.append(relative)
     reject_symlink_path(repo, state_path(repo))
     if not state_path(repo).exists():

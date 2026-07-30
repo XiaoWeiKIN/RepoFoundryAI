@@ -160,7 +160,7 @@ validation failure.
 
 ## Consumer requirements
 
-A consumer such as `execution-plan`:
+A consumer such as `engineering-execution-plan`:
 
 1. locates concluded Research through its controller;
 2. validates the sealed Synthesis body digest;

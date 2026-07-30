@@ -15,7 +15,7 @@ flowchart LR
     C --> R["Run<br/>固定 revision 的一次执行"]
     R --> E["sealed Evidence Bundle<br/>Result + artifacts + Manifest"]
     E --> Q["engineering-research<br/>解释矛盾与形成 Synthesis"]
-    E --> P["execution-plan<br/>最终 revision 验收"]
+    E --> P["engineering-execution-plan<br/>最终 revision 验收"]
     E --> O["CI / Runbook<br/>持续回归与容量治理"]
 ```
 

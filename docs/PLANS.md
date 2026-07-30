@@ -15,6 +15,7 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 <!-- EPCTL:ACTIVE:START -->
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
+| EP-003 | Restructure EngineeringWorkflow skill ownership | active | 2026-07-30 | [EXECPLAN](exec-plans/active/ep-003_restructure-engineering-workflow/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed

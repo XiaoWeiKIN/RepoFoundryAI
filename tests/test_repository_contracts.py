@@ -11,7 +11,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EPCTL = ROOT / "scripts" / "epctl.py"
+EPCTL = (
+    ROOT
+    / "engineering-execution-plan"
+    / "scripts"
+    / "epctl.py"
+)
 RESEARCHCTL = ROOT / "engineering-research" / "scripts" / "researchctl.py"
 BENCHCTL = ROOT / "engineering-benchmark" / "scripts" / "benchctl.py"
 EXAMPLE = ROOT / "examples" / "cache-topology"
@@ -242,15 +247,23 @@ class RepositoryContractTestCase(unittest.TestCase):
 
     def test_project_brand_and_skill_names_are_independent(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertTrue(readme.startswith("# EngineeringPlan\n"))
+        self.assertTrue(readme.startswith("# EngineeringWorkflow\n"))
         self.assertIn(
-            "https://github.com/XiaoWeiKIN/EngineeringPlan.git",
+            "https://github.com/XiaoWeiKIN/EngineeringWorkflow.git",
             readme,
         )
         self.assertNotIn("XiaoWeiKIN/ExecutionPlan", readme)
         self.assertIn(
-            "name: execution-plan",
+            "name: engineering-workflow",
             (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "name: engineering-execution-plan",
+            (
+                ROOT
+                / "engineering-execution-plan"
+                / "SKILL.md"
+            ).read_text(encoding="utf-8"),
         )
         self.assertIn(
             "name: engineering-research",
@@ -269,6 +282,16 @@ class RepositoryContractTestCase(unittest.TestCase):
             (ROOT / "engineering-case-study" / "SKILL.md").read_text(
                 encoding="utf-8"
             ),
+        )
+
+    def test_codex_agents_bootstrap_template_has_reserved_line_budget(self) -> None:
+        template = ROOT / "assets" / "harness-agents.md"
+        line_count = len(template.read_text(encoding="utf-8").splitlines())
+
+        self.assertLessEqual(line_count, 80)
+        self.assertIn(
+            "at or below 100 physical lines",
+            template.read_text(encoding="utf-8"),
         )
 
     def test_execplan_consumes_sealed_benchmark_contract(self) -> None:
@@ -403,15 +426,31 @@ class RepositoryContractTestCase(unittest.TestCase):
     def test_skills_work_when_installed_independently(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
-            execution_skill = base / "execution-plan"
-            execution_skill.mkdir()
-            for name in ("SKILL.md", "agents", "assets", "references", "scripts"):
+            workflow_skill = base / "engineering-workflow"
+            workflow_skill.mkdir()
+            for name in (
+                "SKILL.md",
+                "agents",
+                "assets",
+                "references",
+                "scripts",
+            ):
                 source = ROOT / name
-                destination = execution_skill / name
+                destination = workflow_skill / name
                 if source.is_dir():
                     shutil.copytree(source, destination)
                 else:
                     shutil.copy2(source, destination)
+            shutil.copytree(
+                ROOT / "engineering-execution-plan",
+                workflow_skill / "engineering-execution-plan",
+            )
+
+            execution_skill = base / "engineering-execution-plan"
+            shutil.copytree(
+                ROOT / "engineering-execution-plan",
+                execution_skill,
+            )
 
             research_skill = base / "engineering-research"
             shutil.copytree(ROOT / "engineering-research", research_skill)
@@ -453,6 +492,24 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "agents/openai.yaml",
             ):
                 self.assertTrue((benchmark_skill / relative).is_file())
+
+            workflow_repo = base / "workflow-repo"
+            workflow_repo.mkdir()
+            workflow_script = workflow_skill / "scripts" / "engineeringctl.py"
+            self.run_cli(
+                workflow_script,
+                workflow_repo,
+                "bootstrap",
+                "--profile",
+                "codex",
+                "--apply",
+            )
+            self.run_cli(
+                workflow_script,
+                workflow_repo,
+                "validate",
+                "--harness",
+            )
 
             execution_repo = base / "execution-repo"
             execution_repo.mkdir()

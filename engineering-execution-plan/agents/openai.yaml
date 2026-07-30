@@ -1,0 +1,4 @@
+interface:
+  display_name: "Engineering Execution Plan"
+  short_description: "Govern ADRs and resumable engineering execution"
+  default_prompt: "Use $engineering-execution-plan to turn sealed engineering evidence into an authorized architecture decision and a resumable implementation plan."
