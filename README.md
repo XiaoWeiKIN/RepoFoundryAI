@@ -5,19 +5,22 @@
 EngineeringWorkflow combines one aggregation Skill with four professional
 Skills:
 
-- **Engineering Workflow** bootstraps and validates an agent-first project
-  Harness, then routes follow-up work to the right professional Skill.
-- **Engineering Benchmark** organizes load tests, performance comparisons,
-  capacity validation, and regression tests into Suites, stable Scenarios, and
-  sealed Evidence Bundles.
-- **Engineering Research** turns source code, documents, experiments, and
-  external research into an auditable multi-document corpus and a sealed
-  Synthesis.
-- **Engineering Execution Plan** consumes completed Research and governs ADRs,
-  ExecPlans, Tasks, Checkpoints, Bugfixes, and technical debt.
-- **Engineering Case Study** uses code, Research, ADRs, and EP history to write
-  Chinese, English, or bilingual module designs, best practices, and delivery
-  stories when a user explicitly asks for a shareable case study.
+- **[Engineering Workflow](./SKILL.md)** bootstraps and validates an
+  agent-first project Harness, then routes follow-up work to the right
+  professional Skill.
+- **[Engineering Benchmark](./engineering-benchmark/SKILL.md)** organizes load
+  tests, performance comparisons, capacity validation, and regression tests
+  into Suites, stable Scenarios, and sealed Evidence Bundles.
+- **[Engineering Research](./engineering-research/SKILL.md)** turns source code,
+  documents, experiments, and external research into an auditable
+  multi-document corpus and a sealed Synthesis.
+- **[Engineering Execution Plan](./engineering-execution-plan/SKILL.md)**
+  consumes completed Research and governs ADRs, ExecPlans, Tasks, Checkpoints,
+  Bugfixes, and technical debt.
+- **[Engineering Case Study](./engineering-case-study/SKILL.md)** uses code,
+  Research, ADRs, and EP history to write Chinese, English, or bilingual module
+  designs, best practices, and delivery stories when a user explicitly asks
+  for a shareable case study.
 
 The four professional Skills share versioned file contracts and remain
 independently installable. The aggregation Skill composes the bundled
@@ -45,6 +48,20 @@ flowchart LR
 Documentation-to-code integrity is independent of any agent or hosting
 provider. `python3 -B scripts/check.py` is the repository's single validation
 entrypoint; GitHub Actions, GitLab CI, and other pipelines only invoke it.
+
+## Start with the artifact you need
+
+The root README is a map, not the complete specification. Start at the
+professional Skill for the artifact you need, then open the linked contract
+only when the task reaches that boundary.
+
+| Intent | Start here | Contract or example |
+|---|---|---|
+| Bootstrap an agent-navigable project Harness | [Engineering Workflow](./SKILL.md) | [Bootstrap contract](./references/bootstrap.md) |
+| Design or run a reproducible load test | [Engineering Benchmark](./engineering-benchmark/SKILL.md) | [Suite / Scenario / Run contract](./engineering-benchmark/references/contract.md) · [Routing examples](./engineering-benchmark/references/examples.md) |
+| Investigate an unknown or reconcile evidence | [Engineering Research](./engineering-research/SKILL.md) | [Research method](./engineering-research/references/research.md) · [Manifest contract](./engineering-research/references/manifest.md) |
+| Make an ADR or drive implementation through an EP | [Engineering Execution Plan](./engineering-execution-plan/SKILL.md) | [Artifact routing](./engineering-execution-plan/references/templates.md) · [Benchmark gates](./engineering-execution-plan/references/benchmark.md) |
+| Turn verified engineering work into a shareable article | [Engineering Case Study](./engineering-case-study/SKILL.md) | [Source evidence](./engineering-case-study/references/source-evidence.md) · [Article patterns](./engineering-case-study/references/article-patterns.md) |
 
 ## Why four professional Skills
 
@@ -92,6 +109,67 @@ These boundaries keep documents bounded:
 - `SYNTHESIS.md` keeps only conclusions required by downstream decisions.
 - `EXECPLAN.md` keeps current truth and open work; completed history moves into
   sealed Checkpoints.
+
+## What appears in a target repository
+
+The Skills write governance artifacts into the project being developed. This
+target layout is distinct from the EngineeringWorkflow distribution layout
+shown in the next section:
+
+```text
+target-repository/
+├── AGENTS.md
+├── ARCHITECTURE.md
+├── benchmarks/
+│   ├── BENCHMARKS.md
+│   └── suites/b-NNN_slug/
+│       ├── BENCHMARK.md
+│       ├── scenarios/bs-NNN_slug.md
+│       └── runs/br-NNN_slug/
+│           ├── SCENARIO.md
+│           ├── RESULT.md
+│           ├── EVIDENCE_MANIFEST.json
+│           └── artifacts/
+└── docs/
+    ├── index.md
+    ├── RESEARCH.md
+    ├── DECISIONS.md
+    ├── PLANS.md
+    ├── BUGFIXES.md
+    ├── research/
+    │   ├── active/r-NNN_slug/
+    │   └── completed/
+    ├── adr/adr-NNN_slug.md
+    ├── design-docs/
+    ├── exec-plans/
+    │   ├── active/ep-NNN_slug/
+    │   └── completed/
+    ├── bugfixes/
+    │   ├── active/
+    │   └── completed/
+    └── case-studies/                 # created only for requested publications
+```
+
+`benchmarks/` owns repeatable measurement facts. A Suite defines the subject
+and owner, a Scenario predeclares the protocol, and a Run seals one execution
+with its Scenario snapshot, Result, native artifacts, and Manifest. Existing
+load-test implementations can remain under paths such as `scripts/bench/`; the
+Scenario points to the executable entrypoint and every Run records an immutable
+`harness_revision`.
+
+`docs/` owns explanation, decisions, implementation governance, and shareable
+case studies. Research may interpret several sealed Runs. An ExecPlan declares
+Scenario IDs as completion gates and accepts exactly one passed sealed Run per
+gate from the same subject revision. The generated root indexes are rebuildable
+projections; the Suite, Scenario, Run bundle, Research package, ADR, and
+ExecPlan files remain the facts. See the
+[Benchmark contract](./engineering-benchmark/references/contract.md),
+[Research method](./engineering-research/references/research.md), and
+[ExecPlan artifact routing](./engineering-execution-plan/references/templates.md)
+for the full schemas and lifecycle rules.
+
+Each path appears only when its owning workflow is invoked. For example,
+Case Study output is never generated automatically.
 
 ## Repository layout and installation
 
@@ -211,6 +289,13 @@ limit is reported as a conflict before any write occurs.
 
 Create a long-lived Suite, complete its generated `BENCHMARK.md`, then create a
 reusable Scenario:
+
+The generated paths, identities, lifecycle, and Manifest digest are specified
+by the [Benchmark contract](./engineering-benchmark/references/contract.md).
+Use the [routing examples](./engineering-benchmark/references/examples.md) to
+choose Research, direct EP acceptance, or CI / Runbook consumption; use the
+[ExecPlan Benchmark contract](./engineering-execution-plan/references/benchmark.md)
+when one EP requires several Scenario gates.
 
 ```bash
 python3 "$BENCHCTL" --repo . new-suite \
@@ -664,7 +749,10 @@ python3 -B scripts/check.py
 The command depends only on repository content and Python 3.10+, not on any
 agent's private Skill directory.
 
-## Project documentation
+## Reference map
+
+Start with a Skill entrypoint. Open the narrower contract or example only when
+the task needs its detail.
 
 End-to-end:
 

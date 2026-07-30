@@ -273,6 +273,18 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertNotIn("XiaoWeiKIN/ExecutionPlan", readme)
         self.assertNotIn("XiaoWeiKIN/ExecutionPlan", chinese_readme)
+        for text in (readme, chinese_readme):
+            self.assertIn("target-repository/", text)
+            self.assertIn("benchmarks/", text)
+            self.assertIn("scripts/bench/", text)
+            self.assertIn(
+                "./engineering-benchmark/references/contract.md",
+                text,
+            )
+            self.assertIn(
+                "./engineering-execution-plan/references/benchmark.md",
+                text,
+            )
         self.assertIn(
             "name: engineering-workflow",
             (ROOT / "SKILL.md").read_text(encoding="utf-8"),

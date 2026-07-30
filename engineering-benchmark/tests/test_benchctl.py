@@ -467,6 +467,8 @@ class BenchctlTestCase(unittest.TestCase):
             self.run_cli(repository, "reindex")
             self.run_cli(repository, "validate")
             rebuilt = index.read_text(encoding="utf-8")
+            self.assertIn("A Suite (`B-NNN`)", rebuilt)
+            self.assertIn("flowchart LR", rebuilt)
             self.assertIn("[B-001]", rebuilt)
             self.assertIn("[B-002]", rebuilt)
 
