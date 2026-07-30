@@ -15,7 +15,6 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 <!-- EPCTL:ACTIVE:START -->
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
-| EP-005 | Externalize engineering specifications and fetch by Git revision | active | 2026-07-30 | [EXECPLAN](exec-plans/active/ep-005_externalize-engineering-specifications/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed
@@ -27,4 +26,5 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | EP-002 | Split engineering research from execution planning | completed | 2026-07-28 | [EXECPLAN](exec-plans/completed/ep-002_split-engineering-research/EXECPLAN.md) |
 | EP-003 | Restructure EngineeringWorkflow skill ownership | completed | 2026-07-30 | [EXECPLAN](exec-plans/completed/ep-003_restructure-engineering-workflow/EXECPLAN.md) |
 | EP-004 | Add Engineering Spec management to Harness bootstrap | completed | 2026-07-30 | [EXECPLAN](exec-plans/completed/ep-004_add-spec-management/EXECPLAN.md) |
+| EP-005 | Externalize engineering specifications and fetch by Git revision | completed | 2026-07-30 | [EXECPLAN](exec-plans/completed/ep-005_externalize-engineering-specifications/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->

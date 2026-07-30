@@ -1,0 +1,149 @@
+verified_revision: git:5e7e4a8
+[check] Skill package metadata and portability
+[check] engineering-workflow eval catalog
+[check] engineering-execution-plan eval catalog
+[check] engineering-benchmark eval catalog
+[check] engineering-case-study eval catalog
+[check] external Engineering Spec ownership
+[check] Markdown links
+[check] Engineering Research tests
+test_absolute_input_document_is_a_portability_warning (test_researchctl.ResearchctlTestCase) ... ok
+test_cancelled_research_requires_reason (test_researchctl.ResearchctlTestCase) ... ok
+test_complete_legacy_schema_1_topic_remains_reviewable (test_researchctl.ResearchctlTestCase) ... ok
+test_complete_legacy_schema_2_topic_remains_reviewable (test_researchctl.ResearchctlTestCase) ... ok
+test_controller_contract_paths_cannot_traverse (test_researchctl.ResearchctlTestCase) ... ok
+test_epctl_consumes_researchctl_conclusion (test_researchctl.ResearchctlTestCase) ... ok
+test_epctl_rejects_unsealed_manifest_for_concluded_research (test_researchctl.ResearchctlTestCase) ... ok
+test_init_and_managed_manifest_are_idempotent (test_researchctl.ResearchctlTestCase) ... ok
+test_learning_topic_rejects_unknown_evidence_reference (test_researchctl.ResearchctlTestCase) ... ok
+test_learning_topic_role_order_is_independent_of_titles (test_researchctl.ResearchctlTestCase) ... ok
+test_linked_conclusion_snapshots_and_detects_tampering (test_researchctl.ResearchctlTestCase) ... ok
+test_linked_corpus_keeps_entrypoint_and_source_in_place (test_researchctl.ResearchctlTestCase) ... ok
+test_linked_corpus_supports_multiple_roots_and_entrypoints (test_researchctl.ResearchctlTestCase) ... ok
+test_managed_conclusion_seals_in_place (test_researchctl.ResearchctlTestCase) ... ok
+test_managed_sync_and_drift_detection (test_researchctl.ResearchctlTestCase) ... ok
+test_missing_markdown_and_input_document_references_are_errors (test_researchctl.ResearchctlTestCase) ... ok
+test_new_topic_continues_after_ids_in_linked_corpus (test_researchctl.ResearchctlTestCase) ... ok
+test_new_topic_creates_auditable_round_evidence (test_researchctl.ResearchctlTestCase) ... ok
+test_new_topic_rejects_unknown_question_without_mutation (test_researchctl.ResearchctlTestCase) ... ok
+test_outside_repository_and_symlink_are_rejected (test_researchctl.ResearchctlTestCase) ... ok
+test_researchctl_accepts_legacy_package_without_manifest (test_researchctl.ResearchctlTestCase) ... ok
+test_review_ready_never_concludes_without_explicit_approval (test_researchctl.ResearchctlTestCase) ... ok
+test_review_ready_reopens_as_another_round (test_researchctl.ResearchctlTestCase) ... ok
+test_review_snapshot_tampering_survives_manifest_refresh_detection (test_researchctl.ResearchctlTestCase) ... ok
+test_sealed_snapshot_replaced_by_symlink_is_rejected_by_both_tools (test_researchctl.ResearchctlTestCase) ... ok
+test_sparse_snapshot_revision_gaps_are_valid (test_researchctl.ResearchctlTestCase) ... ok
+test_topic_ids_are_monotonic_and_unique_within_research (test_researchctl.ResearchctlTestCase) ... ok
+test_topic_quality_blocks_review_ready_until_complete (test_researchctl.ResearchctlTestCase) ... ok
+test_unassigned_owner_blocks_conclusion (test_researchctl.ResearchctlTestCase) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 5.305s
+
+OK
+[check] Engineering Benchmark tests
+test_complete_lifecycle_seals_native_artifacts (test_benchctl.BenchctlTestCase) ... ok
+test_errored_run_is_preserved_and_superseded (test_benchctl.BenchctlTestCase) ... ok
+test_init_is_idempotent_and_index_is_rebuildable (test_benchctl.BenchctlTestCase) ... ok
+test_run_requires_predeclared_scenario_and_complete_result (test_benchctl.BenchctlTestCase) ... ok
+test_scenario_requires_an_accountable_suite_owner (test_benchctl.BenchctlTestCase) ... ok
+test_scenario_snapshot_does_not_drift_with_reusable_protocol (test_benchctl.BenchctlTestCase) ... ok
+test_sealed_bundle_detects_changed_and_added_artifacts (test_benchctl.BenchctlTestCase) ... ok
+test_symlinked_artifact_cannot_be_sealed (test_benchctl.BenchctlTestCase) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 1.834s
+
+OK
+[check] Engineering Execution Plan tests
+test_accepted_adr_can_supersede_an_accepted_adr (test_epctl.EpctlTestCase) ... ok
+test_adr_dependency_cycles_and_duplicate_ids_are_rejected (test_epctl.EpctlTestCase) ... ok
+test_adr_requires_concluded_research_and_explicit_decision (test_epctl.EpctlTestCase) ... ok
+test_architecture_roots_and_design_refs_stay_under_registered_docs (test_epctl.EpctlTestCase) ... ok
+test_blocked_state_and_open_blocker_must_agree (test_epctl.EpctlTestCase) ... ok
+test_bugfix_can_escalate_to_existing_ep (test_epctl.EpctlTestCase) ... ok
+test_cancelled_ep_requires_reason_and_terminal_tasks (test_epctl.EpctlTestCase) ... ok
+test_cancelled_research_requires_reason_and_cannot_satisfy_gate (test_epctl.EpctlTestCase) ... ok
+test_checkpoint_chain_and_archive_move_history_together (test_epctl.EpctlTestCase) ... ok
+test_checkpoint_dry_run_does_not_mutate_plan_or_state (test_epctl.EpctlTestCase) ... ok
+test_checkpoint_payload_tampering_is_detected (test_epctl.EpctlTestCase) ... ok
+test_checkpoint_refuses_unresolved_template (test_epctl.EpctlTestCase) ... ok
+test_checkpoint_seals_history_and_preserves_live_work (test_epctl.EpctlTestCase) ... ok
+test_completed_ep_requires_acceptance_and_archives_atomically (test_epctl.EpctlTestCase) ... ok
+test_concurrent_creation_allocates_unique_ids (test_epctl.EpctlTestCase) ... ok
+test_declared_unknown_adr_schema_fails_closed (test_epctl.EpctlTestCase) ... ok
+test_does_not_depend_on_git_or_path_lookup (test_epctl.EpctlTestCase) ... ok
+test_duplicate_frontmatter_key_is_rejected (test_epctl.EpctlTestCase) ... ok
+test_execplan_gates_require_concluded_research_and_accepted_adr (test_epctl.EpctlTestCase) ... ok
+test_fix_index_repairs_all_artifact_projections (test_epctl.EpctlTestCase) ... ok
+test_fixed_bugfix_requires_verification (test_epctl.EpctlTestCase) ... ok
+test_high_water_prevents_id_reuse_and_supports_four_digits (test_epctl.EpctlTestCase) ... ok
+test_index_location_mismatch_is_detected (test_epctl.EpctlTestCase) ... ok
+test_init_is_idempotent_and_does_not_overwrite (test_epctl.EpctlTestCase) ... ok
+test_large_root_emits_checkpoint_warning (test_epctl.EpctlTestCase) ... ok
+test_linked_multi_adr_and_design_doc_corpus_is_dependency_closed (test_epctl.EpctlTestCase) ... ok
+test_managed_symlink_is_rejected (test_epctl.EpctlTestCase) ... ok
+test_markdown_parser_ignores_fenced_fake_sections (test_epctl.EpctlTestCase) ... ok
+test_research_conclusion_seals_synthesis_and_detects_tampering (test_epctl.EpctlTestCase) ... ok
+test_schema_11_adr_seals_typed_inputs_and_decision_outcome (test_epctl.EpctlTestCase) ... ok
+test_stale_index_is_detected_and_fixable (test_epctl.EpctlTestCase) ... ok
+test_task_blocked_by_matches_open_blockers (test_epctl.EpctlTestCase) ... ok
+test_task_dependency_cycle_is_rejected (test_epctl.EpctlTestCase) ... ok
+test_v20_execplan_remains_readable_and_valid (test_epctl.EpctlTestCase) ... ok
+test_v21_execplan_remains_readable_and_valid (test_epctl.EpctlTestCase) ... ok
+test_v22_execplan_remains_archive_compatible (test_epctl.EpctlTestCase) ... ok
+test_v24_execplan_remains_archive_compatible (test_epctl.EpctlTestCase) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 8.467s
+
+OK
+[check] Engineering Workflow and repository contract tests
+test_codex_bootstrap_apply_is_idempotent_and_validated (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_codex_bootstrap_dry_run_does_not_write (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_codex_bootstrap_path_conflict_is_non_destructive (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_codex_bootstrap_preserves_existing_files_at_line_limit (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_codex_bootstrap_rejects_101_line_agents_without_writing (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_execution_plan_cli_does_not_own_harness_commands (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_git_catalog_digest_failure_is_non_destructive (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_harness_validation_can_require_bootstrap (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_harness_validation_rejects_agents_growth (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_project_spec_is_routed_without_becoming_managed (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_spec_drift_requires_explicit_sync (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_spec_polyglot_selection (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_spec_sync_and_update_have_distinct_language_behavior (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_spec_sync_pins_commit_and_update_moves_to_ref_head (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_spec_validation_is_offline (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_unreachable_initial_ref_is_non_destructive (test_engineeringctl.EngineeringctlTestCase) ... ok
+test_cache_topology_example_is_an_executable_contract (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_ci_adapters_only_call_the_canonical_check (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_codex_agents_bootstrap_template_has_reserved_line_budget (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_example_does_not_copy_generated_manifest_sizes (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_execplan_consumes_sealed_benchmark_contract (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_project_brand_and_skill_names_are_independent (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_skills_work_when_installed_independently (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_workflow_has_no_bundled_engineering_spec_content (test_repository_contracts.RepositoryContractTestCase) ... ok
+test_catalog_rejects_dependency_cycles (test_spec_manager.SpecManagerBoundaryTestCase) ... ok
+test_detection_ignores_dependencies_and_managed_paths (test_spec_manager.SpecManagerBoundaryTestCase) ... ok
+test_git_catalog_rejects_symbolic_link_content (test_spec_manager.SpecManagerBoundaryTestCase) ... ok
+test_git_catalog_resolves_full_commit_without_checkout (test_spec_manager.SpecManagerBoundaryTestCase) ... ok
+test_manifest_rejects_embedded_git_credentials (test_spec_manager.SpecManagerBoundaryTestCase) ... ok
+test_manifest_rejects_project_path_traversal (test_spec_manager.SpecManagerBoundaryTestCase) ... ok
+test_required_spec_must_be_explicit_in_manifest (test_spec_manager.SpecManagerBoundaryTestCase) ... ok
+
+----------------------------------------------------------------------
+Ran 31 tests in 11.608s
+
+OK
+[check] Engineering Research repository validation
+{"errors": 0, "warnings": 0}
+[check] Engineering Execution Plan repository validation
+{"errors": 0, "warnings": 0}
+[check] Research index projection
+{"research": 1}
+[check] Execution artifact index projections
+{"plans": 5, "research": 1, "adrs": 4, "bugfixes": 0}
+[check] Git tracked-tree whitespace validation
+[check] Git staged whitespace validation
+[check] Git working-tree whitespace validation
+[check] all integrity checks passed

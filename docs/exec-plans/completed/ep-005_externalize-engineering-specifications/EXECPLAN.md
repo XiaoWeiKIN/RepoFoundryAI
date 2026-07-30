@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-005
 title: "Externalize engineering specifications and fetch by Git revision"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -13,9 +13,9 @@ architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
 architecture_gate_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:5e7e4a8"
+verification_evidence: ["artifact:docs/exec-plans/completed/ep-005_externalize-engineering-specifications/artifacts/exact-revision-check.txt"]
+archive_sha256: 65a94d21a6ec4930cfeaaab87586224a7bb8ed0f1a68c937947506a831b0f678
 created: 2026-07-30
 updated: 2026-07-30
 owner: "EngineeringWorkflow Maintainer"
@@ -51,10 +51,11 @@ against isolated Git fixtures and one real public-source preview.
 - Current state: ADR-005 is accepted. The public EngineeringSpecifications
   repository main is at `e93a0a3043d26be15a74d7f65c310f873a9569d0`
   with four validated Specs, contribution rules, changelog, and CI. Workflow
-  has no bundled normative content, all focused and canonical checks pass, and
-  the real public-source preview resolves that full remote commit.
-- Next action: commit the Workflow implementation, verify that exact commit in
-  a clean worktree, archive EP-005, and tag EngineeringSpecifications v0.1.0.
+  has no bundled normative content; implementation commit `5e7e4a8` passes the
+  canonical check in a clean detached worktree, and the real public-source
+  preview resolves the full remote commit.
+- Next action: archive EP-005 with `git:5e7e4a8` and the exact-revision check as
+  evidence.
 - Open questions: none that change the selected route. Exact error wording and
   test-fixture helpers remain local implementation choices.
 
@@ -272,6 +273,9 @@ empty because preview is non-mutating.
   check.
 - [x] Confirm `git diff --cached --name-only` excludes the four pre-existing
   unrelated worktree modifications.
+- [x] Check implementation commit `5e7e4a8` in an isolated detached worktree
+  with `python3 -B scripts/check.py`; expect all integrity checks to pass.
+  Evidence: `artifacts/exact-revision-check.txt`.
 
 ### Required Benchmark Scenario Gates
 
@@ -321,10 +325,12 @@ after end-to-end compatibility passes.
 - [x] (2026-07-30T15:19:00Z) Added and pushed EngineeringSpecifications
   contribution rules, changelog, and independent GitHub Actions check at
   `e93a0a3043d26be15a74d7f65c310f873a9569d0`.
-- [x] (2026-07-30T15:21:00Z) Staged only EP-005 implementation and evidence;
+- [x] (2026-07-30T15:18:00Z) Staged only EP-005 implementation and evidence;
   preserved the four pre-existing files matching incoming origin/main as
   unstaged changes.
-- [ ] Run validation, commit, archive, and tag the specification release.
+- [x] (2026-07-30T15:20:00Z) Committed Workflow implementation as `5e7e4a8`,
+  passed the full canonical check on that exact detached revision, and pushed
+  EngineeringSpecifications tag `v0.1.0`.
 
 ## Surprises & Discoveries
 
@@ -374,8 +380,11 @@ checked out or executed. Tests prove failure safety for missing refs, digest
 drift, path traversal, symlinks, embedded credentials, managed drift, and
 unavailable remotes during validation.
 
-Final implementation revision and archive evidence remain to be recorded after
-the clean-worktree verification.
+The verified Workflow implementation revision is `git:5e7e4a8`. The
+EngineeringSpecifications v0.1.0 tag points to
+`e93a0a3043d26be15a74d7f65c310f873a9569d0`. The only intentional unresolved
+item is license selection, which remains a repository-owner legal choice and
+does not affect Catalog consumption.
 
 ### Knowledge promotion candidates
 
@@ -412,7 +421,7 @@ resolved revision. `engineeringctl` owns default URL/ref and CLI options;
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-005_externalize-engineering-specifications/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-005_externalize-engineering-specifications/EXECPLAN.md`
 - EngineeringSpecifications check:
   `artifacts/engineering-specifications-check.txt`
 - Focused Workflow Spec tests: `artifacts/workflow-spec-tests.txt`
@@ -420,6 +429,7 @@ resolved revision. `engineeringctl` owns default URL/ref and CLI options;
 - Canonical Workflow check: `artifacts/workflow-check.txt`
 - Public GitHub source preview: `artifacts/public-source-preview.txt`
 - EP validation: `artifacts/epctl-validate.txt`
+- Exact Workflow revision check: `artifacts/exact-revision-check.txt`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
