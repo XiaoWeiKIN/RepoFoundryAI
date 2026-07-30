@@ -120,6 +120,26 @@
           "description": "跨协议比较由 Research 解释，不由 Benchmark 强行合并"
         }
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "同一个 EP 既要过延迟、吞吐、恢复三个压测，应该合成一个综合分数还是分别关联？",
+      "expected_output": "为每个独立协议保留一个稳定 Scenario，并在 EP v2.5 中通过 repeated --benchmark-scenario 预声明完整 Gate Set。三个 Scenario 分别映射到开发里程碑；最终在同一个 subject/verified revision 上各提供恰好一个 passed sealed Run。不要聚合跨环境或跨判定规则的总分。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "models_many_scenarios_to_one_ep",
+          "description": "多个 Scenario 可以共同作为一个 EP 的独立完成门禁"
+        },
+        {
+          "name": "keeps_gates_independent",
+          "description": "不把延迟、吞吐、恢复等不同协议压成不可解释的总分"
+        },
+        {
+          "name": "requires_same_final_revision",
+          "description": "每个 gate 的 passed Run 都绑定同一最终 revision"
+        }
+      ]
     }
   ]
 }

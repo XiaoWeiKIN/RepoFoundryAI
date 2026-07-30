@@ -213,7 +213,8 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.4"', plan_text)
+            self.assertIn('schema_version: "2.5"', plan_text)
+            self.assertIn("required_benchmark_scenarios: []", plan_text)
             self.assertIn("research_gate: satisfied", plan_text)
             self.assertIn("architecture_gate: satisfied", plan_text)
             self.complete_placeholders(plan)
@@ -325,44 +326,57 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             self.complete_placeholders(scenario)
-            result = Path(
+            second_scenario = Path(
                 self.run_cli(
                     BENCHCTL,
                     repository,
-                    "new-run",
-                    "BS-001",
+                    "new-scenario",
+                    "B-001",
                     "--slug",
-                    "verified-revision",
+                    "throughput",
                     "--title",
-                    "Verified revision",
-                    "--subject-revision",
-                    "git:verified-revision",
-                    "--harness-revision",
-                    "git:benchmark-harness",
+                    "Final revision throughput",
                 ).stdout.strip()
             )
-            self.complete_placeholders(result)
-            artifact = result.parent / "artifacts" / "latency.json"
-            artifact.write_text('{"p95_ms":91}\n', encoding="utf-8")
-            manifest_path = Path(
-                self.run_cli(
-                    BENCHCTL,
-                    repository,
-                    "seal-run",
-                    "BR-001",
-                    "--outcome",
-                    "passed",
-                    "--executed-by",
-                    "Contract Test Operator",
-                ).stdout.strip()
-            )
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            evidence = (
-                "benchmark:BR-001@sha256:"
-                + manifest["payload_sha256"]
-            )
+            self.complete_placeholders(second_scenario)
 
             self.run_cli(EPCTL, repository, "init")
+            missing_scenario = self.run_cli(
+                EPCTL,
+                repository,
+                "new-ep",
+                "--slug",
+                "missing-benchmark",
+                "--title",
+                "Missing benchmark",
+                "--research-not-required-reason",
+                "The accepted route is already fixed.",
+                "--architecture-not-required-reason",
+                "This plan only verifies the fixed route.",
+                "--benchmark-scenario",
+                "BS-999",
+                expected=2,
+            )
+            self.assertIn("expected exactly one local", missing_scenario.stderr)
+            duplicate_scenario = self.run_cli(
+                EPCTL,
+                repository,
+                "new-ep",
+                "--slug",
+                "duplicate-benchmark",
+                "--title",
+                "Duplicate benchmark",
+                "--research-not-required-reason",
+                "The accepted route is already fixed.",
+                "--architecture-not-required-reason",
+                "This plan only verifies the fixed route.",
+                "--benchmark-scenario",
+                "BS-001",
+                "--benchmark-scenario",
+                "BS-001",
+                expected=2,
+            )
+            self.assertIn("must be unique", duplicate_scenario.stderr)
             plan = Path(
                 self.run_cli(
                     EPCTL,
@@ -376,8 +390,143 @@ class RepositoryContractTestCase(unittest.TestCase):
                     "The accepted route is already fixed.",
                     "--architecture-not-required-reason",
                     "This plan only verifies the fixed route.",
+                    "--benchmark-scenario",
+                    "BS-001",
+                    "--benchmark-scenario",
+                    "BS-002",
                 ).stdout.strip()
             )
+            plan_text = plan.read_text(encoding="utf-8")
+            self.assertIn('schema_version: "2.5"', plan_text)
+            self.assertIn(
+                'required_benchmark_scenarios: ["BS-001", "BS-002"]',
+                plan_text,
+            )
+            status = json.loads(
+                self.run_cli(EPCTL, repository, "status", "--json").stdout
+            )
+            self.assertEqual(
+                status["plans"][0]["benchmark_scenarios"],
+                ["BS-001", "BS-002"],
+            )
+
+            first_result = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "new-run",
+                    "BS-001",
+                    "--slug",
+                    "verified-latency",
+                    "--title",
+                    "Verified latency",
+                    "--subject-revision",
+                    "git:verified-revision",
+                    "--harness-revision",
+                    "git:benchmark-harness",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(first_result)
+            first_artifact = (
+                first_result.parent / "artifacts" / "latency.json"
+            )
+            first_artifact.write_text('{"p95_ms":91}\n', encoding="utf-8")
+            first_manifest_path = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "seal-run",
+                    "BR-001",
+                    "--outcome",
+                    "passed",
+                    "--executed-by",
+                    "Contract Test Operator",
+                ).stdout.strip()
+            )
+            first_manifest = json.loads(
+                first_manifest_path.read_text(encoding="utf-8")
+            )
+            first_evidence = (
+                "benchmark:BR-001@sha256:"
+                + first_manifest["payload_sha256"]
+            )
+            second_result = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "new-run",
+                    "BS-002",
+                    "--slug",
+                    "verified-throughput",
+                    "--title",
+                    "Verified throughput",
+                    "--subject-revision",
+                    "git:verified-revision",
+                    "--harness-revision",
+                    "git:benchmark-harness",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(second_result)
+            second_artifact = (
+                second_result.parent / "artifacts" / "throughput.json"
+            )
+            second_artifact.write_text('{"rps":12000}\n', encoding="utf-8")
+            second_manifest_path = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "seal-run",
+                    "BR-002",
+                    "--outcome",
+                    "passed",
+                    "--executed-by",
+                    "Contract Test Operator",
+                ).stdout.strip()
+            )
+            second_manifest = json.loads(
+                second_manifest_path.read_text(encoding="utf-8")
+            )
+            second_evidence = (
+                "benchmark:BR-002@sha256:"
+                + second_manifest["payload_sha256"]
+            )
+            duplicate_result = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "new-run",
+                    "BS-001",
+                    "--slug",
+                    "verified-latency-rerun",
+                    "--title",
+                    "Verified latency rerun",
+                    "--subject-revision",
+                    "git:verified-revision",
+                    "--harness-revision",
+                    "git:benchmark-harness",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(duplicate_result)
+            duplicate_manifest_path = Path(
+                self.run_cli(
+                    BENCHCTL,
+                    repository,
+                    "seal-run",
+                    "BR-003",
+                    "--outcome",
+                    "passed",
+                    "--executed-by",
+                    "Contract Test Operator",
+                ).stdout.strip()
+            )
+            duplicate_manifest = json.loads(
+                duplicate_manifest_path.read_text(encoding="utf-8")
+            )
+            duplicate_evidence = (
+                "benchmark:BR-003@sha256:"
+                + duplicate_manifest["payload_sha256"]
+            )
+
             self.complete_placeholders(plan)
             mismatched = self.run_cli(
                 EPCTL,
@@ -387,12 +536,50 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "--verified-revision",
                 "git:different-revision",
                 "--evidence",
-                evidence,
+                first_evidence,
+                "--evidence",
+                second_evidence,
                 expected=2,
             )
             self.assertIn(
                 "does not match ExecPlan verified_revision",
                 mismatched.stderr,
+            )
+            self.assertTrue(plan.is_file())
+            incomplete_gate_set = self.run_cli(
+                EPCTL,
+                repository,
+                "archive-ep",
+                "EP-001",
+                "--verified-revision",
+                "git:verified-revision",
+                "--evidence",
+                first_evidence,
+                expected=2,
+            )
+            self.assertIn(
+                "Required Benchmark Scenario BS-002 has no valid",
+                incomplete_gate_set.stderr,
+            )
+            self.assertTrue(plan.is_file())
+            ambiguous_gate = self.run_cli(
+                EPCTL,
+                repository,
+                "archive-ep",
+                "EP-001",
+                "--verified-revision",
+                "git:verified-revision",
+                "--evidence",
+                first_evidence,
+                "--evidence",
+                duplicate_evidence,
+                "--evidence",
+                second_evidence,
+                expected=2,
+            )
+            self.assertIn(
+                "BS-001 must have exactly one accepted Run",
+                ambiguous_gate.stderr,
             )
             self.assertTrue(plan.is_file())
             archived = Path(
@@ -404,14 +591,17 @@ class RepositoryContractTestCase(unittest.TestCase):
                     "--verified-revision",
                     "git:verified-revision",
                     "--evidence",
-                    evidence,
+                    first_evidence,
+                    "--evidence",
+                    second_evidence,
                 ).stdout.strip()
             )
             archived_text = archived.read_text(encoding="utf-8")
-            self.assertIn(evidence, archived_text)
+            self.assertIn(first_evidence, archived_text)
+            self.assertIn(second_evidence, archived_text)
             self.run_cli(EPCTL, repository, "validate")
 
-            artifact.write_text('{"p95_ms":191}\n', encoding="utf-8")
+            first_artifact.write_text('{"p95_ms":191}\n', encoding="utf-8")
             drift = self.run_cli(
                 EPCTL,
                 repository,

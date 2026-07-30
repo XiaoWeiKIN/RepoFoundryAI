@@ -70,6 +70,28 @@ EXECPLAN_SECTIONS = (
 )
 EXECPLAN_V21_SECTIONS = ("Current Snapshot",)
 EXECPLAN_V22_SECTIONS = ("Research and Architecture Inputs",)
+EXECPLAN_V25_SECTIONS = ("Benchmark Gate Set",)
+BENCHMARK_SUITE_SECTIONS = (
+    "Purpose and Scope",
+    "Subject Under Test",
+    "Consumers",
+    "Ownership and Lifecycle",
+    "Non-goals",
+    "Safety and Data Policy",
+)
+BENCHMARK_SCENARIO_SECTIONS = (
+    "Question and Hypothesis",
+    "Subject, Control, and Variants",
+    "Variables",
+    "Dataset and Traffic Model",
+    "Environment and Isolation",
+    "Procedure and Commands",
+    "Metrics and Correctness Checks",
+    "Decision Rule",
+    "Evidence Requirements",
+    "Safety, Cleanup, and Recovery",
+    "Boundaries and Extrapolation",
+)
 CHECKPOINT_SECTIONS = (
     "Handoff Summary",
     "Next Action At Checkpoint",
@@ -154,6 +176,7 @@ ID_RE = {
     "CP": re.compile(r"\bCP-(\d{3,})\b", re.IGNORECASE),
     "R": re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE),
     "ADR": re.compile(r"\bADR-(\d{3,})\b", re.IGNORECASE),
+    "BS": re.compile(r"\bBS-(\d{3,})\b", re.IGNORECASE),
 }
 BENCHMARK_EVIDENCE_RE = re.compile(
     r"^benchmark:(BR-\d{3,})@sha256:([0-9a-f]{64})$"
@@ -978,6 +1001,37 @@ def parse_string_array(value: str, field: str) -> list[str]:
     if len(set(raw)) != len(raw):
         raise EpctlError(f"{field} contains duplicate values")
     return raw
+
+
+def normalize_benchmark_scenario_ids(values: Iterable[str]) -> list[str]:
+    raw = list(values)
+    normalized = normalize_reference_ids(raw, "BS")
+    if len(normalized) != len(raw):
+        raise EpctlError("--benchmark-scenario values must be unique")
+    return normalized
+
+
+def benchmark_gate_rows(scenario_ids: Iterable[str]) -> str:
+    values = list(scenario_ids)
+    if not values:
+        return "| — | No Benchmark Scenario gate declared for this EP. | — |"
+    return "\n".join(
+        f"| {scenario_id} | <!-- REQUIRED: State the development decision or "
+        "milestone gated by this Scenario. --> | Exactly one passed sealed Run "
+        "at `verified_revision` |"
+        for scenario_id in values
+    )
+
+
+def benchmark_acceptance_items(scenario_ids: Iterable[str]) -> str:
+    values = list(scenario_ids)
+    if not values:
+        return "- No required Benchmark Scenario gates."
+    return "\n".join(
+        f"- [ ] `{scenario_id}` has exactly one passed sealed Run attached through "
+        "`--evidence` at the final `verified_revision`."
+        for scenario_id in values
+    )
 
 
 def marker_block(kind: str) -> str:
@@ -1983,6 +2037,7 @@ def new_ep(
     research_values: Iterable[str],
     adr_values: Iterable[str],
     design_values: Iterable[str],
+    benchmark_scenario_values: Iterable[str],
     architecture_entrypoint_value: str,
     research_not_required_reason: str,
     architecture_not_required_reason: str,
@@ -1990,6 +2045,9 @@ def new_ep(
     validate_slug(slug)
     research_refs = normalize_reference_ids(research_values, "R")
     adr_refs = normalize_reference_ids(adr_values, "ADR")
+    benchmark_scenario_refs = normalize_benchmark_scenario_ids(
+        benchmark_scenario_values
+    )
     raw_design_values = list(design_values)
     research_reason = inline_text(research_not_required_reason)
     architecture_reason = inline_text(architecture_not_required_reason)
@@ -2020,6 +2078,17 @@ def new_ep(
         )
     with repo_lock(repo):
         init_repo(repo)
+        for scenario_id in benchmark_scenario_refs:
+            scenario_errors = validate_benchmark_scenario_reference(
+                repo,
+                scenario_id,
+            )
+            if scenario_errors:
+                raise EpctlError(
+                    f"{scenario_id} is not a valid predeclared Benchmark "
+                    "Scenario:\n- "
+                    + "\n- ".join(scenario_errors)
+                )
         design_refs = normalize_document_refs(
             repo,
             raw_design_values,
@@ -2092,6 +2161,16 @@ def new_ep(
                 "RESEARCH_GATE_REASON": yaml_string(research_reason),
                 "ADR_REFS": json.dumps(adr_refs, ensure_ascii=False),
                 "DESIGN_REFS": json.dumps(design_refs, ensure_ascii=False),
+                "REQUIRED_BENCHMARK_SCENARIOS": json.dumps(
+                    benchmark_scenario_refs,
+                    ensure_ascii=False,
+                ),
+                "BENCHMARK_GATE_ROWS": benchmark_gate_rows(
+                    benchmark_scenario_refs
+                ),
+                "BENCHMARK_ACCEPTANCE_ITEMS": benchmark_acceptance_items(
+                    benchmark_scenario_refs
+                ),
                 "ARCHITECTURE_ENTRYPOINT": yaml_string(
                     architecture_entrypoint
                 ),
@@ -2245,6 +2324,93 @@ def plan_repository(path: Path) -> Path:
     raise EpctlError(f"ExecPlan is not below a docs directory: {path}")
 
 
+def validate_benchmark_scenario_reference(
+    repo: Path,
+    scenario_id: str,
+) -> list[str]:
+    paths = sorted(
+        (repo / "benchmarks" / "suites").glob(
+            f"*/scenarios/{scenario_id.lower()}_*.md"
+        )
+    )
+    if len(paths) != 1:
+        return [
+            f"{scenario_id}: expected exactly one local predeclared Scenario, "
+            f"found {len(paths)}"
+        ]
+    path = paths[0]
+    try:
+        reject_symlink_path(repo, path)
+        text = path.read_text(encoding="utf-8")
+        data, _, _ = parse_frontmatter(text)
+    except (EpctlError, OSError, UnicodeDecodeError) as exc:
+        return [f"{path}: invalid Benchmark Scenario: {exc}"]
+    errors: list[str] = []
+    expected_fields = {
+        "schema_version": "1",
+        "id": scenario_id,
+        "status": "active",
+    }
+    for field, expected in expected_fields.items():
+        if data.get(field) != expected:
+            errors.append(
+                f"{path}: {field} must be {expected!r}, "
+                f"found {data.get(field)!r}"
+            )
+    if not inline_text(data.get("title", "")):
+        errors.append(f"{path}: title must be a non-empty string")
+    errors.extend(
+        validate_required_sections(
+            path,
+            text,
+            BENCHMARK_SCENARIO_SECTIONS,
+        )
+    )
+    suite_id = data.get("suite_id", "")
+    if not re.fullmatch(r"B-\d{3,}", suite_id, re.IGNORECASE):
+        errors.append(f"{path}: invalid suite_id {suite_id!r}")
+    else:
+        suite_path = path.parent.parent / "BENCHMARK.md"
+        try:
+            reject_symlink_path(repo, suite_path)
+            suite_text = suite_path.read_text(encoding="utf-8")
+            suite_data, _, _ = parse_frontmatter(suite_text)
+        except (EpctlError, OSError, UnicodeDecodeError) as exc:
+            errors.append(f"{suite_path}: invalid Benchmark Suite: {exc}")
+        else:
+            if suite_data.get("schema_version") != "1":
+                errors.append(f"{suite_path}: schema_version must be '1'")
+            if suite_data.get("id") != suite_id:
+                errors.append(
+                    f"{suite_path}: id does not match Scenario suite_id {suite_id}"
+                )
+            if suite_data.get("status") != "active":
+                errors.append(f"{suite_path}: status must be 'active'")
+            if not inline_text(suite_data.get("title", "")):
+                errors.append(f"{suite_path}: title must be a non-empty string")
+            owner = inline_text(suite_data.get("owner", ""))
+            if not owner or owner == "Unassigned":
+                errors.append(
+                    f"{suite_path}: owner must identify an accountable owner"
+                )
+            errors.extend(
+                validate_required_sections(
+                    suite_path,
+                    suite_text,
+                    BENCHMARK_SUITE_SECTIONS,
+                )
+            )
+            if marker_names(suite_text):
+                errors.append(
+                    f"{suite_path}: unresolved REQUIRED marker in Benchmark Suite"
+                )
+    if marker_names(text):
+        errors.append(
+            f"{path}: unresolved REQUIRED marker in Benchmark Scenario"
+        )
+    return errors
+
+
 def benchmark_manifest_digest(manifest: dict[str, object]) -> str:
     payload = dict(manifest)
     payload["payload_sha256"] = ""
@@ -2332,13 +2498,16 @@ def validate_benchmark_evidence_reference(
     repo: Path,
     reference: str,
     verified_revision: str,
-) -> list[str]:
+) -> tuple[list[str], str | None]:
     match = BENCHMARK_EVIDENCE_RE.fullmatch(reference)
     if not match:
-        return [
-            "Benchmark evidence must use "
-            "benchmark:BR-NNN@sha256:<manifest-payload-sha256>"
-        ]
+        return (
+            [
+                "Benchmark evidence must use "
+                "benchmark:BR-NNN@sha256:<manifest-payload-sha256>"
+            ],
+            None,
+        )
     run_id, referenced_digest = match.groups()
     manifest_paths = sorted(
         (
@@ -2350,18 +2519,21 @@ def validate_benchmark_evidence_reference(
         )
     )
     if len(manifest_paths) != 1:
-        return [
-            f"{reference}: expected exactly one local sealed {run_id}, "
-            f"found {len(manifest_paths)}"
-        ]
+        return (
+            [
+                f"{reference}: expected exactly one local sealed {run_id}, "
+                f"found {len(manifest_paths)}"
+            ],
+            None,
+        )
     manifest_path = manifest_paths[0]
     try:
         reject_symlink_path(repo, manifest_path)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (EpctlError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        return [f"{manifest_path}: invalid Benchmark Manifest: {exc}"]
+        return [f"{manifest_path}: invalid Benchmark Manifest: {exc}"], None
     if not isinstance(manifest, dict):
-        return [f"{manifest_path}: Benchmark Manifest must be an object"]
+        return [f"{manifest_path}: Benchmark Manifest must be an object"], None
 
     errors: list[str] = []
     expected_fields = {
@@ -2477,24 +2649,55 @@ def validate_benchmark_evidence_reference(
                     f"{scenario_path}: sealed Benchmark Scenario has "
                     "required placeholders"
                 )
-    return errors
+    scenario_id = manifest.get("scenario_id")
+    return errors, scenario_id if isinstance(scenario_id, str) else None
 
 
 def validate_benchmark_evidence(
     repo: Path,
     evidence: Iterable[str],
     verified_revision: str,
+    required_scenarios: Iterable[str] | None = None,
 ) -> list[str]:
     errors: list[str] = []
+    declared = (
+        list(required_scenarios)
+        if required_scenarios is not None
+        else None
+    )
+    accepted_by_scenario: dict[str, list[str]] = {}
     for reference in evidence:
         if reference.startswith("benchmark:"):
-            errors.extend(
+            reference_errors, scenario_id = (
                 validate_benchmark_evidence_reference(
                     repo,
                     reference,
                     verified_revision,
                 )
             )
+            errors.extend(reference_errors)
+            if not reference_errors and scenario_id:
+                accepted_by_scenario.setdefault(scenario_id, []).append(
+                    reference
+                )
+    if declared is not None:
+        declared_set = set(declared)
+        for scenario_id in sorted(set(accepted_by_scenario) - declared_set):
+            errors.append(
+                f"Benchmark evidence belongs to undeclared Scenario {scenario_id}"
+            )
+        for scenario_id in declared:
+            references = accepted_by_scenario.get(scenario_id, [])
+            if not references:
+                errors.append(
+                    f"Required Benchmark Scenario {scenario_id} has no valid "
+                    "passed sealed Run evidence"
+                )
+            elif len(references) > 1:
+                errors.append(
+                    f"Required Benchmark Scenario {scenario_id} must have "
+                    "exactly one accepted Run evidence"
+                )
     return errors
 
 
@@ -2535,9 +2738,15 @@ def checkpoint_plan(
             raise EpctlError("checkpoint requires a v2 EXECPLAN.md")
         text = plan_path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
-        if data.get("schema_version") not in {"2.1", "2.2", "2.3", "2.4"}:
+        if data.get("schema_version") not in {
+            "2.1",
+            "2.2",
+            "2.3",
+            "2.4",
+            "2.5",
+        }:
             raise EpctlError(
-                "checkpoint requires schema_version 2.1, 2.2, 2.3 or 2.4 "
+                "checkpoint requires schema_version 2.1 through 2.5 "
                 "and ## Current Snapshot"
             )
         errors, _ = validate_plan(plan_path)
@@ -3333,9 +3542,17 @@ def validate_plan(
     plan_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "EP"))
     schema_version = data.get("schema_version", "2.0")
-    if schema_version not in {"2.0", "2.1", "2.2", "2.3", "2.4"}:
+    required_benchmark_scenarios: list[str] | None = None
+    if schema_version not in {
+        "2.0",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+    }:
         errors.append(f"{path}: unsupported schema_version {schema_version!r}")
-    if schema_version in {"2.1", "2.2", "2.3", "2.4"}:
+    if schema_version in {"2.1", "2.2", "2.3", "2.4", "2.5"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V21_SECTIONS)
         )
@@ -3346,7 +3563,7 @@ def validate_plan(
             f"{path}: v2.0 plan has no bounded checkpoint model; "
             "add schema_version 2.1 and ## Current Snapshot before checkpointing"
         )
-    if schema_version in {"2.2", "2.3", "2.4"}:
+    if schema_version in {"2.2", "2.3", "2.4", "2.5"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V22_SECTIONS)
         )
@@ -3363,7 +3580,7 @@ def validate_plan(
             )
             design_refs = (
                 parse_string_array(data.get("design_refs", ""), "design_refs")
-                if schema_version == "2.4"
+                if schema_version in {"2.4", "2.5"}
                 else []
             )
         except EpctlError as exc:
@@ -3433,7 +3650,7 @@ def validate_plan(
                     f"{path}: not_required Architecture Gate requires a reason"
                 )
             if design_refs or (
-                schema_version == "2.4"
+                schema_version in {"2.4", "2.5"}
                 and inline_text(data.get("architecture_entrypoint", ""))
             ):
                 errors.append(
@@ -3493,7 +3710,7 @@ def validate_plan(
                         f"{path}: {adr_id} requires missing Design Docs "
                         + ", ".join(sorted(missing_designs))
                     )
-        if schema_version == "2.4":
+        if schema_version in {"2.4", "2.5"}:
             if "design_refs" not in data:
                 errors.append(f"{path}: missing frontmatter field design_refs")
             if "architecture_entrypoint" not in data:
@@ -3525,6 +3742,36 @@ def validate_plan(
                         f"{path}: Research and Architecture Inputs must mention "
                         f"{architecture_entrypoint}"
                     )
+    if schema_version == "2.5":
+        errors.extend(
+            validate_required_sections(path, text, EXECPLAN_V25_SECTIONS)
+        )
+        if "required_benchmark_scenarios" not in data:
+            errors.append(
+                f"{path}: missing frontmatter field "
+                "required_benchmark_scenarios"
+            )
+        try:
+            required_benchmark_scenarios = parse_reference_array(
+                data.get("required_benchmark_scenarios", ""),
+                "BS",
+                "required_benchmark_scenarios",
+            )
+        except EpctlError as exc:
+            errors.append(f"{path}: {exc}")
+            required_benchmark_scenarios = []
+        benchmark_gate_set = section(text, "Benchmark Gate Set") or ""
+        for scenario_id in required_benchmark_scenarios:
+            errors.extend(
+                validate_benchmark_scenario_reference(
+                    repository_from_artifact(path),
+                    scenario_id,
+                )
+            )
+            if scenario_id not in benchmark_gate_set:
+                errors.append(
+                    f"{path}: Benchmark Gate Set must mention {scenario_id}"
+                )
     status = data.get("status", "")
     location = "completed" if "/completed/" in path.as_posix() else "active"
     allowed = PLAN_COMPLETED_STATUSES if location == "completed" else PLAN_ACTIVE_STATUSES
@@ -3539,7 +3786,7 @@ def validate_plan(
     completing = archive_status == "completed" or (
         archive_status is None and status == "completed"
     )
-    if schema_version in {"2.3", "2.4"}:
+    if schema_version in {"2.3", "2.4", "2.5"}:
         attestation_version = schema_version
         if "verified_revision" not in data:
             errors.append(f"{path}: missing frontmatter field verified_revision")
@@ -3572,6 +3819,7 @@ def validate_plan(
                     plan_repository(path),
                     verification_evidence,
                     verified_revision,
+                    required_benchmark_scenarios,
                 )
             )
         elif status in PLAN_ACTIVE_STATUSES and (
@@ -3697,7 +3945,7 @@ def validate_plan(
         errors.append(
             f"{path}: Current Snapshot must link {latest_checkpoint}"
         )
-    if schema_version in {"2.1", "2.2", "2.3", "2.4"} and not re.search(
+    if schema_version in {"2.1", "2.2", "2.3", "2.4", "2.5"} and not re.search(
         r"(?im)^-\s+Next action:\s+\S",
         snapshot,
     ):
@@ -4421,7 +4669,8 @@ def archive_ep(
             )
         text = path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
-        has_completion_attestation = data.get("schema_version") in {"2.3", "2.4"}
+        schema_version = data.get("schema_version")
+        has_completion_attestation = schema_version in {"2.3", "2.4", "2.5"}
         if outcome == "completed" and has_completion_attestation:
             if not verified_revision:
                 raise EpctlError(
@@ -4431,10 +4680,18 @@ def archive_ep(
                 raise EpctlError(
                     "Completed v2.3+ EP requires at least one --evidence"
                 )
+            required_benchmark_scenarios: list[str] | None = None
+            if schema_version == "2.5":
+                required_benchmark_scenarios = parse_reference_array(
+                    data.get("required_benchmark_scenarios", ""),
+                    "BS",
+                    "required_benchmark_scenarios",
+                )
             benchmark_errors = validate_benchmark_evidence(
                 repo,
                 verification_evidence,
                 verified_revision,
+                required_benchmark_scenarios,
             )
             if benchmark_errors:
                 raise EpctlError(
@@ -4640,6 +4897,14 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
         except EpctlError:
             continue
         acceptance = checkboxes(section(text, "Validation and Acceptance") or "")
+        try:
+            benchmark_scenarios = parse_reference_array(
+                data.get("required_benchmark_scenarios", "[]"),
+                "BS",
+                "required_benchmark_scenarios",
+            )
+        except EpctlError:
+            benchmark_scenarios = []
         tasks = []
         for task in task_files(path):
             try:
@@ -4663,6 +4928,7 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                     "architecture_entrypoint",
                     "",
                 ),
+                "benchmark_scenarios": benchmark_scenarios,
                 "acceptance": f"{sum(acceptance)}/{len(acceptance)}",
                 "tasks": f"{sum(s in {'done', 'cancelled'} for s in tasks)}/{len(tasks)}"
                 if tasks
@@ -4747,14 +5013,15 @@ def print_status(repo: Path, as_json: bool) -> None:
         )
     print()
     print(
-        "| EP | Title | Status | Gates (R/ADR) | Acceptance | Tasks | "
+        "| EP | Title | Status | Gates (R/ADR/Benchmark) | Acceptance | Tasks | "
         "Open blockers | Checkpoint | Root | Events | Last activity |"
     )
     print("|---|---|---|---|---|---|---|---|---|---|---|")
     for row in payload["plans"]:
         print(
             f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
-            f"{row['research_gate']}/{row['architecture_gate']} | "
+            f"{row['research_gate']}/{row['architecture_gate']}/"
+            f"{len(row['benchmark_scenarios'])} | "
             f"{row['acceptance']} | {row['tasks']} | {row['open_blockers']} | "
             f"{row['latest_checkpoint'] or '—'} ({row['checkpoints']}) | "
             f"{row['root_lines']}L/{row['root_bytes']}B | "
@@ -4868,7 +5135,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ep = sub.add_parser(
         "new-ep",
-        help="Create a gated v2.4 ExecPlan from an architecture input set",
+        help="Create a gated v2.5 ExecPlan from architecture and benchmark inputs",
     )
     ep.add_argument("--slug", required=True)
     ep.add_argument("--title", required=True)
@@ -4893,6 +5160,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="PATH",
         help="Repository-relative Design Doc; repeat for multiple documents",
+    )
+    ep.add_argument(
+        "--benchmark-scenario",
+        action="append",
+        default=[],
+        metavar="BS-NNN",
+        help=(
+            "Predeclared Benchmark Scenario required for completion; "
+            "repeat for multiple gates"
+        ),
     )
     ep.add_argument(
         "--architecture-entrypoint",
@@ -5045,6 +5322,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.research,
                     args.adr,
                     args.design,
+                    args.benchmark_scenario,
                     args.architecture_entrypoint,
                     args.research_not_required_reason,
                     args.architecture_not_required_reason,

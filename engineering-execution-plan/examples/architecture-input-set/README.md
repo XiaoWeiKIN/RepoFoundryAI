@@ -23,7 +23,7 @@ flowchart LR
     D11["oql-dynamic-attribute-typing.md"]
     D12["spans-env-placement-routing.md"]
     IDX["index.md"]
-    EP["EP-001 v2.4"]
+    EP["EP-001 v2.5"]
 
     A11 -->|"depends_on"| A10
     A12 -->|"depends_on"| A10
@@ -110,7 +110,7 @@ python3 "$EPCTL" --repo . new-ep \
   --architecture-entrypoint docs/design-docs/index.md
 ```
 
-生成的 v2.4 frontmatter 包含：
+生成的 v2.5 frontmatter 包含：
 
 ```yaml
 research_gate: not_required
@@ -118,6 +118,7 @@ adr_refs: ["ADR-010", "ADR-011", "ADR-012"]
 design_refs: ["docs/design-docs/oql-dynamic-attribute-typing.md", "docs/design-docs/spans-env-placement-routing.md"]
 architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
+required_benchmark_scenarios: []
 ```
 
 如果只写 `--adr ADR-011 --adr ADR-012`，命令会因缺少依赖闭包中的 ADR-010

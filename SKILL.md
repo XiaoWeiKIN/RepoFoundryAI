@@ -54,7 +54,7 @@ Owner、架构、SLO 或安全控制。
 
 | 请求 | 使用 Skill |
 |---|---|
-| 预声明并执行性能、容量或回归测量 | `engineering-benchmark` |
+| 预声明并执行性能、容量或回归测量；为一个 EP 建立多个独立测量门禁 | `engineering-benchmark`，再由 `engineering-execution-plan` 声明 Gate Set |
 | 搜集证据、解释矛盾、维护多文档 Research | `engineering-research` |
 | ADR、ExecPlan、Task、Checkpoint、Bugfix | `engineering-execution-plan` |
 | 基于真实代码和过程证据撰写工程分享 | `engineering-case-study` |
