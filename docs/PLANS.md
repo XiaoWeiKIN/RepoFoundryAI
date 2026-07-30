@@ -15,7 +15,6 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 <!-- EPCTL:ACTIVE:START -->
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
-| EP-004 | Add Engineering Spec management to Harness bootstrap | active | 2026-07-30 | [EXECPLAN](exec-plans/active/ep-004_add-spec-management/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed
@@ -26,4 +25,5 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | EP-001 | Add research and ADR lifecycle | completed | 2026-07-28 | [EXECPLAN](exec-plans/completed/ep-001_add-research-adr-lifecycle/EXECPLAN.md) |
 | EP-002 | Split engineering research from execution planning | completed | 2026-07-28 | [EXECPLAN](exec-plans/completed/ep-002_split-engineering-research/EXECPLAN.md) |
 | EP-003 | Restructure EngineeringWorkflow skill ownership | completed | 2026-07-30 | [EXECPLAN](exec-plans/completed/ep-003_restructure-engineering-workflow/EXECPLAN.md) |
+| EP-004 | Add Engineering Spec management to Harness bootstrap | completed | 2026-07-30 | [EXECPLAN](exec-plans/completed/ep-004_add-spec-management/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->

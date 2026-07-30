@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-004
 title: "Add Engineering Spec management to Harness bootstrap"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -13,9 +13,9 @@ architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
 architecture_gate_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:eb2a433"
+verification_evidence: ["artifact:docs/exec-plans/completed/ep-004_add-spec-management/artifacts/check.txt"]
+archive_sha256: f4296da4e2f49c13facb5ef1bce6c556dd60b6b8d217dc3ee338c0b16b02b9f7
 created: 2026-07-30
 updated: 2026-07-30
 owner: "EngineeringWorkflow Maintainer"
@@ -45,10 +45,10 @@ reviewable, and byte-idempotent.
 - Latest checkpoint: none.
 - Current milestone: Milestone 3 — packaged workflow and complete verification.
 - Current state: Catalog, resolver, CLI, Bootstrap integration, documentation,
-  evals, and tests are complete. Skill validation, EP validation, and the
-  canonical check pass.
-- Next action: commit the implementation, verify that exact revision from an
-  isolated checkout, and archive EP-004 with the resulting evidence.
+  evals, and tests are complete. Commit `eb2a433` passed the canonical check
+  from an isolated detached worktree.
+- Next action: archive EP-004 with `git:eb2a433` and the recorded check
+  artifact, then validate and commit the archival-only change.
 - Open questions: none. A provider-managed
   remote Git fetcher is explicitly outside V1; a project-relative catalog
   checkout preserves that extension point.
@@ -261,14 +261,14 @@ Work from the repository root.
 - [x] From the repository root, run
   `python3 -B -m unittest tests.test_engineeringctl`; expect all Spec and
   existing Bootstrap tests to pass. Evidence:
-  `docs/exec-plans/active/ep-004_add-spec-management/artifacts/test-engineeringctl.txt`.
+  `docs/exec-plans/completed/ep-004_add-spec-management/artifacts/test-engineeringctl.txt`.
 - [x] Run `python3 -B -m unittest tests.test_repository_contracts`; expect the
   catalog and independently installed Workflow package contracts to pass.
   Evidence:
-  `docs/exec-plans/active/ep-004_add-spec-management/artifacts/test-repository-contracts.txt`.
+  `docs/exec-plans/completed/ep-004_add-spec-management/artifacts/test-repository-contracts.txt`.
 - [x] Run `python3 -B scripts/check.py`; expect a zero exit status across the
   provider-neutral canonical suite. Evidence:
-  `docs/exec-plans/active/ep-004_add-spec-management/artifacts/check.txt`.
+  `docs/exec-plans/completed/ep-004_add-spec-management/artifacts/check.txt`.
 - [x] Run the Skill Creator `quick_validate.py` against the repository root;
   expect `Skill is valid!`. Evidence: concise transcript in this document.
 - [x] In a polyglot fixture, apply Bootstrap and inspect
@@ -324,7 +324,9 @@ the project-relative checkout; no host-specific absolute path is recorded.
   repository checks.
 - [x] (2026-07-30T15:22:00Z) Passed Skill validation, EP validation, 99 tests
   across all suites, catalog/link/index checks, and Git whitespace validation.
-- [ ] Commit the verified implementation revision and archive EP-004.
+- [x] (2026-07-30T15:30:00Z) Committed implementation revision `eb2a433` and
+  passed the complete canonical check from an isolated detached worktree;
+  proceed with archival.
 
 ## Surprises & Discoveries
 
@@ -418,13 +420,13 @@ bundled `engineering-execution-plan` component.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-004_add-spec-management/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-004_add-spec-management/EXECPLAN.md`
 - Workflow tests:
-  `docs/exec-plans/active/ep-004_add-spec-management/artifacts/test-engineeringctl.txt`
+  `docs/exec-plans/completed/ep-004_add-spec-management/artifacts/test-engineeringctl.txt`
 - Repository contract tests:
-  `docs/exec-plans/active/ep-004_add-spec-management/artifacts/test-repository-contracts.txt`
+  `docs/exec-plans/completed/ep-004_add-spec-management/artifacts/test-repository-contracts.txt`
 - Canonical check:
-  `docs/exec-plans/active/ep-004_add-spec-management/artifacts/check.txt`
+  `docs/exec-plans/completed/ep-004_add-spec-management/artifacts/check.txt`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -434,3 +436,5 @@ bundled `engineering-execution-plan` component.
   acceptance contract after recording the Spec V1 Design Doc.
 - 2026-07-30T15:22:00Z — Updated current truth, acceptance, evidence, and
   retrospective after implementation and complete validation.
+- 2026-07-30T15:30:00Z — Bound completion evidence to isolated verified
+  revision `git:eb2a433`; only archival remains.

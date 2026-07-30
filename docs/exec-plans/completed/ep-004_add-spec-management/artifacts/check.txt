@@ -1,6 +1,12 @@
 Command:
   python3 -B scripts/check.py
 
+Verified revision:
+  git:eb2a433
+
+Verification environment:
+  Detached temporary worktree containing exactly the verified revision.
+
 Result:
   Exit status: 0.
   [check] all integrity checks passed
