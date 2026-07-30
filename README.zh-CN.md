@@ -164,6 +164,22 @@ create、preserve 和 conflict。只有预览无冲突时才应用，随后验�
 [cache-topology 端到端示例](./examples/cache-topology/README.md)展示了如何从既有
 corpus 出发，经过 Research、明确授权的 ADR，最终进入 gated ExecPlan。
 
+## Prompt 驱动的示例
+
+双语 [Prompt 示例目录](./examples/README.zh-CN.md)与
+[English catalog](./examples/README.md)覆盖五个 Skill 的独立入口和证据交接：
+
+| 场景 | 首选 Skill |
+|---|---|
+| 初始化仓库或路由模糊请求 | `$repo-foundry` |
+| 产生可复现测量 | `$engineering-benchmark` |
+| 调研未知或接管现有 corpus | `$engineering-research` |
+| 记录决定或推动交付 | `$engineering-execution-plan` |
+| 编写可分享工程文章 | `$engineering-case-study` |
+
+用户提供意图、上下文、停止边界和明确授权；Skill 在内部调用确定性控制脚本，
+并报告生成的 ID、制品和验证结果。
+
 ## 确定性 CLI
 
 Skill 通过这些 CLI 修改状态并验证制品。维护者也可以直接用它们编写自动化或

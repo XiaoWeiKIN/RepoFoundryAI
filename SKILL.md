@@ -92,6 +92,10 @@ python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec validate
 Skill 必须保持可独立安装和运行；只有 `repo-foundry` 可以显式组合仓库内
 的子 Skill。
 
+需要向用户展示独立入口、跨 Skill 交接或完整工作流时，读取
+[Prompt 示例集](examples/README.zh-CN.md)。从用户 Prompt 开始说明，不把
+`foundryctl`、`benchctl`、`researchctl` 或 `epctl` 命令当作端到端入口。
+
 ## 边界
 
 - 不在本 Skill 接受或拒绝 ADR。

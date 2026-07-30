@@ -373,6 +373,44 @@ class RepositoryContractTestCase(unittest.TestCase):
         self.assertIn("repository braces", guide)
         self.assertIn("AI spark", guide)
 
+    def test_prompt_catalog_covers_every_distributed_skill(self) -> None:
+        skill_files = [
+            ROOT / "SKILL.md",
+            *sorted(ROOT.glob("engineering-*/SKILL.md")),
+        ]
+        skill_names: list[str] = []
+        for skill_file in skill_files:
+            match = re.search(
+                r"(?m)^name:\s*([a-z0-9-]+)\s*$",
+                skill_file.read_text(encoding="utf-8"),
+            )
+            self.assertIsNotNone(match, msg=str(skill_file))
+            skill_names.append(match.group(1))
+
+        self.assertGreaterEqual(len(skill_names), 5)
+        catalogs = (
+            ROOT / "examples" / "README.md",
+            ROOT / "examples" / "README.zh-CN.md",
+        )
+        for catalog in catalogs:
+            text = catalog.read_text(encoding="utf-8")
+            self.assertNotIn("python3 ", text)
+            for skill_name in skill_names:
+                self.assertIn(
+                    f"${skill_name}",
+                    text,
+                    msg=f"{catalog} does not cover {skill_name}",
+                )
+
+        self.assertIn(
+            "./examples/README.md",
+            (ROOT / "README.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "./examples/README.zh-CN.md",
+            (ROOT / "README.zh-CN.md").read_text(encoding="utf-8"),
+        )
+
     def test_codex_agents_bootstrap_template_has_reserved_line_budget(self) -> None:
         template = ROOT / "assets" / "harness-agents.md"
         line_count = len(template.read_text(encoding="utf-8").splitlines())

@@ -177,6 +177,24 @@ The [cache-topology example](./examples/cache-topology/README.md) shows the full
 Prompt-driven handoff from an existing corpus to Research, an authorized ADR,
 and a gated ExecPlan.
 
+## Prompt-driven examples
+
+The bilingual [Prompt example catalog](./examples/README.md) and
+[Chinese catalog](./examples/README.zh-CN.md) cover all five Skills as
+standalone entrypoints and as evidence handoffs:
+
+| Situation | First Skill |
+|---|---|
+| Initialize a repository or route an ambiguous request | `$repo-foundry` |
+| Produce reproducible measurements | `$engineering-benchmark` |
+| Investigate unknowns or adopt an existing corpus | `$engineering-research` |
+| Record a decision or drive delivery | `$engineering-execution-plan` |
+| Write a shareable engineering narrative | `$engineering-case-study` |
+
+Users provide intent, context, stopping boundaries, and explicit authority.
+Skills invoke deterministic control scripts internally and report the resulting
+IDs, artifacts, and validation results.
+
 ## Deterministic CLI surfaces
 
 Skills invoke these CLIs for state changes and validation. Humans can use them
