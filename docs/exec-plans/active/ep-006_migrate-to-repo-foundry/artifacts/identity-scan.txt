@@ -1,0 +1,29 @@
+RepoFoundry AI current-surface identity scan
+Recorded: 2026-07-31
+
+Scanned current public metadata and mutable design surfaces:
+- SKILL.md
+- agents/openai.yaml
+- evals/evals.json
+- scripts/check.py
+- docs/design-docs/codex-project-bootstrap.md
+- docs/design-docs/engineering-spec-management.md
+- docs/design-docs/index.md
+
+Rejected patterns:
+- EngineeringWorkflow
+- scripts/engineeringctl.py
+- ENGINEERING_WORKFLOW_HOME
+- $engineering-workflow
+
+Also required the former scripts/engineeringctl.py and
+tests/test_engineeringctl.py paths to be absent.
+
+Result:
+- exit code: 0
+- disallowed current-surface matches: 0
+- legacy executable paths: absent
+
+Migration guides, compatibility constants and fixtures, accepted ADRs,
+completed ExecPlans, and the ADR-004 packaging baseline are intentionally
+outside this rejection set.

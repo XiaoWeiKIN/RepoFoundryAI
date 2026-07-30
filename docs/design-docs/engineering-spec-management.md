@@ -10,14 +10,14 @@ updated: 2026-07-30
 
 ## Purpose
 
-Extend the Engineering Workflow Harness with versioned, composable engineering
+Extend the RepoFoundry AI Harness with versioned, composable engineering
 Specs fetched from an independently governed Git repository. Bootstrap installs
 required common guidance and language guidance detected from repository
 evidence. Codex reads repository-local copies through a bounded `AGENTS.md`
 route rather than depending on remote content at task time.
 
 This design implements the ownership accepted by ADR-002, ADR-004, and ADR-005:
-`engineering-workflow` owns project Bootstrap and Spec consumption,
+`repo-foundry` owns project Bootstrap and Spec consumption,
 `EngineeringSpecifications` owns Catalog and normative content, while
 `engineering-execution-plan` remains Agent-neutral and owns only ADR, ExecPlan,
 Task, Checkpoint, Bugfix, and technical-debt artifacts.
@@ -26,7 +26,7 @@ Task, Checkpoint, Bugfix, and technical-debt artifacts.
 flowchart LR
     G["EngineeringSpecifications<br/>Git URL + ref"] --> F["Ephemeral bare fetch"]
     F --> C["Catalog + exact content"]
-    C --> R["engineeringctl Spec Resolver"]
+    C --> R["foundryctl Spec Resolver"]
     D["Repository language evidence"] --> R
     P["Project Spec manifest"] --> R
     R --> L["Pinned commit + content lock"]
@@ -55,7 +55,7 @@ flowchart LR
 
 ## Non-goals
 
-- Bundle normative Engineering Spec content with EngineeringWorkflow.
+- Bundle normative Engineering Spec content with the RepoFoundry distribution.
 - Fetch individual raw HTTP files or silently fall back to packaged content.
 - Store, prompt for, or manage Git credentials.
 - Check out or execute code from the specification repository.
@@ -88,7 +88,7 @@ EngineeringSpecifications/
 └── tests/
 ```
 
-EngineeringWorkflow contains no Catalog or normative Spec Markdown. The target
+The RepoFoundry distribution contains no Catalog or normative Spec Markdown. The target
 project receives:
 
 ```text
@@ -141,7 +141,7 @@ configuration:
 ```json
 {
   "version": 1,
-  "owner": "engineering-workflow",
+  "owner": "repo-foundry",
   "catalog": {
     "kind": "git",
     "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
@@ -222,17 +222,17 @@ The resolver:
 - deletes the temporary object store after resolution.
 
 Existing Git credential helpers and SSH agents may satisfy authentication.
-EngineeringWorkflow never reads, accepts, logs, or persists credentials.
+RepoFoundry never reads, accepts, logs, or persists credentials.
 
 ## CLI Contract
 
 All mutating operations are preview-first:
 
 ```text
-engineeringctl spec plan
-engineeringctl spec sync [--dry-run | --apply]
-engineeringctl spec update [--dry-run | --apply]
-engineeringctl spec validate
+foundryctl spec plan
+foundryctl spec sync [--dry-run | --apply]
+foundryctl spec update [--dry-run | --apply]
+foundryctl spec validate
 ```
 
 - `plan` resolves the current manifest, or previews the inferred initial
@@ -245,7 +245,7 @@ engineeringctl spec validate
   content, project Spec references, routing index, and `AGENTS.md` route. It
   performs no network or Git operation.
 
-`engineeringctl bootstrap --profile codex` includes the same Spec plan and
+`foundryctl bootstrap --profile codex` includes the same Spec plan and
 accepts optional initial `--spec-repository` and `--spec-ref` values.
 Bootstrap apply may create missing files but does not replace an existing
 managed file with different bytes. An explicit `spec sync --apply` or
@@ -304,7 +304,7 @@ flowchart TB
 - Catalog digest drift, managed-content drift, missing lock entries, traversal,
   dependency cycles, unreachable refs, and missing project Specs fail safely.
 - Existing `AGENTS.md` and project documentation remain byte-identical.
-- The independently installed `engineering-workflow` package contains no
+- The independently installed `repo-foundry` package contains no
   normative Spec files and resolves the public default source.
-- EngineeringSpecifications and EngineeringWorkflow each have a canonical
+- EngineeringSpecifications and RepoFoundry each have a canonical
   check, and Workflow integration tests use isolated Git fixture repositories.

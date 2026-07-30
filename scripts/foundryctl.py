@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bootstrap and validate the EngineeringWorkflow project Harness."""
+"""Bootstrap and validate the RepoFoundry AI project Harness."""
 
 from __future__ import annotations
 
@@ -37,6 +37,8 @@ DEFAULT_SPEC_REPOSITORY = (
 DEFAULT_SPEC_REF = "main"
 
 HARNESS_VERSION = 1
+HARNESS_OWNER = "repo-foundry"
+LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_AGENT_MAX_LINES = 100
 CODEX_AGENT_TEMPLATE_TARGET_LINES = 80
@@ -62,7 +64,7 @@ CODEX_REQUIRED_FILES = tuple(
 )
 
 
-class EngineeringctlError(RuntimeError):
+class FoundryctlError(RuntimeError):
     pass
 
 
@@ -77,7 +79,7 @@ def spec_source(repository: str, ref: str) -> dict[str, str]:
 def normalize_repo(value: str) -> Path:
     repo = Path(value).expanduser().resolve()
     if not repo.exists() or not repo.is_dir():
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"Repository directory does not exist: {repo}"
         )
     return repo
@@ -85,16 +87,16 @@ def normalize_repo(value: str) -> Path:
 
 def load_execution_plan_ctl() -> ModuleType:
     if not EXECUTION_PLAN_CTL.is_file():
-        raise EngineeringctlError(
+        raise FoundryctlError(
             "Bundled engineering-execution-plan component is missing: "
             f"{EXECUTION_PLAN_CTL}"
         )
     spec = importlib.util.spec_from_file_location(
-        "_engineering_workflow_epctl",
+        "_repo_foundry_epctl",
         EXECUTION_PLAN_CTL,
     )
     if spec is None or spec.loader is None:
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"Unable to load engineering-execution-plan: {EXECUTION_PLAN_CTL}"
         )
     module = importlib.util.module_from_spec(spec)
@@ -109,7 +111,7 @@ def load_execution_plan_ctl() -> ModuleType:
         "save_config",
     ):
         if not hasattr(module, attribute):
-            raise EngineeringctlError(
+            raise FoundryctlError(
                 "engineering-execution-plan component does not expose "
                 f"the required bootstrap contract: {attribute}"
             )
@@ -120,14 +122,14 @@ def reject_symlink_path(repo: Path, path: Path) -> None:
     try:
         relative = path.relative_to(repo)
     except ValueError as exc:
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"Managed path escapes repository: {path}"
         ) from exc
     current = repo
     for component in relative.parts:
         current = current / component
         if current.is_symlink():
-            raise EngineeringctlError(
+            raise FoundryctlError(
                 f"Refusing to manage symbolic link: {current}"
             )
 
@@ -162,7 +164,7 @@ def atomic_write(path: Path, text: str) -> None:
 def asset_text(name: str) -> str:
     path = ASSET_DIR / name
     if not path.is_file():
-        raise EngineeringctlError(f"Missing bundled asset: {path}")
+        raise FoundryctlError(f"Missing bundled asset: {path}")
     return path.read_text(encoding="utf-8")
 
 
@@ -205,7 +207,7 @@ def harness_path(repo: Path) -> Path:
 def codex_harness_manifest() -> dict[str, object]:
     return {
         "version": HARNESS_VERSION,
-        "owner": "engineering-workflow",
+        "owner": HARNESS_OWNER,
         "profile": CODEX_HARNESS_PROFILE,
         "components": ["engineering-execution-plan"],
         "instruction_files": [
@@ -221,26 +223,29 @@ def codex_harness_manifest() -> dict[str, object]:
 def load_codex_harness_manifest(repo: Path) -> dict[str, object]:
     path = harness_path(repo)
     if not path.exists():
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"HARNESS_MANIFEST_MISSING: {path}: "
-            "run engineeringctl bootstrap --profile codex --apply"
+            "run foundryctl bootstrap --profile codex --apply"
         )
     reject_symlink_path(repo, path)
     if not path.is_file():
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"HARNESS_MANIFEST_INVALID: {path}: expected a regular file"
         )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"HARNESS_MANIFEST_INVALID: {path}: {exc}"
         ) from exc
-    expected = codex_harness_manifest()
-    if data != expected:
-        raise EngineeringctlError(
+    owner = data.get("owner") if isinstance(data, dict) else None
+    supported_owners = {HARNESS_OWNER, *LEGACY_HARNESS_OWNERS}
+    normalized = dict(data) if isinstance(data, dict) else {}
+    normalized["owner"] = HARNESS_OWNER
+    if owner not in supported_owners or normalized != codex_harness_manifest():
+        raise FoundryctlError(
             f"HARNESS_MANIFEST_INVALID: {path}: expected Codex Harness "
-            f"schema version {HARNESS_VERSION} owned by engineering-workflow "
+            f"schema version {HARNESS_VERSION} owned by {HARNESS_OWNER} "
             f"with AGENTS.md max_lines {CODEX_AGENT_MAX_LINES}"
         )
     return data
@@ -292,7 +297,7 @@ def bootstrap_plan(
     initial_spec_source: dict[str, str],
 ) -> dict[str, object]:
     if profile != CODEX_HARNESS_PROFILE:
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"Unsupported bootstrap profile {profile!r}; "
             f"supported profiles: {CODEX_HARNESS_PROFILE}"
         )
@@ -361,7 +366,7 @@ def bootstrap_plan(
     if not reason and manifest.is_file():
         try:
             load_codex_harness_manifest(repo)
-        except EngineeringctlError as exc:
+        except FoundryctlError as exc:
             reason = str(exc)
     if reason:
         actions.append(
@@ -384,7 +389,7 @@ def bootstrap_plan(
             loaded_config = epctl.load_config(repo)
             loaded_roots = loaded_config["architecture_roots"]
             if not isinstance(loaded_roots, list):
-                raise EngineeringctlError(
+                raise FoundryctlError(
                     "engineering-execution-plan returned an invalid "
                     "architecture_roots contract"
                 )
@@ -451,13 +456,19 @@ def validate_codex_harness(
         if require_manifest:
             errors.append(
                 f"HARNESS_MANIFEST_MISSING: {path}: "
-                "run engineeringctl bootstrap --profile codex --apply"
+                "run foundryctl bootstrap --profile codex --apply"
             )
         return errors, warnings
     try:
         manifest = load_codex_harness_manifest(repo)
-    except EngineeringctlError as exc:
+    except FoundryctlError as exc:
         return [str(exc)], warnings
+    if manifest["owner"] in LEGACY_HARNESS_OWNERS:
+        warnings.append(
+            f"HARNESS_LEGACY_OWNER: {HARNESS_MANIFEST}: "
+            f"{manifest['owner']!r} remains readable; new manifests use "
+            f"{HARNESS_OWNER!r}"
+        )
 
     required_files = manifest["required_files"]
     if not isinstance(required_files, list):
@@ -478,7 +489,7 @@ def validate_codex_harness(
         if not target.is_file():
             errors.append(
                 f"HARNESS_REQUIRED_FILE_MISSING: {relative}: "
-                "run engineeringctl bootstrap --profile codex --apply"
+                "run foundryctl bootstrap --profile codex --apply"
             )
             continue
         todo_count = target.read_text(encoding="utf-8").count(
@@ -527,14 +538,14 @@ def validate_codex_harness(
         epctl = load_execution_plan_ctl()
         roots = epctl.load_config(repo)["architecture_roots"]
         if not isinstance(roots, list):
-            raise EngineeringctlError("architecture_roots is not a list")
+            raise FoundryctlError("architecture_roots is not a list")
     except Exception as exc:
         errors.append(f"HARNESS_ARCHITECTURE_ROOT_INVALID: {exc}")
     else:
         if "docs/design-docs" not in roots:
             errors.append(
                 "HARNESS_ARCHITECTURE_ROOT_MISSING: docs/design-docs: "
-                "run engineeringctl bootstrap --profile codex --apply"
+                "run foundryctl bootstrap --profile codex --apply"
             )
     spec_errors, spec_warnings = specctl.validate_spec_state(
         repo,
@@ -555,7 +566,7 @@ def bootstrap_repo(
     planned = bootstrap_plan(repo, profile, initial_spec_source)
     actions = planned["actions"]
     if not isinstance(actions, list):
-        raise EngineeringctlError("Bootstrap plan returned invalid actions")
+        raise FoundryctlError("Bootstrap plan returned invalid actions")
     conflicts = [
         action
         for action in actions
@@ -577,7 +588,7 @@ def bootstrap_repo(
         details = "; ".join(
             f"{item.get('path')}: {item.get('reason')}" for item in conflicts
         )
-        raise EngineeringctlError(
+        raise FoundryctlError(
             f"Bootstrap preflight failed: {details}"
         )
 
@@ -589,7 +600,7 @@ def bootstrap_repo(
         second_plan = bootstrap_plan(repo, profile, initial_spec_source)
         second_actions = second_plan["actions"]
         if not isinstance(second_actions, list):
-            raise EngineeringctlError(
+            raise FoundryctlError(
                 "Bootstrap locked plan returned invalid actions"
             )
         second_conflicts = [
@@ -602,7 +613,7 @@ def bootstrap_repo(
                 f"{item.get('path')}: {item.get('reason')}"
                 for item in second_conflicts
             )
-            raise EngineeringctlError(
+            raise FoundryctlError(
                 f"Bootstrap preflight changed while locking: {details}"
             )
 
@@ -643,7 +654,7 @@ def bootstrap_repo(
                 loaded_config = epctl.load_config(repo)
                 roots = loaded_config["architecture_roots"]
                 if not isinstance(roots, list):
-                    raise EngineeringctlError(
+                    raise FoundryctlError(
                         "engineering-execution-plan returned invalid "
                         "architecture_roots"
                     )
@@ -667,12 +678,12 @@ def bootstrap_repo(
                 )
                 created.extend(spec_created)
                 updated.extend(spec_updated)
-        except EngineeringctlError:
+        except FoundryctlError:
             raise
         except specctl.SpecError as exc:
-            raise EngineeringctlError(str(exc)) from exc
+            raise FoundryctlError(str(exc)) from exc
         except Exception as exc:
-            raise EngineeringctlError(
+            raise FoundryctlError(
                 f"engineering-execution-plan initialization failed: {exc}"
             ) from exc
 
@@ -681,7 +692,7 @@ def bootstrap_repo(
         require_manifest=True,
     )
     if harness_errors:
-        raise EngineeringctlError(
+        raise FoundryctlError(
             "Bootstrap Harness validation failed: "
             + "; ".join(harness_errors)
         )
@@ -713,14 +724,14 @@ def manage_specs(
             allow_replace=True,
         )
     except specctl.SpecError as exc:
-        raise EngineeringctlError(str(exc)) from exc
+        raise FoundryctlError(str(exc)) from exc
     if planned.conflicts:
         details = "; ".join(
             f"{item.get('path')}: {item.get('reason')}"
             for item in planned.conflicts
         )
         if apply_changes:
-            raise EngineeringctlError(f"Spec preflight failed: {details}")
+            raise FoundryctlError(f"Spec preflight failed: {details}")
     if not apply_changes:
         return specctl.plan_payload(planned, mode="dry-run")
 
@@ -733,23 +744,23 @@ def manage_specs(
                 allow_replace=True,
             )
         except specctl.SpecError as exc:
-            raise EngineeringctlError(str(exc)) from exc
+            raise FoundryctlError(str(exc)) from exc
         if locked_plan != planned:
-            raise EngineeringctlError(
+            raise FoundryctlError(
                 "Spec preflight changed while acquiring the Harness lock; "
                 "rerun the dry-run"
             )
         try:
             created, updated = specctl.apply_spec_plan(repo, locked_plan)
         except specctl.SpecError as exc:
-            raise EngineeringctlError(str(exc)) from exc
+            raise FoundryctlError(str(exc)) from exc
 
     errors, validation_warnings = specctl.validate_spec_state(
         repo,
         require_manifest=True,
     )
     if errors:
-        raise EngineeringctlError(
+        raise FoundryctlError(
             "Spec validation failed after apply: " + "; ".join(errors)
         )
     payload = specctl.plan_payload(
@@ -817,7 +828,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate_parser = sub.add_parser(
         "validate",
-        help="Validate the EngineeringWorkflow project Harness",
+        help="Validate the RepoFoundry AI project Harness",
     )
     validate_parser.add_argument(
         "--harness",
@@ -942,9 +953,9 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         else:  # pragma: no cover - argparse guarantees a command
-            raise EngineeringctlError(f"Unknown command: {args.command}")
-    except EngineeringctlError as exc:
-        print(f"engineeringctl: {exc}", file=sys.stderr)
+            raise FoundryctlError(f"Unknown command: {args.command}")
+    except FoundryctlError as exc:
+        print(f"foundryctl: {exc}", file=sys.stderr)
         return 2
     return 0
 

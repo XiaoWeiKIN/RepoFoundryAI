@@ -1,0 +1,14 @@
+RepoFoundry AI repository contract evidence
+Recorded: 2026-07-31
+
+Command:
+python3 -B -m unittest tests.test_repository_contracts
+
+Result:
+- exit code: 0
+- tests: 9
+- status: OK
+
+Coverage includes the public brand hierarchy, unverified-hosting-URL guard,
+brand SVG/PNG contracts, independent Skill installation, executable example,
+Benchmark evidence handoff, and thin CI adapters.

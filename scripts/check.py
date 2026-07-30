@@ -144,7 +144,7 @@ def skill_frontmatter(path: Path) -> dict[str, str]:
 
 def validate_skill_packages() -> None:
     skills = (
-        (ROOT, "engineering-workflow"),
+        (ROOT, "repo-foundry"),
         (
             ROOT / "engineering-execution-plan",
             "engineering-execution-plan",
@@ -268,7 +268,7 @@ def validate_eval_catalog(path: Path, expected_skill_name: str) -> None:
 
 def validate_eval_catalogs() -> None:
     catalogs = (
-        (ROOT / "evals" / "evals.json", "engineering-workflow"),
+        (ROOT / "evals" / "evals.json", "repo-foundry"),
         (
             ROOT
             / "engineering-execution-plan"
@@ -439,7 +439,7 @@ def main() -> int:
             ],
         )
         run(
-            "Engineering Workflow and repository contract tests",
+            "RepoFoundry AI and repository contract tests",
             [
                 sys.executable,
                 "-B",

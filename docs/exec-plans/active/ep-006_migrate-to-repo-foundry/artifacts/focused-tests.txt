@@ -1,0 +1,13 @@
+RepoFoundry AI migration focused test evidence
+Recorded: 2026-07-31
+
+Command:
+python3 -B -m unittest tests.test_foundryctl tests.test_spec_manager
+
+Result:
+- exit code: 0
+- tests: 25
+- status: OK
+
+Coverage includes Bootstrap preview/apply, manifest ownership, legacy owner
+compatibility, Spec selection, lock behavior, drift, and offline validation.

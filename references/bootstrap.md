@@ -2,20 +2,20 @@
 
 ## 目标
 
-`engineering-workflow` Bootstrap 建立 Codex 可导航、EP 可治理、CI 可验证的
+`repo-foundry` Bootstrap 建立 Codex 可导航、EP 可治理、CI 可验证的
 项目文档控制面。它负责知识入口、组合初始化和文件契约，不负责生成未经验证的
 项目事实。
 
 ```mermaid
 flowchart LR
-    P["engineeringctl 仓库预检"] --> I["epctl init<br/>ADR / ExecPlan 制品"]
+    P["foundryctl 仓库预检"] --> I["epctl init<br/>ADR / ExecPlan 制品"]
     P --> C["Codex profile<br/>AGENTS.md + 架构与治理入口"]
     P --> S["Spec Resolver<br/>Core + detected languages"]
     I --> E["docs/.epctl/<br/>EP 状态"]
     C --> M["docs/.engineering/harness.json"]
     S --> L["specs.json + lock<br/>本地 managed Specs"]
     L --> C
-    M --> V["engineeringctl validate --harness"]
+    M --> V["foundryctl validate --harness"]
 ```
 
 ## `init` 与 `bootstrap`
@@ -24,7 +24,7 @@ flowchart LR
 只创建 EP 自己拥有的目录、索引和 ID 状态。它的行为不能因 Codex profile
 改变。
 
-`engineering-workflow` 的 `bootstrap` 是显式选择的项目级操作：
+`repo-foundry` 的 `bootstrap` 是显式选择的项目级操作：
 
 - 默认 dry-run；
 - 只在 `--apply` 时写入；
@@ -45,7 +45,7 @@ Bootstrap 不隐式运行 `reindex`。
 在目标仓库根目录运行：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex
 ```
 
@@ -62,7 +62,7 @@ python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
 显式 `--dry-run` 与默认行为相同。确认预览后执行：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . \
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex --apply
 ```
 
@@ -121,11 +121,11 @@ Markdown 路径、作用域和说明，`index.md` 会引用它，工具不复制
 Spec 操作同样 preview-first：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec plan
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec sync
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec sync --apply
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec update --apply
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . spec validate
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec plan
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync --apply
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 `sync` 使用 lock 已记录的 commit；lock 缺失时才从 manifest ref 建立初始解析。
@@ -136,7 +136,7 @@ lock 与本地文件，完全不访问网络。
 
 解析器通过临时 bare Git object store 读取 Catalog 与 Markdown，不 checkout、
 不执行远程代码。Git 凭据只能来自用户已有的 credential helper 或 SSH agent；
-Workflow 不接收、不打印、不保存 token。
+RepoFoundry AI 不接收、不打印、不保存 token。
 
 ## `AGENTS.md` 硬约束
 
@@ -179,7 +179,7 @@ apply 前检查全部目标：
 ```json
 {
   "version": 1,
-  "owner": "engineering-workflow",
+  "owner": "repo-foundry",
   "profile": "codex",
   "components": [
     "engineering-execution-plan"
@@ -202,6 +202,9 @@ apply 前检查全部目标：
 }
 ```
 
+owner 为 `engineering-workflow` 的既有 Manifest 继续以兼容模式读取，并产生
+`HARNESS_LEGACY_OWNER` warning；新 Manifest 一律写入 `repo-foundry`。
+
 项目级 Manifest 与 `docs/.epctl/config.json` 分属不同状态目录。
 `config.json` 继续只负责 EP 的 architecture roots；不要借 Bootstrap 静默升级
 其 schema。
@@ -211,7 +214,7 @@ apply 前检查全部目标：
 显式要求 Harness：
 
 ```bash
-python3 <workflow-dir>/scripts/engineeringctl.py --repo . validate --harness
+python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . validate --harness
 ```
 
 只要 manifest 已存在，普通 `validate` 也会自动检查：

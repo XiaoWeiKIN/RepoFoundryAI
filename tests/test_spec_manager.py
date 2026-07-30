@@ -19,6 +19,32 @@ from tests.spec_git_fixture import (  # noqa: E402
 
 
 class SpecManagerBoundaryTestCase(unittest.TestCase):
+    def test_manifest_rejects_unknown_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "specs.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "owner": "another-product",
+                        "catalog": {
+                            "kind": "git",
+                            "url": "https://example.com/specifications.git",
+                            "ref": "main",
+                        },
+                        "specs": ["core/semantic-naming"],
+                        "project_specs": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                spec_manager.SpecError,
+                "SPEC_MANIFEST_INVALID.owner",
+            ):
+                spec_manager.parse_manifest(manifest)
+
     def test_catalog_rejects_dependency_cycles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             catalog_root = Path(temporary) / "catalog"

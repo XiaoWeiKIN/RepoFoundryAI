@@ -3,10 +3,16 @@ doc_type: design
 title: EngineeringWorkflow skill packaging
 status: current
 adr_refs: ["ADR-004", "ADR-005"]
-updated: 2026-07-30
+updated: 2026-07-31
 ---
 
 # EngineeringWorkflow Skill Packaging
+
+This document remains current for the aggregation and professional-Skill
+boundaries adopted by ADR-004 and ADR-005. Its product identifiers and path
+examples record the original packaging baseline.
+[RepoFoundry AI system identity and packaging](repo-foundry-system.md) amends
+that naming while retaining these structural boundaries.
 
 Decision records:
 [ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md)

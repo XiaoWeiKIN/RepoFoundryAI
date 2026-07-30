@@ -1,8 +1,9 @@
 # 端到端示例：用多文档 Research 决定缓存拓扑
 
-这个示例展示一条完整主线：注册四篇现有研究文档，形成 review-ready
-Synthesis，经过 Research Owner 明确结束授权后封存，再经过架构授权创建可恢复
-的 ExecPlan。
+这个示例展示用户如何在 Codex 对话中驱动一条完整主线：接管四篇现有研究文档，
+形成 review-ready Synthesis，经过 Research Owner 明确结束授权后封存，再经过
+架构授权创建可恢复的 ExecPlan。用户只提供目标、上下文和授权；Skill 负责调用
+确定性脚本、维护状态并验证制品。
 
 ```mermaid
 flowchart LR
@@ -17,20 +18,27 @@ flowchart LR
 示例数据是虚构的工程数据，只用于演示制品边界。尤其不要把 benchmark 数字当成
 生产容量结论。
 
-## 先复制 corpus，保留发行仓库不变
+## 第一条 Prompt：让 Codex 接管现有 corpus
 
-准备一个空的示例仓库。以下路径都必须替换成真实绝对路径：
+先把示例 corpus 放到目标仓库的 `research-input/cache-topology/`。如果它仍在
+RepoFoundry 发行仓库中，也可以把源路径和目标路径直接告诉 Codex，让
+它只复制 corpus，不修改发行仓库。
 
-```bash
-export ENGINEERING_WORKFLOW_HOME=/absolute/path/to/EngineeringWorkflow
-export EXAMPLE_REPO=/absolute/path/to/empty-cache-example
-export RESEARCHCTL="$ENGINEERING_WORKFLOW_HOME/engineering-research/scripts/researchctl.py"
-export EPCTL="$ENGINEERING_WORKFLOW_HOME/engineering-execution-plan/scripts/epctl.py"
+在目标仓库中发起对话：
 
-mkdir -p "$EXAMPLE_REPO/research-input/cache-topology"
-cp -R "$ENGINEERING_WORKFLOW_HOME/examples/cache-topology/corpus/." \
-  "$EXAMPLE_REPO/research-input/cache-topology/"
-cd "$EXAMPLE_REPO"
+```text
+使用 $engineering-research 接管
+research-input/cache-topology/ 下的现有多文档调研。
+
+研究主题：tenant settings cache topology
+Research Owner：Cache Platform Owner
+Author：Codex
+类型：technical
+入口文档：research-input/cache-topology/index.md
+
+先只读检查 corpus 和仓库现状，再创建一个 linked Research。保留原始文档位置，
+不要结束 Research；完成后告诉我 Research ID、识别出的 Research Questions、
+manifest 文件数、校验结果和下一步。
 ```
 
 输入 corpus 有一个入口和三篇专题文档：
@@ -46,23 +54,10 @@ research-input/cache-topology/
 `index.md` 定义决策目的、Research Questions 和阅读路线；其他文档分别保存
 现状、选项和实验。它们共享同一个决策目的，因此使用一个 Research ID。
 
-## 注册后，manifest 应明确四篇文档
+## Skill 建立控制包后，manifest 应明确四篇文档
 
-```bash
-python3 "$RESEARCHCTL" --repo . init
-python3 "$EPCTL" --repo . init
-
-python3 "$RESEARCHCTL" --repo . new-research \
-  --slug cache-topology \
-  --title "Research tenant settings cache topology" \
-  --owner "Cache Platform Owner" \
-  --author "Example Researcher" \
-  --research-type technical \
-  --corpus-root research-input/cache-topology \
-  --entrypoint research-input/cache-topology/index.md
-
-python3 "$RESEARCHCTL" --repo . validate
-```
+Codex 触发 `engineering-research` 后，会在内部完成初始化、ID 分配、corpus
+注册和校验。用户不需要定位或运行 `researchctl.py`。
 
 此时控制页和 Synthesis 还没有填写，`validate` 会报告 REQUIRED placeholder
 warning；corpus、manifest 和本地链接不应出现 error。
@@ -132,30 +127,34 @@ role 是 `entrypoint`。`bytes` 与完整 `sha256` 由 `researchctl` 根据源�
 - 两层缓存增加运维和排障复杂度。
 - Redis outage 与 invalidation backlog 尚未测试，必须进入 EP 验收。
 
-完成控制页和 Synthesis 中所有 REQUIRED 内容后刷新并生成评审版本：
+完成控制页和 Synthesis 中所有 REQUIRED 内容后，用下一条 Prompt 请求评审版本：
 
-```bash
-python3 "$RESEARCHCTL" --repo . sync-research R-001
-python3 "$RESEARCHCTL" --repo . validate
-python3 "$RESEARCHCTL" --repo . mark-review-ready R-001
+```text
+继续使用 $engineering-research 完成 R-001。
+
+逐篇阅读 corpus，回答全部 Research Questions；把分析过程写进结构化专题，
+把证据、反例、不确定性和适用边界保留下来。SYNTHESIS.md 要面向架构决策，
+明确推荐方案、成立条件、负面后果和仍需进入 EP 的验证项。
+
+完成后同步 manifest、运行校验，并把 R-001 标记为 review-ready。不要 conclude。
+请给我一份适合人工评审的摘要和文档入口。
 ```
 
 这会生成 `snapshots/synthesis-v001.md`，但 R-001 仍然是 active。需要继续验证
-Redis outage 时，可以在同一个 Research 中创建下一轮：
+Redis outage 时，在同一个 Research 中继续对话：
 
-```bash
-python3 "$RESEARCHCTL" --repo . new-round R-001 \
-  --slug redis-outage \
-  --title "Validate Redis outage behavior" \
-  --author "Reliability Reviewer"
+```text
+R-001 的评审发现 Redis outage 和 invalidation backlog 证据不足。
+使用 $engineering-research 为 R-001 开启新一轮，保留同一个 Research ID，
+补充故障行为专题和可复核证据，再更新 Synthesis。不要 conclude。
 ```
 
-本示例假设 Cache Platform Owner 已明确表示“结束并归档 R-001”，再记录该授权：
+本示例假设评审已经通过。Research Owner 必须亲自给出结束授权：
 
-```bash
-python3 "$RESEARCHCTL" --repo . conclude-research R-001 \
-  --approved-by "Cache Platform Owner" \
-  --approval-ref "example:explicit-owner-approval"
+```text
+我以 Cache Platform Owner 身份确认 R-001 已满足本轮决策需要。
+请使用 $engineering-research 结束并归档 R-001，
+将本条消息记录为明确的 Owner approval。
 ```
 
 linked corpus 的源文件仍留在 `research-input/cache-topology/`。completed 包中会
@@ -179,13 +178,14 @@ docs/research/completed/r-001_cache-topology/
 
 ## ADR 必须停在 proposed，直到授权出现
 
-Research 可以推荐 Option C，但不能自行接受架构决定：
+Research 可以推荐 Option C，但不能自行接受架构决定。下一条 Prompt 只要求创建
+proposed ADR：
 
-```bash
-python3 "$EPCTL" --repo . new-adr \
-  --slug cache-topology \
-  --title "Choose tenant settings cache topology" \
-  --research R-001
+```text
+使用 $engineering-execution-plan 消费已 concluded 的 R-001。
+为 tenant settings cache topology 创建一份原子的 ADR，比较可行选项，
+推荐 5 秒 L1 + 30 秒 Redis L2，并写清后果和确认方式。
+ADR 必须停在 proposed；不要替 Decision Owner 接受。
 ```
 
 填完 ADR 的全部 REQUIRED section，其中至少写清三项内容：
@@ -195,29 +195,24 @@ python3 "$EPCTL" --repo . new-adr \
 - Confirmation：压测、tenant isolation 测试、Redis outage fallback 和
   invalidation backlog 测试。
 
-此时 ADR 仍是 `proposed`。只有 Decision Owner 给出类似下面的明确表达，才能
-执行决定命令：
+此时 ADR 仍是 `proposed`。只有 Decision Owner 给出类似下面的明确表达，Skill
+才能记录决定：
 
 ```text
 我以 Cache Platform Owner 身份接受 ADR-001：采用 5 秒 L1 + 30 秒 Redis L2。
-```
-
-```bash
-python3 "$EPCTL" --repo . decide-adr ADR-001 \
-  --outcome accepted \
-  --decision-maker "Cache Platform Owner"
 ```
 
 “继续”“按这个方向做”“帮我写 ADR”都不足以证明谁接受了哪份决定。
 
 ## ExecPlan 必须把上游结论带入实施上下文
 
-```bash
-python3 "$EPCTL" --repo . new-ep \
-  --slug implement-cache-topology \
-  --title "Implement tenant settings cache topology" \
-  --research R-001 \
-  --adr ADR-001
+```text
+使用 $engineering-execution-plan，基于 R-001 和已接受的 ADR-001，
+创建“Implement tenant settings cache topology” ExecPlan。
+
+计划必须复述 Research 的约束和负面后果，写明 Research Gate 与
+Architecture Gate，给出真实文件路径、里程碑、验证命令、回滚方式和完成证据。
+先创建并评审计划，不要开始实现。
 ```
 
 生成的 EP 应明确两个 Gate：
@@ -250,26 +245,27 @@ Checkpoint 封存已完成事件，根 `EXECPLAN.md` 继续保存当前事实和
 
 ## 完成时绑定真实代码版本与证据
 
-只有真实实现和全部验收完成后，才把 EP 归档为 `completed`：
+只有真实实现和全部验收完成后，才能请求 Skill 归档：
 
-```bash
-python3 "$EPCTL" --repo . archive-ep EP-001 \
-  --outcome completed \
-  --verified-revision "git:<实际通过验收的 commit>" \
-  --evidence "ci:<实际 pipeline 或 job URL>" \
-  --evidence "artifact:<仓库内验收产物路径>"
+```text
+继续使用 $engineering-execution-plan 核对 EP-001。
+只有全部验收真实通过、没有 open blocker、所有 Task 已终态时才归档 completed。
+verified_revision 必须使用实际通过验收的代码 revision，
+verification_evidence 必须引用真实 CI 和仓库内验收产物。
+如果条件不满足，保持 active 并准确列出缺口。
 ```
 
 `verified_revision` 绑定“哪些代码被验证过”，evidence 绑定“在哪里可以复核”。
 复选框全部勾选但缺少这两类信息时，v2.5 EP 仍不能完成。非 Git 仓库可以使用
 稳定的 `snapshot:<id>`；该契约不依赖 GitHub 或 GitLab。
 
-## 三条命令验证完整链路
+## 最后一条 Prompt 验证完整链路
 
-```bash
-python3 "$RESEARCHCTL" --repo . validate
-python3 "$EPCTL" --repo . validate
-python3 "$EPCTL" --repo . status
+```text
+使用 $engineering-research 和 $engineering-execution-plan
+对 R-001、ADR-001、EP-001 做最终一致性检查。
+验证 manifest、Synthesis seal、Owner 授权、ADR 决策者、两个 Gate、
+verified revision 和 evidence，并报告任何 error；不要用自动修复掩盖问题。
 ```
 
 预期结果：
@@ -277,8 +273,9 @@ python3 "$EPCTL" --repo . status
 - R-001 是 `concluded`，Synthesis 与 manifest 都是 sealed。
 - ADR-001 是 `accepted`，并记录真实 Decision Owner。
 - 实施前 EP-001 是 `active`，两个 Gate 都是 `satisfied`；真实验收和上述归档
-  命令完成后，它才是带 revision/evidence 的 sealed `completed`。
-- 两个 validate 命令没有 error。
+  Prompt 完成后，它才是带 revision/evidence 的 sealed `completed`。
+- Research 与 Execution Plan 的校验都没有 error。
 
-这个例子刻意保留人工编辑、Research Owner 结束授权和 Decision Owner 架构
-授权三个不同步骤。Research 结论与 ADR 接受都不能由演示脚本自行推断。
+这个例子刻意保留 Research 分析、Research Owner 结束授权和 Decision Owner
+架构授权三个不同步骤。`researchctl` 与 `epctl` 是 Skill 内部的确定性执行机制，
+不应成为用户学习这条工作流的入口。

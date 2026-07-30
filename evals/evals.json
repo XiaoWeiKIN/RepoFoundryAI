@@ -1,10 +1,10 @@
 {
-  "skill_name": "engineering-workflow",
+  "skill_name": "repo-foundry",
   "evals": [
     {
       "id": 1,
       "prompt": "帮我把这个仓库初始化成 Codex agent-first 项目：先预览要创建的文档，再应用。保留已有文件，AGENTS.md 无论如何不能超过 100 行。",
-      "expected_output": "先用 engineeringctl bootstrap --profile codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，并组合 engineering-execution-plan 初始化。已有文件保持字节不变，docs/.engineering/harness.json 注册 AGENTS.md max_lines=100，最终 engineeringctl validate --harness 通过。",
+      "expected_output": "先用 foundryctl bootstrap --profile codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，并组合 engineering-execution-plan 初始化。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
       "files": [],
       "assertions": [
         {
@@ -32,7 +32,7 @@
     {
       "id": 2,
       "prompt": "我们还不知道缓存方案是否正确传播 trace context，需要读源码、查规范并做最小实验。请先初始化项目，然后继续处理。",
-      "expected_output": "使用 engineering-workflow 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，再交给 engineering-execution-plan。",
+      "expected_output": "使用 repo-foundry 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，再交给 engineering-execution-plan。",
       "files": [],
       "assertions": [
         {

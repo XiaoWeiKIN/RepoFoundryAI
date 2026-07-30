@@ -17,7 +17,7 @@ This document describes their selected implementation.
 
 ## Purpose
 
-Add a repository-aware bootstrap surface to Engineering Workflow. It creates
+Add a repository-aware bootstrap surface to RepoFoundry AI. It creates
 the minimum documentation control plane needed for Codex to navigate a project
 and composes the deterministic, idempotent `epctl init` contract for EP-owned
 artifacts.
@@ -46,7 +46,7 @@ The first version provides one optional profile, `codex`, with these behaviors:
 - materialize selected Specs with a versioned manifest, content lock, and local
   routing index;
 - validate the Harness automatically after bootstrap and through
-  `engineeringctl validate`;
+  `foundryctl validate`;
 - enforce a maximum of 100 physical lines for each registered Agent instruction
   file.
 
@@ -71,14 +71,14 @@ files must be registered explicitly before the validator owns their limit.
 Preview is the safe default:
 
 ```bash
-python3 scripts/engineeringctl.py --repo . bootstrap --profile codex
-python3 scripts/engineeringctl.py --repo . bootstrap --profile codex --dry-run
+python3 scripts/foundryctl.py --repo . bootstrap --profile codex
+python3 scripts/foundryctl.py --repo . bootstrap --profile codex --dry-run
 ```
 
 Apply is explicit:
 
 ```bash
-python3 scripts/engineeringctl.py --repo . bootstrap --profile codex --apply
+python3 scripts/foundryctl.py --repo . bootstrap --profile codex --apply
 ```
 
 `--apply` and `--dry-run` are mutually exclusive. The command emits JSON with:
@@ -97,7 +97,7 @@ any conflict exists.
 Harness verification is available explicitly:
 
 ```bash
-python3 scripts/engineeringctl.py --repo . validate --harness
+python3 scripts/foundryctl.py --repo . validate --harness
 ```
 
 Normal `validate` also checks the Harness whenever
@@ -156,7 +156,7 @@ Schema version 1:
 ```json
 {
   "version": 1,
-  "owner": "engineering-workflow",
+  "owner": "repo-foundry",
   "profile": "codex",
   "components": [
     "engineering-execution-plan"
@@ -233,24 +233,24 @@ value, and required value so an Agent can remediate the problem directly.
 ```mermaid
 flowchart LR
     I["epctl init"] --> E["EP-owned artifact storage"]
-    B["engineeringctl bootstrap --profile codex"] --> K["Project knowledge entrypoints"]
+    B["foundryctl bootstrap --profile codex"] --> K["Project knowledge entrypoints"]
     B --> M["Harness manifest"]
     K --> A["AGENTS.md: routing only"]
     K --> D["Architecture and governance docs"]
     E --> D
-    M --> V["engineeringctl validate"]
+    M --> V["foundryctl validate"]
     A --> V
     D --> V
 ```
 
 `engineering-execution-plan` owns EP directories, indexes, configuration and ID
-state. `engineering-workflow` owns creation of missing Harness entrypoints and
+state. `repo-foundry` owns creation of missing Harness entrypoints and
 its manifest. Once a document exists, its content is repository-owned;
 bootstrap will not rewrite it.
 
 ## Implementation Surface
 
-- `scripts/engineeringctl.py`
+- `scripts/foundryctl.py`
   - own bootstrap planning, apply, manifest loading, and Harness validation;
   - expose `spec plan`, `spec sync`, `spec update`, and `spec validate`;
   - load the bundled EP initialization contract only during composition.
@@ -267,7 +267,7 @@ bootstrap will not rewrite it.
   - expose no Bootstrap or Harness validation command.
 - `assets/`
   - add Codex Harness templates.
-- `tests/test_engineeringctl.py`
+- `tests/test_foundryctl.py`
   - add dry-run, apply, idempotence, preservation, conflict, manifest, and line
     limit tests.
 - `engineering-execution-plan/tests/test_epctl.py`
@@ -283,12 +283,12 @@ bootstrap will not rewrite it.
 - Existing `init` tests and behavior remain unchanged.
 - Preview produces no repository changes.
 - Apply creates the declared structure and passes
-  `engineeringctl validate --harness`.
+  `foundryctl validate --harness`.
 - Empty repositories select Core only; Go, TypeScript, Python, and polyglot
   Git fixtures select exactly the matching language Specs.
 - Lock files record the full resolved remote commit; sync remains pinned while
   update adopts a moved branch.
-- `engineeringctl spec validate` proves manifest, lock, local content, project
+- `foundryctl spec validate` proves manifest, lock, local content, project
   references, and routing integrity.
 - Repeating apply produces no content changes.
 - Existing files remain byte-identical.

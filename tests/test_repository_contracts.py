@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from tests.spec_git_fixture import create_git_catalog
@@ -253,9 +255,9 @@ class RepositoryContractTestCase(unittest.TestCase):
         chinese_readme = (ROOT / "README.zh-CN.md").read_text(
             encoding="utf-8"
         )
-        self.assertTrue(readme.startswith("# EngineeringWorkflow\n"))
+        self.assertTrue(readme.startswith("# RepoFoundry AI\n"))
         self.assertTrue(
-            chinese_readme.startswith("# EngineeringWorkflow\n")
+            chinese_readme.startswith("# RepoFoundry AI\n")
         )
         self.assertIn(
             "[简体中文](README.zh-CN.md) | English",
@@ -265,16 +267,34 @@ class RepositoryContractTestCase(unittest.TestCase):
             "简体中文 | [English](README.md)",
             chinese_readme.splitlines()[:5],
         )
-        self.assertIn(
-            "https://github.com/XiaoWeiKIN/EngineeringWorkflow.git",
+        self.assertIn("<repo-url>", readme)
+        self.assertIn("<repo-url>", chinese_readme)
+        self.assertNotIn(
+            "https://github.com/XiaoWeiKIN/RepoFoundry.git",
             readme,
         )
-        self.assertIn(
-            "https://github.com/XiaoWeiKIN/EngineeringWorkflow.git",
+        self.assertNotIn(
+            "https://github.com/XiaoWeiKIN/RepoFoundry.git",
             chinese_readme,
         )
         self.assertNotIn("XiaoWeiKIN/ExecutionPlan", readme)
         self.assertNotIn("XiaoWeiKIN/ExecutionPlan", chinese_readme)
+        self.assertIn(
+            "The Agent-Native Engineering System",
+            readme,
+        )
+        self.assertIn(
+            "Turn any repository into an AI-ready engineering system.",
+            readme,
+        )
+        self.assertIn(
+            "The Agent-Native Engineering System",
+            chinese_readme,
+        )
+        self.assertIn(
+            "把任何代码仓库锻造成 AI Agent 可以可靠工作的工程系统。",
+            chinese_readme,
+        )
         for text in (readme, chinese_readme):
             self.assertIn("target-repository/", text)
             self.assertIn("benchmarks/", text)
@@ -288,8 +308,16 @@ class RepositoryContractTestCase(unittest.TestCase):
                 text,
             )
         self.assertIn(
-            "name: engineering-workflow",
+            "name: repo-foundry",
             (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "# RepoFoundry AI",
+            (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            'display_name: "RepoFoundry AI"',
+            (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8"),
         )
         self.assertIn(
             "name: engineering-execution-plan",
@@ -318,6 +346,33 @@ class RepositoryContractTestCase(unittest.TestCase):
             ),
         )
 
+    def test_repofoundry_ai_brand_assets_are_valid(self) -> None:
+        brand = ROOT / "assets" / "brand"
+        for name in ("repofoundry-mark.svg", "repofoundry-icon.svg"):
+            path = brand / name
+            root = ET.parse(path).getroot()
+            self.assertTrue(root.tag.endswith("svg"))
+            self.assertEqual(root.attrib.get("viewBox"), "0 0 256 256")
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("#17202A", text)
+            self.assertIn("#FF6B2C", text)
+
+        icon_svg = (brand / "repofoundry-icon.svg").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("#F7F4ED", icon_svg)
+
+        png = (brand / "repofoundry-icon.png").read_bytes()
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(png[12:16], b"IHDR")
+        self.assertEqual(struct.unpack(">II", png[16:24]), (256, 256))
+        self.assertIn(png[25], (4, 6))
+
+        guide = (brand / "README.md").read_text(encoding="utf-8")
+        self.assertIn("RepoFoundry AI Brand Assets", guide)
+        self.assertIn("repository braces", guide)
+        self.assertIn("AI spark", guide)
+
     def test_codex_agents_bootstrap_template_has_reserved_line_budget(self) -> None:
         template = ROOT / "assets" / "harness-agents.md"
         line_count = len(template.read_text(encoding="utf-8").splitlines())
@@ -334,14 +389,14 @@ class RepositoryContractTestCase(unittest.TestCase):
 
     def test_workflow_has_no_bundled_engineering_spec_content(self) -> None:
         self.assertFalse((ROOT / "engineering-specs").exists())
-        engineeringctl = (
-            ROOT / "scripts" / "engineeringctl.py"
+        foundryctl = (
+            ROOT / "scripts" / "foundryctl.py"
         ).read_text(encoding="utf-8")
         self.assertIn(
             "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
-            engineeringctl,
+            foundryctl,
         )
-        self.assertNotIn("SPEC_CATALOG_DIR", engineeringctl)
+        self.assertNotIn("SPEC_CATALOG_DIR", foundryctl)
 
     def test_execplan_consumes_sealed_benchmark_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -664,7 +719,7 @@ class RepositoryContractTestCase(unittest.TestCase):
     def test_skills_work_when_installed_independently(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
-            workflow_skill = base / "engineering-workflow"
+            workflow_skill = base / "repo-foundry"
             workflow_skill.mkdir()
             for name in (
                 "SKILL.md",
@@ -734,7 +789,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             workflow_repo = base / "workflow-repo"
             workflow_repo.mkdir()
             catalog_repository, _ = create_git_catalog(base)
-            workflow_script = workflow_skill / "scripts" / "engineeringctl.py"
+            workflow_script = workflow_skill / "scripts" / "foundryctl.py"
             self.run_cli(
                 workflow_script,
                 workflow_repo,
