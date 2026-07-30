@@ -166,10 +166,10 @@ Use `sync-research` after membership changes. Resolve missing local references
 before review readiness. Absolute source paths are provenance warnings because
 other machines cannot reproduce them without an alternate source.
 Structured topics may remain incomplete while evidence is building. Before
-review readiness, every schema 2 required section and `C-NNN` argument block
-must be complete, including its evidence, reasoning, decision impact,
-confidence, and falsifier. Legacy schema 1 topics retain their original
-evidence-record and Finding requirements.
+review readiness, every schema 2.1 semantic role, `A-NNN` analysis section,
+`E-NNN` evidence mapping, `S-NNN` source, and analysis-linked falsifier must be
+complete. Legacy schema 1 and schema 2 topics retain their original validation
+requirements.
 
 ## Synthesis
 

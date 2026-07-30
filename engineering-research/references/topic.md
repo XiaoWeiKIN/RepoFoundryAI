@@ -1,35 +1,33 @@
-# Human-readable structured topic documents
+# Learning-first structured topic documents
 
-A structured topic is one auditable, decision-relevant argument inside a
-Research corpus. Topic schema 2 is optimized for two readers at once:
+A structured topic is one auditable explanation inside a Research corpus.
+Schema 2.1 serves three readers without forcing them through the same path:
 
-- a decision-maker who needs the answer, confidence, boundary, and consequence
-  in the first screen;
-- a reviewer who needs to trace every material claim to evidence, reasoning,
-  and a falsifier.
+- a decision-maker can stop after the brief and implications;
+- a learner can follow the mental model and continuous analysis;
+- a reviewer can continue into falsifiers, the evidence index, and sources.
 
-It is not a chronological research diary and not a form with one section for
-every activity performed.
+The analysis is the main research product. The brief navigates it, and the
+evidence index audits it.
 
 ## Contents
 
 - Create a topic
 - Reader contract
-- Responsibility boundary
-- Required reading flow
-- Claim contract
-- Optional modules
+- Dual-speed reading flow
+- Semantic roles and visible titles
+- Analysis contract
+- Evidence and falsifier contract
 - Validation and compatibility
 
 ```mermaid
 flowchart LR
-    Q["RQ-NNN"] --> B["Decision Brief"]
-    B --> M["Model at a Glance"]
-    M --> C["C-NNN claims"]
-    E["Code, sources, experiments"] --> C
-    C --> O["Options and risks"]
-    O --> H["Handoff"]
-    H --> S["SYNTHESIS.md"]
+    B["Decision brief"] --> M["Mental model"]
+    M --> A["Continuous A-NNN analysis"]
+    A --> I["Implications"]
+    I --> H["Handoff"]
+    A -.->|"Review path"| E["E-NNN evidence index"]
+    E --> S["S-NNN sources"]
 ```
 
 ## Create a topic
@@ -48,10 +46,9 @@ The command:
 
 - verifies every referenced `RQ-NNN`;
 - binds the topic to the current `RR-NNN`;
-- creates a schema 2 topic at `notes/<slug>.md`;
+- creates a schema 2.1 topic at `notes/<slug>.md`;
 - links it from the current Round's `Evidence Added`;
-- registers package-local `notes/` when the Research adopted a linked corpus;
-- refreshes the manifest and assigns the document `role: topic`;
+- refreshes the manifest and assigns `role: topic`;
 - rolls back the topic, Round, and manifest together on failure.
 
 Start a new Round before adding a topic to review-ready Research. Do not edit a
@@ -59,155 +56,171 @@ concluded package.
 
 ## Reader contract
 
-Write in the order a human makes a decision, not the order the researcher did
-the work:
+Write in the order a person understands and tests an argument:
 
-1. give the answer;
+1. state the answer, confidence, consequence, and boundary;
 2. establish the smallest useful mental model;
-3. prove distinct claims;
-4. compare real choices and expose uncertainty;
-5. state exactly what changes downstream.
+3. walk through the mechanism and causal reasoning;
+4. test plausible alternatives and counterevidence;
+5. derive concrete decision or architecture consequences;
+6. show what evidence would change the judgment;
+7. hand off downstream changes;
+8. leave compact traceability for reviewers.
 
-Apply these rules throughout:
+Apply these rules:
 
-- Put the conclusion before chronology, background, or methodology.
-- Make each `### C-NNN` heading a complete claim, not a category such as
-  "Authentication" or "Analysis."
-- Keep one primary claim per block.
-- Cite evidence next to the claim it supports.
-- Separate observed facts from the reasoning that connects them to a decision.
-- Use tables for repeated-field comparison, Mermaid for relationships or
-  sequence, and prose for argument. Do not force everything into tables.
-- State boundaries and falsifiers close to the affected claim.
-- Do not repeat the same conclusion in separate Evidence, Analysis, Findings,
-  and Synthesis-impact sections.
+- Treat the brief as navigation, not a substitute for analysis.
+- Make every analysis heading a complete explanatory claim.
+- Develop reasoning in connected prose. Use examples, counterexamples,
+  diagrams, timelines, and comparison tables when they clarify the mechanism.
+- Put audit IDs after reader-facing words, for example
+  `### A handle must carry explicit ownership（A-003）`.
+- Cite `E-NNN` observations at the point where they affect reasoning.
+- Separate observed facts from inference without splitting the document into
+  repetitive Evidence, Analysis, and Findings reports.
+- Put the evidence index after Handoff so audit material does not interrupt the
+  ordinary reading path.
 - Move raw logs, captures, benchmark output, and generated dumps to
-  `artifacts/`; link them instead of interrupting the reading flow.
-- Delete authoring instructions and empty optional material before review.
+  `artifacts/`.
+- Match visible headings and language to the audience.
 
-The first screen must let a reader answer: What is true? How sure are we? When
-does it hold? What decision changes?
+For a long topic, provide three short reading routes: quick decision, mechanism
+learning, and full review. Do not add them when the topic is already shorter
+than the routes themselves.
 
-## Responsibility boundary
+## Dual-speed reading flow
 
-| Layer | Responsibility |
-|---|---|
-| `RESEARCH.md` | Purpose, current state, stable Questions, routing, blockers |
-| Structured topic | Deep evidence and reasoning for a bounded question |
-| `SYNTHESIS.md` | Bounded cross-topic recommendation and downstream handoff |
+The ordinary reading path ends at Handoff:
 
-One topic may address several tightly coupled Questions. Split it when the
-evidence method, decision relevance, or likely conclusion becomes independent.
-
-## Required reading flow
-
-Keep these schema 2 sections in relative order. Extra sections are allowed
-where they improve the argument.
-
-1. **Decision Brief** — direct answer, calibrated confidence, decision impact,
-   applicability boundary, related Questions, and one short relevance
-   paragraph.
-2. **Model at a Glance** — the minimum diagram, protocol timeline, invariant
-   list, or comparison needed to understand later claims.
-3. **Claims and Evidence** — one or more auditable `C-NNN` argument blocks.
-4. **Options and Trade-offs** — only credible alternatives, including evidence
-   for and against each one and the conditions under which it wins.
-5. **Risks, Unknowns, and Validation** — material limitations, unresolved
-   questions, experiments, owners, and monitoring triggers.
-6. **Handoff** — exact Synthesis delta and any justified ADR, ExecPlan,
-   prototype, or monitoring consequence.
-7. **Sources** — stable source registry with exact locators.
-8. **Revision Notes** — factual edit history.
-
-`Decision Brief` and `Handoff` serve different moments. The first tells a reader
-what the topic currently means; the second records what downstream artifacts
-must change and whether that change has been integrated.
-
-## Claim contract
-
-Each `C-NNN` block is a compact argument:
-
-```markdown
-### C-001 — Stateless HTTP still requires explicit session identity
-
-**Evidence**
-
-The handler rejects follow-up requests without the negotiated session header.
-See `src/http/session.ts#validateSession` and artifact `A-004`.
-
-**Reasoning**
-
-Transport statelessness removes server affinity; it does not remove the
-protocol-level identity needed to associate a request with negotiated state.
-
-**Decision impact**
-
-Keep session identity in the public HTTP contract and test it independently of
-load-balancer affinity.
-
-**Confidence**
-
-High — implementation, protocol documentation, and integration tests agree.
-
-**Falsifier**
-
-A supported request flow that resumes negotiated state without any explicit or
-implicit session identity would overturn this claim.
+```text
+Brief → Mental model → Analysis → Alternatives → Implications
+      → Falsifiers / validation → Handoff
 ```
 
-The heading carries the claim. The five fields answer:
+The audit appendix follows:
 
-| Field | Reader question |
-|---|---|
-| Evidence | What was actually observed, and where can I verify it? |
-| Reasoning | Why does that observation support this claim? |
-| Decision impact | What changes if the claim is accepted? |
-| Confidence | How strong and convergent is the support? |
-| Falsifier | What would overturn or materially weaken it? |
+```text
+Evidence index → Sources → Revision notes
+```
 
-Use `High`, `Medium`, or `Low` confidence. Confidence reflects evidence quality,
-independence, freshness, and contradiction; it is not rhetorical emphasis.
+This order lets a learner encounter evidence inside the explanation while a
+reviewer still gets a deterministic traceability surface.
 
-## Optional modules
+## Semantic roles and visible titles
 
-Add an extra section only when it shortens or clarifies the core argument.
-Useful examples include:
+Schema 2.1 decouples validation from prose titles. Each required section
+contains one invisible marker:
 
-- a protocol timeline for a stateful interaction;
-- an experiment matrix when several variables were controlled;
-- a misconception explicitly ruled out by evidence;
-- a version or platform compatibility matrix;
-- a short methodology note when source selection could bias the result.
+```markdown
+## 进程级共享与请求级隔离可以同时成立
 
-Optional modules do not become new mandatory boilerplate. Place them after the
-core model or relevant claim and give them a title that tells the reader what
-the section establishes.
+<!-- topic-role: mental-model -->
+```
+
+Authors may rewrite or localize the visible `##` title. Keep the
+`<!-- topic-role: ... -->` marker unchanged. The required roles, in order, are:
+
+1. `decision-brief`
+2. `mental-model`
+3. `analysis`
+4. `alternatives`
+5. `implications`
+6. `falsifiers`
+7. `handoff`
+8. `evidence-index`
+9. `sources`
+10. `revision-notes`
+
+Extra unroled sections are allowed when they improve the explanation. Do not
+add a new semantic role for every optional module.
+
+## Analysis contract
+
+Use `A-NNN` for a distinct reasoning unit. Put the ID at the end of a
+claim-bearing level-three heading:
+
+```markdown
+### TCP connection 与 MCP session 是独立边界（A-002）
+
+A TCP connection can carry several HTTP requests. HTTP/2 can carry them
+concurrently. An SSE stream belongs to one response, while a protocol session
+requires an explicit cross-request mechanism. The handler creates its server
+inside each request path. [E-001](#e-001) [E-005](#e-005)
+
+This separation means connection affinity cannot provide workflow ownership or
+authorization.
+```
+
+Each analysis unit must:
+
+- contain one `A-NNN`;
+- explain a mechanism or causal step in substantive prose;
+- cite at least one registered `E-NNN`;
+- distinguish what was observed from what was inferred;
+- connect to the next reasoning step or a concrete consequence.
+
+The structural validator uses a small prose floor to reject conclusion-only
+cards. That floor cannot measure explanatory quality. Human review should ask:
+
+- Can a reader reconstruct how the conclusion was reached?
+- Are assumptions and intermediate steps visible?
+- Does an example or diagram reduce cognitive load?
+- Could a knowledgeable reviewer identify the weakest inference?
+
+## Evidence and falsifier contract
+
+The evidence index is compact:
+
+| ID | Observation | Exact source | Supports | Confidence |
+|---|---|---|---|---|
+| E-001 | Handler creates one server per request. | S-001 | A-001, A-002 | High |
+
+Each row must:
+
+- use a unique `E-NNN`;
+- state an observation, not a conclusion;
+- cite exact `S-NNN` sources or auditable paths;
+- name the `A-NNN` analysis sections it supports;
+- use `High`, `Medium`, or `Low` confidence.
+
+Every `E-NNN` cited by analysis must exist in the index. The index must map it
+back to the same `A-NNN`. Every referenced `S-NNN` must exist in Sources.
+
+Falsifiers stay in the reader path because they explain uncertainty:
+
+| Affected analysis | Evidence that changes the judgment | Why it matters | Validation |
+|---|---|---|---|
+| A-002 | A supported path persists state across requests. | The lifecycle boundary changes. | Run a cross-request trace. |
+
+Record evidence that would weaken or overturn a judgment, not a generic risk
+inventory. Several analyses may share one falsifier when the same observation
+changes them together.
 
 ## Validation and compatibility
 
-`researchctl validate` enforces the schema 2 structural floor:
+`researchctl validate` enforces the schema 2.1 structural floor:
 
-- schema, parent Research, Round, author field, kebab-case filename;
+- schema, parent Research, Round, author field, and kebab-case filename;
 - a real link from the declared Round's `Evidence Added`;
-- required sections and their relative order;
+- all semantic roles exactly once and in relative order;
 - at least one valid parent `RQ-NNN`;
-- at least one unique `C-NNN` claim;
-- Evidence, Reasoning, Decision impact, Confidence, and Falsifier in reading
-  order for every claim;
-- calibrated confidence vocabulary;
+- answer, calibrated confidence, decision impact, and applicability boundary;
+- unique `A-NNN` analysis sections with substantive explanatory prose;
+- bidirectional `A-NNN` ↔ `E-NNN` traceability;
+- valid evidence rows, source references, and confidence vocabulary;
+- analysis-linked falsifiers;
 - manifest membership and `role: topic`.
 
-During evidence building, unfinished quality markers are warnings. Before
-`mark-review-ready`, they become errors. Cancelled Research may retain
-incomplete topic content for audit.
+During evidence building, unfinished quality requirements are warnings. Before
+`mark-review-ready`, they become errors. Structural contradictions such as
+duplicate IDs or references to unknown analysis/evidence remain errors.
 
-Existing schema 1 topics remain valid and are not rewritten. Their original
-14-section, `E-NNN`, and `F-NNN` contract is validated as before. New topics use
-schema 2. Migrate an old topic only when an author is already revising it; do
-not create churn solely to change its shape.
+Existing schema 1 topics keep their original 14-section, `E-NNN`, and `F-NNN`
+contract. Existing schema 2 claim-card topics also remain valid. New topics use
+schema 2.1. Migrate an older topic only when an author is already revising it.
 
-The validator cannot prove that a source is authoritative, a claim is correct,
-alternatives are fair, or prose is easy to read. Human review still owns those
+The validator cannot prove that prose teaches well, a source is authoritative,
+an inference is correct, or counterevidence is fair. Human review owns those
 judgments.
 
 Ordinary Markdown notes remain compatible. Strict topic validation applies

@@ -118,69 +118,123 @@ class ResearchctlTestCase(unittest.TestCase):
         )
         path.write_text(text, encoding="utf-8")
 
-    def complete_topic(self, path: Path) -> None:
-        self.complete_placeholders(path)
-        self.replace_section(
-            path,
-            "Decision Brief",
-            "\n".join(
-                (
-                    "> **Answer:** The inspected contract is stable.",
-                    ">",
-                    "> **Confidence:** High — implementation and tests agree.",
-                    ">",
-                    "> **Decision impact:** Keep the current option.",
-                    ">",
-                    "> **Applies when:** The inspected implementation is used.",
-                    "",
-                    "Related Research Questions: `RQ-001`.",
-                    "",
-                    "This topic determines which contract is safe.",
-                )
-            ),
-        )
-        self.replace_section(
-            path,
-            "Claims and Evidence",
-            "\n".join(
-                (
-                    "### C-001 — The inspected contract is stable",
-                    "",
-                    "**Evidence**",
-                    "",
-                    "The implementation and its tests use the same contract; "
-                    "see `src/contract.py` and `tests/test_contract.py`.",
-                    "",
-                    "**Reasoning**",
-                    "",
-                    "The current option preserves observed behavior.",
-                    "",
-                    "**Decision impact**",
-                    "",
-                    "Keep the current option.",
-                    "",
-                    "**Confidence**",
-                    "",
-                    "High — implementation and tests agree.",
-                    "",
-                    "**Falsifier**",
-                    "",
-                    "A supported implementation with a different contract.",
-                )
-            ),
-        )
-
     @staticmethod
-    def convert_topic_to_complete_v1(path: Path) -> None:
+    def topic_frontmatter(path: Path, schema_version: str) -> str:
         text = path.read_text(encoding="utf-8")
         end = text.find("\n---\n", 4)
         if end < 0:
             raise AssertionError("topic frontmatter not found")
-        frontmatter = text[: end + len("\n---\n")].replace(
-            'schema_version: "2"',
-            'schema_version: "1"',
-            1,
+        frontmatter = text[: end + len("\n---\n")]
+        return re.sub(
+            r'(?m)^schema_version:\s*"[^"]+"$',
+            f'schema_version: "{schema_version}"',
+            frontmatter,
+            count=1,
         )
+
+    def complete_topic(self, path: Path) -> None:
+        frontmatter = self.topic_frontmatter(path, "2.1")
+        body = """
+
+# Complete learning topic
+
+## 结论速览
+
+<!-- topic-role: decision-brief -->
+
+> **答案：** The inspected implementation and tests share one stable contract.
+>
+> **置信度：** High — implementation and tests agree.
+>
+> **决策影响：** Keep the current contract.
+>
+> **适用边界：** The inspected implementation is used.
+
+关联研究问题：`RQ-001`。
+
+This topic determines which contract is safe.
+
+**按阅读目标选择路径：**
+
+- Quick decision: read this brief and implications.
+- Learn: continue through the model and A-001.
+- Full review: inspect the evidence index and sources.
+
+## 先理解实现与测试如何表达同一契约
+
+<!-- topic-role: mental-model -->
+
+The implementation defines behavior and the tests independently exercise it.
+Their agreement is the minimum model needed by the analysis.
+
+## 从独立实现与测试推导契约稳定性
+
+<!-- topic-role: analysis -->
+
+The analysis first observes the implementation, then checks whether the tests
+encode the same externally visible behavior.
+
+### 实现与测试共同约束当前契约（A-001）
+
+The implementation exposes one contract, while an independently maintained
+test suite exercises the same inputs, outputs, and failure boundary. Their
+agreement is stronger than either source alone because a mismatch would fail
+the suite. The exact observation is registered as E-001. This supports keeping
+the contract for the inspected version while leaving external integrations
+outside the claim.
+
+## 替代解释没有得到同等支持
+
+<!-- topic-role: alternatives -->
+
+No inspected implementation or test supports a different contract.
+
+## 当前证据支持保留现有契约
+
+<!-- topic-role: implications -->
+
+Keep the current contract and add conformance coverage before expanding its
+applicability to external integrations.
+
+## 哪些新证据会改变当前判断
+
+<!-- topic-role: falsifiers -->
+
+| 影响的分析 | 会削弱或推翻当前判断的证据 | 为什么重要 | 如何验证 |
+|---|---|---|---|
+| A-001 | A supported implementation uses another contract. | The compatibility claim would narrow. | Run conformance tests. |
+
+## 下游交接
+
+<!-- topic-role: handoff -->
+
+Synthesis should retain the current contract. No ADR is ready yet.
+
+## 证据索引
+
+<!-- topic-role: evidence-index -->
+
+| ID | 观察 | 精确来源 | 支持的分析 | 置信度 |
+|---|---|---|---|---|
+| E-001 | Implementation and tests use the same contract. | S-001 | A-001 | High |
+
+## 来源
+
+<!-- topic-role: sources -->
+
+- S-001 — `src/contract.py` and `tests/test_contract.py` — inspected contract.
+
+## 修订记录
+
+<!-- topic-role: revision-notes -->
+
+- Complete schema 2.1 fixture.
+"""
+        path.write_text(frontmatter + body.lstrip("\n"), encoding="utf-8")
+
+    @staticmethod
+    def convert_topic_to_complete_v1(path: Path) -> None:
+        frontmatter = ResearchctlTestCase.topic_frontmatter(path, "1")
         body = """
 
 # Legacy topic
@@ -260,6 +314,77 @@ No further inquiry is needed before synthesis.
 ## Revision Notes
 
 - Legacy schema 1 compatibility fixture.
+"""
+        path.write_text(frontmatter + body.lstrip("\n"), encoding="utf-8")
+
+    @staticmethod
+    def convert_topic_to_complete_v2(path: Path) -> None:
+        frontmatter = ResearchctlTestCase.topic_frontmatter(path, "2")
+        body = """
+
+# Legacy claim-card topic
+
+## Decision Brief
+
+> **Answer:** The inspected contract is stable.
+>
+> **Confidence:** High — implementation and tests agree.
+>
+> **Decision impact:** Keep the current option.
+>
+> **Applies when:** The inspected implementation is used.
+
+Related Research Questions: `RQ-001`.
+
+This question determines which contract is safe.
+
+## Model at a Glance
+
+The implementation and tests express the same contract.
+
+## Claims and Evidence
+
+### C-001 — The inspected contract is stable
+
+**Evidence**
+
+The implementation and tests use the same contract.
+
+**Reasoning**
+
+Independent agreement supports the current behavior.
+
+**Decision impact**
+
+Keep the current option.
+
+**Confidence**
+
+High — implementation and tests agree.
+
+**Falsifier**
+
+A supported implementation with another contract.
+
+## Options and Trade-offs
+
+No credible alternative was found in the inspected boundary.
+
+## Risks, Unknowns, and Validation
+
+External integrations remain outside the claim.
+
+## Handoff
+
+Synthesis should retain the current contract.
+
+## Sources
+
+- S-001 — `src/contract.py` and `tests/test_contract.py`.
+
+## Revision Notes
+
+- Complete legacy schema 2 fixture.
 """
         path.write_text(frontmatter + body.lstrip("\n"), encoding="utf-8")
 
@@ -345,29 +470,41 @@ No further inquiry is needed before synthesis.
 
         self.assertEqual(topic.parent, research.parent / "notes")
         topic_text = topic.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2"', topic_text)
+        self.assertIn('schema_version: "2.1"', topic_text)
         self.assertIn("doc_type: research-topic", topic_text)
         self.assertIn("parent_id: R-001", topic_text)
         self.assertIn("round_id: RR-001", topic_text)
         self.assertIn("`RQ-001`", topic_text)
         topic_headings = re.findall(r"(?m)^## (.+)$", topic_text)
-        self.assertEqual(topic_headings[0], "Decision Brief")
+        self.assertEqual(topic_headings[0], "结论速览")
         self.assertEqual(
-            topic_headings,
+            re.findall(
+                r"<!--\s*topic-role:\s*([a-z0-9-]+)\s*-->",
+                topic_text,
+            ),
             [
-                "Decision Brief",
-                "Model at a Glance",
-                "Claims and Evidence",
-                "Options and Trade-offs",
-                "Risks, Unknowns, and Validation",
-                "Handoff",
-                "Sources",
-                "Revision Notes",
+                "decision-brief",
+                "mental-model",
+                "analysis",
+                "alternatives",
+                "implications",
+                "falsifiers",
+                "handoff",
+                "evidence-index",
+                "sources",
+                "revision-notes",
             ],
         )
-        self.assertNotIn("\n## Evidence\n", topic_text)
-        self.assertNotIn("\n## Analysis\n", topic_text)
-        self.assertNotIn("\n## Findings\n", topic_text)
+        self.assertIn("（A-001）", topic_text)
+        self.assertNotIn("\n## Claims and Evidence\n", topic_text)
+        self.assertLess(
+            topic_text.index("topic-role: analysis"),
+            topic_text.index("topic-role: implications"),
+        )
+        self.assertLess(
+            topic_text.index("topic-role: handoff"),
+            topic_text.index("topic-role: evidence-index"),
+        )
 
         round_text = (
             research.parent / "rounds" / "rr-001_baseline.md"
@@ -444,8 +581,8 @@ No further inquiry is needed before synthesis.
         self.complete_topic(topic)
         topic.write_text(
             topic.read_text(encoding="utf-8").replace(
-                "> **Confidence:** High",
-                "> **Confidence:** Certain",
+                "> **置信度：** High",
+                "> **置信度：** Certain",
                 1,
             ),
             encoding="utf-8",
@@ -456,25 +593,52 @@ No further inquiry is needed before synthesis.
             expected=2,
         )
         self.assertIn(
-            "Decision Brief confidence must start with",
+            "decision brief confidence must start with",
             uncalibrated_brief.stderr,
+        )
+
+        self.complete_topic(topic)
+        self.replace_section(
+            topic,
+            "从独立实现与测试推导契约稳定性",
+            "\n".join(
+                (
+                    "<!-- topic-role: analysis -->",
+                    "",
+                    "### 契约稳定（A-001）",
+                    "",
+                    "E-001.",
+                )
+            ),
+        )
+        shallow_analysis = self.run_cli(
+            "mark-review-ready",
+            "R-001",
+            expected=2,
+        )
+        self.assertIn(
+            "A-001 needs explanatory analysis",
+            shallow_analysis.stderr,
         )
 
         self.complete_topic(topic)
         topic.write_text(
             topic.read_text(encoding="utf-8").replace(
-                "**Falsifier**",
-                "**Disproof condition**",
+                "registered as E-001",
+                "registered in the evidence index",
                 1,
             ),
             encoding="utf-8",
         )
-        missing_falsifier = self.run_cli(
+        missing_evidence_link = self.run_cli(
             "mark-review-ready",
             "R-001",
             expected=2,
         )
-        self.assertIn("C-001 is missing Falsifier", missing_falsifier.stderr)
+        self.assertIn(
+            "A-001 must cite at least one E-NNN",
+            missing_evidence_link.stderr,
+        )
 
         self.complete_topic(topic)
         review_ready = Path(
@@ -508,6 +672,77 @@ No further inquiry is needed before synthesis.
             (completed.parent / "notes" / "cache-contract.md").is_file()
         )
         self.run_cli("validate")
+
+    def test_learning_topic_rejects_unknown_evidence_reference(self) -> None:
+        self.new_research("unknown-topic-evidence")
+        topic = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "unknown-evidence",
+                "--title",
+                "Unknown evidence",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        self.complete_topic(topic)
+        topic.write_text(
+            topic.read_text(encoding="utf-8").replace(
+                "registered as E-001",
+                "registered as E-999",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.run_cli("sync-research", "R-001")
+
+        denied = self.run_cli("validate", expected=1)
+        self.assertIn(
+            "A-001 cites unknown evidence E-999",
+            denied.stderr,
+        )
+
+    def test_learning_topic_role_order_is_independent_of_titles(self) -> None:
+        self.new_research("topic-role-order")
+        topic = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "role-order",
+                "--title",
+                "Role order",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        self.complete_topic(topic)
+        text = topic.read_text(encoding="utf-8")
+        text = text.replace(
+            "topic-role: alternatives",
+            "topic-role: temporary-role",
+            1,
+        )
+        text = text.replace(
+            "topic-role: implications",
+            "topic-role: alternatives",
+            1,
+        )
+        text = text.replace(
+            "topic-role: temporary-role",
+            "topic-role: implications",
+            1,
+        )
+        topic.write_text(text, encoding="utf-8")
+        self.run_cli("sync-research", "R-001")
+
+        denied = self.run_cli("validate", expected=1)
+        self.assertIn(
+            "required topic roles are out of order",
+            denied.stderr,
+        )
 
     def test_complete_legacy_schema_1_topic_remains_reviewable(self) -> None:
         research = self.new_research("legacy-topic")
@@ -548,6 +783,49 @@ No further inquiry is needed before synthesis.
         self.assertEqual(review_ready.name, "SYNTHESIS.md")
         self.assertIn(
             'schema_version: "1"',
+            topic.read_text(encoding="utf-8"),
+        )
+        self.run_cli("validate")
+
+    def test_complete_legacy_schema_2_topic_remains_reviewable(self) -> None:
+        research = self.new_research("legacy-claim-topic")
+        topic = Path(
+            self.run_cli(
+                "new-topic",
+                "R-001",
+                "--slug",
+                "legacy-claim-contract",
+                "--title",
+                "Legacy claim contract",
+                "--question",
+                "RQ-001",
+            ).stdout.strip()
+        )
+        self.convert_topic_to_complete_v2(topic)
+
+        synthesis = research.parent / "SYNTHESIS.md"
+        self.complete_placeholders(research)
+        self.complete_placeholders(synthesis)
+        self.replace_section(
+            research,
+            "Research Questions",
+            "\n".join(
+                (
+                    "| ID | Status | Question | Answer or disposition | Evidence |",
+                    "|---|---|---|---|---|",
+                    "| RQ-001 | answered | Which contract works? | "
+                    "The claim-card contract works. | "
+                    "`notes/legacy-claim-contract.md` |",
+                )
+            ),
+        )
+
+        review_ready = Path(
+            self.run_cli("mark-review-ready", "R-001").stdout.strip()
+        )
+        self.assertEqual(review_ready.name, "SYNTHESIS.md")
+        self.assertIn(
+            'schema_version: "2"',
             topic.read_text(encoding="utf-8"),
         )
         self.run_cli("validate")

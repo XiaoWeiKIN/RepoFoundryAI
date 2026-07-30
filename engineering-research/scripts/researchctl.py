@@ -91,7 +91,19 @@ TOPIC_V2_SECTIONS = (
     "Sources",
     "Revision Notes",
 )
-TOPIC_SCHEMA_VERSIONS = {"1", "2"}
+TOPIC_V21_ROLES = (
+    "decision-brief",
+    "mental-model",
+    "analysis",
+    "alternatives",
+    "implications",
+    "falsifiers",
+    "handoff",
+    "evidence-index",
+    "sources",
+    "revision-notes",
+)
+TOPIC_SCHEMA_VERSIONS = {"1", "2", "2.1"}
 SYNTHESIS_SECTIONS = (
     "Executive Conclusion",
     "Supported Findings",
@@ -136,12 +148,30 @@ TOPIC_BRIEF_LABELS = (
     "Decision impact",
     "Applies when",
 )
+TOPIC_V21_BRIEF_FIELDS = (
+    ("Answer", ("Answer", "答案")),
+    ("Confidence", ("Confidence", "置信度")),
+    ("Decision impact", ("Decision impact", "决策影响")),
+    ("Applies when", ("Applies when", "适用边界")),
+)
+TOPIC_V21_BRIEF_LABELS = tuple(
+    alias
+    for _, aliases in TOPIC_V21_BRIEF_FIELDS
+    for alias in aliases
+)
+TOPIC_MIN_ANALYSIS_CHARS = 120
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 RESEARCH_ID_RE = re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE)
 RESEARCH_QUESTION_ID_RE = re.compile(r"RQ-(\d{3,})", re.IGNORECASE)
 ROUND_ID_RE = re.compile(r"\bRR-(\d{3,})\b", re.IGNORECASE)
 TOPIC_EVIDENCE_ID_RE = re.compile(r"\bE-(\d{3,})\b", re.IGNORECASE)
 TOPIC_FINDING_ID_RE = re.compile(r"\bF-(\d{3,})\b", re.IGNORECASE)
+TOPIC_ANALYSIS_ID_RE = re.compile(r"\bA-(\d{3,})\b", re.IGNORECASE)
+TOPIC_SOURCE_ID_RE = re.compile(r"\bS-(\d{3,})\b", re.IGNORECASE)
+TOPIC_ROLE_RE = re.compile(
+    r"<!--\s*topic-role\s*:\s*([a-z0-9-]+)\s*-->",
+    re.IGNORECASE,
+)
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -1428,7 +1458,7 @@ def markdown_label_value(
 ) -> tuple[int, str] | None:
     prefix = r"(?m)^\s*(?:>\s*)?"
     label_pattern = (
-        rf"{prefix}\*\*{re.escape(label)}:?\*\*"
+        rf"{prefix}\*\*{re.escape(label)}[:：]?\*\*"
     )
     match = re.search(label_pattern, text, re.IGNORECASE)
     if not match:
@@ -1437,7 +1467,7 @@ def markdown_label_value(
         candidate.start()
         for other_label in labels
         for candidate in re.finditer(
-            rf"{prefix}\*\*{re.escape(other_label)}:?\*\*",
+            rf"{prefix}\*\*{re.escape(other_label)}[:：]?\*\*",
             text[match.end() :],
             re.IGNORECASE,
         )
@@ -1454,6 +1484,413 @@ def markdown_label_value(
     )
     value = re.sub(r"(?m)^\s*>\s?", "", value).strip()
     return match.start(), value
+
+
+def markdown_alias_label_value(
+    text: str,
+    aliases: tuple[str, ...],
+    all_labels: tuple[str, ...],
+) -> tuple[int, str] | None:
+    candidates = [
+        value
+        for alias in aliases
+        if (value := markdown_label_value(text, alias, all_labels))
+        is not None
+    ]
+    return min(candidates, key=lambda value: value[0]) if candidates else None
+
+
+def topic_role_entries(text: str) -> list[tuple[str, str, str]]:
+    entries: list[tuple[str, str, str]] = []
+    for heading, lines in markdown_sections(text):
+        body = "\n".join(lines).strip()
+        for role in TOPIC_ROLE_RE.findall(body):
+            entries.append((role.lower(), heading, body))
+    return entries
+
+
+def markdown_level_three_sections(
+    text: str,
+) -> list[tuple[str, list[str]]]:
+    result: list[tuple[str, list[str]]] = []
+    heading: str | None = None
+    lines: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if marker:
+            token = marker.group(1)
+            if fence is None:
+                fence = token[0]
+            elif token[0] == fence:
+                fence = None
+            if heading is not None:
+                lines.append(line)
+            continue
+        match = (
+            re.match(r"^###\s+(.+?)\s*#*\s*$", line)
+            if fence is None
+            else None
+        )
+        if match:
+            if heading is not None:
+                result.append((heading, lines))
+            heading = match.group(1).strip()
+            lines = []
+        elif heading is not None:
+            lines.append(line)
+    if heading is not None:
+        result.append((heading, lines))
+    return result
+
+
+def topic_analysis_records(
+    body: str,
+) -> list[tuple[str, str, str]]:
+    records: list[tuple[str, str, str]] = []
+    for heading, lines in markdown_level_three_sections(body):
+        ids = normalized_topic_ids(
+            TOPIC_ANALYSIS_ID_RE,
+            "A",
+            heading,
+        )
+        if len(ids) == 1:
+            records.append(
+                (
+                    next(iter(ids)),
+                    heading,
+                    "\n".join(lines).strip(),
+                )
+            )
+    return records
+
+
+def topic_table_rows(body: str) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for line in visible_markdown_lines(body):
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = split_table_row(line)
+        if not cells:
+            continue
+        first = re.sub(r"<[^>]+>", "", cells[0]).strip()
+        if (
+            first.lower() == "id"
+            or first in {"影响的分析", "Analysis"}
+            or (first and set(first) <= {"-", ":"})
+        ):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def normalized_topic_ids(
+    pattern: re.Pattern[str],
+    prefix: str,
+    text: str,
+) -> set[str]:
+    return {
+        f"{prefix}-{int(value):03d}"
+        for value in pattern.findall(text)
+    }
+
+
+def visible_topic_text(text: str) -> str:
+    without_comments = re.sub(r"<!--[\s\S]*?-->", "", text)
+    return re.sub(r"\s+", " ", without_comments).strip()
+
+
+def validate_learning_topic_document(
+    path: Path,
+    text: str,
+    valid_question_ids: set[str],
+    quality_mode: str,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    quality_issues: list[str] = []
+    entries = topic_role_entries(text)
+    known_roles = set(TOPIC_V21_ROLES)
+    for role, heading, _ in entries:
+        if role not in known_roles:
+            errors.append(
+                f"{path}: ## {heading} declares unknown topic role {role!r}"
+            )
+
+    by_role: dict[str, list[tuple[str, str]]] = {
+        role: [] for role in TOPIC_V21_ROLES
+    }
+    for role, heading, body in entries:
+        if role in by_role:
+            by_role[role].append((heading, body))
+    for role in TOPIC_V21_ROLES:
+        if not by_role[role]:
+            errors.append(f"{path}: missing topic role {role}")
+        elif len(by_role[role]) > 1:
+            errors.append(f"{path}: duplicate topic role {role}")
+
+    if all(len(by_role[role]) == 1 for role in TOPIC_V21_ROLES):
+        observed = tuple(
+            role for role, _, _ in entries if role in known_roles
+        )
+        if observed != TOPIC_V21_ROLES:
+            errors.append(f"{path}: required topic roles are out of order")
+
+    for heading, lines in markdown_sections(text):
+        roles = TOPIC_ROLE_RE.findall("\n".join(lines))
+        if len(roles) > 1:
+            errors.append(
+                f"{path}: ## {heading} declares multiple topic roles"
+            )
+
+    def role_body(role: str) -> str:
+        values = by_role[role]
+        return values[0][1] if len(values) == 1 else ""
+
+    brief_body = role_body("decision-brief")
+    question_ids = normalized_topic_ids(
+        RESEARCH_QUESTION_ID_RE,
+        "RQ",
+        brief_body,
+    )
+    if not question_ids:
+        errors.append(f"{path}: topic must reference at least one RQ-NNN")
+    for question_id in sorted(question_ids - valid_question_ids):
+        errors.append(
+            f"{path}: topic references unknown Research Question {question_id}"
+        )
+
+    brief_fields = {
+        canonical: markdown_alias_label_value(
+            brief_body,
+            aliases,
+            TOPIC_V21_BRIEF_LABELS,
+        )
+        for canonical, aliases in TOPIC_V21_BRIEF_FIELDS
+    }
+    for canonical, field in brief_fields.items():
+        if field is None:
+            quality_issues.append(
+                f"{path}: decision brief is missing {canonical}"
+            )
+        elif not field[1]:
+            quality_issues.append(
+                f"{path}: decision brief has empty {canonical}"
+            )
+    brief_positions = [
+        field[0]
+        for field in brief_fields.values()
+        if field is not None
+    ]
+    if len(brief_positions) == len(TOPIC_V21_BRIEF_FIELDS):
+        if brief_positions != sorted(brief_positions):
+            quality_issues.append(
+                f"{path}: decision brief fields are out of order"
+            )
+    brief_confidence = brief_fields["Confidence"]
+    if brief_confidence and not re.match(
+        r"(high|medium|low)\b",
+        brief_confidence[1],
+        re.IGNORECASE,
+    ):
+        quality_issues.append(
+            f"{path}: decision brief confidence must start with "
+            "high, medium, or low"
+        )
+
+    if quality_mode == "strict":
+        parsed_roles = {"analysis", "falsifiers", "evidence-index"}
+        for role in TOPIC_V21_ROLES:
+            if role in parsed_roles:
+                continue
+            if not visible_topic_text(role_body(role)):
+                quality_issues.append(
+                    f"{path}: topic role {role} needs substantive content"
+                )
+
+    analysis_body = role_body("analysis")
+    analysis_sections = markdown_level_three_sections(analysis_body)
+    for heading, _ in analysis_sections:
+        ids = normalized_topic_ids(
+            TOPIC_ANALYSIS_ID_RE,
+            "A",
+            heading,
+        )
+        if len(ids) != 1:
+            errors.append(
+                f"{path}: analysis heading must contain one A-NNN: "
+                f"{heading!r}"
+            )
+    analysis_records = topic_analysis_records(analysis_body)
+    if not analysis_records:
+        quality_issues.append(
+            f"{path}: topic needs at least one A-NNN analysis section"
+        )
+    analysis_by_id: dict[str, str] = {}
+    analysis_evidence: dict[str, set[str]] = {}
+    for analysis_id, _, body in analysis_records:
+        if analysis_id in analysis_by_id:
+            errors.append(
+                f"{path}: duplicate topic analysis id {analysis_id}"
+            )
+        analysis_by_id[analysis_id] = body
+        visible = visible_topic_text(body)
+        if len(visible) < TOPIC_MIN_ANALYSIS_CHARS:
+            quality_issues.append(
+                f"{path}: {analysis_id} needs explanatory analysis, "
+                f"not only a conclusion ({TOPIC_MIN_ANALYSIS_CHARS}+ chars)"
+            )
+        evidence_ids = normalized_topic_ids(
+            TOPIC_EVIDENCE_ID_RE,
+            "E",
+            body,
+        )
+        analysis_evidence[analysis_id] = evidence_ids
+        if not evidence_ids:
+            quality_issues.append(
+                f"{path}: {analysis_id} must cite at least one E-NNN"
+            )
+
+    evidence_rows = topic_table_rows(role_body("evidence-index"))
+    if not evidence_rows:
+        quality_issues.append(
+            f"{path}: evidence index needs at least one E-NNN row"
+        )
+    evidence_supports: dict[str, set[str]] = {}
+    evidence_sources: dict[str, set[str]] = {}
+    for cells in evidence_rows:
+        if len(cells) < 5:
+            errors.append(
+                f"{path}: evidence index rows need five columns"
+            )
+            continue
+        evidence_cell = re.sub(r"<[^>]+>", "", cells[0]).strip()
+        evidence_id = evidence_cell.upper()
+        if not TOPIC_EVIDENCE_ID_RE.fullmatch(evidence_id):
+            errors.append(
+                f"{path}: invalid evidence index id {evidence_cell!r}"
+            )
+            continue
+        if evidence_id in evidence_supports:
+            errors.append(
+                f"{path}: duplicate evidence index id {evidence_id}"
+            )
+        if not cells[1]:
+            quality_issues.append(
+                f"{path}: {evidence_id} needs an observation"
+            )
+        if not cells[2]:
+            quality_issues.append(
+                f"{path}: {evidence_id} needs an exact source"
+            )
+        supports = normalized_topic_ids(
+            TOPIC_ANALYSIS_ID_RE,
+            "A",
+            cells[3],
+        )
+        evidence_supports[evidence_id] = supports
+        evidence_sources[evidence_id] = normalized_topic_ids(
+            TOPIC_SOURCE_ID_RE,
+            "S",
+            cells[2],
+        )
+        if not supports:
+            quality_issues.append(
+                f"{path}: {evidence_id} must support at least one A-NNN"
+            )
+        for analysis_id in sorted(supports - set(analysis_by_id)):
+            errors.append(
+                f"{path}: {evidence_id} supports unknown analysis "
+                f"{analysis_id}"
+            )
+        if cells[4].lower() not in TOPIC_CONFIDENCE_LEVELS:
+            quality_issues.append(
+                f"{path}: {evidence_id} confidence must be "
+                "high, medium, or low"
+            )
+
+    known_evidence = set(evidence_supports)
+    for analysis_id, evidence_ids in analysis_evidence.items():
+        for evidence_id in sorted(evidence_ids - known_evidence):
+            errors.append(
+                f"{path}: {analysis_id} cites unknown evidence {evidence_id}"
+            )
+        for evidence_id in sorted(evidence_ids & known_evidence):
+            if analysis_id not in evidence_supports[evidence_id]:
+                quality_issues.append(
+                    f"{path}: {evidence_id} must list {analysis_id} "
+                    "in Supports"
+                )
+    for evidence_id, supports in evidence_supports.items():
+        for analysis_id in sorted(supports & set(analysis_by_id)):
+            if evidence_id not in analysis_evidence.get(analysis_id, set()):
+                quality_issues.append(
+                    f"{path}: {analysis_id} must cite {evidence_id} "
+                    "listed by the evidence index"
+                )
+
+    falsifier_rows = topic_table_rows(role_body("falsifiers"))
+    if not falsifier_rows:
+        quality_issues.append(
+            f"{path}: falsifiers need at least one analysis-linked row"
+        )
+    for cells in falsifier_rows:
+        if len(cells) < 4:
+            errors.append(f"{path}: falsifier rows need four columns")
+            continue
+        analysis_ids = normalized_topic_ids(
+            TOPIC_ANALYSIS_ID_RE,
+            "A",
+            cells[0],
+        )
+        if not analysis_ids:
+            quality_issues.append(
+                f"{path}: falsifier row must reference an A-NNN"
+            )
+        for analysis_id in sorted(analysis_ids - set(analysis_by_id)):
+            errors.append(
+                f"{path}: falsifier references unknown analysis "
+                f"{analysis_id}"
+            )
+        for index, name in enumerate(
+            ("falsifying evidence", "decision relevance", "validation"),
+            start=1,
+        ):
+            if not cells[index]:
+                quality_issues.append(
+                    f"{path}: falsifier row needs {name}"
+                )
+
+    source_body = role_body("sources")
+    source_entries = [
+        match.group(1).upper()
+        for match in re.finditer(
+            r"(?m)^\s*-\s+`?(S-\d{3,})`?\b",
+            source_body,
+            re.IGNORECASE,
+        )
+    ]
+    if not source_entries:
+        quality_issues.append(
+            f"{path}: sources need at least one S-NNN entry"
+        )
+    if len(source_entries) != len(set(source_entries)):
+        errors.append(f"{path}: duplicate S-NNN source entry")
+    known_sources = set(source_entries)
+    for evidence_id, source_ids in evidence_sources.items():
+        for source_id in sorted(source_ids - known_sources):
+            errors.append(
+                f"{path}: {evidence_id} references unknown source "
+                f"{source_id}"
+            )
+
+    if marker_names(text):
+        quality_issues.append(f"{path}: required topic placeholders remain")
+    if quality_mode == "strict":
+        errors.extend(quality_issues)
+    elif quality_mode == "warning":
+        warnings.extend(quality_issues)
+    return errors, warnings
 
 
 def declares_topic_document(text: str) -> bool:
@@ -1505,6 +1942,19 @@ def validate_topic_document(
         warnings.append(f"{path}: topic author is unassigned")
     if not SLUG_RE.fullmatch(path.stem):
         errors.append(f"{path}: topic filename must be lowercase kebab-case")
+
+    if schema_version == "2.1":
+        learning_errors, learning_warnings = (
+            validate_learning_topic_document(
+                path,
+                text,
+                valid_question_ids,
+                quality_mode,
+            )
+        )
+        errors.extend(learning_errors)
+        warnings.extend(learning_warnings)
+        return errors, warnings
 
     topic_sections = (
         TOPIC_V2_SECTIONS if schema_version == "2" else TOPIC_V1_SECTIONS
