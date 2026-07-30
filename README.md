@@ -241,9 +241,39 @@ Use $engineering-case-study to write a module-design article from the code, Rese
 
 Other hosts can use their own Skill invocation convention.
 
-## Quick start
+## Prompt-driven end-to-end example
 
-Run the following commands from the target repository root:
+The [cache-topology example](./examples/cache-topology/README.md) follows one
+conversation from four source documents to a gated ExecPlan:
+
+```mermaid
+flowchart LR
+    P["User prompt"] --> R["$engineering-research<br/>linked R-001"]
+    R --> S["sealed Manifest + Synthesis"]
+    S --> A["$engineering-execution-plan<br/>proposed ADR-001"]
+    A -->|"explicit Decision Owner acceptance"| E["gated EP-001"]
+```
+
+Start by giving Codex the decision context and stopping boundary:
+
+```text
+Use $engineering-research to take over
+research-input/cache-topology/ as one linked Research.
+Read the complete corpus, preserve counterevidence, and produce a
+decision-ready Synthesis. Stop at review-ready and do not conclude it.
+```
+
+Codex invokes the control scripts internally and reports the created IDs,
+artifacts, and validation results. Later prompts carry the Research Owner
+conclusion and Decision Owner acceptance; the example never fabricates either
+authority.
+
+## Low-level CLI for agents and automation
+
+Most users should start with the Skill prompts above. The commands in this
+section are the deterministic interface used by Skills, CI, and maintainers;
+run them directly only when building automation or debugging the control layer.
+Run them from the target repository root:
 
 ```bash
 ENGINEERING_WORKFLOW_HOME=/absolute/path/to/EngineeringWorkflow
@@ -365,24 +395,6 @@ checks code, tests, Research/ADR/EP artifacts, and the revision before writing a
 when the user requests finalization and source, link, and redaction checks pass.
 Bilingual output defaults to two independently readable articles backed by the
 same evidence.
-
-### End-to-end example: from four documents to an executable EP
-
-The [cache-topology example](./examples/cache-topology/README.md) provides four
-copyable corpus documents and demonstrates:
-
-```mermaid
-flowchart LR
-    C["index + three topic documents"] --> R["linked R-001"]
-    R --> S["sealed Manifest + Synthesis"]
-    S --> A["proposed ADR-001"]
-    A -->|"explicit Decision Owner acceptance"| E["gated EP-001"]
-```
-
-The example includes concrete Research Questions, benchmark numbers, Synthesis
-conclusions, an ADR authorization statement, Gate fields, and implementation
-milestones. Corpus registration commands are executable. The ADR remains
-`proposed`; the example never fabricates a human decision.
 
 ### 1. Create managed Research
 

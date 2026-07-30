@@ -339,4 +339,4 @@ candidate 本身都不构成生成案例的触发条件。
 - Checkpoint、压缩与恢复 → `references/checkpoints.md`
 - 文档—代码完整性、CI 适配与合并门禁 → `references/integrity.md`
 - Bugfix 字段与升级/归档 → `references/bugfix.md`
-- 完整命令、典型场景和端到端输出边界 → `references/examples.md`
+- Prompt 示例、典型场景和端到端输出边界 → `references/examples.md`
