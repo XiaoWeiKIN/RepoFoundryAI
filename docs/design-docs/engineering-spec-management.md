@@ -17,7 +17,7 @@ evidence. Codex reads repository-local copies through a bounded `AGENTS.md`
 route rather than depending on remote content at task time.
 
 This design implements the ownership accepted by ADR-002, ADR-004, and ADR-005:
-`repo-foundry` owns project Bootstrap and Spec consumption,
+`repo-foundry-ai` owns project Bootstrap and Spec consumption,
 `EngineeringSpecifications` owns Catalog and normative content, while
 `engineering-execution-plan` remains Agent-neutral and owns only ADR, ExecPlan,
 Task, Checkpoint, Bugfix, and technical-debt artifacts.
@@ -304,7 +304,7 @@ flowchart TB
 - Catalog digest drift, managed-content drift, missing lock entries, traversal,
   dependency cycles, unreachable refs, and missing project Specs fail safely.
 - Existing `AGENTS.md` and project documentation remain byte-identical.
-- The independently installed `repo-foundry` package contains no
+- The independently installed `repo-foundry-ai` package contains no
   normative Spec files and resolves the public default source.
 - EngineeringSpecifications and RepoFoundry each have a canonical
   check, and Workflow integration tests use isolated Git fixture repositories.

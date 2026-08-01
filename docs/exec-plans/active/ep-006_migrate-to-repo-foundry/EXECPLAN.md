@@ -7,7 +7,7 @@ latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
 research_gate_reason: ""
-adr_refs: ["ADR-001", "ADR-004", "ADR-007", "ADR-008"]
+adr_refs: ["ADR-001", "ADR-004", "ADR-007", "ADR-008", "ADR-009"]
 design_refs: ["docs/design-docs/engineering-workflow-packaging.md", "docs/design-docs/repo-foundry-system.md"]
 architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
@@ -17,7 +17,7 @@ verified_revision:
 verification_evidence: []
 archive_sha256:
 created: 2026-07-30
-updated: 2026-07-31
+updated: 2026-08-01
 owner: "RepoFoundry Maintainer"
 ---
 
@@ -30,7 +30,7 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 Present the distribution externally as **RepoFoundry AI**, The Agent-Native
 Engineering System, while preserving `RepoFoundry` as its technical basename.
 A user should immediately understand that the system turns a repository into an
-AI-ready engineering environment, then be able to install `$repo-foundry`, run
+AI-ready engineering environment, then be able to install `$repo-foundry-ai`, run
 `scripts/foundryctl.py`, bootstrap a target repository, and see new Harness and
 Spec manifests owned by `repo-foundry`.
 
@@ -43,13 +43,13 @@ validation, and professional Skills operate above that environment.
 
 - Latest checkpoint: none.
 - Current milestone: Milestone 4 — validated implementation ready for review.
-- Current state: ADR-007 and ADR-008 are accepted. The root CLI, Skill ID,
-  manifest owner, compatibility predicates, README narrative, current design
-  documents, and brand assets use the target identity. The canonical check
-  passed 108 tests; repository Research and ExecPlan validation report zero
-  errors and zero warnings.
-- Next action: the Repository Owner may review and commit this working tree.
-  The external GitHub repository rename remains a separate hosting operation.
+- Current state: ADR-009 amends ADR-008 after the Repository Owner explicitly
+  requested the Skill and project names be synchronized. Public Skill surfaces
+  now use `$repo-foundry-ai`; CLI, environment variable, manifest owner, and
+  state paths remain stable. Skill validation and the canonical repository
+  check pass, including 109 tests and zero repository validation warnings.
+- Next action: commit and push the synchronized naming change to the amended PR
+  branch. The external GitHub repository rename remains a separate operation.
 - Open questions: the external GitHub repository rename is intentionally
   outside this local implementation.
 
@@ -82,6 +82,7 @@ overlaps the migration.
 |---|---|---|
 | `docs/adr/adr-007_repo-foundry-identity.md` | Accepted naming, migration, and compatibility decision | Before changing a public contract |
 | `docs/adr/adr-008_repofoundry-ai-brand.md` | Accepted external brand and stable technical-name boundary | Before changing promotional surfaces |
+| `docs/adr/adr-009_align-repofoundry-ai-skill-name.md` | Accepted project/Skill naming alignment | Before changing the root Skill ID |
 | `docs/design-docs/repo-foundry-system.md` | Target layers, names, brand assets, and verification | Before each milestone |
 | `docs/design-docs/engineering-workflow-packaging.md` | Existing package ownership retained by this migration | Before moving root paths |
 | `SKILL.md` | Root Skill boundary and user-facing routing | Before rewriting the root entrypoint |
@@ -99,7 +100,7 @@ the configured Git remote or claim the external repository was renamed.
 - Research gate: `satisfied`.
 - Research references: ["R-001"].
 - Architecture gate: `satisfied`.
-- ADR references: ["ADR-001", "ADR-004", "ADR-007", "ADR-008"].
+- ADR references: ["ADR-001", "ADR-004", "ADR-007", "ADR-008", "ADR-009"].
 - Design document references: ["docs/design-docs/engineering-workflow-packaging.md", "docs/design-docs/repo-foundry-system.md"].
 - Architecture entrypoint: `docs/design-docs/index.md`.
 
@@ -117,9 +118,11 @@ use `REPO_FOUNDRY_HOME`; new Harness and Spec manifests use owner
 
 ADR-008 amends the public-brand portion of ADR-007. Promotional surfaces use
 `RepoFoundry AI`, the category line `The Agent-Native Engineering System`, and
-the claim `Turn any repository into an AI-ready engineering system.` The
-distribution basename, Skill ID, CLI, environment variable, asset prefix, and
-manifest owner remain unchanged.
+the claim `Turn any repository into an AI-ready engineering system.` ADR-009
+then narrows that technical-name split: the root Skill ID becomes
+`repo-foundry-ai` so project discovery and invocation match. The CLI,
+environment variable, asset prefix, manifest owner, state path, and
+professional Skill IDs remain unchanged.
 
 Existing target repositories may already contain owner
 `engineering-workflow`. Validation must recognize that value as legacy input
@@ -170,7 +173,7 @@ readable.
 ### Milestone 2: RepoFoundry AI explains one system model
 
 Rewrite both README introductions and current design/Bootstrap/Spec documents.
-All current installation examples must use `$repo-foundry`,
+All current installation examples must use `$repo-foundry-ai`,
 `scripts/foundryctl.py`, and `REPO_FOUNDRY_HOME`. Historical evidence remains
 unchanged.
 
@@ -269,6 +272,10 @@ must remain in place throughout the work.
   design around the RepoFoundry AI message hierarchy.
 - [x] (2026-07-31T01:22:00Z) Passed all acceptance checks and recorded focused,
   repository, canonical, identity, and brand evidence under `artifacts/`.
+- [x] (2026-08-01T08:18:00Z) Accepted ADR-009 from the Repository Owner's
+  explicit instruction to synchronize the project and root Skill names.
+- [x] (2026-08-01T08:31:00Z) Updated every current Skill surface to `$repo-foundry-ai` and reran the
+  canonical validation before pushing the amended PR branch.
 
 ## Surprises & Discoveries
 
@@ -298,6 +305,9 @@ must remain in place throughout the work.
 - 2026-07-31 — Use `RepoFoundry AI` on external promotional surfaces while
   retaining all ADR-007 technical identifiers. This adds immediate AI relevance
   without creating a second compatibility migration.
+- 2026-08-01 — Align the public root Skill ID with the project as
+  `repo-foundry-ai`. Keep `repo-foundry` only as the stable manifest owner and
+  as an explicitly documented pre-merge candidate name.
 
 ## Blockers
 
@@ -308,8 +318,9 @@ must remain in place throughout the work.
 
 RepoFoundry AI is now the external brand, backed by the category line
 `The Agent-Native Engineering System` and an AI-ready repository claim.
-`repo-foundry`, `foundryctl`, `REPO_FOUNDRY_HOME`, and the `repo-foundry`
-manifest owner remain stable technical contracts.
+`repo-foundry-ai` is the synchronized public Skill ID. `foundryctl`,
+`REPO_FOUNDRY_HOME`, and the `repo-foundry` manifest owner remain stable
+machine contracts.
 
 The migration retains compatibility with existing `engineering-workflow`
 Harness and Spec owners, while one current root Skill and CLI avoid permanent
@@ -317,7 +328,7 @@ alias complexity. The final mark uses repository braces and a forge-orange AI
 spark; SVG is the source and the checked 256px PNG remains recognizable at
 32px.
 
-The canonical check passed 108 tests. Research and ExecPlan validators returned
+The canonical check passed 109 tests. Research and ExecPlan validators returned
 zero errors and zero warnings. The configured Git remote still uses the former
 hosting path because remote rename was explicitly outside this local change.
 
@@ -354,3 +365,9 @@ hosting path because remote rename was explicitly outside this local change.
   identity-scan, and canonical-check evidence. The plan remains active until the
   reviewed working tree receives a stable commit or snapshot revision for
   archival.
+- 2026-08-01T08:18:00Z — Added accepted ADR-009 and reopened current-surface
+  validation to align the root Skill ID with RepoFoundry AI without changing
+  persistent target-repository contracts.
+- 2026-08-01T08:31:00Z — Regenerated root Skill UI metadata, synchronized
+  prompts, evals, current design documents, and installation tests, then passed
+  the 109-test canonical check with zero validation errors or warnings.

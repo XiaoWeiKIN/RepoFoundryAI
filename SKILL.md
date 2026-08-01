@@ -1,5 +1,5 @@
 ---
-name: repo-foundry
+name: repo-foundry-ai
 description: |
   面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化和验证版本化 Repository Harness，从独立 Git 仓库解析并同步通用、语言级和项目级 Engineering Specs，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go/TypeScript/Python 语言规范、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，应用时只创建缺失文件、物化匹配的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
 ---
@@ -12,7 +12,7 @@ Harness、Spec 解析和能力路由；专业制品生命周期仍由四个独�
 
 ```mermaid
 flowchart LR
-    W["repo-foundry<br/>Inventory + Scaffold + Harness"]
+    W["repo-foundry-ai<br/>Inventory + Scaffold + Harness"]
     W -.->|"Git fetch + immutable lock"| S["EngineeringSpecifications<br/>Core + language guidance"]
     W --> B["engineering-benchmark<br/>可复现测量"]
     W --> R["engineering-research<br/>问题与证据综合"]
@@ -22,19 +22,19 @@ flowchart LR
 
 ## 初始化项目
 
-使用确定性脚本。把 `<repo-foundry-dir>` 解析为本 Skill 所在目录：
+使用确定性脚本。把 `<repo-foundry-ai-dir>` 解析为本 Skill 所在目录：
 
 ```bash
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex
 
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex --apply
 
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
 ```
 
@@ -65,10 +65,10 @@ TypeScript 和 Python Spec 只在仓库证据匹配时选择。选择写入
 所有写操作默认只预览：
 
 ```bash
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec plan
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync --apply
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec update --apply
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec validate
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 默认 Catalog 来自
@@ -89,7 +89,7 @@ python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec validate
 | 基于真实代码和过程证据撰写工程分享 | `engineering-case-study` |
 
 一次请求可以按证据流依次经过多个 Skill，但不要让聚合 Skill 伪造其输出。专业
-Skill 必须保持可独立安装和运行；只有 `repo-foundry` 可以显式组合仓库内
+Skill 必须保持可独立安装和运行；只有 `repo-foundry-ai` 可以显式组合仓库内
 的子 Skill。
 
 需要向用户展示独立入口、跨 Skill 交接或完整工作流时，读取

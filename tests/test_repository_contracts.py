@@ -250,7 +250,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             self.run_cli(RESEARCHCTL, repository, "validate")
             self.run_cli(EPCTL, repository, "validate")
 
-    def test_project_brand_and_skill_names_are_independent(self) -> None:
+    def test_repofoundry_ai_project_and_skill_names_are_aligned(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         chinese_readme = (ROOT / "README.zh-CN.md").read_text(
             encoding="utf-8"
@@ -308,7 +308,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 text,
             )
         self.assertIn(
-            "name: repo-foundry",
+            "name: repo-foundry-ai",
             (ROOT / "SKILL.md").read_text(encoding="utf-8"),
         )
         self.assertIn(
@@ -317,6 +317,10 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertIn(
             'display_name: "RepoFoundry AI"',
+            (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "$repo-foundry-ai",
             (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8"),
         )
         self.assertIn(
@@ -757,7 +761,7 @@ class RepositoryContractTestCase(unittest.TestCase):
     def test_skills_work_when_installed_independently(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
-            workflow_skill = base / "repo-foundry"
+            workflow_skill = base / "repo-foundry-ai"
             workflow_skill.mkdir()
             for name in (
                 "SKILL.md",

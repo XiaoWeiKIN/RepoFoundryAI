@@ -2,7 +2,7 @@
 
 ## 目标
 
-`repo-foundry` Bootstrap 建立 Codex 可导航、EP 可治理、CI 可验证的
+`repo-foundry-ai` Bootstrap 建立 Codex 可导航、EP 可治理、CI 可验证的
 项目文档控制面。它负责知识入口、组合初始化和文件契约，不负责生成未经验证的
 项目事实。
 
@@ -24,7 +24,7 @@ flowchart LR
 只创建 EP 自己拥有的目录、索引和 ID 状态。它的行为不能因 Codex profile
 改变。
 
-`repo-foundry` 的 `bootstrap` 是显式选择的项目级操作：
+`repo-foundry-ai` 的 `bootstrap` 是显式选择的项目级操作：
 
 - 默认 dry-run；
 - 只在 `--apply` 时写入；
@@ -45,7 +45,7 @@ Bootstrap 不隐式运行 `reindex`。
 在目标仓库根目录运行：
 
 ```bash
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex
 ```
 
@@ -62,7 +62,7 @@ python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
 显式 `--dry-run` 与默认行为相同。确认预览后执行：
 
 ```bash
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . \
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex --apply
 ```
 
@@ -121,11 +121,11 @@ Markdown 路径、作用域和说明，`index.md` 会引用它，工具不复制
 Spec 操作同样 preview-first：
 
 ```bash
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec plan
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec sync --apply
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec update --apply
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . spec validate
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 `sync` 使用 lock 已记录的 commit；lock 缺失时才从 manifest ref 建立初始解析。
@@ -214,7 +214,7 @@ owner 为 `engineering-workflow` 的既有 Manifest 继续以兼容模式读取�
 显式要求 Harness：
 
 ```bash
-python3 <repo-foundry-dir>/scripts/foundryctl.py --repo . validate --harness
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . validate --harness
 ```
 
 只要 manifest 已存在，普通 `validate` 也会自动检查：

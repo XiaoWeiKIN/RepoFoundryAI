@@ -244,7 +244,7 @@ flowchart LR
 ```
 
 `engineering-execution-plan` owns EP directories, indexes, configuration and ID
-state. `repo-foundry` owns creation of missing Harness entrypoints and
+state. `repo-foundry-ai` owns creation of missing Harness entrypoints and
 its manifest. Once a document exists, its content is repository-owned;
 bootstrap will not rewrite it.
 

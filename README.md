@@ -47,7 +47,7 @@ system that makes those workflows composable and verifiable.
 
 | Skill | Responsibility | Durable output |
 |---|---|---|
-| [`repo-foundry`](./SKILL.md) | Inspect, Bootstrap, synchronize Specs, validate the Harness, and route work | `AGENTS.md`, architecture and docs maps, Harness and Spec manifests |
+| [`repo-foundry-ai`](./SKILL.md) | Inspect, Bootstrap, synchronize Specs, validate the Harness, and route work | `AGENTS.md`, architecture and docs maps, Harness and Spec manifests |
 | [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | Predeclare and execute reproducible measurement | Suite, Scenario, Run, Result, sealed Evidence Manifest |
 | [`engineering-research`](./engineering-research/SKILL.md) | Investigate unknowns and synthesize multi-document evidence | Research controller, corpus Manifest, Rounds, topics, sealed Synthesis |
 | [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | Govern decisions and implementation | ADR, ExecPlan, Task, Checkpoint, Bugfix, technical debt |
@@ -152,7 +152,7 @@ when they preserve these package roots.
 Bootstrap a repository:
 
 ```text
-Use $repo-foundry to inspect this repository, preview the Codex Harness
+Use $repo-foundry-ai to inspect this repository, preview the Codex Harness
 Bootstrap, and report create, preserve, and conflict actions. Apply only after
 the preview is conflict-free, then validate the Harness and local Specs.
 ```
@@ -185,7 +185,7 @@ standalone entrypoints and as evidence handoffs:
 
 | Situation | First Skill |
 |---|---|
-| Initialize a repository or route an ambiguous request | `$repo-foundry` |
+| Initialize a repository or route an ambiguous request | `$repo-foundry-ai` |
 | Produce reproducible measurements | `$engineering-benchmark` |
 | Investigate unknowns or adopt an existing corpus | `$engineering-research` |
 | Record a decision or drive delivery | `$engineering-execution-plan` |
@@ -250,7 +250,8 @@ entrypoint:
 
 | Former surface | Current surface |
 |---|---|
-| `$engineering-workflow` | `$repo-foundry` |
+| `$engineering-workflow` | `$repo-foundry-ai` |
+| `$repo-foundry` (pre-merge candidate) | `$repo-foundry-ai` |
 | `scripts/engineeringctl.py` | `scripts/foundryctl.py` |
 | `ENGINEERING_WORKFLOW_HOME` | `REPO_FOUNDRY_HOME` |
 | new manifest owner `engineering-workflow` | new manifest owner `repo-foundry` |
@@ -304,4 +305,5 @@ Decision and implementation:
 
 - [ADR-007 — Adopt RepoFoundry](./docs/adr/adr-007_repo-foundry-identity.md)
 - [ADR-008 — Use RepoFoundry AI externally](./docs/adr/adr-008_repofoundry-ai-brand.md)
+- [ADR-009 — Align the root Skill name with RepoFoundry AI](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
 - [EP-006 — Migrate to RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
