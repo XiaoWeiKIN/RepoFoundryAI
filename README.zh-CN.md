@@ -43,7 +43,7 @@ flowchart LR
 
 | Skill | 职责 | 持久制品 |
 |---|---|---|
-| [`repo-foundry`](./SKILL.md) | 盘点、Bootstrap、同步 Specs、验证 Harness、路由工作 | `AGENTS.md`、架构与文档地图、Harness 与 Spec manifests |
+| [`repo-foundry-ai`](./SKILL.md) | 盘点、Bootstrap、同步 Specs、验证 Harness、路由工作 | `AGENTS.md`、架构与文档地图、Harness 与 Spec manifests |
 | [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | 预声明并执行可复现测量 | Suite、Scenario、Run、Result、sealed Evidence Manifest |
 | [`engineering-research`](./engineering-research/SKILL.md) | 调研未知并综合多文档证据 | Research controller、corpus Manifest、Rounds、topics、sealed Synthesis |
 | [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | 治理决定与实施 | ADR、ExecPlan、Task、Checkpoint、Bugfix、技术债务 |
@@ -141,7 +141,7 @@ RepoFoundry 不要求安装到某个 Agent 的私有目录。只要保留这些 
 初始化仓库：
 
 ```text
-使用 $repo-foundry 盘点当前仓库，预览 Codex Harness Bootstrap，并报告
+使用 $repo-foundry-ai 盘点当前仓库，预览 Codex Harness Bootstrap，并报告
 create、preserve 和 conflict。只有预览无冲突时才应用，随后验证 Harness
 和本地 Specs。
 ```
@@ -171,7 +171,7 @@ corpus 出发，经过 Research、明确授权的 ADR，最终进入 gated ExecP
 
 | 场景 | 首选 Skill |
 |---|---|
-| 初始化仓库或路由模糊请求 | `$repo-foundry` |
+| 初始化仓库或路由模糊请求 | `$repo-foundry-ai` |
 | 产生可复现测量 | `$engineering-benchmark` |
 | 调研未知或接管现有 corpus | `$engineering-research` |
 | 记录决定或推动交付 | `$engineering-execution-plan` |
@@ -230,7 +230,8 @@ RepoFoundry AI 用一套当前入口替换原产品身份：
 
 | 原入口 | 当前入口 |
 |---|---|
-| `$engineering-workflow` | `$repo-foundry` |
+| `$engineering-workflow` | `$repo-foundry-ai` |
+| `$repo-foundry`（合并前候选名） | `$repo-foundry-ai` |
 | `scripts/engineeringctl.py` | `scripts/foundryctl.py` |
 | `ENGINEERING_WORKFLOW_HOME` | `REPO_FOUNDRY_HOME` |
 | 新 manifest owner `engineering-workflow` | 新 manifest owner `repo-foundry` |
@@ -281,4 +282,5 @@ RepoFoundry AI：
 
 - [ADR-007 — 采用 RepoFoundry](./docs/adr/adr-007_repo-foundry-identity.md)
 - [ADR-008 — 对外使用 RepoFoundry AI](./docs/adr/adr-008_repofoundry-ai-brand.md)
+- [ADR-009 — 根 Skill 名称与 RepoFoundry AI 对齐](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
 - [EP-006 — 迁移到 RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)

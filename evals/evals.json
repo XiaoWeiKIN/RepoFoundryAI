@@ -1,5 +1,5 @@
 {
-  "skill_name": "repo-foundry",
+  "skill_name": "repo-foundry-ai",
   "evals": [
     {
       "id": 1,
@@ -32,7 +32,7 @@
     {
       "id": 2,
       "prompt": "我们还不知道缓存方案是否正确传播 trace context，需要读源码、查规范并做最小实验。请先初始化项目，然后继续处理。",
-      "expected_output": "使用 repo-foundry 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，再交给 engineering-execution-plan。",
+      "expected_output": "使用 repo-foundry-ai 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，再交给 engineering-execution-plan。",
       "files": [],
       "assertions": [
         {

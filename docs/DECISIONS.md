@@ -31,4 +31,5 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 | ADR-005 | Store engineering specifications in a separate repository | accepted | 2026-07-30 | [] |  | [ADR](adr/adr-005_external-engineering-specifications.md) |
 | ADR-007 | Adopt RepoFoundry as the product identity | accepted | 2026-07-30 | [] |  | [ADR](adr/adr-007_repo-foundry-identity.md) |
 | ADR-008 | Use RepoFoundry AI as the external brand | accepted | 2026-07-30 | [] |  | [ADR](adr/adr-008_repofoundry-ai-brand.md) |
+| ADR-009 | Align the root Skill name with RepoFoundry AI | accepted | 2026-08-01 | [] |  | [ADR](adr/adr-009_align-repofoundry-ai-skill-name.md) |
 <!-- ADRCTL:COMPLETED:END -->

@@ -9,7 +9,7 @@
 
 ```mermaid
 flowchart LR
-    U["用户 Prompt"] --> W["$repo-foundry<br/>初始化或路由"]
+    U["用户 Prompt"] --> W["$repo-foundry-ai<br/>初始化或路由"]
     W --> B["$engineering-benchmark<br/>测量"]
     W --> R["$engineering-research<br/>解释未知"]
     W --> E["$engineering-execution-plan<br/>决策与交付"]
@@ -25,7 +25,7 @@ flowchart LR
 
 | 用户意图 | 从这里开始 | 常见后续 |
 |---|---|---|
-| 初始化 Agent-first 仓库，或判断请求应由谁负责 | `$repo-foundry` | 路由到一个专业 Skill |
+| 初始化 Agent-first 仓库，或判断请求应由谁负责 | `$repo-foundry-ai` | 路由到一个专业 Skill |
 | 产生可复现的性能、容量、可靠性或回归证据 | `$engineering-benchmark` | Research、EP 或 CI / Runbook |
 | 调研未知、解释多来源证据、维护 Research corpus | `$engineering-research` | proposed ADR 或下一轮 Research |
 | 记录决定、创建 ExecPlan、维护 Bugfix 或推动实施 | `$engineering-execution-plan` | Benchmark 门禁与完成证据 |
@@ -36,7 +36,7 @@ flowchart LR
 第一条 Prompt 只做无写入预览：
 
 ```text
-使用 $repo-foundry 检查当前仓库，预览 Codex 项目 Harness 初始化。
+使用 $repo-foundry-ai 检查当前仓库，预览 Codex 项目 Harness 初始化。
 
 报告哪些文件会被创建、保留、注册，哪些位置存在 conflict。不要应用预览。
 同时把“重构 tenant cache 并证明容量”路由到分别负责测量、未知分析、
@@ -46,7 +46,7 @@ flowchart LR
 确认预览后再发第二条：
 
 ```text
-使用 $repo-foundry 应用刚才已经评审过的 Harness 初始化。
+使用 $repo-foundry-ai 应用刚才已经评审过的 Harness 初始化。
 如果仓库状态变化或出现 conflict，立即停止。完成后验证 Harness，
 报告生成的入口文件和推荐使用的下一个 Skill。
 ```
@@ -57,7 +57,7 @@ Research、Execution Plan 或 Case Study 创建专业制品。
 ## 示例二：不确定走哪条流程时只使用路由能力
 
 ```text
-只使用 $repo-foundry 路由下面的请求：
+只使用 $repo-foundry-ai 路由下面的请求：
 “存储迁移后 p95 上升了。我需要判断架构是否有问题，然后修复。”
 
 检查现有证据，判断应该从 $engineering-benchmark、

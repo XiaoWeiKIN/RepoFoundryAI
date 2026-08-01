@@ -2,8 +2,8 @@
 doc_type: design
 title: RepoFoundry AI system identity and packaging
 status: current
-adr_refs: ["ADR-007", "ADR-008"]
-updated: 2026-07-31
+adr_refs: ["ADR-007", "ADR-008", "ADR-009"]
+updated: 2026-08-01
 ---
 
 # RepoFoundry AI System Identity and Packaging
@@ -49,7 +49,7 @@ the engineering environment in which multiple workflows can operate.
 | Product short name and distribution basename | `RepoFoundry` |
 | Category | `The Agent-Native Engineering System` |
 | Primary claim | `Turn any repository into an AI-ready engineering system.` |
-| Root Skill ID | `repo-foundry` |
+| Root Skill ID | `repo-foundry-ai` |
 | Root Skill display name | `RepoFoundry AI` |
 | Root CLI | `scripts/foundryctl.py` |
 | Installation variable used in examples | `REPO_FOUNDRY_HOME` |
@@ -57,9 +57,10 @@ the engineering environment in which multiple workflows can operate.
 | Persistent target state directory | `docs/.engineering/` |
 | Professional Skills | existing `engineering-*` IDs |
 
-`AI` is a public qualifier, not a package namespace. The `.engineering` state
-directory and professional Skill IDs remain stable because they describe domain
-contracts rather than the former product name. New manifests use
+`AI` is part of the public project and root Skill identity. The `.engineering`
+state directory, manifest owner, and professional Skill IDs remain stable
+because they describe machine and domain contracts rather than the package
+display name. New manifests use
 `repo-foundry`; validators continue to recognize `engineering-workflow` as a
 legacy owner so existing bootstrapped repositories remain readable.
 
@@ -71,7 +72,7 @@ Benchmark Runs, Research packages, ADRs, ExecPlans, or Case Studies.
 
 ```mermaid
 flowchart TB
-    U["Human or coding agent"] --> F["repo-foundry"]
+    U["Human or coding agent"] --> F["repo-foundry-ai"]
     F --> D["Repository discovery"]
     F --> P["Bootstrap preview/apply"]
     F --> V["Harness and Spec validation"]
@@ -115,7 +116,8 @@ The former root Skill and CLI are not shipped as parallel packages. Migration
 instructions map:
 
 ```text
-$engineering-workflow  -> $repo-foundry
+$engineering-workflow  -> $repo-foundry-ai
+$repo-foundry          -> $repo-foundry-ai
 scripts/engineeringctl.py -> scripts/foundryctl.py
 ENGINEERING_WORKFLOW_HOME -> REPO_FOUNDRY_HOME
 ```
@@ -128,7 +130,8 @@ claim that external rename succeeded before it actually occurs.
 
 The canonical `python3 -B scripts/check.py` entrypoint proves:
 
-- all five Skill packages have valid metadata and routing;
+- all five Skill packages have valid metadata and routing, with the root
+  package named `repo-foundry-ai`;
 - the root CLI writes `repo-foundry` into new manifests;
 - legacy `engineering-workflow` manifests remain readable;
 - bootstrap, Spec locking, drift detection, and idempotence still work;

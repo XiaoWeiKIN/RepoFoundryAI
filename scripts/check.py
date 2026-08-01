@@ -144,7 +144,7 @@ def skill_frontmatter(path: Path) -> dict[str, str]:
 
 def validate_skill_packages() -> None:
     skills = (
-        (ROOT, "repo-foundry"),
+        (ROOT, "repo-foundry-ai"),
         (
             ROOT / "engineering-execution-plan",
             "engineering-execution-plan",
@@ -268,7 +268,7 @@ def validate_eval_catalog(path: Path, expected_skill_name: str) -> None:
 
 def validate_eval_catalogs() -> None:
     catalogs = (
-        (ROOT / "evals" / "evals.json", "repo-foundry"),
+        (ROOT / "evals" / "evals.json", "repo-foundry-ai"),
         (
             ROOT
             / "engineering-execution-plan"
