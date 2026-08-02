@@ -197,7 +197,7 @@ python3 "$FOUNDRYCTL" --repo . validate --harness
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
-python3 "$FOUNDRYCTL" --repo . spec update --apply
+python3 "$FOUNDRYCTL" --repo . spec update --spec-version 1.2.0 --apply
 python3 "$FOUNDRYCTL" --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -211,8 +211,11 @@ Bootstrap 与 Spec 写操作默认先预览。Bootstrap 只创建缺失路径，
 
 Engineering Specs 来自独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
-Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析配置 ref；
-`spec validate` 完全离线。
+Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发布版本。
+新仓库默认选择固定 Catalog `1.2.0`，manifest 记录
+`refs/tags/v1.2.0`。生产升级通过
+`spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
+`--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。
 
 ## 清晰边界保证系统可信
 

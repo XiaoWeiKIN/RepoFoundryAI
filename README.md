@@ -212,7 +212,7 @@ python3 "$FOUNDRYCTL" --repo . validate --harness
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
-python3 "$FOUNDRYCTL" --repo . spec update --apply
+python3 "$FOUNDRYCTL" --repo . spec update --spec-version 1.2.0 --apply
 python3 "$FOUNDRYCTL" --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -228,7 +228,11 @@ Codex profile must stay at or below 100 physical lines.
 Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog. `sync` follows the locked commit; `update` explicitly resolves the
-configured ref again. `spec validate` is offline.
+selected release again. New repositories default to fixed Catalog version
+`1.2.0`, represented as `refs/tags/v1.2.0`; production upgrades name another
+version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
+remains an explicit development-source escape hatch. `spec validate` is
+offline.
 
 ## Boundaries keep the system trustworthy
 

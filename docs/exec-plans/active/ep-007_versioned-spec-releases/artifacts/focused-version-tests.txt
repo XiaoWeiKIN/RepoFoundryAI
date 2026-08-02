@@ -1,0 +1,4 @@
+Command: python3 -B -m unittest tests.test_spec_manager tests.test_foundryctl tests.test_repository_contracts
+Repository: /Users/wangxiaowei1/x-otel/EngineeringPlan
+Observed: 42 tests passed.
+Covered: canonical release ref construction, tag/Catalog version matching, fixed default, pinned sync, explicit version update, explicit development refs, invalid selectors, source-change gating, offline validation, and independent package contracts.

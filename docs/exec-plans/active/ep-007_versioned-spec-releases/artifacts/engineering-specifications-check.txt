@@ -1,0 +1,5 @@
+Command: python3 -B scripts/check.py
+Repository: /Users/wangxiaowei1/xiaowei/EngineeringSpecifications
+Revision: 72dbd5f609147a7bf81b472e81d7207013900e29
+Observed: 13 tests passed.
+Result: CHECK_OK: io.github.xiaoweikin.engineering-specifications@1.2.0 (3 specifications)

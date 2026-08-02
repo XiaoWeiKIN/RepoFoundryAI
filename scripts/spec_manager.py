@@ -36,6 +36,9 @@ SPEC_ID_RE = re.compile(
     r"(?:/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)*$"
 )
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+RELEASE_REF_RE = re.compile(
+    r"^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$"
+)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -68,6 +71,23 @@ EXCLUDED_DIRECTORY_NAMES = {
 
 class SpecError(RuntimeError):
     """Raised when external Spec data does not satisfy its contract."""
+
+
+def release_ref(version: str) -> str:
+    """Return the canonical immutable Git ref for a Catalog SemVer."""
+
+    if not isinstance(version, str) or not SEMVER_RE.fullmatch(version):
+        raise SpecError(
+            "SPEC_VERSION_INVALID: expected MAJOR.MINOR.PATCH"
+        )
+    return f"refs/tags/v{version}"
+
+
+def release_version_from_ref(ref: str) -> str | None:
+    """Extract a Catalog SemVer from an exact canonical release ref."""
+
+    match = RELEASE_REF_RE.fullmatch(ref)
+    return match.group(1) if match is not None else None
 
 
 @dataclass(frozen=True)
@@ -789,12 +809,23 @@ def resolve_git_catalog(
                 source_url=source_url,
             )
 
-        return _parse_catalog(
+        catalog = _parse_catalog(
             raw_catalog,
             read_content,
             source=parsed_source,
             resolved_revision=commit,
         )
+        expected_version = release_version_from_ref(parsed_source["ref"])
+        if (
+            expected_version is not None
+            and catalog.catalog_version != expected_version
+        ):
+            raise SpecError(
+                "SPEC_CATALOG_VERSION_MISMATCH: release ref "
+                f"{parsed_source['ref']} requires Catalog "
+                f"{expected_version}; found {catalog.catalog_version}"
+            )
+        return catalog
 
 
 def _parse_catalog_source(value: object, label: str) -> dict[str, str]:
@@ -1366,12 +1397,26 @@ def _prepare_manifest(
     repo: Path,
     initial_source: dict[str, str],
     operation: str,
+    update_source: dict[str, str] | None,
 ) -> tuple[SpecManifest, Catalog, tuple[str, ...], bytes | None]:
     manifest_path = repo / SPEC_MANIFEST
     lock_path = repo / SPEC_LOCK
     if manifest_path.exists():
         manifest = parse_manifest(manifest_path)
         manifest_write: bytes | None = None
+        if operation == "update" and update_source is not None:
+            source = _parse_catalog_source(
+                update_source,
+                "SPEC_CATALOG_SOURCE_INVALID",
+            )
+            if source != manifest.catalog:
+                manifest = SpecManifest(
+                    catalog=source,
+                    spec_ids=manifest.spec_ids,
+                    project_specs=manifest.project_specs,
+                    owner=manifest.owner,
+                )
+                manifest_write = _json_bytes(manifest_data(manifest))
     else:
         if lock_path.exists():
             raise SpecError(
@@ -1466,6 +1511,7 @@ def plan_spec_state(
     *,
     operation: str,
     allow_replace: bool,
+    update_source: dict[str, str] | None = None,
 ) -> SpecPlan:
     if operation not in {"plan", "sync", "update"}:
         raise SpecError(f"SPEC_OPERATION_INVALID: {operation}")
@@ -1474,6 +1520,7 @@ def plan_spec_state(
         repo,
         initial_source,
         effective_operation,
+        update_source,
     )
     _validate_project_specs(repo, manifest.project_specs)
     selected = resolve_selection(manifest, catalog)

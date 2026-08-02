@@ -67,15 +67,18 @@ TypeScript 和 Python Spec 只在仓库证据匹配时选择。选择写入
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
-python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --spec-version 1.2.0 --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 默认 Catalog 来自
-`https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`。首次初始化可用
-`--spec-repository` 与 `--spec-ref` 覆盖；manifest 保存 Git URL/ref。
-`sync` 使用已有 lock 的 commit；`update` 重新解析 manifest ref、刷新内容并加入
-新检测到的语言，但不自动移除现有选择。`spec validate` 完全离线。Bootstrap
+`https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`，默认固定版本为
+`1.2.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
+`refs/tags/vMAJOR.MINOR.PATCH`，解析器必须验证 tag 与 `catalog_version` 一致。
+首次初始化可用 `--spec-repository` 选择其他仓库；`--spec-ref` 只用于显式开发
+分支、tag 或 commit。manifest 保存 Git URL/ref。`sync` 使用已有 lock 的 commit；
+生产升级通过 `update --spec-version ...` 替换 source、刷新内容并加入新检测到的语言，
+但不自动移除现有选择。`spec validate` 完全离线。Bootstrap
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
 

@@ -103,8 +103,10 @@ SLO 或安全控制。
 
 Catalog 与规范正文位于独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
-Git 仓库。默认源是该仓库的 `main`；首次 Bootstrap 可通过
-`--spec-repository` 与 `--spec-ref` 覆盖。Bootstrap 永远选择
+Git 仓库。默认 Catalog 版本是 `1.2.0`；首次 Bootstrap 可通过
+`--spec-repository` 与 `--spec-version` 覆盖。manifest 记录
+`refs/tags/v1.2.0`；解析器验证 tag 内的 `catalog_version` 完全一致。
+`--spec-ref` 仅用于显式开发分支、tag 或 commit。Bootstrap 永远选择
 `core/semantic-naming`，并根据 `go.mod` / `*.go`、
 `tsconfig.json` / TypeScript 源文件、`pyproject.toml` / Python 源文件选择语言
 Spec。多语言仓库组合多个语言 Spec，不加载未匹配语言。
@@ -124,12 +126,14 @@ Spec 操作同样 preview-first：
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
-python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --spec-version 1.2.0 --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
-`sync` 使用 lock 已记录的 commit；lock 缺失时才从 manifest ref 建立初始解析。
-`update` 重新解析 manifest ref、加入新检测到的语言并刷新内容，但不自动移除选择。
+`sync` 使用 lock 已记录的 commit；lock 缺失时才从 manifest 的版本 tag 建立初始
+解析。生产升级必须通过 `update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
+`update --spec-ref ...` 只用于显式开发源。更新会加入新检测到的语言并刷新内容，
+但不自动移除选择。
 显式 applied Spec 操作可以在预览后替换生成的 lock、index 和 managed Spec；
 Bootstrap 本身遇到内容漂移仍报告 conflict。`spec validate` 只检查 manifest、
 lock 与本地文件，完全不访问网络。

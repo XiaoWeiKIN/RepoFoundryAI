@@ -10,6 +10,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FOUNDRYCTL = ROOT / "scripts" / "foundryctl.py"
+sys.path.insert(0, str(ROOT / "scripts"))
+import foundryctl  # noqa: E402
+
 EPCTL = (
     ROOT
     / "engineering-execution-plan"
@@ -37,6 +40,16 @@ class FoundryctlTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_default_source_is_a_fixed_catalog_release(self) -> None:
+        source = foundryctl.spec_source(
+            foundryctl.DEFAULT_SPEC_REPOSITORY,
+            version=None,
+            ref=None,
+        )
+        self.assertIsNotNone(source)
+        assert source is not None
+        self.assertEqual(source["ref"], "refs/tags/v1.2.0")
+
     def run_cli(
         self,
         *arguments: str,
@@ -51,7 +64,10 @@ class FoundryctlTestCase(unittest.TestCase):
             and selected_arguments[0] == "spec"
             and selected_arguments[1] in {"plan", "sync", "update"}
         )
-        if needs_source:
+        manifest_exists = (
+            self.repo / "docs" / ".engineering" / "specs.json"
+        ).exists()
+        if needs_source and not manifest_exists:
             if "--spec-repository" not in selected_arguments:
                 selected_arguments.extend(
                     [
@@ -59,7 +75,10 @@ class FoundryctlTestCase(unittest.TestCase):
                         self.catalog_repository.resolve().as_uri(),
                     ]
                 )
-            if "--spec-ref" not in selected_arguments:
+            if (
+                "--spec-ref" not in selected_arguments
+                and "--spec-version" not in selected_arguments
+            ):
                 selected_arguments.extend(["--spec-ref", "main"])
         result = subprocess.run(
             [
@@ -589,6 +608,87 @@ class FoundryctlTestCase(unittest.TestCase):
             new_commit,
         )
 
+    def test_spec_version_pins_tag_and_explicit_update_changes_release(
+        self,
+    ) -> None:
+        (self.repo / "go.mod").write_text(
+            "module example.test/versioned\n",
+            encoding="utf-8",
+        )
+        self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--spec-version",
+            "0.1.0",
+            "--apply",
+        )
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "specs.json"
+        )
+        lock_path = (
+            self.repo / "docs" / ".engineering" / "specs.lock.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        locked = json.loads(lock_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            manifest["catalog"]["ref"],
+            "refs/tags/v0.1.0",
+        )
+        self.assertEqual(
+            locked["catalog"]["resolved_revision"],
+            self.catalog_commit,
+        )
+
+        new_commit = update_go_spec(self.catalog_repository)
+        sync = json.loads(self.run_cli("spec", "sync").stdout)
+        self.assertEqual(
+            sync["catalog"]["resolved_revision"],
+            self.catalog_commit,
+        )
+
+        preview = json.loads(
+            self.run_cli(
+                "spec",
+                "update",
+                "--spec-version",
+                "0.2.0",
+            ).stdout
+        )
+        self.assertEqual(
+            preview["catalog"]["source"]["ref"],
+            "refs/tags/v0.2.0",
+        )
+        self.assertEqual(
+            preview["catalog"]["resolved_revision"],
+            new_commit,
+        )
+        self.assertIn(
+            {
+                "action": "update_file",
+                "path": "docs/.engineering/specs.json",
+            },
+            preview["actions"],
+        )
+
+        self.run_cli(
+            "spec",
+            "update",
+            "--spec-version",
+            "0.2.0",
+            "--apply",
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        locked = json.loads(lock_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            manifest["catalog"]["ref"],
+            "refs/tags/v0.2.0",
+        )
+        self.assertEqual(
+            locked["catalog"]["resolved_revision"],
+            new_commit,
+        )
+
     def test_spec_validation_is_offline(self) -> None:
         self.run_cli("bootstrap", "--profile", "codex", "--apply")
         unavailable = self.base / "specification-source-unavailable"
@@ -608,6 +708,72 @@ class FoundryctlTestCase(unittest.TestCase):
 
         self.assertIn("SPEC_GIT_FETCH_FAILED", result.stderr)
         self.assertEqual(list(self.repo.iterdir()), [])
+
+    def test_invalid_or_ambiguous_version_selector_is_non_destructive(
+        self,
+    ) -> None:
+        invalid = self.run_cli(
+            "spec",
+            "plan",
+            "--spec-version",
+            "main",
+            expected=2,
+        )
+        self.assertIn("SPEC_VERSION_INVALID", invalid.stderr)
+
+        ambiguous = self.run_cli(
+            "spec",
+            "plan",
+            "--spec-version",
+            "0.1.0",
+            "--spec-ref",
+            "main",
+            expected=2,
+        )
+        self.assertIn("not allowed with argument", ambiguous.stderr)
+        self.assertEqual(list(self.repo.iterdir()), [])
+
+    def test_existing_source_changes_require_explicit_update(self) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "specs.json"
+        )
+        original = manifest_path.read_bytes()
+
+        sync = self.run_cli(
+            "spec",
+            "sync",
+            "--spec-version",
+            "0.1.0",
+            expected=2,
+        )
+        self.assertIn("SPEC_SOURCE_OVERRIDE_REQUIRES_UPDATE", sync.stderr)
+
+        bootstrap = self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--spec-version",
+            "0.1.0",
+            expected=2,
+        )
+        self.assertIn(
+            "SPEC_SOURCE_OVERRIDE_REQUIRES_UPDATE",
+            bootstrap.stderr,
+        )
+
+        repository_only = self.run_cli(
+            "spec",
+            "update",
+            "--spec-repository",
+            self.catalog_repository.resolve().as_uri(),
+            expected=2,
+        )
+        self.assertIn(
+            "SPEC_SOURCE_SELECTOR_REQUIRED",
+            repository_only.stderr,
+        )
+        self.assertEqual(manifest_path.read_bytes(), original)
 
     def test_spec_drift_requires_explicit_sync(self) -> None:
         (self.repo / "go.mod").write_text(

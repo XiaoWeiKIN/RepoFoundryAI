@@ -34,7 +34,7 @@ EXECUTION_PLAN_CTL = (
 DEFAULT_SPEC_REPOSITORY = (
     "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git"
 )
-DEFAULT_SPEC_REF = "main"
+DEFAULT_SPEC_VERSION = "1.2.0"
 
 HARNESS_VERSION = 1
 HARNESS_OWNER = "repo-foundry"
@@ -68,12 +68,49 @@ class FoundryctlError(RuntimeError):
     pass
 
 
-def spec_source(repository: str, ref: str) -> dict[str, str]:
+def spec_source(
+    repository: str,
+    *,
+    version: str | None,
+    ref: str | None,
+    use_default_version: bool = True,
+) -> dict[str, str] | None:
+    if version is not None and ref is not None:
+        raise FoundryctlError(
+            "--spec-version and --spec-ref are mutually exclusive"
+        )
+    if version is None and ref is None:
+        if not use_default_version:
+            return None
+        version = DEFAULT_SPEC_VERSION
+    try:
+        selected_ref = specctl.release_ref(version) if version else ref
+    except specctl.SpecError as exc:
+        raise FoundryctlError(str(exc)) from exc
+    if selected_ref is None:  # pragma: no cover - guarded above
+        raise FoundryctlError("A Specification version or ref is required")
     return {
         "kind": "git",
         "url": repository,
-        "ref": ref,
+        "ref": selected_ref,
     }
+
+
+def selected_spec_repository(
+    repo: Path,
+    requested: str | None,
+    *,
+    preserve_manifest_source: bool,
+) -> str:
+    if requested is not None:
+        return requested
+    manifest = repo / specctl.SPEC_MANIFEST
+    if preserve_manifest_source and manifest.exists():
+        try:
+            return specctl.parse_manifest(manifest).catalog["url"]
+        except specctl.SpecError as exc:
+            raise FoundryctlError(str(exc)) from exc
+    return DEFAULT_SPEC_REPOSITORY
 
 
 def normalize_repo(value: str) -> Path:
@@ -715,6 +752,7 @@ def manage_specs(
     *,
     apply_changes: bool,
     initial_spec_source: dict[str, str],
+    update_spec_source: dict[str, str] | None,
 ) -> dict[str, object]:
     try:
         planned = specctl.plan_spec_state(
@@ -722,6 +760,7 @@ def manage_specs(
             initial_spec_source,
             operation=operation,
             allow_replace=True,
+            update_source=update_spec_source,
         )
     except specctl.SpecError as exc:
         raise FoundryctlError(str(exc)) from exc
@@ -742,6 +781,7 @@ def manage_specs(
                 initial_spec_source,
                 operation=operation,
                 allow_replace=True,
+                update_source=update_spec_source,
             )
         except specctl.SpecError as exc:
             raise FoundryctlError(str(exc)) from exc
@@ -783,18 +823,25 @@ def manage_specs(
 def add_spec_source_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--spec-repository",
-        default=DEFAULT_SPEC_REPOSITORY,
         help=(
             "Initial Git specification repository when specs.json is absent "
             f"(default: {DEFAULT_SPEC_REPOSITORY})"
         ),
     )
-    parser.add_argument(
-        "--spec-ref",
-        default=DEFAULT_SPEC_REF,
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--spec-version",
         help=(
-            "Initial Git branch, tag, or commit when specs.json is absent "
-            f"(default: {DEFAULT_SPEC_REF})"
+            "Released Catalog version MAJOR.MINOR.PATCH; normalized to "
+            "refs/tags/vMAJOR.MINOR.PATCH "
+            f"(initial default: {DEFAULT_SPEC_VERSION})"
+        ),
+    )
+    source.add_argument(
+        "--spec-ref",
+        help=(
+            "Explicit development Git branch, tag, or commit; production "
+            "use should select --spec-version"
         ),
     )
 
@@ -881,16 +928,38 @@ def main(argv: list[str] | None = None) -> int:
     try:
         repo = normalize_repo(args.repo)
         if args.command == "bootstrap":
+            source_override = any(
+                value is not None
+                for value in (
+                    args.spec_repository,
+                    args.spec_version,
+                    args.spec_ref,
+                )
+            )
+            if (repo / specctl.SPEC_MANIFEST).exists() and source_override:
+                raise FoundryctlError(
+                    "SPEC_SOURCE_OVERRIDE_REQUIRES_UPDATE: specs.json "
+                    "already exists; use spec update with --spec-version "
+                    "or --spec-ref"
+                )
+            initial_source = spec_source(
+                selected_spec_repository(
+                    repo,
+                    args.spec_repository,
+                    preserve_manifest_source=False,
+                ),
+                version=args.spec_version,
+                ref=args.spec_ref,
+            )
+            if initial_source is None:  # pragma: no cover - default enabled
+                raise FoundryctlError("Initial Spec source is missing")
             print(
                 json.dumps(
                     bootstrap_repo(
                         repo,
                         args.profile,
                         apply_changes=args.apply,
-                        initial_spec_source=spec_source(
-                            args.spec_repository,
-                            args.spec_ref,
-                        ),
+                        initial_spec_source=initial_source,
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -934,8 +1003,63 @@ def main(argv: list[str] | None = None) -> int:
                 if args.spec_command == "plan"
                 else args.spec_command
             )
+            manifest_exists = (repo / specctl.SPEC_MANIFEST).exists()
+            source_override = any(
+                value is not None
+                for value in (
+                    args.spec_repository,
+                    args.spec_version,
+                    args.spec_ref,
+                )
+            )
+            if (
+                manifest_exists
+                and operation != "update"
+                and source_override
+            ):
+                raise FoundryctlError(
+                    "SPEC_SOURCE_OVERRIDE_REQUIRES_UPDATE: specs.json "
+                    "already exists; preview spec update instead"
+                )
+            if (
+                operation == "update"
+                and manifest_exists
+                and args.spec_repository is not None
+                and args.spec_version is None
+                and args.spec_ref is None
+            ):
+                raise FoundryctlError(
+                    "SPEC_SOURCE_SELECTOR_REQUIRED: --spec-repository on an "
+                    "existing project requires --spec-version or --spec-ref"
+                )
             apply_changes = bool(
                 args.spec_command != "plan" and args.apply
+            )
+            initial_repository = selected_spec_repository(
+                repo,
+                args.spec_repository,
+                preserve_manifest_source=False,
+            )
+            initial_source = spec_source(
+                initial_repository,
+                version=args.spec_version,
+                ref=args.spec_ref,
+            )
+            if initial_source is None:  # pragma: no cover - default enabled
+                raise FoundryctlError("Initial Spec source is missing")
+            update_source = (
+                spec_source(
+                    selected_spec_repository(
+                        repo,
+                        args.spec_repository,
+                        preserve_manifest_source=True,
+                    ),
+                    version=args.spec_version,
+                    ref=args.spec_ref,
+                    use_default_version=False,
+                )
+                if operation == "update"
+                else None
             )
             print(
                 json.dumps(
@@ -943,10 +1067,8 @@ def main(argv: list[str] | None = None) -> int:
                         repo,
                         operation,
                         apply_changes=apply_changes,
-                        initial_spec_source=spec_source(
-                            args.spec_repository,
-                            args.spec_ref,
-                        ),
+                        initial_spec_source=initial_source,
+                        update_spec_source=update_source,
                     ),
                     ensure_ascii=False,
                     indent=2,

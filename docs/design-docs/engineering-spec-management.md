@@ -3,7 +3,7 @@ doc_type: design
 title: Engineering Spec resolution and project materialization
 status: current
 adr_refs: ["ADR-002", "ADR-004", "ADR-005"]
-updated: 2026-07-30
+updated: 2026-08-02
 ---
 
 # Engineering Spec Resolution and Project Materialization
@@ -21,6 +21,10 @@ This design implements the ownership accepted by ADR-002, ADR-004, and ADR-005:
 `EngineeringSpecifications` owns Catalog and normative content, while
 `engineering-execution-plan` remains Agent-neutral and owns only ADR, ExecPlan,
 Task, Checkpoint, Bugfix, and technical-debt artifacts.
+
+The release-source refinement follows approved EngineeringSpecifications
+ESP-0008: production consumers select immutable `vX.Y.Z` Catalog tags, while
+explicit branch refs remain development sources.
 
 ```mermaid
 flowchart LR
@@ -145,7 +149,7 @@ configuration:
   "catalog": {
     "kind": "git",
     "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
-    "ref": "main"
+    "ref": "refs/tags/v1.2.0"
   },
   "specs": [
     "core/semantic-naming",
@@ -164,22 +168,30 @@ configuration:
 The only source kind is `git`. `url` is passed as one argument to Git after
 validation; it may be an HTTPS, SSH, `git://`, `file://`, or SCP-style Git URL.
 `ref` is a branch, tag, or full commit-like ref accepted by `git fetch` and may
-not begin with `-`. The default source is:
+not begin with `-`. Production release refs use the exact canonical form
+`refs/tags/vMAJOR.MINOR.PATCH`. The default source is:
 
 ```json
 {
   "kind": "git",
   "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
-  "ref": "main"
+  "ref": "refs/tags/v1.2.0"
 }
 ```
+
+The default Catalog release is `1.2.0`. The option
+`--spec-version MAJOR.MINOR.PATCH` constructs the canonical release ref; the resolver rejects
+the source unless its `catalog_version` equals the requested version.
+`--spec-ref` remains an explicit development escape hatch for a branch, custom
+tag, or commit and does not imply a released Catalog version.
 
 Bootstrap creates this file only when missing. Required catalog entries and
 detected languages form the initial `specs` selection. Once the manifest
 exists, the selection and source are explicit project policy. `spec sync`
-reuses an existing locked commit. `spec update` resolves the manifest ref
-again, may add newly detected language entries, and never removes an existing
-selection.
+reuses an existing locked commit. `spec update --spec-version ...` replaces the
+manifest source with another release tag after preview; the command
+`spec update --spec-ref ...` explicitly selects a development source. Update may add newly
+detected language entries and never removes an existing selection.
 
 Each project Spec path must remain inside the repository and identify a
 non-symlink regular Markdown file. Project Spec scopes and descriptions are
@@ -198,10 +210,10 @@ rendered into the routing index but their content is never copied or rewritten.
 - the selected dependency closure.
 
 The lock is the reproducibility and validation contract. Managed file bytes
-must match the recorded digest. Branch or tag movement affects the project only
-after `spec update --apply`; `spec sync` continues to resolve the locked commit.
-Changing the manifest source while retaining an old lock requires an explicit
-update.
+must match the recorded digest. A published release tag must never move; the
+resolved commit and digests still protect consumers from unexpected movement.
+`spec sync` continues to resolve the locked commit. Changing the manifest
+source while retaining an old lock requires an explicit update.
 
 ## Git Resolution
 
@@ -231,7 +243,7 @@ All mutating operations are preview-first:
 ```text
 foundryctl spec plan
 foundryctl spec sync [--dry-run | --apply]
-foundryctl spec update [--dry-run | --apply]
+foundryctl spec update --spec-version MAJOR.MINOR.PATCH [--dry-run | --apply]
 foundryctl spec validate
 ```
 
@@ -239,14 +251,17 @@ foundryctl spec validate
   manifest when it is absent. With a lock, it previews the locked revision.
 - `sync` materializes the explicitly selected Spec set from the locked commit;
   without a lock it resolves and creates one from the manifest ref.
-- `update` resolves the manifest ref again, refreshes the lock and selected
-  content, and additionally discovers newly introduced languages.
+- `update --spec-version ...` changes the manifest to a reviewed immutable
+  release, refreshes the lock and selected content, and additionally discovers
+  newly introduced languages. `update --spec-ref ...` is the explicit
+  development-source equivalent.
 - `validate` performs no writes and verifies the manifest, lock, managed
   content, project Spec references, routing index, and `AGENTS.md` route. It
   performs no network or Git operation.
 
 `foundryctl bootstrap --profile codex` includes the same Spec plan and
-accepts optional initial `--spec-repository` and `--spec-ref` values.
+accepts optional initial `--spec-repository` and `--spec-version` values.
+`--spec-ref` selects an explicit development source instead.
 Bootstrap apply may create missing files but does not replace an existing
 managed file with different bytes. An explicit `spec sync --apply` or
 `spec update --apply` may replace files inside the managed namespace after the
@@ -299,8 +314,10 @@ flowchart TB
 - Polyglot repositories install multiple language Specs and route them by
   scope.
 - Repeated Bootstrap and Spec sync operations are byte-idempotent.
-- `spec sync` remains pinned after the tracked branch moves; `spec update`
-  adopts the new commit.
+- The default absent-manifest plan uses `refs/tags/v1.2.0`, and exact release
+  refs whose Catalog version differs fail before writes.
+- `spec sync` remains pinned after the tracked branch or tag moves; an explicit
+  version/ref update adopts a new source and commit.
 - Catalog digest drift, managed-content drift, missing lock entries, traversal,
   dependency cycles, unreachable refs, and missing project Specs fail safely.
 - Existing `AGENTS.md` and project documentation remain byte-identical.
