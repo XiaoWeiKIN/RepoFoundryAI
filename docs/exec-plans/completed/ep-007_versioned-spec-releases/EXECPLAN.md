@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-007
 title: "Pin Engineering Specification releases"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -13,9 +13,9 @@ architecture_entrypoint: ""
 architecture_gate: not_required
 architecture_gate_reason: "Accepted ADR-005 already assigns external Git specification resolution and immutable locking to RepoFoundry; this change refines that source contract from an implicit moving branch to an explicit release tag without changing repository ownership or Catalog schema."
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:590bd34f20cc6f400d24e9f429bf0e3c33f52bda"
+verification_evidence: ["docs/exec-plans/completed/ep-007_versioned-spec-releases/artifacts/exact-revision-checks.txt", "docs/exec-plans/completed/ep-007_versioned-spec-releases/artifacts/public-version-preview.txt", "docs/exec-plans/completed/ep-007_versioned-spec-releases/artifacts/specification-release-check.txt"]
+archive_sha256: 9ffcbcef1380f696598a867a42ab8e7f7fbb866936eff60300e1edb62b5577bc
 created: 2026-08-02
 updated: 2026-08-02
 owner: "Codex"
@@ -50,8 +50,8 @@ any target-repository write.
   behavior is implemented, 42 focused/contract tests pass, the full canonical
   check passes, and the public dry-run resolves the expected tag without
   target writes.
-- Next action: commit RepoFoundry, verify both exact commits in clean detached
-  worktrees, archive EP-007, and create review pull requests.
+- Next action: archive EP-007 with verified revision `git:590bd34`, commit the
+  sealed record, push both branches, and create review pull requests.
 - Open questions: none that change the selected route.
 
 ## Context and Orientation
@@ -228,7 +228,7 @@ commit matching the release tag, and no files in the temporary repository.
 - [x] Run a real public `spec plan` against an empty temporary repository;
   expect `refs/tags/v1.2.0`, Catalog `1.2.0`, the release commit, and zero
   target writes. Evidence: `artifacts/public-version-preview.txt`.
-- [ ] Validate exact committed revisions in clean detached worktrees; expect
+- [x] Validate exact committed revisions in clean detached worktrees; expect
   both canonical checks to pass. Evidence:
   `artifacts/exact-revision-checks.txt`.
 
@@ -279,8 +279,12 @@ may be rewritten; correct any defect with a new patch release instead.
 - [x] (2026-08-02T06:00:00Z) Passed 42 focused/contract tests, both
   specification checks, RepoFoundry's full canonical check, EP validation, and
   a real public no-write version preview.
-- [ ] Commit RepoFoundry, validate exact revisions, archive, push, and create
-  pull requests.
+- [x] (2026-08-02T06:10:00Z) Committed RepoFoundry as `590bd34`, then
+  validated exact EngineeringSpecifications `72dbd5f` and RepoFoundry
+  `590bd34` revisions in clean detached worktrees.
+- [x] (2026-08-02T06:12:00Z) Prepared the verified implementation and exact
+  evidence for archival; branch push and pull-request publication follow the
+  sealed execution record.
 
 ## Surprises & Discoveries
 
@@ -320,8 +324,10 @@ canonical tag, the lock proves the commit and bytes, sync stays pinned, and
 only an explicit previewed update changes release. Legacy explicit branch
 sources remain usable for development, but are no longer the default.
 
-The remaining work is procedural: commit the RepoFoundry tree, validate both
-exact commits in detached worktrees, seal this plan, and publish pull requests.
+The implementation is complete and exact revisions are verified. Remaining
+work is repository lifecycle only: seal this plan and publish the two pull
+requests. Future work may add signed tags or hosted versioned documents, but
+neither is required for fixed-version consumption.
 
 ### Knowledge promotion candidates
 
@@ -349,7 +355,7 @@ Git or access the network.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-007_versioned-spec-releases/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-007_versioned-spec-releases/EXECPLAN.md`
 - EngineeringSpecifications proposal:
   `proposals/0008_versioned-catalog-releases.md` in the specification
   repository.
@@ -364,3 +370,5 @@ Git or access the network.
 - 2026-08-02T06:03:00Z — Recorded the implemented contracts, release tag,
   focused and canonical validation, public preview, evidence paths,
   discoveries, decisions, and remaining exact-revision work.
+- 2026-08-02T06:11:00Z — Recorded exact detached-revision validation and
+  reduced remaining work to archival and pull-request publication.
