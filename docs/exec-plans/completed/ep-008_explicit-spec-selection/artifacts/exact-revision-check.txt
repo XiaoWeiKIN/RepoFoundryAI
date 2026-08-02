@@ -1,0 +1,5 @@
+Command: python3 -B scripts/check.py
+Repository: detached clean worktree for RepoFoundry commit 6f186268e6e6b553d3e58709bfb349cc25567f0b
+Observed: 2026-08-02T07:42:00Z
+Exit: 0
+Summary: 45 RepoFoundry/Spec/repository tests passed; Research and Execution Plan validation reported 0 errors and 0 warnings; every canonical integrity check passed.

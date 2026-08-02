@@ -1,0 +1,28 @@
+Remote GitHub Actions snapshot
+Observed: 2026-08-02T07:52:28Z
+
+EngineeringSpecifications
+- Commit: eeea7960b22291d69f5d19f557c6795b11236aec
+- Pull request: https://github.com/XiaoWeiKIN/EngineeringSpecifications/pull/10
+- Job: validate
+- State: queued
+- Conclusion: none
+- URL: https://github.com/XiaoWeiKIN/EngineeringSpecifications/actions/runs/30738335942/job/91471090146
+
+RepoFoundry
+- Commit: 6f186268e6e6b553d3e58709bfb349cc25567f0b
+- Pull request: https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/14
+- Job: Python 3.10
+- State: queued
+- Conclusion: none
+- URL: https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/30738336156/job/91471090933
+- Job: Python 3.14
+- State: queued
+- Conclusion: none
+- URL: https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/30738336156/job/91471090899
+
+Interpretation
+- The jobs had not obtained a runner approximately ten minutes after creation.
+- This snapshot is delivery-state evidence, not successful CI verification.
+- Both exact implementation revisions passed their canonical checks in clean,
+  detached worktrees; those artifacts are the completion evidence for EP-008.

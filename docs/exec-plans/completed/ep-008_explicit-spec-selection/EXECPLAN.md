@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-008
 title: "Let users explicitly select installed Engineering Specs"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -13,9 +13,9 @@ architecture_entrypoint: ""
 architecture_gate: not_required
 architecture_gate_reason: "ADR-005 already fixes external Catalog ownership and immutable local locking; this change refines the reversible CLI selection policy without changing repository ownership, manifest schema, lock schema, or remote trust boundaries."
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:6f186268e6e6b553d3e58709bfb349cc25567f0b"
+verification_evidence: ["docs/exec-plans/completed/ep-008_explicit-spec-selection/artifacts/exact-revision-check.txt", "docs/exec-plans/completed/ep-008_explicit-spec-selection/artifacts/engineering-specifications-check.txt"]
+archive_sha256: 746169d66f52ab247b9974a6339193816d7378f545368991dffab3042f8abcb5
 created: 2026-08-02
 updated: 2026-08-02
 owner: ""
@@ -51,10 +51,14 @@ required-only selection.
   RepoFoundry implements explicit optional selection, recommendation-only
   detection, Catalog summaries, required/dependency closure, selection
   preservation, and digest-guarded deselection. Both focused and canonical
-  checks pass, as does a real public `v1.2.0` smoke flow.
-- Next action: commit each repository, verify the exact RepoFoundry
-  implementation commit in a clean detached worktree, archive EP-008, push the
-  two open-PR branches, and confirm CI.
+  checks pass, as does a real public `v1.2.0` smoke flow. Implementation commit
+  `6f186268e6e6b553d3e58709bfb349cc25567f0b` passes the canonical check in a
+  clean detached worktree; EngineeringSpecifications commit `eeea796` also
+  passes its independent check. Both branches are pushed. Their new GitHub
+  Actions runs remain queued without a runner as of `2026-08-02T07:52:28Z`;
+  this is recorded as delivery state rather than successful verification.
+- Next action: archive EP-008 against the exact implementation revision and
+  retain the queued remote-check snapshot for PR follow-up.
 - Open questions: none that change the selected route.
 
 ## Context and Orientation
@@ -235,7 +239,7 @@ Datafox or another product repository.
   canonical repository check to pass. Evidence: `artifacts/repo-foundry-check.txt`.
 - [x] From RepoFoundry, run `epctl validate`; expect zero errors. Evidence:
   `artifacts/epctl-validate.txt`.
-- [ ] Verify the final RepoFoundry implementation commit in a detached clean
+- [x] Verify the final RepoFoundry implementation commit in a detached clean
   worktree with `python3 -B scripts/check.py`; expect the canonical check to
   pass. Evidence: `artifacts/exact-revision-check.txt`.
 
@@ -282,8 +286,15 @@ schema-v1 data.
 - [x] (2026-08-02T07:35:30Z) Passed 13 EngineeringSpecifications tests, 45
   focused RepoFoundry tests, both canonical checks, EP validation, and a real
   public-tag smoke flow.
-- [ ] Run canonical checks, exact-revision verification, archive, push, and
-  confirm CI.
+- [x] (2026-08-02T07:42:00Z) Committed EngineeringSpecifications as `eeea796`
+  and RepoFoundry implementation as
+  `6f186268e6e6b553d3e58709bfb349cc25567f0b`; both exact detached revisions pass
+  their canonical checks.
+- [x] (2026-08-02T07:52:28Z) Pushed both branches and recorded the three
+  GitHub Actions jobs as queued after approximately ten minutes without a
+  runner. Exact detached-revision checks remain the completion evidence; the
+  queued state is captured in `artifacts/remote-ci.txt` and is not represented
+  as a successful CI conclusion.
 
 ## Surprises & Discoveries
 
@@ -315,11 +326,18 @@ schema-v1 data.
 
 ## Outcomes & Retrospective
 
-The user-visible behavior and local validation are complete. Detection no
-longer makes a project-governance decision; it reports recommendations while
-the manifest records explicit optional choices. Required and dependency
-closure remain safe defaults. Final exact-revision evidence, archival, remote
-push, and CI confirmation remain.
+The user-visible behavior is complete. Detection no longer makes a
+project-governance decision; it reports recommendations while the manifest
+records explicit optional choices. Required and dependency closure remain safe
+defaults. Deselecting an optional Spec removes only an unchanged file proven by
+the old lock, so exact local installation and repository ownership coexist.
+
+No manifest, lock, or Catalog schema migration was needed. Existing projects
+preserve their direct selections; fresh projects move from automatic language
+installation to reviewable required-only defaults. Both branches are pushed.
+Remote GitHub Actions remained queued without a runner at archival time, while
+both exact implementation revisions independently passed their canonical
+checks; the PRs retain the remote check state for normal follow-up.
 
 ### Knowledge promotion candidates
 
@@ -365,7 +383,7 @@ unchanged.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-008_explicit-spec-selection/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-008_explicit-spec-selection/EXECPLAN.md`
 - Approved consumer-contract ESP:
   `https://github.com/XiaoWeiKIN/EngineeringSpecifications/blob/codex/versioned-catalog-releases/proposals/0009_explicit-spec-selection.md`
 - EngineeringSpecifications check:
@@ -376,6 +394,8 @@ unchanged.
 - Public required-only update preview: `artifacts/required-only-update.json`
 - Canonical RepoFoundry check: `artifacts/repo-foundry-check.txt`
 - EP validation: `artifacts/epctl-validate.txt`
+- Exact RepoFoundry revision check: `artifacts/exact-revision-check.txt`
+- Remote GitHub Actions state: `artifacts/remote-ci.txt`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -387,3 +407,8 @@ unchanged.
 - 2026-08-02T07:35:30Z — Updated current facts, validation evidence, progress,
   discovery, and retrospective after implementation and public-tag smoke
   verification.
+- 2026-08-02T07:42:00Z — Recorded both implementation commits, exact detached
+  checks, final acceptance, and completion retrospective before archival.
+- 2026-08-02T07:52:28Z — Recorded pushed branches and the truthful queued
+  GitHub Actions snapshot; retained exact-revision checks as completion
+  evidence instead of treating runner availability as a test result.
