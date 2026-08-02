@@ -207,12 +207,14 @@ RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
 python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex
-python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex --apply
+python3 "$FOUNDRYCTL" --repo . \
+  bootstrap --profile codex --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . validate --harness
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
-python3 "$FOUNDRYCTL" --repo . spec update --apply
+python3 "$FOUNDRYCTL" --repo . \
+  spec update --spec-version 1.2.0 --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -228,7 +230,17 @@ Codex profile must stay at or below 100 physical lines.
 Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog. `sync` follows the locked commit; `update` explicitly resolves the
-configured ref again. `spec validate` is offline.
+selected release again. New repositories default to fixed Catalog version
+`1.2.0`, represented as `refs/tags/v1.2.0`; production upgrades name another
+version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
+remains an explicit development-source escape hatch. `spec validate` is
+offline.
+
+`spec plan` lists every Catalog entry and separates required, recommended,
+configured, and dependency-closed selected sets. Detection only recommends
+optional IDs. Repeat `--spec ID` during initial Bootstrap or `spec update` to
+set the complete optional direct selection; use `--required-only` to select no
+optional Specs. Required Specs and transitive dependencies remain automatic.
 
 ## Boundaries keep the system trustworthy
 

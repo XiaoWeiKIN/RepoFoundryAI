@@ -10,7 +10,7 @@
 flowchart LR
     P["foundryctl 仓库预检"] --> I["epctl init<br/>ADR / ExecPlan 制品"]
     P --> C["Codex profile<br/>AGENTS.md + 架构与治理入口"]
-    P --> S["Spec Resolver<br/>Core + detected languages"]
+    P --> S["Spec Resolver<br/>required + user-selected"]
     I --> E["docs/.epctl/<br/>EP 状态"]
     C --> M["docs/.engineering/harness.json"]
     S --> L["specs.json + lock<br/>本地 managed Specs"]
@@ -32,7 +32,8 @@ flowchart LR
 - 只创建缺失路径；
 - 将 `docs/design-docs` 注册为 architecture root；
 - 创建并启用 Harness manifest；
-- 安装必选 Core Spec 和检测到的 Go、TypeScript、Python Spec；
+- 安装必选 Core Spec 和用户显式选择的可选 Spec；
+- 将确定性检测结果作为推荐展示，不据此自动安装；
 - 生成 Spec manifest、lock、本地副本与按作用域路由索引；
 - 写入后立即执行 Harness 验证。
 
@@ -57,13 +58,14 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 | `create_file` | apply 将从 bundled asset 创建缺失文件 |
 | `register` | apply 将注册 architecture root |
 | `preserve` | 已有路径保持原样 |
+| `remove_file` | 显式取消选择后删除摘要仍匹配旧 lock 的托管 Spec |
 | `conflict` | apply 会在写入前失败 |
 
 显式 `--dry-run` 与默认行为相同。确认预览后执行：
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --profile codex --apply
+  bootstrap --profile codex --spec languages/go --apply
 ```
 
 ## 初始化结构
@@ -103,11 +105,13 @@ SLO 或安全控制。
 
 Catalog 与规范正文位于独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
-Git 仓库。默认源是该仓库的 `main`；首次 Bootstrap 可通过
-`--spec-repository` 与 `--spec-ref` 覆盖。Bootstrap 永远选择
-`core/semantic-naming`，并根据 `go.mod` / `*.go`、
-`tsconfig.json` / TypeScript 源文件、`pyproject.toml` / Python 源文件选择语言
-Spec。多语言仓库组合多个语言 Spec，不加载未匹配语言。
+Git 仓库。默认 Catalog 版本是 `1.2.0`；首次 Bootstrap 可通过
+`--spec-repository` 与 `--spec-version` 覆盖。manifest 记录
+`refs/tags/v1.2.0`；解析器验证 tag 内的 `catalog_version` 完全一致。
+`--spec-ref` 仅用于显式开发分支、tag 或 commit。Bootstrap 永远选择 Catalog 中
+`required: true` 的 Core Spec。`go.mod` / `*.go` 等确定性证据只把对应语言 Spec
+列入 `recommended_specs`；用户重复传入 `--spec <id>` 才安装可选 Spec。多语言
+仓库可显式组合多个语言 Spec；解析器自动补齐 `requires` 依赖闭包。
 
 项目选择保存在 `docs/.engineering/specs.json`；精确版本、Catalog digest、
 解析后的完整 Git commit、内容 SHA-256 和本地路径保存在
@@ -122,14 +126,21 @@ Spec 操作同样 preview-first：
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  spec update --spec languages/go
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
-python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --spec-version 1.2.0 --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
-`sync` 使用 lock 已记录的 commit；lock 缺失时才从 manifest ref 建立初始解析。
-`update` 重新解析 manifest ref、加入新检测到的语言并刷新内容，但不自动移除选择。
+`spec plan` 的 JSON 同时展示 `available_specs`、`required_specs`、
+`recommended_specs`、`configured_specs` 与依赖闭包后的 `selected_specs`。`sync`
+使用 lock 已记录的 commit，并且永不改变选择；lock 缺失时才从 manifest 的版本 tag
+建立初始解析。生产升级必须通过 `update --spec-version MAJOR.MINOR.PATCH` 明确选择
+新版本；`update --spec-ref ...` 只用于显式开发源。没有选择参数时 update 保留当前
+集合；重复 `--spec <id>` 会替换完整可选直接集合，`--required-only` 清空可选集合。
+取消选择时，只删除字节仍匹配旧 lock 的 RepoFoundry 托管副本；漂移会在写入前失败。
 显式 applied Spec 操作可以在预览后替换生成的 lock、index 和 managed Spec；
 Bootstrap 本身遇到内容漂移仍报告 conflict。`spec validate` 只检查 manifest、
 lock 与本地文件，完全不访问网络。

@@ -1,0 +1,5 @@
+Command: python3 -B -m unittest tests.test_spec_manager tests.test_foundryctl tests.test_repository_contracts
+Repository: /Users/wangxiaowei1/x-otel/EngineeringPlan
+Observed: 2026-08-02T07:35:30Z
+Exit: 0
+Summary: 45 tests passed, including recommendation-only detection, explicit selection, required-only deselection, digest-guarded removal, pinned sync, release update, and offline validation.

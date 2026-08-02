@@ -192,12 +192,14 @@ RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
 python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex
-python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex --apply
+python3 "$FOUNDRYCTL" --repo . \
+  bootstrap --profile codex --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . validate --harness
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
-python3 "$FOUNDRYCTL" --repo . spec update --apply
+python3 "$FOUNDRYCTL" --repo . \
+  spec update --spec-version 1.2.0 --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -211,8 +213,16 @@ Bootstrap 与 Spec 写操作默认先预览。Bootstrap 只创建缺失路径，
 
 Engineering Specs 来自独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
-Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析配置 ref；
-`spec validate` 完全离线。
+Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发布版本。
+新仓库默认选择固定 Catalog `1.2.0`，manifest 记录
+`refs/tags/v1.2.0`。生产升级通过
+`spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
+`--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。
+
+`spec plan` 会列出全部 Catalog 条目，并区分必选、推荐、项目直接配置和依赖闭包后的
+最终集合。检测结果只推荐可选 ID；首次 Bootstrap 或 `spec update` 时重复传入
+`--spec ID`，即可设置完整的可选直接集合；`--required-only` 表示不选任何可选
+Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
 
 ## 清晰边界保证系统可信
 

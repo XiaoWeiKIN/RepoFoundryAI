@@ -1,0 +1,5 @@
+Command: python3 engineering-execution-plan/scripts/epctl.py --repo . validate
+Repository: /Users/wangxiaowei1/x-otel/EngineeringPlan
+Observed: 2026-08-02T07:35:30Z
+Exit: 0
+Output: {"errors": 0, "warnings": 0}

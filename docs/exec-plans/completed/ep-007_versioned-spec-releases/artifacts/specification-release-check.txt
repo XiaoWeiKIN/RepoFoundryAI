@@ -1,0 +1,5 @@
+Command: python3 -B scripts/check_release.py 1.2.0 --require-tag
+Repository: /Users/wangxiaowei1/xiaowei/EngineeringSpecifications
+Observed tag: refs/tags/v1.2.0
+Resolved commit: 49232cd57e9cdd77cbaf79365a555d8cf341dfbd
+Result: RELEASE_OK

@@ -14,11 +14,28 @@ import spec_manager  # noqa: E402
 from tests.spec_git_fixture import (  # noqa: E402
     commit_all,
     create_git_catalog,
+    git,
     write_catalog,
 )
 
 
 class SpecManagerBoundaryTestCase(unittest.TestCase):
+    def test_release_ref_requires_exact_semver(self) -> None:
+        self.assertEqual(
+            spec_manager.release_ref("1.2.3"),
+            "refs/tags/v1.2.3",
+        )
+        self.assertEqual(
+            spec_manager.release_version_from_ref("refs/tags/v1.2.3"),
+            "1.2.3",
+        )
+        self.assertIsNone(spec_manager.release_version_from_ref("v1.2.3"))
+        with self.assertRaisesRegex(
+            spec_manager.SpecError,
+            "SPEC_VERSION_INVALID",
+        ):
+            spec_manager.release_ref("main")
+
     def test_manifest_rejects_unknown_owner(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             manifest = Path(temporary) / "specs.json"
@@ -164,6 +181,39 @@ class SpecManagerBoundaryTestCase(unittest.TestCase):
                 "specification/languages/go.md",
                 catalog.contents,
             )
+
+    def test_git_release_ref_matches_catalog_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, expected_commit = create_git_catalog(Path(temporary))
+            catalog = spec_manager.resolve_git_catalog(
+                {
+                    "kind": "git",
+                    "url": source.resolve().as_uri(),
+                    "ref": "refs/tags/v0.1.0",
+                },
+                "refs/tags/v0.1.0",
+            )
+
+            self.assertEqual(catalog.catalog_version, "0.1.0")
+            self.assertEqual(catalog.resolved_revision, expected_commit)
+
+    def test_git_release_ref_rejects_catalog_version_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, _ = create_git_catalog(Path(temporary))
+            git(source, "tag", "v9.9.9")
+
+            with self.assertRaisesRegex(
+                spec_manager.SpecError,
+                "SPEC_CATALOG_VERSION_MISMATCH",
+            ):
+                spec_manager.resolve_git_catalog(
+                    {
+                        "kind": "git",
+                        "url": source.resolve().as_uri(),
+                        "ref": "refs/tags/v9.9.9",
+                    },
+                    "refs/tags/v9.9.9",
+                )
 
     def test_git_catalog_rejects_symbolic_link_content(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

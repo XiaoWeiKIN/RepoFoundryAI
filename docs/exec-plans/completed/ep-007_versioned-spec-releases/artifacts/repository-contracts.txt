@@ -1,0 +1,4 @@
+Command: python3 -B -m unittest tests.test_repository_contracts
+Repository: /Users/wangxiaowei1/x-otel/EngineeringPlan
+Observed as part of the focused 42-test run: all repository contract tests passed.
+Contract assertions include DEFAULT_SPEC_VERSION = 1.2.0, absence of DEFAULT_SPEC_REF = main, availability of --spec-version, and no bundled normative Spec content.

@@ -174,12 +174,28 @@ def commit_all(repository: Path, message: str) -> str:
     return git(repository, "rev-parse", "HEAD").stdout.strip()
 
 
+def tag_release(repository: Path, version: str) -> None:
+    git(
+        repository,
+        "-c",
+        "user.name=Engineering Spec Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "tag",
+        "-a",
+        f"v{version}",
+        "-m",
+        f"fixture Catalog v{version}",
+    )
+
+
 def create_git_catalog(parent: Path) -> tuple[Path, str]:
     repository = parent / "specification-source"
     repository.mkdir()
     git(repository, "init", "-b", "main")
     write_catalog(repository)
     commit = commit_all(repository, "initial catalog")
+    tag_release(repository, "0.1.0")
     return repository, commit
 
 
@@ -200,4 +216,6 @@ def update_go_spec(
         contents=contents,
         catalog_version=catalog_version,
     )
-    return commit_all(repository, "update Go specification")
+    commit = commit_all(repository, "update Go specification")
+    tag_release(repository, catalog_version)
+    return commit

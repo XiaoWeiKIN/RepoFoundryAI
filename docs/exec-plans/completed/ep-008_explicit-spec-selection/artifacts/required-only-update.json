@@ -1,0 +1,17 @@
+{
+  "configured_specs": [
+    "core/semantic-naming",
+    "core/data-boundaries"
+  ],
+  "mode": "dry-run",
+  "remove_actions": [
+    {
+      "action": "remove_file",
+      "path": "docs/agent-guides/managed/languages/go.md"
+    }
+  ],
+  "selected_specs": [
+    "core/semantic-naming",
+    "core/data-boundaries"
+  ]
+}

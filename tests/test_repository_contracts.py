@@ -438,6 +438,9 @@ class RepositoryContractTestCase(unittest.TestCase):
             "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
             foundryctl,
         )
+        self.assertIn('DEFAULT_SPEC_VERSION = "1.2.0"', foundryctl)
+        self.assertNotIn('DEFAULT_SPEC_REF = "main"', foundryctl)
+        self.assertIn("--spec-version", foundryctl)
         self.assertNotIn("SPEC_CATALOG_DIR", foundryctl)
 
     def test_execplan_consumes_sealed_benchmark_contract(self) -> None:

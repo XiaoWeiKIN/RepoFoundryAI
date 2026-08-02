@@ -34,7 +34,7 @@ EXECUTION_PLAN_CTL = (
 DEFAULT_SPEC_REPOSITORY = (
     "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git"
 )
-DEFAULT_SPEC_REF = "main"
+DEFAULT_SPEC_VERSION = "1.2.0"
 
 HARNESS_VERSION = 1
 HARNESS_OWNER = "repo-foundry"
@@ -68,12 +68,49 @@ class FoundryctlError(RuntimeError):
     pass
 
 
-def spec_source(repository: str, ref: str) -> dict[str, str]:
+def spec_source(
+    repository: str,
+    *,
+    version: str | None,
+    ref: str | None,
+    use_default_version: bool = True,
+) -> dict[str, str] | None:
+    if version is not None and ref is not None:
+        raise FoundryctlError(
+            "--spec-version and --spec-ref are mutually exclusive"
+        )
+    if version is None and ref is None:
+        if not use_default_version:
+            return None
+        version = DEFAULT_SPEC_VERSION
+    try:
+        selected_ref = specctl.release_ref(version) if version else ref
+    except specctl.SpecError as exc:
+        raise FoundryctlError(str(exc)) from exc
+    if selected_ref is None:  # pragma: no cover - guarded above
+        raise FoundryctlError("A Specification version or ref is required")
     return {
         "kind": "git",
         "url": repository,
-        "ref": ref,
+        "ref": selected_ref,
     }
+
+
+def selected_spec_repository(
+    repo: Path,
+    requested: str | None,
+    *,
+    preserve_manifest_source: bool,
+) -> str:
+    if requested is not None:
+        return requested
+    manifest = repo / specctl.SPEC_MANIFEST
+    if preserve_manifest_source and manifest.exists():
+        try:
+            return specctl.parse_manifest(manifest).catalog["url"]
+        except specctl.SpecError as exc:
+            raise FoundryctlError(str(exc)) from exc
+    return DEFAULT_SPEC_REPOSITORY
 
 
 def normalize_repo(value: str) -> Path:
@@ -295,6 +332,7 @@ def bootstrap_plan(
     repo: Path,
     profile: str,
     initial_spec_source: dict[str, str],
+    requested_spec_ids: tuple[str, ...] | None,
 ) -> dict[str, object]:
     if profile != CODEX_HARNESS_PROFILE:
         raise FoundryctlError(
@@ -415,12 +453,17 @@ def bootstrap_plan(
         actions.append({"action": "register", "path": "docs/design-docs"})
 
     selected_specs: list[str] = []
+    configured_specs: list[str] = []
+    required_specs: list[str] = []
+    recommended_specs: list[str] = []
+    available_specs: list[dict[str, object]] = []
     try:
         spec_plan = specctl.plan_spec_state(
             repo,
             initial_spec_source,
             operation="sync",
             allow_replace=False,
+            requested_spec_ids=requested_spec_ids,
         )
     except specctl.SpecError as exc:
         actions.append(
@@ -434,11 +477,20 @@ def bootstrap_plan(
         actions.extend(spec_plan.actions)
         warnings.extend(spec_plan.warnings)
         selected_specs.extend(spec_plan.selected_spec_ids)
+        spec_payload = specctl.plan_payload(spec_plan, mode="dry-run")
+        configured_specs.extend(spec_payload["configured_specs"])
+        required_specs.extend(spec_payload["required_specs"])
+        recommended_specs.extend(spec_payload["recommended_specs"])
+        available_specs.extend(spec_payload["available_specs"])
 
     return {
         "profile": profile,
         "components": ["engineering-execution-plan"],
         "specs": selected_specs,
+        "configured_specs": configured_specs,
+        "required_specs": required_specs,
+        "recommended_specs": recommended_specs,
+        "available_specs": available_specs,
         "actions": actions,
         "warnings": warnings,
     }
@@ -562,8 +614,14 @@ def bootstrap_repo(
     *,
     apply_changes: bool,
     initial_spec_source: dict[str, str],
+    requested_spec_ids: tuple[str, ...] | None,
 ) -> dict[str, object]:
-    planned = bootstrap_plan(repo, profile, initial_spec_source)
+    planned = bootstrap_plan(
+        repo,
+        profile,
+        initial_spec_source,
+        requested_spec_ids,
+    )
     actions = planned["actions"]
     if not isinstance(actions, list):
         raise FoundryctlError("Bootstrap plan returned invalid actions")
@@ -577,6 +635,10 @@ def bootstrap_repo(
         "mode": "apply" if apply_changes else "dry-run",
         "components": list(planned["components"]),
         "specs": list(planned["specs"]),
+        "configured_specs": list(planned["configured_specs"]),
+        "required_specs": list(planned["required_specs"]),
+        "recommended_specs": list(planned["recommended_specs"]),
+        "available_specs": list(planned["available_specs"]),
         "actions": actions,
         "warnings": list(planned["warnings"]),
         "created": [],
@@ -597,7 +659,12 @@ def bootstrap_repo(
     updated: list[str] = []
     harness_state_existed = (repo / HARNESS_STATE_DIRECTORY).is_dir()
     with repo_lock(repo):
-        second_plan = bootstrap_plan(repo, profile, initial_spec_source)
+        second_plan = bootstrap_plan(
+            repo,
+            profile,
+            initial_spec_source,
+            requested_spec_ids,
+        )
         second_actions = second_plan["actions"]
         if not isinstance(second_actions, list):
             raise FoundryctlError(
@@ -671,13 +738,17 @@ def bootstrap_repo(
                     initial_spec_source,
                     operation="sync",
                     allow_replace=False,
+                    requested_spec_ids=requested_spec_ids,
                 )
-                spec_created, spec_updated = specctl.apply_spec_plan(
-                    repo,
-                    spec_plan,
+                spec_created, spec_updated, spec_removed = (
+                    specctl.apply_spec_plan(repo, spec_plan)
                 )
                 created.extend(spec_created)
                 updated.extend(spec_updated)
+                if spec_removed:
+                    raise FoundryctlError(
+                        "Bootstrap unexpectedly planned Spec removals"
+                    )
         except FoundryctlError:
             raise
         except specctl.SpecError as exc:
@@ -715,6 +786,8 @@ def manage_specs(
     *,
     apply_changes: bool,
     initial_spec_source: dict[str, str],
+    update_spec_source: dict[str, str] | None,
+    requested_spec_ids: tuple[str, ...] | None,
 ) -> dict[str, object]:
     try:
         planned = specctl.plan_spec_state(
@@ -722,6 +795,8 @@ def manage_specs(
             initial_spec_source,
             operation=operation,
             allow_replace=True,
+            update_source=update_spec_source,
+            requested_spec_ids=requested_spec_ids,
         )
     except specctl.SpecError as exc:
         raise FoundryctlError(str(exc)) from exc
@@ -742,6 +817,8 @@ def manage_specs(
                 initial_spec_source,
                 operation=operation,
                 allow_replace=True,
+                update_source=update_spec_source,
+                requested_spec_ids=requested_spec_ids,
             )
         except specctl.SpecError as exc:
             raise FoundryctlError(str(exc)) from exc
@@ -751,7 +828,10 @@ def manage_specs(
                 "rerun the dry-run"
             )
         try:
-            created, updated = specctl.apply_spec_plan(repo, locked_plan)
+            created, updated, removed = specctl.apply_spec_plan(
+                repo,
+                locked_plan,
+            )
         except specctl.SpecError as exc:
             raise FoundryctlError(str(exc)) from exc
 
@@ -768,6 +848,7 @@ def manage_specs(
         mode="apply",
         created=created,
         updated=updated,
+        removed=removed,
     )
     payload["warnings"] = list(
         dict.fromkeys(
@@ -783,20 +864,53 @@ def manage_specs(
 def add_spec_source_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--spec-repository",
-        default=DEFAULT_SPEC_REPOSITORY,
         help=(
             "Initial Git specification repository when specs.json is absent "
             f"(default: {DEFAULT_SPEC_REPOSITORY})"
         ),
     )
-    parser.add_argument(
-        "--spec-ref",
-        default=DEFAULT_SPEC_REF,
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--spec-version",
         help=(
-            "Initial Git branch, tag, or commit when specs.json is absent "
-            f"(default: {DEFAULT_SPEC_REF})"
+            "Released Catalog version MAJOR.MINOR.PATCH; normalized to "
+            "refs/tags/vMAJOR.MINOR.PATCH "
+            f"(initial default: {DEFAULT_SPEC_VERSION})"
         ),
     )
+    source.add_argument(
+        "--spec-ref",
+        help=(
+            "Explicit development Git branch, tag, or commit; production "
+            "use should select --spec-version"
+        ),
+    )
+
+
+def add_spec_selection_arguments(parser: argparse.ArgumentParser) -> None:
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument(
+        "--spec",
+        dest="spec_ids",
+        action="append",
+        metavar="ID",
+        help=(
+            "Select an optional Specification by stable ID; repeat to set "
+            "the complete desired optional direct selection"
+        ),
+    )
+    selection.add_argument(
+        "--required-only",
+        action="store_true",
+        help="Select no optional Specifications; required Specs remain",
+    )
+
+
+def requested_spec_ids(args: argparse.Namespace) -> tuple[str, ...] | None:
+    if getattr(args, "required_only", False):
+        return ()
+    values = getattr(args, "spec_ids", None)
+    return tuple(values) if values is not None else None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -814,6 +928,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=CODEX_HARNESS_PROFILE,
     )
     add_spec_source_arguments(bootstrap)
+    add_spec_selection_arguments(bootstrap)
     bootstrap_mode = bootstrap.add_mutually_exclusive_group()
     bootstrap_mode.add_argument(
         "--apply",
@@ -853,11 +968,13 @@ def build_parser() -> argparse.ArgumentParser:
         ("sync", "Materialize the explicit Spec selection"),
         (
             "update",
-            "Add newly detected languages and refresh selected Specs",
+            "Replace explicit selection or refresh selected Specs",
         ),
     ):
         command_parser = spec_commands.add_parser(command, help=help_text)
         add_spec_source_arguments(command_parser)
+        if command == "update":
+            add_spec_selection_arguments(command_parser)
         command_mode = command_parser.add_mutually_exclusive_group()
         command_mode.add_argument(
             "--apply",
@@ -881,16 +998,43 @@ def main(argv: list[str] | None = None) -> int:
     try:
         repo = normalize_repo(args.repo)
         if args.command == "bootstrap":
+            selection = requested_spec_ids(args)
+            source_override = any(
+                value is not None
+                for value in (
+                    args.spec_repository,
+                    args.spec_version,
+                    args.spec_ref,
+                )
+            )
+            if (
+                (repo / specctl.SPEC_MANIFEST).exists()
+                and (source_override or selection is not None)
+            ):
+                raise FoundryctlError(
+                    "SPEC_BOOTSTRAP_OVERRIDE_REQUIRES_UPDATE: specs.json "
+                    "already exists; use spec update to change source or "
+                    "selection"
+                )
+            initial_source = spec_source(
+                selected_spec_repository(
+                    repo,
+                    args.spec_repository,
+                    preserve_manifest_source=False,
+                ),
+                version=args.spec_version,
+                ref=args.spec_ref,
+            )
+            if initial_source is None:  # pragma: no cover - default enabled
+                raise FoundryctlError("Initial Spec source is missing")
             print(
                 json.dumps(
                     bootstrap_repo(
                         repo,
                         args.profile,
                         apply_changes=args.apply,
-                        initial_spec_source=spec_source(
-                            args.spec_repository,
-                            args.spec_ref,
-                        ),
+                        initial_spec_source=initial_source,
+                        requested_spec_ids=selection,
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -934,8 +1078,68 @@ def main(argv: list[str] | None = None) -> int:
                 if args.spec_command == "plan"
                 else args.spec_command
             )
+            selection = (
+                requested_spec_ids(args)
+                if operation == "update"
+                else None
+            )
+            manifest_exists = (repo / specctl.SPEC_MANIFEST).exists()
+            source_override = any(
+                value is not None
+                for value in (
+                    args.spec_repository,
+                    args.spec_version,
+                    args.spec_ref,
+                )
+            )
+            if (
+                manifest_exists
+                and operation != "update"
+                and source_override
+            ):
+                raise FoundryctlError(
+                    "SPEC_SOURCE_OVERRIDE_REQUIRES_UPDATE: specs.json "
+                    "already exists; preview spec update instead"
+                )
+            if (
+                operation == "update"
+                and manifest_exists
+                and args.spec_repository is not None
+                and args.spec_version is None
+                and args.spec_ref is None
+            ):
+                raise FoundryctlError(
+                    "SPEC_SOURCE_SELECTOR_REQUIRED: --spec-repository on an "
+                    "existing project requires --spec-version or --spec-ref"
+                )
             apply_changes = bool(
                 args.spec_command != "plan" and args.apply
+            )
+            initial_repository = selected_spec_repository(
+                repo,
+                args.spec_repository,
+                preserve_manifest_source=False,
+            )
+            initial_source = spec_source(
+                initial_repository,
+                version=args.spec_version,
+                ref=args.spec_ref,
+            )
+            if initial_source is None:  # pragma: no cover - default enabled
+                raise FoundryctlError("Initial Spec source is missing")
+            update_source = (
+                spec_source(
+                    selected_spec_repository(
+                        repo,
+                        args.spec_repository,
+                        preserve_manifest_source=True,
+                    ),
+                    version=args.spec_version,
+                    ref=args.spec_ref,
+                    use_default_version=False,
+                )
+                if operation == "update"
+                else None
             )
             print(
                 json.dumps(
@@ -943,10 +1147,9 @@ def main(argv: list[str] | None = None) -> int:
                         repo,
                         operation,
                         apply_changes=apply_changes,
-                        initial_spec_source=spec_source(
-                            args.spec_repository,
-                            args.spec_ref,
-                        ),
+                        initial_spec_source=initial_source,
+                        update_spec_source=update_source,
+                        requested_spec_ids=selection,
                     ),
                     ensure_ascii=False,
                     indent=2,

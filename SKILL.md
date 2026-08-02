@@ -1,7 +1,7 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化和验证版本化 Repository Harness，从独立 Git 仓库解析并同步通用、语言级和项目级 Engineering Specs，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go/TypeScript/Python 语言规范、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，应用时只创建缺失文件、物化匹配的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
+  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化和验证版本化 Repository Harness，从独立 Git 仓库解析并同步用户显式选择的通用、语言级和项目级 Engineering Specs，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go 等语言规范、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，仓库检测只推荐可选 Spec；应用时只创建缺失文件、物化必选与用户选择的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
 ---
 
 # RepoFoundry AI
@@ -29,7 +29,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --profile codex --apply
+  bootstrap --profile codex --spec languages/go --apply
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
@@ -48,8 +48,8 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
    [bootstrap.md](references/bootstrap.md)。
 
 Codex profile 创建短 `AGENTS.md`、`ARCHITECTURE.md`、文档索引、质量、可靠性、
-安全、Design Doc 入口和本地 Engineering Specs。Core Spec 必选；Go、
-TypeScript 和 Python Spec 只在仓库证据匹配时选择。选择写入
+安全、Design Doc 入口和本地 Engineering Specs。Core Spec 必选；仓库证据只推荐
+可选 Spec，用户通过可重复 `--spec <id>` 显式选择安装。选择写入
 `docs/.engineering/specs.json`，精确版本与 SHA-256 写入
 `specs.lock.json`；lock 同时记录解析后的完整 Git commit。Codex 从
 `docs/agent-guides/managed/index.md` 按作用域读取。
@@ -66,16 +66,23 @@ TypeScript 和 Python Spec 只在仓库证据匹配时选择。选择写入
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  bootstrap --profile codex --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
-python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec update --apply
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  spec update --spec-version 1.2.0 --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 默认 Catalog 来自
-`https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`。首次初始化可用
-`--spec-repository` 与 `--spec-ref` 覆盖；manifest 保存 Git URL/ref。
-`sync` 使用已有 lock 的 commit；`update` 重新解析 manifest ref、刷新内容并加入
-新检测到的语言，但不自动移除现有选择。`spec validate` 完全离线。Bootstrap
+`https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`，默认固定版本为
+`1.2.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
+`refs/tags/vMAJOR.MINOR.PATCH`，解析器必须验证 tag 与 `catalog_version` 一致。
+首次初始化可用 `--spec-repository` 选择其他仓库；`--spec-ref` 只用于显式开发
+分支、tag 或 commit。manifest 保存 Git URL/ref。`sync` 使用已有 lock 的 commit；
+生产升级通过 `update --spec-version ...` 替换 source 并刷新已选内容，不会因检测
+结果改变选择；`update --spec ...` 预览并替换完整可选集合，`--required-only` 回到
+仅必选集合。依赖闭包自动补齐。`spec validate` 完全离线。Bootstrap
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
 
