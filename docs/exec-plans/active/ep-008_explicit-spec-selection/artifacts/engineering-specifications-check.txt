@@ -1,0 +1,5 @@
+Command: python3 -B scripts/check.py
+Repository: /Users/wangxiaowei1/xiaowei/EngineeringSpecifications
+Observed: 2026-08-02T07:35:30Z
+Exit: 0
+Summary: 13 tests passed; CHECK_OK reported Catalog 1.2.0 with 3 Specifications.

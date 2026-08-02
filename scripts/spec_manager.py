@@ -155,6 +155,12 @@ class PlannedWrite:
 
 
 @dataclass(frozen=True)
+class PlannedDelete:
+    path: str
+    sha256: str
+
+
+@dataclass(frozen=True)
 class SpecPlan:
     operation: str
     catalog_id: str
@@ -163,10 +169,13 @@ class SpecPlan:
     catalog_source: dict[str, str]
     resolved_revision: str
     detected_spec_ids: tuple[str, ...]
+    configured_spec_ids: tuple[str, ...]
     selected_spec_ids: tuple[str, ...]
+    available_specs: tuple[CatalogSpec, ...]
     actions: tuple[dict[str, str], ...]
     warnings: tuple[str, ...]
     writes: tuple[PlannedWrite, ...]
+    deletes: tuple[PlannedDelete, ...]
 
     @property
     def conflicts(self) -> tuple[dict[str, str], ...]:
@@ -1044,25 +1053,53 @@ def resolve_selection(
     )
 
 
+def configured_spec_ids(
+    catalog: Catalog,
+    requested_spec_ids: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Build the direct project selection from required and requested IDs."""
+
+    if len(requested_spec_ids) != len(set(requested_spec_ids)):
+        raise SpecError(
+            "SPEC_SELECTION_DUPLICATE: duplicate Spec IDs are not allowed"
+        )
+    for spec_id in requested_spec_ids:
+        if not SPEC_ID_RE.fullmatch(spec_id):
+            raise SpecError(
+                f"SPEC_SELECTION_INVALID: invalid Spec ID: {spec_id!r}"
+            )
+        if spec_id not in catalog.by_id:
+            raise SpecError(f"SPEC_SELECTION_UNKNOWN: {spec_id}")
+
+    configured = [
+        spec.spec_id for spec in catalog.ordered_specs if spec.required
+    ]
+    configured.extend(
+        spec_id
+        for spec_id in requested_spec_ids
+        if spec_id not in configured
+    )
+    return tuple(configured)
+
+
 def _initial_manifest(
     repo: Path,
     catalog: Catalog,
     source: dict[str, str],
+    requested_spec_ids: tuple[str, ...] | None,
 ) -> tuple[
     SpecManifest,
     tuple[str, ...],
 ]:
     detected = detect_specs(repo, catalog)
-    selected = [
-        spec.spec_id for spec in catalog.ordered_specs if spec.required
-    ]
-    selected.extend(
-        spec_id for spec_id in detected if spec_id not in selected
+    selected = configured_spec_ids(
+        catalog,
+        requested_spec_ids or (),
     )
     return (
         SpecManifest(
             catalog=dict(source),
-            spec_ids=tuple(selected),
+            spec_ids=selected,
             project_specs=(),
         ),
         detected,
@@ -1398,7 +1435,14 @@ def _prepare_manifest(
     initial_source: dict[str, str],
     operation: str,
     update_source: dict[str, str] | None,
-) -> tuple[SpecManifest, Catalog, tuple[str, ...], bytes | None]:
+    requested_spec_ids: tuple[str, ...] | None,
+) -> tuple[
+    SpecManifest,
+    Catalog,
+    tuple[str, ...],
+    bytes | None,
+    SpecLock | None,
+]:
     manifest_path = repo / SPEC_MANIFEST
     lock_path = repo / SPEC_LOCK
     if manifest_path.exists():
@@ -1428,12 +1472,18 @@ def _prepare_manifest(
             "SPEC_CATALOG_SOURCE_INVALID",
         )
         catalog = resolve_git_catalog(source, source["ref"])
-        manifest, detected = _initial_manifest(repo, catalog, source)
+        manifest, detected = _initial_manifest(
+            repo,
+            catalog,
+            source,
+            requested_spec_ids,
+        )
         return (
             manifest,
             catalog,
             detected,
             _json_bytes(manifest_data(manifest)),
+            None,
         )
 
     locked: SpecLock | None = None
@@ -1459,15 +1509,17 @@ def _prepare_manifest(
             "the locked commit"
         )
     detected = detect_specs(repo, catalog)
-    if operation == "update":
-        updated_ids = list(manifest.spec_ids)
-        for spec_id in detected:
-            if spec_id not in updated_ids:
-                updated_ids.append(spec_id)
-        if tuple(updated_ids) != manifest.spec_ids:
+    if requested_spec_ids is not None:
+        if operation != "update":
+            raise SpecError(
+                "SPEC_SELECTION_REQUIRES_UPDATE: an existing manifest may "
+                "change selection only through spec update"
+            )
+        selected_ids = configured_spec_ids(catalog, requested_spec_ids)
+        if selected_ids != manifest.spec_ids:
             manifest = SpecManifest(
                 catalog=manifest.catalog,
-                spec_ids=tuple(updated_ids),
+                spec_ids=selected_ids,
                 project_specs=manifest.project_specs,
                 owner=manifest.owner,
             )
@@ -1477,12 +1529,14 @@ def _prepare_manifest(
         catalog,
         detected,
         manifest_write,
+        locked,
     )
 
 
 def _stale_managed_warnings(
     repo: Path,
     selected: tuple[CatalogSpec, ...],
+    planned_removals: Iterable[str] = (),
 ) -> list[str]:
     root = repo / MANAGED_ROOT
     if not root.is_dir() or root.is_symlink():
@@ -1492,6 +1546,7 @@ def _stale_managed_warnings(
         for spec in selected
     }
     expected.add(PurePosixPath(MANAGED_INDEX))
+    expected.update(PurePosixPath(path) for path in planned_removals)
     warnings: list[str] = []
     for path in sorted(root.rglob("*.md")):
         if path.is_symlink() or not path.is_file():
@@ -1512,15 +1567,19 @@ def plan_spec_state(
     operation: str,
     allow_replace: bool,
     update_source: dict[str, str] | None = None,
+    requested_spec_ids: tuple[str, ...] | None = None,
 ) -> SpecPlan:
     if operation not in {"plan", "sync", "update"}:
         raise SpecError(f"SPEC_OPERATION_INVALID: {operation}")
     effective_operation = "sync" if operation == "plan" else operation
-    manifest, catalog, detected, manifest_write = _prepare_manifest(
-        repo,
-        initial_source,
-        effective_operation,
-        update_source,
+    manifest, catalog, detected, manifest_write, previous_lock = (
+        _prepare_manifest(
+            repo,
+            initial_source,
+            effective_operation,
+            update_source,
+            requested_spec_ids,
+        )
     )
     _validate_project_specs(repo, manifest.project_specs)
     selected = resolve_selection(manifest, catalog)
@@ -1564,6 +1623,59 @@ def plan_spec_state(
             role="index",
         )
     )
+
+    selected_ids = {spec.spec_id for spec in selected}
+    deletes: list[PlannedDelete] = []
+    delete_conflicts: list[dict[str, str]] = []
+    if previous_lock is not None:
+        for previous_spec in previous_lock.specs:
+            if previous_spec.spec_id in selected_ids:
+                continue
+            relative = _managed_path(previous_spec.spec_id)
+            reason = _path_conflict(repo, relative)
+            if reason:
+                delete_conflicts.append(
+                    {
+                        "action": "conflict",
+                        "path": relative,
+                        "reason": reason,
+                    }
+                )
+                continue
+            path = repo / relative
+            if not path.exists():
+                continue
+            try:
+                actual = _sha256_file(path)
+            except OSError as exc:
+                delete_conflicts.append(
+                    {
+                        "action": "conflict",
+                        "path": relative,
+                        "reason": (
+                            "SPEC_MANAGED_REMOVAL_UNREADABLE: " + str(exc)
+                        ),
+                    }
+                )
+                continue
+            if actual != previous_spec.sha256:
+                delete_conflicts.append(
+                    {
+                        "action": "conflict",
+                        "path": relative,
+                        "reason": (
+                            "SPEC_MANAGED_REMOVAL_DRIFT: current bytes do "
+                            "not match the previous lock"
+                        ),
+                    }
+                )
+                continue
+            deletes.append(
+                PlannedDelete(
+                    path=relative,
+                    sha256=previous_spec.sha256,
+                )
+            )
 
     actions: list[dict[str, str]] = []
     if manifest_write is None:
@@ -1610,7 +1722,17 @@ def plan_spec_state(
             }
         )
 
-    warnings = _stale_managed_warnings(repo, selected)
+    actions.extend(delete_conflicts)
+    actions.extend(
+        {"action": "remove_file", "path": item.path}
+        for item in deletes
+    )
+
+    warnings = _stale_managed_warnings(
+        repo,
+        selected,
+        (item.path for item in deletes),
+    )
     agents = repo / "AGENTS.md"
     if agents.is_file() and not agents.is_symlink():
         try:
@@ -1634,10 +1756,13 @@ def plan_spec_state(
         catalog_source=dict(manifest.catalog),
         resolved_revision=catalog.resolved_revision,
         detected_spec_ids=detected,
+        configured_spec_ids=manifest.spec_ids,
         selected_spec_ids=tuple(spec.spec_id for spec in selected),
+        available_specs=catalog.ordered_specs,
         actions=tuple(actions),
         warnings=tuple(warnings),
         writes=tuple(writes),
+        deletes=tuple(deletes),
     )
 
 
@@ -1670,7 +1795,7 @@ def _atomic_write(path: Path, content: bytes) -> None:
 def apply_spec_plan(
     repo: Path,
     plan: SpecPlan,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     if plan.conflicts:
         details = "; ".join(
             f"{item.get('path')}: {item.get('reason')}"
@@ -1684,6 +1809,7 @@ def apply_spec_plan(
     }
     created: list[str] = []
     updated: list[str] = []
+    removed: list[str] = []
     for write in plan.writes:
         action = action_by_path.get(write.path)
         if action == "preserve":
@@ -1702,7 +1828,44 @@ def apply_spec_plan(
             created.append(write.path)
         else:
             updated.append(write.path)
-    return created, updated
+    managed_root = repo / MANAGED_ROOT
+    for delete in plan.deletes:
+        action = action_by_path.get(delete.path)
+        if action != "remove_file":
+            raise SpecError(
+                f"SPEC_PLAN_INVALID: no remove action for {delete.path}"
+            )
+        reason = _path_conflict(repo, delete.path)
+        if reason:
+            raise SpecError(
+                f"SPEC_PREFLIGHT_CHANGED: {delete.path}: {reason}"
+            )
+        path = repo / delete.path
+        if not path.is_file():
+            raise SpecError(
+                f"SPEC_PREFLIGHT_CHANGED: {delete.path}: file is missing"
+            )
+        try:
+            actual = _sha256_file(path)
+        except OSError as exc:
+            raise SpecError(
+                f"SPEC_PREFLIGHT_CHANGED: {delete.path}: {exc}"
+            ) from exc
+        if actual != delete.sha256:
+            raise SpecError(
+                f"SPEC_PREFLIGHT_CHANGED: {delete.path}: current bytes no "
+                "longer match the previous lock"
+            )
+        path.unlink()
+        removed.append(delete.path)
+        parent = path.parent
+        while parent != managed_root and managed_root in parent.parents:
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+    return created, updated, removed
 
 
 def validate_spec_state(
@@ -1883,7 +2046,14 @@ def plan_payload(
     mode: str,
     created: Iterable[str] = (),
     updated: Iterable[str] = (),
+    removed: Iterable[str] = (),
 ) -> dict[str, object]:
+    required = {
+        spec.spec_id for spec in plan.available_specs if spec.required
+    }
+    detected = set(plan.detected_spec_ids)
+    configured = set(plan.configured_spec_ids)
+    selected = set(plan.selected_spec_ids)
     return {
         "operation": plan.operation,
         "mode": mode,
@@ -1895,11 +2065,36 @@ def plan_payload(
             "resolved_revision": plan.resolved_revision,
         },
         "detected_specs": list(plan.detected_spec_ids),
+        "recommended_specs": [
+            spec.spec_id
+            for spec in plan.available_specs
+            if spec.spec_id in detected and spec.spec_id not in required
+        ],
+        "required_specs": [
+            spec.spec_id
+            for spec in plan.available_specs
+            if spec.spec_id in required
+        ],
+        "configured_specs": list(plan.configured_spec_ids),
         "selected_specs": list(plan.selected_spec_ids),
+        "available_specs": [
+            {
+                "id": spec.spec_id,
+                "version": spec.version,
+                "description": spec.description,
+                "required": spec.required,
+                "requires": list(spec.requires),
+                "recommended": spec.spec_id in detected,
+                "configured": spec.spec_id in configured,
+                "selected": spec.spec_id in selected,
+            }
+            for spec in plan.available_specs
+        ],
         "actions": list(plan.actions),
         "warnings": list(plan.warnings),
         "created": list(created),
         "updated": list(updated),
+        "removed": list(removed),
     }
 
 

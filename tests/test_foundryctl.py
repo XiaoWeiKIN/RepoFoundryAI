@@ -428,7 +428,7 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertFalse((self.repo / "AGENTS.md").exists())
 
-    def test_spec_polyglot_selection(self) -> None:
+    def test_spec_detection_recommends_and_explicit_ids_select(self) -> None:
         (self.repo / "go.mod").write_text(
             "module example.test/polyglot\n",
             encoding="utf-8",
@@ -441,16 +441,31 @@ class FoundryctlTestCase(unittest.TestCase):
 
         preview = json.loads(self.run_cli("spec", "plan").stdout)
 
-        expected = [
-            "core/semantic-naming",
+        optional = [
             "languages/go",
             "languages/typescript",
             "languages/python",
         ]
-        self.assertEqual(preview["selected_specs"], expected)
+        expected = [
+            "core/semantic-naming",
+            *optional,
+        ]
+        self.assertEqual(
+            preview["selected_specs"],
+            ["core/semantic-naming"],
+        )
+        self.assertEqual(
+            preview["configured_specs"],
+            ["core/semantic-naming"],
+        )
         self.assertEqual(
             preview["detected_specs"],
-            expected[1:],
+            optional,
+        )
+        self.assertEqual(preview["recommended_specs"], optional)
+        self.assertEqual(
+            [item["id"] for item in preview["available_specs"]],
+            expected,
         )
         self.assertEqual(list(self.repo.glob("docs/**")), [])
 
@@ -459,10 +474,18 @@ class FoundryctlTestCase(unittest.TestCase):
                 "bootstrap",
                 "--profile",
                 "codex",
+                "--spec",
+                "languages/go",
+                "--spec",
+                "languages/typescript",
+                "--spec",
+                "languages/python",
                 "--apply",
             ).stdout
         )
         self.assertEqual(applied["specs"], expected)
+        self.assertEqual(applied["configured_specs"], expected)
+        self.assertEqual(applied["recommended_specs"], optional)
         lock = json.loads(
             (
                 self.repo / "docs" / ".engineering" / "specs.lock.json"
@@ -483,12 +506,19 @@ class FoundryctlTestCase(unittest.TestCase):
             self.assertIn(spec_id, index)
         self.run_cli("spec", "validate")
 
-    def test_spec_sync_and_update_have_distinct_language_behavior(self) -> None:
+    def test_spec_sync_and_update_preserve_or_replace_selection(self) -> None:
         (self.repo / "go.mod").write_text(
             "module example.test/update\n",
             encoding="utf-8",
         )
-        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--spec",
+            "languages/go",
+            "--apply",
+        )
         (self.repo / "tsconfig.json").write_text("{}\n", encoding="utf-8")
 
         synced = json.loads(
@@ -503,9 +533,35 @@ class FoundryctlTestCase(unittest.TestCase):
             synced["detected_specs"],
         )
 
-        preview = json.loads(self.run_cli("spec", "update").stdout)
+        preserved = json.loads(self.run_cli("spec", "update").stdout)
         self.assertEqual(
-            preview["selected_specs"],
+            preserved["selected_specs"],
+            ["core/semantic-naming", "languages/go"],
+        )
+        self.assertIn(
+            "languages/typescript",
+            preserved["recommended_specs"],
+        )
+        self.assertNotIn(
+            {
+                "action": "update_file",
+                "path": "docs/.engineering/specs.json",
+            },
+            preserved["actions"],
+        )
+
+        preview = json.loads(
+            self.run_cli(
+                "spec",
+                "update",
+                "--spec",
+                "languages/go",
+                "--spec",
+                "languages/typescript",
+            ).stdout
+        )
+        self.assertEqual(
+            preview["configured_specs"],
             [
                 "core/semantic-naming",
                 "languages/go",
@@ -520,7 +576,15 @@ class FoundryctlTestCase(unittest.TestCase):
             preview["actions"],
         )
         updated = json.loads(
-            self.run_cli("spec", "update", "--apply").stdout
+            self.run_cli(
+                "spec",
+                "update",
+                "--spec",
+                "languages/go",
+                "--spec",
+                "languages/typescript",
+                "--apply",
+            ).stdout
         )
         self.assertIn(
             "docs/.engineering/specs.json",
@@ -541,12 +605,139 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.run_cli("spec", "validate")
 
+    def test_required_only_update_removes_locked_managed_copy(self) -> None:
+        (self.repo / "go.mod").write_text(
+            "module example.test/remove\n",
+            encoding="utf-8",
+        )
+        self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--spec",
+            "languages/go",
+            "--apply",
+        )
+        managed = (
+            self.repo
+            / "docs"
+            / "agent-guides"
+            / "managed"
+            / "languages"
+            / "go.md"
+        )
+        self.assertTrue(managed.is_file())
+
+        preview = json.loads(
+            self.run_cli("spec", "update", "--required-only").stdout
+        )
+        self.assertEqual(
+            preview["configured_specs"],
+            ["core/semantic-naming"],
+        )
+        self.assertIn(
+            {
+                "action": "remove_file",
+                "path": "docs/agent-guides/managed/languages/go.md",
+            },
+            preview["actions"],
+        )
+
+        applied = json.loads(
+            self.run_cli(
+                "spec",
+                "update",
+                "--required-only",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(
+            applied["removed"],
+            ["docs/agent-guides/managed/languages/go.md"],
+        )
+        self.assertFalse(managed.exists())
+        manifest = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "specs.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["specs"], ["core/semantic-naming"])
+        self.run_cli("spec", "validate")
+
+    def test_deselection_refuses_to_remove_drifted_managed_copy(self) -> None:
+        self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--spec",
+            "languages/go",
+            "--apply",
+        )
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "specs.json"
+        )
+        original_manifest = manifest_path.read_bytes()
+        managed = (
+            self.repo
+            / "docs"
+            / "agent-guides"
+            / "managed"
+            / "languages"
+            / "go.md"
+        )
+        managed.write_text("# repository-owned edit\n", encoding="utf-8")
+
+        result = self.run_cli(
+            "spec",
+            "update",
+            "--required-only",
+            "--apply",
+            expected=2,
+        )
+
+        self.assertIn("SPEC_MANAGED_REMOVAL_DRIFT", result.stderr)
+        self.assertEqual(manifest_path.read_bytes(), original_manifest)
+        self.assertEqual(
+            managed.read_text(encoding="utf-8"),
+            "# repository-owned edit\n",
+        )
+
+    def test_explicit_selection_rejects_unknown_and_duplicate_ids(self) -> None:
+        unknown = self.run_cli(
+            "bootstrap",
+            "--spec",
+            "languages/unknown",
+            "--apply",
+            expected=2,
+        )
+        self.assertIn("SPEC_SELECTION_UNKNOWN", unknown.stderr)
+        self.assertEqual(list(self.repo.iterdir()), [])
+
+        duplicate = self.run_cli(
+            "bootstrap",
+            "--spec",
+            "languages/go",
+            "--spec",
+            "languages/go",
+            "--apply",
+            expected=2,
+        )
+        self.assertIn("SPEC_SELECTION_DUPLICATE", duplicate.stderr)
+        self.assertEqual(list(self.repo.iterdir()), [])
+
     def test_spec_sync_pins_commit_and_update_moves_to_ref_head(self) -> None:
         (self.repo / "go.mod").write_text(
             "module example.test/pinned\n",
             encoding="utf-8",
         )
-        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--spec",
+            "languages/go",
+            "--apply",
+        )
         managed = (
             self.repo
             / "docs"
@@ -758,7 +949,7 @@ class FoundryctlTestCase(unittest.TestCase):
             expected=2,
         )
         self.assertIn(
-            "SPEC_SOURCE_OVERRIDE_REQUIRES_UPDATE",
+            "SPEC_BOOTSTRAP_OVERRIDE_REQUIRES_UPDATE",
             bootstrap.stderr,
         )
 
@@ -780,7 +971,14 @@ class FoundryctlTestCase(unittest.TestCase):
             "module example.test/drift\n",
             encoding="utf-8",
         )
-        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        self.run_cli(
+            "bootstrap",
+            "--profile",
+            "codex",
+            "--spec",
+            "languages/go",
+            "--apply",
+        )
         managed = (
             self.repo
             / "docs"

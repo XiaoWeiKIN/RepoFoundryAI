@@ -2,8 +2,9 @@
   "high_water": {
     "ADR": 9,
     "BF": 0,
-    "EP": 7,
-    "R": 1,
+    "EP": 8,
+    "R": 2,
+    "RT:R-002": 1,
     "TD": 0
   },
   "version": 1

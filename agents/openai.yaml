@@ -1,4 +1,4 @@
 interface:
   display_name: "RepoFoundry AI"
   short_description: "Turn any repo into an AI-ready engineering system"
-  default_prompt: "Use $repo-foundry-ai to inventory the repository, preview and apply its Harness scaffold, fetch and lock applicable Engineering Specs, validate the result, and route follow-up work."
+  default_prompt: "Use $repo-foundry-ai to inventory the repository, preview its Harness scaffold and available Engineering Specs, apply the user-selected Spec set, validate the result, and route follow-up work."

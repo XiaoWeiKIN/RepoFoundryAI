@@ -12,9 +12,11 @@ updated: 2026-08-02
 
 Extend the RepoFoundry AI Harness with versioned, composable engineering
 Specs fetched from an independently governed Git repository. Bootstrap installs
-required common guidance and language guidance detected from repository
-evidence. Codex reads repository-local copies through a bounded `AGENTS.md`
-route rather than depending on remote content at task time.
+required common guidance plus optional guidance explicitly selected by the
+repository owner. Deterministic repository evidence recommends optional IDs;
+it does not authorize installation. Codex reads repository-local copies
+through a bounded `AGENTS.md` route rather than depending on remote content at
+task time.
 
 This design implements the ownership accepted by ADR-002, ADR-004, and ADR-005:
 `repo-foundry-ai` owns project Bootstrap and Spec consumption,
@@ -26,13 +28,18 @@ The release-source refinement follows approved EngineeringSpecifications
 ESP-0008: production consumers select immutable `vX.Y.Z` Catalog tags, while
 explicit branch refs remain development sources.
 
+The selection refinement follows approved EngineeringSpecifications ESP-0009:
+required entries remain automatic, detection is advisory, optional direct IDs
+are user-selected, and dependency closure remains automatic.
+
 ```mermaid
 flowchart LR
     G["EngineeringSpecifications<br/>Git URL + ref"] --> F["Ephemeral bare fetch"]
     F --> C["Catalog + exact content"]
     C --> R["foundryctl Spec Resolver"]
-    D["Repository language evidence"] --> R
-    P["Project Spec manifest"] --> R
+    D["Repository evidence"] --> Q["Recommended optional IDs"]
+    Q --> R
+    P["Explicit project selection"] --> R
     R --> L["Pinned commit + content lock"]
     R --> M["Repository-local managed Specs"]
     L --> I["Managed routing index"]
@@ -44,7 +51,8 @@ flowchart LR
 ## Goals
 
 - Always select a common semantic-naming Spec for implementation repositories.
-- Select language Specs from deterministic repository evidence.
+- Recommend language Specs from deterministic repository evidence.
+- Let the repository owner explicitly select the complete optional direct set.
 - Support polyglot repositories without loading every language guide.
 - Materialize exact Spec content inside the target repository.
 - Record the immutable Git commit, versions, and SHA-256 digests in a lock file.
@@ -66,7 +74,7 @@ flowchart LR
 - Provide persistent catalog caching in version 1.
 - Infer frameworks, architecture, owners, build commands, or project facts.
 - Rewrite an existing `AGENTS.md` to insert a missing route.
-- Remove stale managed files automatically.
+- Delete untracked, drifted, or repository-owned files during deselection.
 - Move project-owned guidance into the central catalog.
 
 ## Repository Layout
@@ -82,11 +90,10 @@ EngineeringSpecifications/
 │   └── catalog.schema.json
 ├── specification/
 │   ├── core/
+│   │   ├── data-boundaries.md
 │   │   └── semantic-naming.md
 │   └── languages/
-│       ├── go.md
-│       ├── python.md
-│       └── typescript.md
+│       └── go.md
 ├── scripts/
 │   └── check.py
 └── tests/
@@ -105,6 +112,7 @@ docs/
     └── managed/
         ├── index.md
         ├── core/
+        │   ├── data-boundaries.md
         │   └── semantic-naming.md
         └── languages/
             └── <selected-language>.md
@@ -134,8 +142,8 @@ graph.
 
 Language detection may use marker filenames and source extensions. The resolver
 ignores generated, dependency, VCS, and Harness-managed directories. Detection
-only chooses catalog entries; it does not claim the project uses a particular
-framework or architecture.
+only recommends optional Catalog entries; it neither installs them nor claims
+the project uses a particular framework or architecture.
 
 ## Project Manifest
 
@@ -153,6 +161,7 @@ configuration:
   },
   "specs": [
     "core/semantic-naming",
+    "core/data-boundaries",
     "languages/go"
   ],
   "project_specs": [
@@ -185,13 +194,17 @@ the source unless its `catalog_version` equals the requested version.
 `--spec-ref` remains an explicit development escape hatch for a branch, custom
 tag, or commit and does not imply a released Catalog version.
 
-Bootstrap creates this file only when missing. Required catalog entries and
-detected languages form the initial `specs` selection. Once the manifest
-exists, the selection and source are explicit project policy. `spec sync`
-reuses an existing locked commit. `spec update --spec-version ...` replaces the
-manifest source with another release tag after preview; the command
-`spec update --spec-ref ...` explicitly selects a development source. Update may add newly
-detected language entries and never removes an existing selection.
+Bootstrap creates this file only when missing. Required Catalog entries always
+form the mandatory part of `specs`; repeatable `--spec ID` values form the
+complete optional direct part. Detection is returned as a recommendation and
+does not mutate `specs`. Once the manifest exists, selection and source are
+explicit project policy. `spec sync` reuses the existing locked commit and
+selection. `spec update --spec-version ...` replaces the manifest source with
+another release tag after preview; `spec update --spec-ref ...` explicitly
+selects a development source. Without selection arguments, update preserves
+the current IDs. Repeatable `--spec ID` replaces the optional direct set;
+`--required-only` selects no optional IDs. The resolver adds dependencies after
+direct selection.
 
 Each project Spec path must remain inside the repository and identify a
 non-symlink regular Markdown file. Project Spec scopes and descriptions are
@@ -243,25 +256,31 @@ All mutating operations are preview-first:
 ```text
 foundryctl spec plan
 foundryctl spec sync [--dry-run | --apply]
-foundryctl spec update --spec-version MAJOR.MINOR.PATCH [--dry-run | --apply]
+foundryctl spec update [--spec ID ... | --required-only] [--dry-run | --apply]
+foundryctl spec update --spec-version MAJOR.MINOR.PATCH [--spec ID ...] [--dry-run | --apply]
 foundryctl spec validate
 ```
 
-- `plan` resolves the current manifest, or previews the inferred initial
-  manifest when it is absent. With a lock, it previews the locked revision.
+- `plan` resolves the current manifest, or previews the required-only initial
+  manifest when it is absent. It lists all Catalog entries and distinguishes
+  required, recommended, configured, and dependency-closed selected sets. With
+  a lock, it previews the locked revision.
 - `sync` materializes the explicitly selected Spec set from the locked commit;
   without a lock it resolves and creates one from the manifest ref.
 - `update --spec-version ...` changes the manifest to a reviewed immutable
-  release, refreshes the lock and selected content, and additionally discovers
-  newly introduced languages. `update --spec-ref ...` is the explicit
-  development-source equivalent.
+  release and refreshes the lock and selected content without changing direct
+  selection. `update --spec-ref ...` is the explicit development-source
+  equivalent. Repeated `--spec ID` values replace the complete optional direct
+  selection; `--required-only` removes every optional direct ID.
 - `validate` performs no writes and verifies the manifest, lock, managed
   content, project Spec references, routing index, and `AGENTS.md` route. It
   performs no network or Git operation.
 
 `foundryctl bootstrap --profile codex` includes the same Spec plan and
 accepts optional initial `--spec-repository` and `--spec-version` values.
-`--spec-ref` selects an explicit development source instead.
+`--spec-ref` selects an explicit development source instead. Repeated
+`--spec ID` values choose optional Specs; omitting them creates a required-only
+selection while reporting deterministic recommendations.
 Bootstrap apply may create missing files but does not replace an existing
 managed file with different bytes. An explicit `spec sync --apply` or
 `spec update --apply` may replace files inside the managed namespace after the
@@ -269,7 +288,7 @@ preview reports the replacement.
 
 ## Routing
 
-The Workflow `AGENTS.md` template contains one stable instruction:
+The RepoFoundry `AGENTS.md` template contains one stable instruction:
 
 > Before implementation or review, read
 > `docs/agent-guides/managed/index.md` and follow every entry whose scope
@@ -284,8 +303,6 @@ flowchart TB
     A["Task files"] --> I["Managed routing index"]
     I --> C["Common Specs"]
     I --> G["Go Specs"]
-    I --> T["TypeScript Specs"]
-    I --> P["Python Specs"]
     I --> X["Project Specs"]
 ```
 
@@ -302,17 +319,21 @@ flowchart TB
 - Explicit applied Spec commands only write the manifest, lock, routing index,
   and files beneath `docs/agent-guides/managed/`.
 - Atomic writes and the existing Harness lock protect project state.
-- Stale managed files are retained but omitted from the current index and lock.
+- Explicit deselection removes only previously locked managed files whose
+  bytes still match their old digest. Drift blocks the complete update before
+  writes. Untracked stale files are retained and omitted from the index/lock.
 - Validation errors include a stable label, affected path, and remediation.
 
 ## Acceptance
 
 - Empty repositories preview without writes and install the required Core Spec
   from the default remote repository when applied.
-- Repositories containing Go, TypeScript, or Python evidence select only the
-  applicable language Specs plus Core.
-- Polyglot repositories install multiple language Specs and route them by
-  scope.
+- Repositories containing Go evidence recommend `languages/go` without
+  installing it until the user selects that ID.
+- Explicit selections install one or more optional Specs, automatically add
+  dependencies, and route the resulting closure by scope.
+- `--required-only` previews and removes only unchanged, previously locked
+  optional managed copies.
 - Repeated Bootstrap and Spec sync operations are byte-idempotent.
 - The default absent-manifest plan uses `refs/tags/v1.2.0`, and exact release
   refs whose Catalog version differs fail before writes.

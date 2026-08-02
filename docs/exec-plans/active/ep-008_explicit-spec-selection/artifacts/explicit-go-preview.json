@@ -1,0 +1,17 @@
+{
+  "catalog_version": "1.2.0",
+  "configured_specs": [
+    "core/semantic-naming",
+    "core/data-boundaries",
+    "languages/go"
+  ],
+  "recommended_specs": [
+    "languages/go"
+  ],
+  "selected_specs": [
+    "core/semantic-naming",
+    "core/data-boundaries",
+    "languages/go"
+  ],
+  "target_writes": 0
+}
