@@ -200,11 +200,31 @@ class FoundryctlTestCase(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["owner"], "repo-foundry")
-        self.assertEqual(manifest["profile"], "codex")
+        self.assertEqual(manifest["schema_version"], 2)
+        self.assertEqual(
+            manifest["producer"],
+            {"name": "repo-foundry", "version": "0.1.0"},
+        )
+        self.assertEqual(
+            manifest["profile"],
+            {"id": "codex", "version": "1.0.0"},
+        )
         self.assertEqual(
             manifest["instruction_files"],
             [{"path": "AGENTS.md", "max_lines": 100}],
         )
+        self.assertEqual(
+            [item["path"] for item in manifest["files"]],
+            list(foundryctl.CODEX_SEEDED_FILES),
+        )
+        self.assertTrue(
+            all(
+                item["template_version"] == "1.0.0"
+                and item["template_sha256"] == item["installed_sha256"]
+                for item in manifest["files"]
+            )
+        )
+        self.assertEqual(manifest["applied_migrations"], [])
         spec_manifest = json.loads(
             (
                 self.repo / "docs" / ".engineering" / "specs.json"
@@ -287,6 +307,432 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(second["updated"], [])
         self.assertEqual(after, before)
 
+    def test_cli_reports_the_distribution_version(self) -> None:
+        result = self.run_cli("--version")
+
+        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.1.0")
+
+    def test_legacy_schema_upgrade_is_preview_first_and_idempotent(
+        self,
+    ) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest_path.write_text(
+            json.dumps(
+                foundryctl.legacy_codex_harness_manifest(),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        before_manifest = manifest_path.read_bytes()
+        before_files = {
+            relative: (self.repo / relative).read_bytes()
+            for relative in foundryctl.CODEX_SEEDED_FILES
+        }
+
+        validation = self.run_cli("validate", "--harness")
+        self.assertIn("HARNESS_SCHEMA_UPGRADE_AVAILABLE", validation.stderr)
+        preview = json.loads(
+            self.run_cli("upgrade", "--to", "0.1.0").stdout
+        )
+
+        self.assertEqual(preview["mode"], "dry-run")
+        self.assertEqual(preview["from"]["schema"], 1)
+        self.assertEqual(preview["to"]["schema"], 2)
+        self.assertEqual(preview["updated"], [])
+        self.assertEqual(manifest_path.read_bytes(), before_manifest)
+        self.assertEqual(
+            {
+                relative: (self.repo / relative).read_bytes()
+                for relative in foundryctl.CODEX_SEEDED_FILES
+            },
+            before_files,
+        )
+
+        applied = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.1.0",
+                "--apply",
+            ).stdout
+        )
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(applied["mode"], "apply")
+        self.assertEqual(
+            applied["updated"],
+            ["docs/.engineering/harness.json"],
+        )
+        self.assertEqual(migrated["schema_version"], 2)
+        self.assertEqual(
+            [item["id"] for item in migrated["applied_migrations"]],
+            ["harness-schema-v1-to-v2"],
+        )
+        self.assertEqual(
+            {
+                relative: (self.repo / relative).read_bytes()
+                for relative in foundryctl.CODEX_SEEDED_FILES
+            },
+            before_files,
+        )
+        second = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.1.0",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(second["updated"], [])
+        self.assertEqual(
+            json.loads(manifest_path.read_text(encoding="utf-8")),
+            migrated,
+        )
+
+    def test_legacy_upgrade_adds_missing_generated_profile_seeds(
+        self,
+    ) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest_path.write_text(
+            json.dumps(
+                foundryctl.legacy_codex_harness_manifest(),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        for relative in foundryctl.CODEX_GENERATED_FILES:
+            (self.repo / relative).unlink()
+
+        preview = json.loads(
+            self.run_cli("upgrade", "--to", "0.1.0").stdout
+        )
+        self.assertEqual(
+            {
+                item["path"] for item in preview["actions"]
+                if item["action"] == "create_file"
+            },
+            set(foundryctl.CODEX_GENERATED_FILES),
+        )
+        self.assertTrue(
+            all(
+                not (self.repo / relative).exists()
+                for relative in foundryctl.CODEX_GENERATED_FILES
+            )
+        )
+
+        applied = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.1.0",
+                "--apply",
+            ).stdout
+        )
+
+        self.assertEqual(
+            set(applied["created"]),
+            set(foundryctl.CODEX_GENERATED_FILES),
+        )
+        for relative, asset in foundryctl.CODEX_ROUTER_FILE_ASSETS:
+            self.assertEqual(
+                (self.repo / relative).read_text(encoding="utf-8"),
+                foundryctl.asset_text(asset),
+            )
+        self.run_cli("validate", "--harness")
+
+    def test_older_profile_can_add_new_generated_seed_records(self) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["producer"]["version"] = "0.0.9"
+        manifest["profile"]["version"] = "0.9.0"
+        manifest["files"] = [
+            item for item in manifest["files"]
+            if item["path"] not in foundryctl.CODEX_GENERATED_FILES
+        ]
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        for relative in foundryctl.CODEX_GENERATED_FILES:
+            (self.repo / relative).unlink()
+
+        applied = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.1.0",
+                "--apply",
+            ).stdout
+        )
+
+        self.assertEqual(
+            set(applied["created"]),
+            set(foundryctl.CODEX_GENERATED_FILES),
+        )
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [item["path"] for item in migrated["files"]],
+            list(foundryctl.CODEX_SEEDED_FILES),
+        )
+        self.run_cli("validate", "--harness")
+
+    def test_legacy_upgrade_preserves_customized_seed_without_a_base(
+        self,
+    ) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        architecture = self.repo / "ARCHITECTURE.md"
+        custom = "# Repository-owned architecture\n"
+        architecture.write_text(custom, encoding="utf-8")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest_path.write_text(
+            json.dumps(
+                foundryctl.legacy_codex_harness_manifest(),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.1.0",
+                "--apply",
+            ).stdout
+        )
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+        record = next(
+            item for item in migrated["files"]
+            if item["path"] == "ARCHITECTURE.md"
+        )
+
+        self.assertEqual(architecture.read_text(encoding="utf-8"), custom)
+        self.assertEqual(record["template_version"], "legacy-unversioned")
+        self.assertIsNone(record["template_sha256"])
+        self.assertIsNone(record["installed_sha256"])
+        self.assertTrue(
+            any(
+                "HARNESS_CUSTOMIZED_SEED_PRESERVED" in warning
+                for warning in result["warnings"]
+            )
+        )
+
+    def test_upgrade_replaces_an_unmodified_versioned_seed(self) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        architecture = self.repo / "ARCHITECTURE.md"
+        old_seed = "# Old seeded architecture\n"
+        architecture.write_text(old_seed, encoding="utf-8")
+        old_digest = foundryctl.sha256_text(old_seed)
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["producer"]["version"] = "0.0.9"
+        manifest["profile"]["version"] = "0.9.0"
+        record = next(
+            item for item in manifest["files"]
+            if item["path"] == "ARCHITECTURE.md"
+        )
+        record["template_version"] = "0.9.0"
+        record["template_sha256"] = old_digest
+        record["installed_sha256"] = old_digest
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        preview = json.loads(
+            self.run_cli("upgrade", "--to", "0.1.0").stdout
+        )
+        self.assertIn(
+            "ARCHITECTURE.md",
+            [
+                item["path"] for item in preview["actions"]
+                if item["action"] == "replace_file"
+            ],
+        )
+        applied = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.1.0",
+                "--apply",
+            ).stdout
+        )
+
+        self.assertEqual(
+            architecture.read_text(encoding="utf-8"),
+            foundryctl.asset_text("harness-architecture.md"),
+        )
+        self.assertEqual(
+            applied["updated"],
+            ["ARCHITECTURE.md", "docs/.engineering/harness.json"],
+        )
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(migrated["profile"]["version"], "1.0.0")
+        self.assertIn(
+            "codex-profile-0.9.0-to-1.0.0",
+            [item["id"] for item in migrated["applied_migrations"]],
+        )
+
+    def test_upgrade_refuses_to_overwrite_a_modified_versioned_seed(
+        self,
+    ) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        architecture = self.repo / "ARCHITECTURE.md"
+        old_seed = "# Old seeded architecture\n"
+        old_digest = foundryctl.sha256_text(old_seed)
+        architecture.write_text(
+            old_seed + "\nRepository customization.\n",
+            encoding="utf-8",
+        )
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["producer"]["version"] = "0.0.9"
+        manifest["profile"]["version"] = "0.9.0"
+        record = next(
+            item for item in manifest["files"]
+            if item["path"] == "ARCHITECTURE.md"
+        )
+        record["template_version"] = "0.9.0"
+        record["template_sha256"] = old_digest
+        record["installed_sha256"] = old_digest
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        before_manifest = manifest_path.read_bytes()
+        before_file = architecture.read_bytes()
+
+        preview = json.loads(
+            self.run_cli("upgrade", "--to", "0.1.0").stdout
+        )
+        self.assertIn(
+            "ARCHITECTURE.md",
+            [
+                item["path"] for item in preview["actions"]
+                if item["action"] == "conflict"
+            ],
+        )
+        failed = self.run_cli(
+            "upgrade",
+            "--to",
+            "0.1.0",
+            "--apply",
+            expected=2,
+        )
+
+        self.assertIn("merge manually", failed.stderr)
+        self.assertEqual(manifest_path.read_bytes(), before_manifest)
+        self.assertEqual(architecture.read_bytes(), before_file)
+
+    def test_upgrade_rejects_future_state_and_unavailable_targets(self) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        future_schema = json.loads(json.dumps(manifest))
+        future_schema["schema_version"] = 3
+        manifest_path.write_text(
+            json.dumps(future_schema, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        schema_result = self.run_cli(
+            "upgrade",
+            "--to",
+            "0.1.0",
+            expected=2,
+        )
+        self.assertIn("HARNESS_SCHEMA_TOO_NEW", schema_result.stderr)
+
+        future_product = json.loads(json.dumps(manifest))
+        future_product["producer"]["version"] = "9.0.0"
+        manifest_path.write_text(
+            json.dumps(future_product, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        product_result = self.run_cli(
+            "upgrade",
+            "--to",
+            "0.1.0",
+            expected=2,
+        )
+        self.assertIn("HARNESS_PRODUCER_TOO_NEW", product_result.stderr)
+
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        target_result = self.run_cli(
+            "upgrade",
+            "--to",
+            "0.2.0",
+            expected=2,
+        )
+        self.assertIn("UPGRADE_TARGET_UNAVAILABLE", target_result.stderr)
+
+    def test_upgrade_rolls_back_when_post_validation_fails(self) -> None:
+        self.run_cli("bootstrap", "--profile", "codex", "--apply")
+        manifest_path = (
+            self.repo / "docs" / ".engineering" / "harness.json"
+        )
+        manifest_path.write_text(
+            json.dumps(
+                foundryctl.legacy_codex_harness_manifest(),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        config_path = self.repo / "docs" / ".epctl" / "config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["architecture_roots"].remove("docs/design-docs")
+        config_path.write_text(
+            json.dumps(config, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        for relative in foundryctl.CODEX_GENERATED_FILES:
+            (self.repo / relative).unlink()
+        before = manifest_path.read_bytes()
+
+        result = self.run_cli(
+            "upgrade",
+            "--to",
+            "0.1.0",
+            "--apply",
+            expected=2,
+        )
+
+        self.assertIn("validation failed after upgrade", result.stderr)
+        self.assertEqual(manifest_path.read_bytes(), before)
+        self.assertTrue(
+            all(
+                not (self.repo / relative).exists()
+                for relative in foundryctl.CODEX_GENERATED_FILES
+            )
+        )
+
     def test_legacy_manifest_owners_remain_readable(self) -> None:
         self.run_cli("bootstrap", "--profile", "codex", "--apply")
         state = self.repo / "docs" / ".engineering"
@@ -365,6 +811,23 @@ class FoundryctlTestCase(unittest.TestCase):
                 for warning in result["warnings"]
             )
         )
+        manifest = json.loads(
+            (
+                self.repo / "docs" / ".engineering" / "harness.json"
+            ).read_text(encoding="utf-8")
+        )
+        custom_records = {
+            item["path"]: item
+            for item in manifest["files"]
+            if item["path"] in {"AGENTS.md", "ARCHITECTURE.md"}
+        }
+        for record in custom_records.values():
+            self.assertEqual(
+                record["template_version"],
+                "legacy-unversioned",
+            )
+            self.assertIsNone(record["template_sha256"])
+            self.assertIsNone(record["installed_sha256"])
         self.run_cli("validate", "--harness")
 
     def test_codex_bootstrap_rejects_101_line_agents_without_writing(

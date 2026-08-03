@@ -212,10 +212,13 @@ BENCHCTL="$REPO_FOUNDRY_HOME/engineering-benchmark/scripts/benchctl.py"
 RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
+python3 "$FOUNDRYCTL" --version
 python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex
 python3 "$FOUNDRYCTL" --repo . \
   bootstrap --profile codex --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . validate --harness
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0 --apply
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
@@ -229,9 +232,18 @@ python3 "$EPCTL" --repo . validate
 python3 "$EPCTL" --repo . status
 ```
 
-Bootstrap and Spec writes are preview-first. Bootstrap creates missing paths and
-preserves repository-owned files. An agent instruction file registered by the
-Codex profile must stay at or below 100 physical lines.
+Bootstrap, Harness upgrades, and Spec writes are preview-first. Bootstrap
+creates missing paths and preserves repository-owned files. An agent
+instruction file registered by the Codex profile must stay at or below 100
+physical lines.
+
+RepoFoundry `0.1.0` introduces Harness schema `2` and Codex profile `1.0.0`.
+Those versions evolve independently from the Engineering Specs Catalog.
+Schema `1` stays readable but is changed only by an explicit
+`upgrade --to 0.1.0 --apply`. A versioned seed is replaced only when its bytes
+still match the recorded installed SHA-256; customized or provenance-unknown
+files are preserved, and post-write validation failure rolls the migration
+back. See the [versioning and migration design](./docs/design-docs/repo-foundry-versioning-and-migrations.md).
 
 Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
@@ -340,6 +352,7 @@ RepoFoundry AI:
 - [Root Skill](./SKILL.md)
 - [Bootstrap contract](./references/bootstrap.md)
 - [System identity and packaging](./docs/design-docs/repo-foundry-system.md)
+- [Versioning and Harness migrations](./docs/design-docs/repo-foundry-versioning-and-migrations.md)
 - [Engineering Spec resolution](./docs/design-docs/engineering-spec-management.md)
 
 Professional capabilities:
