@@ -79,6 +79,12 @@ RepoFoundry 只创建已选择能力拥有的路径。完整使用后，目标�
 target-repository/
 ├── AGENTS.md
 ├── ARCHITECTURE.md
+├── .agents/skills/engineering-specs/ # 单个项目级任务 Router Skill
+│   ├── SKILL.md
+│   ├── agents/openai.yaml
+│   └── scripts/spec_router.py
+├── .codex/
+│   └── hooks.json                     # 经审查的项目激活门禁
 ├── scripts/
 │   └── bench/                         # 项目自己的压测实现
 ├── benchmarks/
@@ -224,6 +230,35 @@ Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发�
 `--spec ID`，即可设置完整的可选直接集合；`--required-only` 表示不选任何可选
 Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
 
+## 为每个任务激活规范
+
+安装与任务激活是两个阶段。Bootstrap 只生成一个项目级
+`$engineering-specs` Router Skill，不会把每份 Spec 都变成 Skill。实现或评审前，
+Router 会：
+
+1. 用计划路径匹配 lock 中的 Catalog 作用域；
+2. 要求 Agent 读取候选 description 与 Applicability；
+3. 为当前 Turn 记录适用 Spec ID 与依赖，或记录带理由的显式 `none`；
+4. 只读取摘要已验证的本地规范；
+5. 在交接时报告激活的 Requirement、验证、例外与迁移影响。
+
+```mermaid
+flowchart LR
+    P["Prompt + 计划路径"] --> R["$engineering-specs Router"]
+    L["锁定的本地 Specs"] --> R
+    R --> A["Turn 激活回执"]
+    A --> G["受信任 Codex Hooks"]
+    G --> W["实现或评审"]
+    W --> H["变更路径 + 交接审计"]
+```
+
+生成的 Codex Hooks 在 `UserPromptSubmit` 建立 Git 基线，把契约传给子 Agent，
+在激活前拒绝 Bash 或 `apply_patch` 写入，在首次写入前注入已激活的本地全文，并在
+`Stop` 审计实际变更路径。项目只有在仓库受信任、用户通过 Codex `/hooks` 审查
+精确命令后才运行这些 Hooks。Hooks 被禁用或不可用时，Skill 仍是人工契约，但不再
+具有机械写入门禁；Agent 必须在写入前运行 Router `begin`，并在完成前用包含五字段
+交接的 `audit --message` 检查路径。
+
 ## 清晰边界保证系统可信
 
 - RepoFoundry AI 不运行通用 Agent runtime，也不把编排状态藏在仓库外。
@@ -231,6 +266,9 @@ Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
 - 专业 Skill 不推断 Research Owner 或 Decision Owner 的授权。
 - Bootstrap 不覆盖仓库自有文档。
 - 规范正文保留在独立 EngineeringSpecifications 仓库。
+- RepoFoundry 只生成一个任务 Router，不为每份 Spec 创建一个 Skill。
+- 项目 Hooks 是受信任 Codex 项目中的护栏，不是对其他 Agent 或禁用 Hook 环境的
+  通用强制保证。
 - 只有用户明确要求分享时才创建 Case Study。
 - GitHub Actions、GitLab CI、Jenkins 等平台调用同一个仓库检查入口，不复制策略。
 

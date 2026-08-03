@@ -49,8 +49,11 @@ HARNESS_MANIFEST = f"{HARNESS_STATE_DIRECTORY}/harness.json"
 CODEX_BOOTSTRAP_DIRECTORIES = (
     HARNESS_STATE_DIRECTORY,
     "docs/design-docs",
+    ".agents/skills/engineering-specs/agents",
+    ".agents/skills/engineering-specs/scripts",
+    ".codex",
 )
-CODEX_BOOTSTRAP_FILE_ASSETS = (
+CODEX_DOCUMENT_FILE_ASSETS = (
     ("AGENTS.md", "harness-agents.md"),
     ("ARCHITECTURE.md", "harness-architecture.md"),
     ("docs/index.md", "harness-docs-index.md"),
@@ -59,8 +62,49 @@ CODEX_BOOTSTRAP_FILE_ASSETS = (
     ("docs/SECURITY.md", "harness-security.md"),
     ("docs/design-docs/index.md", "harness-design-docs-index.md"),
 )
+CODEX_ROUTER_FILE_ASSETS = (
+    (
+        ".agents/skills/engineering-specs/SKILL.md",
+        "engineering-specs-router/SKILL.md",
+    ),
+    (
+        ".agents/skills/engineering-specs/agents/openai.yaml",
+        "engineering-specs-router/agents/openai.yaml",
+    ),
+    (
+        ".agents/skills/engineering-specs/scripts/spec_router.py",
+        "engineering-specs-router/scripts/spec_router.py",
+    ),
+    (".codex/hooks.json", "harness-hooks.json"),
+)
+CODEX_BOOTSTRAP_FILE_ASSETS = (
+    *CODEX_DOCUMENT_FILE_ASSETS,
+    *CODEX_ROUTER_FILE_ASSETS,
+)
 CODEX_REQUIRED_FILES = tuple(
-    relative for relative, _ in CODEX_BOOTSTRAP_FILE_ASSETS
+    relative for relative, _ in CODEX_DOCUMENT_FILE_ASSETS
+)
+CODEX_ROUTER_SKILL_FILES = frozenset(
+    relative
+    for relative, _ in CODEX_ROUTER_FILE_ASSETS
+    if relative != ".codex/hooks.json"
+)
+CODEX_HOOKS_FILE = ".codex/hooks.json"
+CODEX_ROUTER_SCRIPT = (
+    ".agents/skills/engineering-specs/scripts/spec_router.py"
+)
+CODEX_ROUTER_COMMAND_FRAGMENT = (
+    ".agents/skills/engineering-specs/scripts/spec_router.py\" hook"
+)
+CODEX_ROUTER_AGENTS_ROUTES = (
+    "$engineering-specs",
+    "docs/agent-guides/managed/index.md",
+)
+CODEX_REQUIRED_HOOK_EVENTS = (
+    "UserPromptSubmit",
+    "SubagentStart",
+    "PreToolUse",
+    "Stop",
 )
 
 
@@ -203,6 +247,135 @@ def asset_text(name: str) -> str:
     if not path.is_file():
         raise FoundryctlError(f"Missing bundled asset: {path}")
     return path.read_text(encoding="utf-8")
+
+
+def router_asset_by_target(relative: str) -> str | None:
+    for target, asset in CODEX_ROUTER_FILE_ASSETS:
+        if target == relative:
+            return asset
+    return None
+
+
+def validate_hook_config_data(data: object) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(data, dict):
+        return ["HARNESS_SPEC_HOOKS_INVALID: expected a JSON object"]
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return ["HARNESS_SPEC_HOOKS_INVALID: hooks must be an object"]
+    for event in CODEX_REQUIRED_HOOK_EVENTS:
+        groups = hooks.get(event)
+        if not isinstance(groups, list) or not groups:
+            errors.append(
+                f"HARNESS_SPEC_HOOK_MISSING: {event}: add the RepoFoundry "
+                "Engineering Spec Hook group"
+            )
+            continue
+        matched = False
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            if event == "PreToolUse":
+                matcher = group.get("matcher")
+                if not isinstance(matcher, str) or not all(
+                    value in matcher for value in ("Bash", "apply_patch")
+                ):
+                    continue
+            handlers = group.get("hooks")
+            if not isinstance(handlers, list):
+                continue
+            for handler in handlers:
+                if not isinstance(handler, dict):
+                    continue
+                if (
+                    handler.get("type") == "command"
+                    and isinstance(handler.get("command"), str)
+                    and CODEX_ROUTER_COMMAND_FRAGMENT in handler["command"]
+                ):
+                    matched = True
+                    break
+            if matched:
+                break
+        if not matched:
+            errors.append(
+                f"HARNESS_SPEC_HOOK_MISSING: {event}: no command handler "
+                f"routes to {CODEX_ROUTER_SCRIPT}"
+            )
+    return errors
+
+
+def validate_hook_config_file(repo: Path) -> list[str]:
+    path = repo / CODEX_HOOKS_FILE
+    reason = managed_path_conflict(repo, path, "file")
+    if reason:
+        return [f"HARNESS_SPEC_HOOKS_INVALID: {CODEX_HOOKS_FILE}: {reason}"]
+    if not path.is_file():
+        return [
+            f"HARNESS_SPEC_HOOKS_MISSING: {CODEX_HOOKS_FILE}: rerun "
+            "foundryctl bootstrap --profile codex --apply"
+        ]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"HARNESS_SPEC_HOOKS_INVALID: {CODEX_HOOKS_FILE}: {exc}"]
+    return validate_hook_config_data(data)
+
+
+def validate_spec_router(repo: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    for relative in sorted(CODEX_ROUTER_SKILL_FILES):
+        target = repo / relative
+        reason = managed_path_conflict(repo, target, "file")
+        if reason:
+            errors.append(
+                f"HARNESS_SPEC_ROUTER_INVALID: {relative}: {reason}"
+            )
+            continue
+        if not target.is_file():
+            errors.append(
+                f"HARNESS_SPEC_ROUTER_MISSING: {relative}: rerun "
+                "foundryctl bootstrap --profile codex --apply"
+            )
+            continue
+        asset = router_asset_by_target(relative)
+        if asset is None:  # pragma: no cover - constant contract
+            errors.append(f"HARNESS_SPEC_ROUTER_INVALID: {relative}: no asset")
+            continue
+        try:
+            actual = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            errors.append(
+                f"HARNESS_SPEC_ROUTER_INVALID: {relative}: {exc}"
+            )
+            continue
+        if actual != asset_text(asset):
+            errors.append(
+                f"HARNESS_SPEC_ROUTER_DRIFT: {relative}: generated Router "
+                "bytes differ from this RepoFoundry release"
+            )
+    errors.extend(validate_hook_config_file(repo))
+    agents = repo / "AGENTS.md"
+    if not agents.is_file() or agents.is_symlink():
+        errors.append(
+            "HARNESS_SPEC_ROUTE_MISSING: AGENTS.md: expected a non-symlink "
+            "regular file"
+        )
+    else:
+        try:
+            text = agents.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"HARNESS_SPEC_ROUTE_INVALID: AGENTS.md: {exc}")
+        else:
+            missing = [
+                value for value in CODEX_ROUTER_AGENTS_ROUTES if value not in text
+            ]
+            if missing:
+                errors.append(
+                    "HARNESS_SPEC_ROUTE_MISSING: AGENTS.md: add the mandatory "
+                    "Router route for " + ", ".join(missing)
+                )
+    return errors, warnings
 
 
 def ensure_file(path: Path, asset: str) -> bool:
@@ -385,6 +558,47 @@ def bootstrap_plan(
                     f"HARNESS_AGENTS_LINE_BUDGET: AGENTS.md: actual "
                     f"{line_count} physical lines; hard limit is "
                     f"{CODEX_AGENT_MAX_LINES}"
+                )
+            if not reason:
+                try:
+                    agents_text = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeError) as exc:
+                    reason = f"HARNESS_SPEC_ROUTE_INVALID: {exc}"
+                else:
+                    missing_routes = [
+                        value
+                        for value in CODEX_ROUTER_AGENTS_ROUTES
+                        if value not in agents_text
+                    ]
+                    if missing_routes:
+                        reason = (
+                            "HARNESS_SPEC_ROUTE_MISSING: add the mandatory "
+                            "Router route for " + ", ".join(missing_routes)
+                        )
+        if not reason and relative in CODEX_ROUTER_SKILL_FILES and path.is_file():
+            asset = router_asset_by_target(relative)
+            try:
+                current_router_text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                reason = f"HARNESS_SPEC_ROUTER_INVALID: {exc}"
+            if (
+                not reason
+                and (
+                    asset is None
+                    or current_router_text != asset_text(asset)
+                )
+            ):
+                reason = (
+                    "HARNESS_SPEC_ROUTER_DRIFT: generated Router bytes differ "
+                    "from this RepoFoundry release"
+                )
+        if not reason and relative == CODEX_HOOKS_FILE and path.is_file():
+            hook_errors = validate_hook_config_file(repo)
+            if hook_errors:
+                reason = (
+                    "; ".join(hook_errors)
+                    + "; preserve existing Hooks and merge the RepoFoundry "
+                    "groups explicitly"
                 )
         if reason:
             actions.append(
@@ -605,6 +819,9 @@ def validate_codex_harness(
     )
     errors.extend(spec_errors)
     warnings.extend(spec_warnings)
+    router_errors, router_warnings = validate_spec_router(repo)
+    errors.extend(router_errors)
+    warnings.extend(router_warnings)
     return errors, warnings
 
 
@@ -1062,6 +1279,10 @@ def main(argv: list[str] | None = None) -> int:
                     repo,
                     require_manifest=True,
                 )
+                if harness_path(repo).exists():
+                    router_errors, router_warnings = validate_spec_router(repo)
+                    errors.extend(router_errors)
+                    warnings.extend(router_warnings)
                 for warning in warnings:
                     print(f"WARNING: {warning}", file=sys.stderr)
                 for error in errors:

@@ -146,6 +146,10 @@ def validate_skill_packages() -> None:
     skills = (
         (ROOT, "repo-foundry-ai"),
         (
+            ROOT / "assets" / "engineering-specs-router",
+            "engineering-specs",
+        ),
+        (
             ROOT / "engineering-execution-plan",
             "engineering-execution-plan",
         ),
@@ -174,6 +178,7 @@ def validate_skill_packages() -> None:
         ROOT / "README.md",
         ROOT / "README.zh-CN.md",
         ROOT / "SKILL.md",
+        ROOT / "assets" / "engineering-specs-router" / "SKILL.md",
         *sorted((ROOT / "references").glob("*.md")),
         ROOT / "engineering-execution-plan" / "SKILL.md",
         *sorted(

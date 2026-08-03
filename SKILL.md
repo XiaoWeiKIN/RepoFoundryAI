@@ -1,7 +1,7 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化和验证版本化 Repository Harness，从独立 Git 仓库解析并同步用户显式选择的通用、语言级和项目级 Engineering Specs，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go 等语言规范、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，仓库检测只推荐可选 Spec；应用时只创建缺失文件、物化必选与用户选择的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
+  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化和验证版本化 Repository Harness，从独立 Git 仓库解析并同步用户显式选择的通用、语言级和项目级 Engineering Specs，生成项目级 $engineering-specs Router Skill 与受信任 Codex Hooks，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go 等语言规范、让 Agent 在实现或评审前激活适用 Spec、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，仓库检测只推荐可选 Spec；应用时只创建缺失文件、物化必选与用户选择的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
 ---
 
 # RepoFoundry AI
@@ -14,6 +14,8 @@ Harness、Spec 解析和能力路由；专业制品生命周期仍由四个独�
 flowchart LR
     W["repo-foundry-ai<br/>Inventory + Scaffold + Harness"]
     W -.->|"Git fetch + immutable lock"| S["EngineeringSpecifications<br/>Core + language guidance"]
+    W --> T["$engineering-specs<br/>task Router + trusted Hooks"]
+    S --> T
     W --> B["engineering-benchmark<br/>可复现测量"]
     W --> R["engineering-research<br/>问题与证据综合"]
     W --> E["engineering-execution-plan<br/>ADR 与实施"]
@@ -48,11 +50,12 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
    [bootstrap.md](references/bootstrap.md)。
 
 Codex profile 创建短 `AGENTS.md`、`ARCHITECTURE.md`、文档索引、质量、可靠性、
-安全、Design Doc 入口和本地 Engineering Specs。Core Spec 必选；仓库证据只推荐
-可选 Spec，用户通过可重复 `--spec <id>` 显式选择安装。选择写入
+安全、Design Doc 入口、本地 Engineering Specs、一个项目级 `$engineering-specs`
+Router Skill 与 `.codex/hooks.json`。Core Spec 必选；仓库证据只推荐可选 Spec，
+用户通过可重复 `--spec <id>` 显式选择安装。选择写入
 `docs/.engineering/specs.json`，精确版本与 SHA-256 写入
 `specs.lock.json`；lock 同时记录解析后的完整 Git commit。Codex 从
-`docs/agent-guides/managed/index.md` 按作用域读取。
+Router 按计划路径、任务意图和 `docs/agent-guides/managed/index.md` 激活规范。
 项目规则通过 manifest 引用，工具不改写其内容。未知项目事实保留
 `BOOTSTRAP_TODO`，不得编造命令、Owner、架构、SLO 或安全控制。
 
@@ -86,6 +89,18 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
 
+## 激活任务规范
+
+Bootstrap 只生成一个 Router Skill，不为每份 Spec 创建 Skill。实现或评审前调用
+`$engineering-specs`：先列出计划路径的候选，再读取每个候选的 Applicability，
+记录本 Turn 的适用 ID 或带理由的 `none`。激活会自动加入 `requires` 闭包；首次
+写入前，受信任 Hook 注入摘要已验证的本地全文，并要求 Agent 重新评估后重试。
+
+`UserPromptSubmit` 建立 Git 基线，`SubagentStart` 传递同一契约，`PreToolUse`
+阻断未激活的 Bash/`apply_patch` 写入，`Stop` 审计实际变更路径与五字段交接。
+项目 Hooks 只有在仓库受信任且用户通过 Codex `/hooks` 审查精确命令后才生效；
+Hook 不可用时仍必须手动遵循 Router Skill 并运行其 `audit` 命令。
+
 ## 路由专业工作
 
 | 请求 | 使用 Skill |
@@ -111,5 +126,7 @@ Skill 必须保持可独立安装和运行；只有 `repo-foundry-ai` 可以显�
 - 不把规范正文内置到 RepoFoundry；不执行远程仓库内容。
 - 不接收、记录或管理 Git 凭据；只使用用户已有的 credential helper / SSH agent。
 - 不把项目自定义 Spec 复制进托管目录或改写其内容。
+- 不把每份 Spec 包装成独立 Skill；Agent 适配只由一个项目级 Router 持有。
+- 不把未受信任或被禁用的项目 Hook 描述成机械强制保证。
 - 不把某个 Agent、代码托管平台或本机安装路径写入文件契约。
 - 不把 Harness manifest 放进 `.epctl`；项目级状态与 EP 状态分开持有。

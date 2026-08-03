@@ -428,6 +428,17 @@ class RepositoryContractTestCase(unittest.TestCase):
             "docs/agent-guides/managed/index.md",
             template.read_text(encoding="utf-8"),
         )
+        self.assertIn(
+            "$engineering-specs",
+            template.read_text(encoding="utf-8"),
+        )
+
+        router = ROOT / "assets" / "engineering-specs-router"
+        router_skill = (router / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("name: engineering-specs", router_skill)
+        self.assertIn("task Applicability", router_skill)
+        self.assertTrue((router / "agents" / "openai.yaml").is_file())
+        self.assertTrue((router / "scripts" / "spec_router.py").is_file())
 
     def test_workflow_has_no_bundled_engineering_spec_content(self) -> None:
         self.assertFalse((ROOT / "engineering-specs").exists())

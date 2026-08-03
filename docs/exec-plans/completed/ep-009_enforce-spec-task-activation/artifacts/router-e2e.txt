@@ -1,0 +1,33 @@
+Scenario: generated Router forward test in an isolated Go target repository
+Target: /private/tmp/repofoundry-forward.eoUEzY
+Observed: 2026-08-03T07:17:07Z
+
+Bootstrap generated one project-local engineering-specs Skill, four Codex Hook
+groups, a locked Catalog at commit eeea7960b22291d69f5d19f557c6795b11236aec,
+and three managed local specifications.
+
+Task: change HandlerName() observable result from legacy to routed and update its
+test. Direct activation requested core/semantic-naming@1.0.0 and
+languages/go@0.4.0; dependency closure added core/data-boundaries@0.1.0.
+Relevant requirements were SEM-NAME-001, SEM-COMPAT-001, GO-FORMAT-001,
+GO-API-001, GO-COMPAT-001, and GO-TEST-001. DATA requirements were loaded only
+through the declared dependency and were not task-applicable.
+
+Wire observations:
+- UserPromptSubmit added the Router commands, session/turn IDs, and locked index.
+- PreToolUse denied the first write and injected 44,032 bytes of digest-verified
+  local Specification text; retrying the same covered write was allowed.
+- An incomplete handoff was blocked; the complete five-label handoff was allowed.
+- Router audit reported exactly service/handler.go and service/handler_test.go,
+  both covered by the activation.
+
+Verification: gofmt -d had no output; go vet ./..., go test ./..., and
+git diff --check passed.
+
+Forward-test discovery: the first generated version lacked an operational manual
+fallback because activate required Hook initialization. The implementation now
+adds explicit begin and audit --message commands. A focused test proves manual
+baseline, activation, changed-path audit, and five-label handoff without Hooks.
+The forward-test host did not automatically load the target project's Hooks;
+automatic lifecycle execution remains conditional on Codex project trust and
+exact Hook review, as documented.

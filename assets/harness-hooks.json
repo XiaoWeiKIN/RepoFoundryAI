@@ -1,0 +1,57 @@
+{
+  "description": "RepoFoundry Engineering Spec task activation",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/skills/engineering-specs/scripts/spec_router.py\" hook",
+            "additionalContextLimit": 0,
+            "timeout": 30,
+            "statusMessage": "Preparing Engineering Spec routing"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/skills/engineering-specs/scripts/spec_router.py\" hook",
+            "additionalContextLimit": 0,
+            "timeout": 30,
+            "statusMessage": "Routing subagent Engineering Specs"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/skills/engineering-specs/scripts/spec_router.py\" hook",
+            "additionalContextLimit": 0,
+            "timeout": 30,
+            "statusMessage": "Enforcing Engineering Spec activation"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agents/skills/engineering-specs/scripts/spec_router.py\" hook",
+            "timeout": 30,
+            "statusMessage": "Auditing Engineering Spec handoff"
+          }
+        ]
+      }
+    ]
+  }
+}

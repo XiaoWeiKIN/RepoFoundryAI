@@ -1,0 +1,7 @@
+Command: python3 -B /Users/wangxiaowei1/.codex/skills/.system/skill-creator/scripts/quick_validate.py assets/engineering-specs-router
+Repository: RepoFoundry branch codex/spec-task-router
+Observed: 2026-08-03T07:17:07Z
+Exit: 0
+Result: Skill is valid.
+Package name: engineering-specs
+Generated target: .agents/skills/engineering-specs/

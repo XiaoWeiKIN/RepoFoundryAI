@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "帮我把这个仓库初始化成 Codex agent-first 项目：先预览要创建的文档，再应用。保留已有文件，AGENTS.md 无论如何不能超过 100 行。",
-      "expected_output": "先用 foundryctl bootstrap --profile codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，并组合 engineering-execution-plan 初始化。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
+      "expected_output": "先用 foundryctl bootstrap --profile codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，组合 engineering-execution-plan 初始化，并生成单个项目级 $engineering-specs Router Skill 与 .codex/hooks.json。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
       "files": [],
       "assertions": [
         {
@@ -26,6 +26,10 @@
         {
           "name": "separates_state_ownership",
           "description": "Harness manifest 位于 docs/.engineering，EP 状态继续位于 docs/.epctl"
+        },
+        {
+          "name": "generates_one_task_router",
+          "description": "Bootstrap 生成一个项目级 $engineering-specs Router 与四组 Codex Hooks，不为每份 Spec 创建 Skill"
         }
       ]
     },
@@ -64,7 +68,7 @@
     {
       "id": 4,
       "prompt": "初始化这个 Go 后端仓库。先展示可安装的 Engineering Specs；我选择安装 languages/go。现有 handler-pattern.md 是项目规则，不要覆盖。",
-      "expected_output": "先预览 Codex Bootstrap；从独立 EngineeringSpecifications Git 仓库的固定 Catalog 发布版本列出 available、required、recommended、configured 与 selected 集合。Go 证据只推荐 languages/go；根据用户的 --spec languages/go 选择，生成记录 refs/tags/vX.Y.Z 的 docs/.engineering/specs.json、记录完整 resolved commit 与依赖闭包的 specs.lock.json，以及 docs/agent-guides/managed/ 本地副本和索引。把已有 handler-pattern.md 作为 project_specs 引用而不复制或改写，应用后离线运行 spec validate 与 Harness validation。",
+      "expected_output": "先预览 Codex Bootstrap；从独立 EngineeringSpecifications Git 仓库的固定 Catalog 发布版本列出 available、required、recommended、configured 与 selected 集合。Go 证据只推荐 languages/go；根据用户的 --spec languages/go 选择，生成记录 refs/tags/vX.Y.Z 的 docs/.engineering/specs.json、记录完整 resolved commit 与依赖闭包的 specs.lock.json，以及 docs/agent-guides/managed/ 本地副本和索引。把已有 handler-pattern.md 作为 project_specs 引用而不复制或改写；生成一个 $engineering-specs Router 与受信任 Hooks，把本地索引用作任务候选源；应用后离线运行 spec validate 与 Harness validation。",
       "files": [],
       "assertions": [
         {
@@ -126,6 +130,34 @@
         {
           "name": "preserves_pinned_sync",
           "description": "升级后的 sync 继续使用 lock commit，validate 保持离线"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "修改 service/handler.go 的 Go HTTP Handler，并评审对应测试。确保 Agent 在写代码前一定处理项目已安装的 Engineering Specs。",
+      "expected_output": "先调用项目级 $engineering-specs，用计划路径列出锁定候选，逐份读取 description 与 Applicability，并为当前 session/turn 激活适用 ID；dependencies 自动加入。没有适用项也必须记录带理由的 none。受信任 PreToolUse Hook 在未激活时拒绝写入，在首次写入前注入摘要已验证的本地全文并要求重试；SubagentStart 传递相同契约。完成后 Stop 对比 Prompt 基线与真实变更路径，并要求五字段交接：Activated specifications、Activated requirements、Verification、Exceptions、Compatibility or migration。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "separates_installation_from_activation",
+          "description": "任务 Router 只消费 lock 与本地文件，不隐式安装、升级或联网"
+        },
+        {
+          "name": "uses_intent_after_scope_candidates",
+          "description": "路径只产生候选；Agent 必须读取 Applicability 后显式激活 ID 或记录带理由的 none"
+        },
+        {
+          "name": "gates_codex_writes",
+          "description": "受信任 Codex Hooks 阻断未激活的 Bash/apply_patch 写入，并在第一次写入前注入激活全文"
+        },
+        {
+          "name": "audits_actual_changes_and_handoff",
+          "description": "Stop 审计真实变更路径覆盖与 Requirement 级验证交接，不只相信计划路径"
+        },
+        {
+          "name": "states_the_trust_boundary",
+          "description": "说明项目 Hooks 需要仓库信任与精确命令审查，不能承诺对其他 Agent 的通用强制"
         }
       ]
     }

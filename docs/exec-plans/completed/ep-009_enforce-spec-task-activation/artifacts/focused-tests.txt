@@ -1,0 +1,9 @@
+Command: python3 -B -m unittest tests.test_spec_router tests.test_foundryctl tests.test_repository_contracts
+Repository: RepoFoundry branch codex/spec-task-router
+Observed: 2026-08-03T07:17:07Z
+Exit: 0
+Result: 42 tests passed.
+Coverage includes Bootstrap, explicit Spec selection, generated Router packaging,
+candidate routing, dependency closure, explicit none, manual begin/audit fallback,
+prompt and subagent context, PreToolUse denial/injection, bounded planned paths,
+Stop handoff auditing, offline validation, and custom Hook preservation.

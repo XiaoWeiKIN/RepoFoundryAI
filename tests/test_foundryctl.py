@@ -335,8 +335,10 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         plans.write_text(original_plans, encoding="utf-8")
         agents = self.repo / "AGENTS.md"
-        original_agents = "".join(
-            f"line {number:03d}\n" for number in range(1, 101)
+        original_agents = (
+            "$engineering-specs\n"
+            "docs/agent-guides/managed/index.md\n"
+            + "".join(f"line {number:03d}\n" for number in range(3, 101))
         )
         agents.write_text(original_agents, encoding="utf-8")
         architecture = self.repo / "ARCHITECTURE.md"
