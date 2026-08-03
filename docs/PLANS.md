@@ -16,7 +16,6 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
 | EP-006 | Migrate EngineeringWorkflow to RepoFoundry AI | active | 2026-08-01 | [EXECPLAN](exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md) |
-| EP-009 | Enforce Engineering Spec task activation | active | 2026-08-03 | [EXECPLAN](exec-plans/active/ep-009_enforce-spec-task-activation/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed
@@ -31,4 +30,5 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | EP-005 | Externalize engineering specifications and fetch by Git revision | completed | 2026-07-30 | [EXECPLAN](exec-plans/completed/ep-005_externalize-engineering-specifications/EXECPLAN.md) |
 | EP-007 | Pin Engineering Specification releases | completed | 2026-08-02 | [EXECPLAN](exec-plans/completed/ep-007_versioned-spec-releases/EXECPLAN.md) |
 | EP-008 | Let users explicitly select installed Engineering Specs | completed | 2026-08-02 | [EXECPLAN](exec-plans/completed/ep-008_explicit-spec-selection/EXECPLAN.md) |
+| EP-009 | Enforce Engineering Spec task activation | completed | 2026-08-03 | [EXECPLAN](exec-plans/completed/ep-009_enforce-spec-task-activation/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->

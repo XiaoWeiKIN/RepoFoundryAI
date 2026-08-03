@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-009
 title: "Enforce Engineering Spec task activation"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -13,9 +13,9 @@ architecture_entrypoint: ""
 architecture_gate: not_required
 architecture_gate_reason: "The repository owner explicitly selected one generated engineering-specs Router Skill plus AGENTS and trusted project Hook enforcement; accepted ADR-002 and ADR-005 already assign Harness routing to RepoFoundry and normative content to EngineeringSpecifications, so implementation introduces no unresolved architecture alternative."
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:9c2802b7c7348cdee8983499ce1d9a4a06130f14"
+verification_evidence: ["docs/exec-plans/completed/ep-009_enforce-spec-task-activation/artifacts/engineering-specifications-check.txt", "docs/exec-plans/completed/ep-009_enforce-spec-task-activation/artifacts/focused-tests.txt", "docs/exec-plans/completed/ep-009_enforce-spec-task-activation/artifacts/generated-skill-validation.txt", "docs/exec-plans/completed/ep-009_enforce-spec-task-activation/artifacts/router-e2e.txt", "docs/exec-plans/completed/ep-009_enforce-spec-task-activation/artifacts/repo-check.txt", "docs/exec-plans/completed/ep-009_enforce-spec-task-activation/artifacts/epctl-validate.txt", "docs/exec-plans/completed/ep-009_enforce-spec-task-activation/artifacts/exact-revision-check.txt"]
+archive_sha256: bbb97af93b2049774504af8f93843dd91982fe99d091668d12dc1d2126217159
 created: 2026-08-03
 updated: 2026-08-03
 owner: "Codex"
@@ -50,10 +50,10 @@ copies.
 - Current state: ESP-0010, the generated Router Skill, four trusted Codex Hook
   groups, Bootstrap/validation integration, manual fallback, bilingual docs,
   evals, and focused/canonical tests are complete. The isolated forward test
-  passed and its manual-fallback discovery was fixed.
-- Next action: commit the two repository changes, validate the exact
-  RepoFoundry implementation revision in a clean worktree, archive EP-009, and
-  create stacked pull requests.
+  passed and its manual-fallback discovery was fixed. Implementation revision
+  `git:9c2802b7c7348cdee8983499ce1d9a4a06130f14` passed the canonical check in a
+  clean detached worktree.
+- Next action: archive EP-009 and create stacked pull requests.
 - Open questions: none that change the selected route. Exact stable error
   labels and the minimal read-only Bash allowlist remain implementation detail.
 
@@ -245,7 +245,7 @@ events through JSON fixtures, and retain concise logs under this EP's
 - [x] From RepoFoundry, run `python3 -B
   engineering-execution-plan/scripts/epctl.py --repo . validate`; expect no
   EP errors. Evidence: `artifacts/epctl-validate.txt`.
-- [ ] In a detached clean worktree at the implementation commit, rerun
+- [x] In a detached clean worktree at the implementation commit, rerun
   `python3 -B scripts/check.py`; expect exit 0 and no generated diff. Evidence:
   `artifacts/exact-revision-check.txt`.
 
@@ -292,6 +292,9 @@ runtime state are removed only after exact-revision validation.
   `audit --message`, and retained its evidence.
 - [ ] Commit exact revisions, rerun the RepoFoundry canonical check in a clean
   worktree, archive EP-009, push, and create stacked pull requests.
+- [x] (2026-08-03T07:17:07Z) Committed implementation as
+  `9c2802b7c7348cdee8983499ce1d9a4a06130f14` and passed the complete canonical
+  check in a clean detached worktree with no generated diff.
 
 ## Surprises & Discoveries
 
@@ -371,7 +374,7 @@ rejected.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-009_enforce-spec-task-activation/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-009_enforce-spec-task-activation/EXECPLAN.md`
 - EngineeringSpecifications Proposal:
   `proposals/0010_task-activation-router.md` in the independent repository.
 - EngineeringSpecifications check:
@@ -381,6 +384,7 @@ rejected.
 - Isolated Router forward test: `artifacts/router-e2e.txt`.
 - RepoFoundry canonical check: `artifacts/repo-check.txt`.
 - EP validation: `artifacts/epctl-validate.txt`.
+- Exact implementation revision check: `artifacts/exact-revision-check.txt`.
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -391,3 +395,5 @@ rejected.
   interfaces before implementation.
 - 2026-08-03T07:17:07Z — Updated current facts, validation evidence, forward
   test discoveries, manual fallback, retrospective, and stable interfaces.
+- 2026-08-03T07:17:07Z — Recorded the exact clean-worktree verification for
+  implementation revision `9c2802b7c7348cdee8983499ce1d9a4a06130f14`.

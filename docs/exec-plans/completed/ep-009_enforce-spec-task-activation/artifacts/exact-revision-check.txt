@@ -1,0 +1,8 @@
+Revision: git:9c2802b7c7348cdee8983499ce1d9a4a06130f14
+Worktree: detached clean worktree
+Command: python3 -B scripts/check.py
+Observed: 2026-08-03T07:17:07Z
+Exit: 0
+Result: all integrity checks passed; 29 Research, 8 Benchmark,
+37 Execution Plan, and 53 RepoFoundry/Spec/repository-contract tests passed.
+Post-check git status was empty.
