@@ -16,6 +16,7 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
 | EP-006 | Migrate EngineeringWorkflow to RepoFoundry AI | active | 2026-08-01 | [EXECPLAN](exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md) |
+| EP-009 | Enforce Engineering Spec task activation | active | 2026-08-03 | [EXECPLAN](exec-plans/active/ep-009_enforce-spec-task-activation/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed

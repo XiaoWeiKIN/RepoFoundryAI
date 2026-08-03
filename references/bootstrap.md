@@ -11,10 +11,12 @@ flowchart LR
     P["foundryctl 仓库预检"] --> I["epctl init<br/>ADR / ExecPlan 制品"]
     P --> C["Codex profile<br/>AGENTS.md + 架构与治理入口"]
     P --> S["Spec Resolver<br/>required + user-selected"]
+    P --> R["$engineering-specs<br/>Router Skill + trusted Hooks"]
     I --> E["docs/.epctl/<br/>EP 状态"]
     C --> M["docs/.engineering/harness.json"]
     S --> L["specs.json + lock<br/>本地 managed Specs"]
-    L --> C
+    L --> R
+    C --> R
     M --> V["foundryctl validate --harness"]
 ```
 
@@ -35,6 +37,7 @@ flowchart LR
 - 安装必选 Core Spec 和用户显式选择的可选 Spec；
 - 将确定性检测结果作为推荐展示，不据此自动安装；
 - 生成 Spec manifest、lock、本地副本与按作用域路由索引；
+- 生成一个项目级 `$engineering-specs` Router Skill 与 Codex Hook groups；
 - 写入后立即执行 Harness 验证。
 
 已有内容文档保持字节不变。唯一允许修改的既有 managed file 是
@@ -91,6 +94,14 @@ docs/
 ├── SECURITY.md
 └── design-docs/
     └── index.md
+.agents/
+└── skills/
+    └── engineering-specs/
+        ├── SKILL.md
+        ├── agents/openai.yaml
+        └── scripts/spec_router.py
+.codex/
+└── hooks.json
 ```
 
 `docs/RESEARCH.md`、`docs/DECISIONS.md`、`docs/PLANS.md`、
@@ -117,7 +128,7 @@ Git 仓库。默认 Catalog 版本是 `1.2.0`；首次 Bootstrap 可通过
 解析后的完整 Git commit、内容 SHA-256 和本地路径保存在
 `specs.lock.json`。Catalog 内容原样物化到 `docs/agent-guides/managed/`，
 生成的 `index.md` 把文件作用域映射到对应 Spec。根 `AGENTS.md` 只保留一条
-读取该索引的短路由。
+强制进入 `$engineering-specs` 的短路由；Router 才把该索引作为锁定的候选来源。
 
 项目特有规则不进入托管目录。在 `specs.json` 的 `project_specs` 中登记已有
 Markdown 路径、作用域和说明，`index.md` 会引用它，工具不复制或修改正文。
@@ -149,6 +160,44 @@ lock 与本地文件，完全不访问网络。
 不执行远程代码。Git 凭据只能来自用户已有的 credential helper 或 SSH agent；
 RepoFoundry AI 不接收、不打印、不保存 token。
 
+## 任务时激活
+
+Bootstrap 不会为每份规范创建一个 Skill，而是只生成
+`.agents/skills/engineering-specs/`。这个 Router Skill 先根据计划修改路径与
+`applies_to` 返回候选，再要求 Agent 读取候选的 description 与 Applicability，
+记录当前 Turn 的适用 ID 或显式 `none` 决定。激活一个规范时自动加入它的
+`requires` 闭包。
+
+```mermaid
+flowchart LR
+    P["Prompt + 计划路径"] --> C["候选规范"]
+    I["本地 lock + index"] --> C
+    C --> R["$engineering-specs<br/>任务意图判断"]
+    R --> E["Turn 激活回执"]
+    E --> H["PreToolUse<br/>拒绝未激活写入"]
+    H --> X["注入已激活本地全文"]
+    X --> W["实现或评审"]
+    W --> S["Stop<br/>路径与交接审计"]
+```
+
+生成的 `.codex/hooks.json` 注册：
+
+- `UserPromptSubmit`：建立基线，并把 Router 命令与本地索引加入 developer context；
+- `SubagentStart`：让子 Agent 继承同一任务激活契约；
+- `PreToolUse`：允许发现性读取；没有激活回执、目标路径未覆盖时拒绝写入；第一次
+  写入前注入摘要已验证的本地全文，并要求重试；
+- `Stop`：比较 Prompt 时的 Git 基线与当前状态，检查路径覆盖和五字段 Agent 交接。
+
+运行时回执按 repository/session/turn 隔离，写入 Git metadata 或系统临时目录，
+不会成为隐藏的项目规范。Router 全程离线，不从远端加载正文。确实没有适用规范时，
+仍必须用 `--none --reason ...` 记录决定。
+
+项目级 Hooks 只在用户信任该项目时加载；非托管命令 Hook 还需要通过 Codex
+`/hooks` 审查并信任精确版本。这个信任边界无法由仓库文件替用户决定。Hook 被禁用
+或项目不受信任时，`AGENTS.md` 与 Skill 仍提供工作流：Agent 必须先运行 Router
+的 `begin` 建立手动 Turn 基线，再执行 candidates/activate，并在完成前用带五字段
+handoff 的 `audit --message` 检查路径。此时不应声称存在机械写入门禁。
+
 ## `AGENTS.md` 硬约束
 
 每个 Harness manifest 注册的 instruction file 必须不超过 100 个物理行：
@@ -178,6 +227,9 @@ apply 前检查全部目标：
 - Spec manifest、Catalog、依赖图或项目 Spec 引用无效：conflict；
 - 已有 lock、路由索引或 managed Spec 与期望 bytes 不同：conflict；
 - 已有 `AGENTS.md` 超过 100 行：conflict；
+- 已有 `AGENTS.md` 缺少 `$engineering-specs` 强制路由：conflict；
+- 生成的 Router Skill 漂移、路径冲突或经过 symlink：conflict；
+- 已有 `.codex/hooks.json` 缺少所需 groups：conflict，保留原字节并要求显式合并；
 - architecture config 无效：conflict。
 
 出现 conflict 时，不创建 `docs/`、lock、manifest 或其他模板。修复冲突后重新
@@ -236,15 +288,16 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . validate --harness
 - `AGENTS.md` 物理行数；
 - Spec manifest、Catalog digest、lock 和 managed content；
 - 项目 Spec 路径与生成的作用域路由索引；
+- Router Skill 的固定文件、AGENTS 强制路由与四个 Codex Hook groups；
 - scaffold TODO。
 
 缺文件、manifest 无效、未注册 architecture root 和超过 100 行属于 error。
 `BOOTSTRAP_TODO` 以及 81–100 行的 instruction file 属于 warning。
-已有 `AGENTS.md` 缺少 Spec index 路由也属于 warning，工具不会为修复路由而
-改写项目文件。
+已有 `AGENTS.md` 缺少 Router 路由、Router 文件漂移或缺少 Hook group 均属于
+error。工具不会为修复这些问题而改写已有项目文件；维护者先显式合并，再重新验证。
 
 ## 边界
 
-Bootstrap 当前只建立文档与 Engineering Spec 控制面。Worktree、浏览器控制、
-可观测性环境、权限、远程 Catalog 获取、部署和自动合并属于运行时 Harness；
-在出现独立生命周期前，不把它们隐式加入本命令。
+Bootstrap 建立文档、Engineering Spec 控制面和 Codex 任务激活适配层。它不提供
+通用 Agent runtime，也不接管 Worktree、浏览器控制、可观测性环境、权限、部署或
+自动合并。其他 Agent 可以实现同一激活回执契约，无需采用 Codex Hook 文件。
