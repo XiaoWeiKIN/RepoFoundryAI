@@ -197,10 +197,13 @@ BENCHCTL="$REPO_FOUNDRY_HOME/engineering-benchmark/scripts/benchctl.py"
 RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
+python3 "$FOUNDRYCTL" --version
 python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex
 python3 "$FOUNDRYCTL" --repo . \
   bootstrap --profile codex --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . validate --harness
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0 --apply
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
@@ -214,8 +217,16 @@ python3 "$EPCTL" --repo . validate
 python3 "$EPCTL" --repo . status
 ```
 
-Bootstrap 与 Spec 写操作默认先预览。Bootstrap 只创建缺失路径，保留仓库已有
-文件。Codex profile 注册的 Agent instruction file 不得超过 100 个物理行。
+Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创建缺失路径，
+保留仓库已有文件。Codex profile 注册的 Agent instruction file 不得超过 100 个
+物理行。
+
+RepoFoundry `0.1.0` 引入 Harness schema `2` 和 Codex profile `1.0.0`；三者与
+Engineering Specs Catalog 各自独立演进。schema `1` 继续可读，但只有显式执行
+`upgrade --to 0.1.0 --apply` 才会迁移。versioned seed 只有在文件字节仍匹配记录的
+installed SHA-256 时才自动替换；定制文件或来源未知文件保持原样，写后验证失败会
+回滚。完整契约见
+[版本与迁移设计](./docs/design-docs/repo-foundry-versioning-and-migrations.md)。
 
 Engineering Specs 来自独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
@@ -311,6 +322,7 @@ RepoFoundry AI：
 - [根 Skill](./SKILL.md)
 - [Bootstrap 契约](./references/bootstrap.md)
 - [系统身份与 packaging](./docs/design-docs/repo-foundry-system.md)
+- [版本与 Harness 迁移](./docs/design-docs/repo-foundry-versioning-and-migrations.md)
 - [Engineering Spec 解析](./docs/design-docs/engineering-spec-management.md)
 
 专业能力：

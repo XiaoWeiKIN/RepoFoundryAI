@@ -49,6 +49,7 @@ Bootstrap 不隐式运行 `reindex`。
 在目标仓库根目录运行：
 
 ```bash
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --version
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --profile codex
 ```
@@ -111,6 +112,55 @@ Bootstrap templates 是明确标记的 scaffold。Agent 应在同一初始化工
 README、代码、构建文件、测试和 CI，再用真实事实替换
 `BOOTSTRAP_TODO`。无法验证的字段保持 `unknown`，不能猜测命令、边界、Owner、
 SLO 或安全控制。
+
+## 版本与 Harness 升级
+
+RepoFoundry 使用四条独立版本线，不能互相替代：
+
+| 版本线 | 当前值 | 职责 |
+|---|---:|---|
+| RepoFoundry distribution | `0.1.0` | Skill、脚本和随版本附带的迁移能力 |
+| Harness schema | `2` | `harness.json` 的数据结构 |
+| Codex profile | `1.0.0` | Seed 集合、模板版本和生成行为 |
+| Engineering Specs Catalog | 默认 `1.2.0` | 独立选择和锁定的工程规范 |
+
+每次发布都更新 distribution `VERSION`；只要 seed bytes、seed 集合或 profile 行为
+变化，就必须同时提升 profile 版本并提供迁移。Harness JSON 结构或语义变化时提升
+schema。不能在 profile 版本不变时替换 bundled template bytes。
+
+旧 schema `1` 继续可读并产生 `HARNESS_SCHEMA_UPGRADE_AVAILABLE` warning；普通
+`bootstrap` 不会改写它。显式预览和应用迁移：
+
+```bash
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  upgrade --to 0.1.0
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  upgrade --to 0.1.0 --apply
+```
+
+`upgrade` 默认 dry-run。apply 会持有 Harness lock 并重新计算计划；计划变化或存在
+conflict 时不写入。对 seed 文件的处理只依赖 manifest 中的 SHA-256 证据：
+
+- 文件等于当前模板：只更新 provenance；
+- 文件等于旧记录的 `installed_sha256`：可以安全替换为新模板；
+- versioned 文件已被修改：报告 conflict，要求人工合并；
+- `legacy-unversioned` 文件与当前模板不同：保留原字节，不自动覆盖；
+- 写入后验证失败：回滚本次触碰的所有文件。
+
+迁移计划新增的 action：
+
+| Action | 含义 |
+|---|---|
+| `record_provenance` | 文件已等于当前模板，只登记可信来源 |
+| `update_metadata` | 文件字节已是当前模板，升级旧 metadata |
+| `create_file` | 新 profile 引入的 generated Router / Hook seed 缺失，apply 时创建 |
+| `replace_file` | 文件仍等于旧安装摘要，可安全采用新模板 |
+| `update_manifest` | 写入 producer/profile、file records 和 migration history |
+| `preserve` | 定制或来源未知的 seed 保持不变 |
+| `conflict` | 缺文件、路径不安全或 versioned seed 已漂移；apply 拒绝全部写入 |
+
+当前安装只执行自身携带、目标为 `0.1.0` 的迁移，不下载或执行远程迁移代码。
+重复 apply 是幂等操作。
 
 ## Engineering Specs
 
@@ -223,7 +273,8 @@ apply 前检查全部目标：
 - 目录已存在：reuse；
 - 文件和目录类型相反：conflict；
 - 任意 managed path 穿过 symlink：conflict；
-- 已有 Harness manifest 与当前 schema 不一致：conflict；
+- 已知的 legacy schema `1`：preserve 并提示显式 upgrade；
+- 无效或比当前工具更新的 Harness schema / producer / profile：conflict；
 - Spec manifest、Catalog、依赖图或项目 Spec 引用无效：conflict；
 - 已有 lock、路由索引或 managed Spec 与期望 bytes 不同：conflict；
 - 已有 `AGENTS.md` 超过 100 行：conflict；
@@ -237,13 +288,21 @@ apply 前检查全部目标：
 
 ## Harness Manifest
 
-`docs/.engineering/harness.json` schema version 1 固定记录：
+`docs/.engineering/harness.json` schema version 2 固定记录产品、profile、seed
+provenance 与已应用迁移。下面省略其余同构的 file entries：
 
 ```json
 {
-  "version": 1,
+  "schema_version": 2,
   "owner": "repo-foundry",
-  "profile": "codex",
+  "producer": {
+    "name": "repo-foundry",
+    "version": "0.1.0"
+  },
+  "profile": {
+    "id": "codex",
+    "version": "1.0.0"
+  },
   "components": [
     "engineering-execution-plan"
   ],
@@ -261,12 +320,32 @@ apply 前检查全部目标：
     "docs/RELIABILITY.md",
     "docs/SECURITY.md",
     "docs/design-docs/index.md"
-  ]
+  ],
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "ownership": "seeded",
+      "template_id": "codex/agents",
+      "template_version": "1.0.0",
+      "template_sha256": "<lowercase SHA-256>",
+      "installed_sha256": "<lowercase SHA-256>"
+    }
+  ],
+  "applied_migrations": []
 }
 ```
 
-owner 为 `engineering-workflow` 的既有 Manifest 继续以兼容模式读取，并产生
-`HARNESS_LEGACY_OWNER` warning；新 Manifest 一律写入 `repo-foundry`。
+实际 manifest 的 `files` 按 profile 固定顺序包含 11 个 seed：七个可由项目继续
+维护的文档，以及 Router Skill 三个文件和 `.codex/hooks.json` 四个严格生成文件。
+`required_files` 为兼容 schema `1` 继续表示七个文档入口。Bootstrap 时已经与
+bundled template 相同的文件记录版本和两个 digest；无法证明来源的既有文档记录为
+`template_version: "legacy-unversioned"` 且两个 digest 为 `null`。严格生成文件若
+已存在但字节不同则 conflict；旧 profile 尚未包含且路径缺失时，upgrade 可以创建。
+
+schema `1` 和 owner 为 `engineering-workflow` 的既有 Manifest 继续以兼容模式读取，
+分别产生 `HARNESS_SCHEMA_UPGRADE_AVAILABLE` 和 `HARNESS_LEGACY_OWNER` warning；
+新 Manifest 一律写入 schema `2` 与 owner `repo-foundry`。高于当前能力的 schema、
+producer、profile、template 或 migration 版本拒绝读取，防止旧工具误写新状态。
 
 项目级 Manifest 与 `docs/.epctl/config.json` 分属不同状态目录。
 `config.json` 继续只负责 EP 的 architecture roots；不要借 Bootstrap 静默升级

@@ -323,6 +323,10 @@ class RepositoryContractTestCase(unittest.TestCase):
             "$repo-foundry-ai",
             (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8"),
         )
+        self.assertEqual(
+            (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
+            "0.1.0",
+        )
         self.assertIn(
             "name: engineering-execution-plan",
             (
@@ -452,6 +456,8 @@ class RepositoryContractTestCase(unittest.TestCase):
         self.assertIn('DEFAULT_SPEC_VERSION = "1.2.0"', foundryctl)
         self.assertNotIn('DEFAULT_SPEC_REF = "main"', foundryctl)
         self.assertIn("--spec-version", foundryctl)
+        self.assertIn('"upgrade"', foundryctl)
+        self.assertIn("VERSION_FILE", foundryctl)
         self.assertNotIn("SPEC_CATALOG_DIR", foundryctl)
 
     def test_execplan_consumes_sealed_benchmark_contract(self) -> None:
@@ -778,6 +784,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             workflow_skill = base / "repo-foundry-ai"
             workflow_skill.mkdir()
             for name in (
+                "VERSION",
                 "SKILL.md",
                 "agents",
                 "assets",

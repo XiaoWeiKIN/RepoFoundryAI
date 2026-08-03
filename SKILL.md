@@ -1,7 +1,7 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化和验证版本化 Repository Harness，从独立 Git 仓库解析并同步用户显式选择的通用、语言级和项目级 Engineering Specs，生成项目级 $engineering-specs Router Skill 与受信任 Codex Hooks，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化项目、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go 等语言规范、让 Agent 在实现或评审前激活适用 Spec、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 默认只预览，仓库检测只推荐可选 Spec；应用时只创建缺失文件、物化必选与用户选择的本地 Specs，并组合 engineering-execution-plan 初始化，不覆盖已有仓库内容。
+  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，从独立 Git 仓库解析并同步用户显式选择的通用、语言级和项目级 Engineering Specs，生成项目级 $engineering-specs Router Skill 与受信任 Codex Hooks，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化或升级项目脚手架、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go 等语言规范、让 Agent 在实现或评审前激活适用 Spec、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 和 upgrade 默认只预览，仓库检测只推荐可选 Spec；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、物化必选与用户选择的本地 Specs，并组合 engineering-execution-plan 初始化。
 ---
 
 # RepoFoundry AI
@@ -37,6 +37,9 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  upgrade --to 0.1.0
+
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
 ```
 
@@ -62,6 +65,27 @@ Router 按计划路径、任务意图和 `docs/agent-guides/managed/index.md` �
 所有注册的 Agent instruction 文件按物理行计数。根 `AGENTS.md` 必须不超过
 100 行；模板目标不超过 80 行，为项目维护保留余量。Harness 契约写入
 `docs/.engineering/harness.json`，EP 状态继续写入 `docs/.epctl/`。
+
+## 升级 Harness
+
+先读取 `VERSION`，再检查目标仓库的 `docs/.engineering/harness.json`。RepoFoundry
+产品版本、Harness schema、profile 版本和 Engineering Specs Catalog 版本是四条
+独立版本线；不要用 `spec update` 代替 Harness migration，也不要在 bootstrap 中
+静默迁移。
+
+```bash
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  upgrade --to 0.1.0
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  upgrade --to 0.1.0 --apply
+```
+
+必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
+`--apply`。versioned seed 只有在实际 SHA-256 等于 manifest 记录的
+`installed_sha256` 时才可自动替换；修改过的 versioned seed 必须停止并要求人工
+合并。`legacy-unversioned` seed 保持原字节，除非它已经与当前模板完全一致。apply
+后必须报告更新路径和验证结果；验证失败由 CLI 回滚。详细兼容矩阵见
+[Bootstrap 契约](references/bootstrap.md#版本与-harness-升级)。
 
 ## 管理 Engineering Specs
 

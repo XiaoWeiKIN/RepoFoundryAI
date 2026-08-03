@@ -3,7 +3,7 @@ doc_type: design
 title: RepoFoundry AI system identity and packaging
 status: current
 adr_refs: ["ADR-007", "ADR-008", "ADR-009"]
-updated: 2026-08-01
+updated: 2026-08-03
 ---
 
 # RepoFoundry AI System Identity and Packaging
@@ -52,6 +52,7 @@ the engineering environment in which multiple workflows can operate.
 | Root Skill ID | `repo-foundry-ai` |
 | Root Skill display name | `RepoFoundry AI` |
 | Root CLI | `scripts/foundryctl.py` |
+| Distribution version source | `VERSION` (`0.1.0`) |
 | Installation variable used in examples | `REPO_FOUNDRY_HOME` |
 | New Harness and Spec manifest owner | `repo-foundry` |
 | Persistent target state directory | `docs/.engineering/` |
@@ -66,15 +67,17 @@ legacy owner so existing bootstrapped repositories remain readable.
 
 ## The root remains a control layer
 
-The root Skill owns repository inspection, guarded bootstrap, Engineering Spec
-resolution, Harness validation, and capability routing. It does not create
-Benchmark Runs, Research packages, ADRs, ExecPlans, or Case Studies.
+The root Skill owns repository inspection, guarded bootstrap, explicit Harness
+migration, Engineering Spec resolution, Harness validation, and capability
+routing. It does not create Benchmark Runs, Research packages, ADRs, ExecPlans,
+or Case Studies.
 
 ```mermaid
 flowchart TB
     U["Human or coding agent"] --> F["repo-foundry-ai"]
     F --> D["Repository discovery"]
     F --> P["Bootstrap preview/apply"]
+    F --> U["Versioned Harness upgrade"]
     F --> V["Harness and Spec validation"]
     F --> X["Capability routing"]
     X --> B["engineering-benchmark"]
@@ -135,6 +138,8 @@ The canonical `python3 -B scripts/check.py` entrypoint proves:
 - the root CLI writes `repo-foundry` into new manifests;
 - legacy `engineering-workflow` manifests remain readable;
 - bootstrap, Spec locking, drift detection, and idempotence still work;
+- distribution reporting, legacy Harness migration, customized-seed protection,
+  and rollback work;
 - current documentation and tests no longer present EngineeringWorkflow as the
   active product identity;
 - brand assets exist and the raster icon has the expected square dimensions.
