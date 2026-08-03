@@ -2,7 +2,7 @@
 doc_type: design
 title: Engineering Spec resolution and project materialization
 status: current
-adr_refs: ["ADR-002", "ADR-004", "ADR-005"]
+adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-010"]
 updated: 2026-08-03
 ---
 
@@ -25,6 +25,11 @@ This design implements the ownership accepted by ADR-002, ADR-004, and ADR-005:
 `EngineeringSpecifications` owns Catalog and normative content, while
 `engineering-execution-plan` remains Agent-neutral and owns only ADR, ExecPlan,
 Task, Checkpoint, Bugfix, and technical-debt artifacts.
+
+ADR-010 owns the task-time adapter boundary: one project-local Router Skill,
+one short `AGENTS.md` route, digest-verified local content, trusted project Hook
+guardrails for supported lifecycle paths, and an explicit manual fallback. The
+Hooks are not a universal sandbox or an organization-managed policy boundary.
 
 The release-source refinement follows approved EngineeringSpecifications
 ESP-0008: production consumers select immutable `vX.Y.Z` Catalog tags, while
