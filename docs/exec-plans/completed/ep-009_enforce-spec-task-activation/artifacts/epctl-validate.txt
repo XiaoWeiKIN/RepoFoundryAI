@@ -1,0 +1,5 @@
+Command: python3 -B engineering-execution-plan/scripts/epctl.py --repo . validate
+Repository: RepoFoundry branch codex/spec-task-router
+Observed: 2026-08-03T07:17:07Z
+Exit: 0
+Result: {"errors": 0, "warnings": 0}

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Engineering Specs"
+  short_description: "Activate task-specific engineering specifications"
+  default_prompt: "Use $engineering-specs to route this task to the applicable locked specifications before editing."
+policy:
+  allow_implicit_invocation: true

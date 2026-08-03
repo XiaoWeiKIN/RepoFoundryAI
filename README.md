@@ -85,6 +85,12 @@ target may contain:
 target-repository/
 ├── AGENTS.md
 ├── ARCHITECTURE.md
+├── .agents/skills/engineering-specs/ # one project-local task Router Skill
+│   ├── SKILL.md
+│   ├── agents/openai.yaml
+│   └── scripts/spec_router.py
+├── .codex/
+│   └── hooks.json                     # reviewed project activation guards
 ├── scripts/
 │   └── bench/                         # project-owned benchmark executables
 ├── benchmarks/
@@ -242,6 +248,39 @@ optional IDs. Repeat `--spec ID` during initial Bootstrap or `spec update` to
 set the complete optional direct selection; use `--required-only` to select no
 optional Specs. Required Specs and transitive dependencies remain automatic.
 
+## Activate Specifications for each task
+
+Installation and task activation are separate. Bootstrap generates exactly one
+project-local `$engineering-specs` Router Skill; it does not turn every Spec
+into a Skill. Before implementation or code review, the Router:
+
+1. matches planned paths to the locked Catalog scopes;
+2. asks the Agent to read candidate descriptions and Applicability;
+3. records applicable Spec IDs, including dependencies, or an explicit
+   reasoned `none` decision for the current turn;
+4. reads only digest-verified local documents; and
+5. reports activated requirements, verification, exceptions, and migration
+   effects at handoff.
+
+```mermaid
+flowchart LR
+    P["Prompt + planned paths"] --> R["$engineering-specs Router"]
+    L["locked local Specs"] --> R
+    R --> A["turn activation receipt"]
+    A --> G["trusted Codex Hooks"]
+    G --> W["implementation or review"]
+    W --> H["changed-path + handoff audit"]
+```
+
+The generated Codex Hooks establish a Git baseline on `UserPromptSubmit`, pass
+the contract to subagents, deny Bash or `apply_patch` writes before activation,
+inject the activated local documents before the first write, and audit changed
+paths at `Stop`. Project hooks run only after the repository is trusted and the
+exact commands are reviewed through Codex `/hooks`. If hooks are disabled or
+unavailable, run the Router's `begin` before any write and finish with
+`audit --message` over the five-label handoff. The Skill remains the manual
+contract, but there is no mechanical write gate.
+
 ## Boundaries keep the system trustworthy
 
 - RepoFoundry AI does not run a general agent runtime or hide orchestration state
@@ -251,6 +290,9 @@ optional Specs. Required Specs and transitive dependencies remain automatic.
 - Professional Skills do not infer Research Owner or Decision Owner authority.
 - Bootstrap does not overwrite repository-owned documentation.
 - Normative Engineering Specs stay in their independent repository.
+- RepoFoundry generates one task Router, not one Skill per Specification.
+- Project Hooks are guardrails inside a trusted Codex project, not a universal
+  enforcement guarantee for other agents or disabled hook environments.
 - Case Studies are created only after an explicit sharing request.
 - GitHub Actions, GitLab CI, Jenkins, and other providers call the same
   repository check instead of duplicating policy.

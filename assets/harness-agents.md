@@ -7,7 +7,7 @@
 - Read `README.md` for the project purpose and supported workflows.
 - Read `ARCHITECTURE.md` before changing module boundaries.
 - Use `docs/index.md` as the documentation map.
-- Before implementation or review, read `docs/agent-guides/managed/index.md` and follow every entry whose scope matches the changed files.
+- Before implementation or review, invoke `$engineering-specs`; use `docs/agent-guides/managed/index.md` only as its locked routing source.
 - Keep this file at or below 100 physical lines, including blank lines and comments.
 
 ## Knowledge Map
