@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-011
 title: "Add one-command RepoFoundry AI install and upgrade"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -13,9 +13,9 @@ architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
 architecture_gate_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "ab0b6e5bbb5e086f9b38f4de771b02665ba46439"
+verification_evidence: ["docs/exec-plans/completed/ep-011_one-command-install-upgrade/artifacts/validation-summary.txt", "python3 -B scripts/check.py (exit 0)", "live:github-release-v0.1.0@2c54bb85a1fb88096eee0ef63ac30bc44d300329"]
+archive_sha256: 40b49f1bcf9ce4fda1a3dcc0a7c0d76970c55b509262943b67b2240237a0c866
 created: 2026-08-04
 updated: 2026-08-04
 owner: "RepoFoundry Maintainer"
@@ -372,8 +372,8 @@ arguments to `current/scripts/foundryctl.py`.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-011_one-command-install-upgrade/EXECPLAN.md`
-- Validation summary: `docs/exec-plans/active/ep-011_one-command-install-upgrade/artifacts/validation-summary.txt`
+- Plan: `docs/exec-plans/completed/ep-011_one-command-install-upgrade/EXECPLAN.md`
+- Validation summary: `docs/exec-plans/completed/ep-011_one-command-install-upgrade/artifacts/validation-summary.txt`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
