@@ -1,0 +1,58 @@
+{
+  "artifact_type": "research-manifest",
+  "author": "Codex",
+  "created": "2026-08-02",
+  "documents": [
+    {
+      "base": "package",
+      "bytes": 20523,
+      "path": "notes/commercial-and-delivery-feasibility.md",
+      "role": "topic",
+      "sha256": "69c1e8e0702a675c8d8b26a0f703ee627c791f496e8a655c59f35d77acf62d3e",
+      "topic_id": "RT-001"
+    },
+    {
+      "base": "package",
+      "bytes": 2308,
+      "path": "rounds/rr-001_baseline.md",
+      "role": "round",
+      "sha256": "f9f97b0070ff34e9e0a76fc8b70af6984257f5077eb798a6d5463b627856cc93"
+    }
+  ],
+  "entrypoints": [],
+  "id": "R-002-MANIFEST",
+  "metadata_schema": "1",
+  "mode": "managed",
+  "owner": "XiaoWeiKIN",
+  "payload_sha256": "",
+  "research_id": "R-002",
+  "roots": [
+    {
+      "base": "package",
+      "include": [
+        "**/*.md"
+      ],
+      "path": "notes"
+    },
+    {
+      "base": "package",
+      "include": [
+        "**/*.md"
+      ],
+      "path": "rounds",
+      "role": "round"
+    },
+    {
+      "base": "package",
+      "include": [
+        "**/*.md"
+      ],
+      "path": "snapshots",
+      "role": "snapshot"
+    }
+  ],
+  "schema_version": "1.1",
+  "status": "active",
+  "title": "Assess RepoFoundry AI as an AI-native project scaffolding product — Research manifest",
+  "updated": "2026-08-04"
+}

@@ -21,6 +21,7 @@ approval plus a sealed `SYNTHESIS.md`.
 <!-- RCTL:ACTIVE:START -->
 | ID | Title | Type | Status | Maturity | Owner | Updated | Synthesis | Path |
 |---|---|---|---|---|---|---|---|---|
+| R-002 | Assess RepoFoundry AI as an AI-native project scaffolding product | Feasibility | active | exploratory | XiaoWeiKIN | 2026-08-04 | [Synthesis](research/active/r-002_ai-native-project-scaffolding-feasibility/SYNTHESIS.md) | [Research](research/active/r-002_ai-native-project-scaffolding-feasibility/RESEARCH.md) |
 <!-- RCTL:ACTIVE:END -->
 
 ## Completed

@@ -56,6 +56,13 @@ system that makes those workflows composable and verifiable.
 The four professional Skills remain independently installable. They communicate
 through versioned repository files rather than private runtime imports.
 
+Governed artifacts also share one semantic metadata layer: stable type and ID,
+title/status, author/owner, and created/updated. Authorship never implies
+Research approval, ADR authority, or Benchmark execution. Raw evidence carries
+the equivalent provenance in a content-addressed Manifest; source code and
+generated indexes continue to use Git, CODEOWNERS, and generator provenance.
+See the [Artifact Metadata Contract](./docs/design-docs/artifact-metadata-contract.md).
+
 ## Evidence moves forward without losing authority
 
 ```mermaid
@@ -497,6 +504,7 @@ RepoFoundry AI:
 - [Versioning and Harness migrations](./docs/design-docs/repo-foundry-versioning-and-migrations.md)
 - [Engineering Spec resolution](./docs/design-docs/engineering-spec-management.md)
 - [Agent-neutral Harness and adapters](./docs/design-docs/agent-neutral-harness-adapters.md)
+- [Artifact Metadata Contract](./docs/design-docs/artifact-metadata-contract.md)
 
 Professional capabilities:
 
@@ -518,5 +526,6 @@ Decision and implementation:
 - [ADR-009 — Align the root Skill name with RepoFoundry AI](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
 - [ADR-011 — Separate Core from Agent adapters](./docs/adr/adr-011_agent-neutral-harness-adapters.md)
 - [ADR-012 — Separate Spec activation from runtime adapters](./docs/adr/adr-012_agent-neutral-spec-activation.md)
+- [ADR-014 — Governed artifact metadata contract (proposed)](./docs/adr/adr-014_governed-artifact-metadata-contract.md)
 - [EP-006 — Migrate to RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
 - [EP-010 — Implement Agent-neutral adapters](./docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md)

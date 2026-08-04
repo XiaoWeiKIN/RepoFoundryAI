@@ -49,6 +49,8 @@
 
 ## 6. 仓库完整性
 
+- `metadata_schema: "1"`、`artifact_type: case-study`、稳定 `CS-NNN`、
+  title/status、author/owner、created/updated 均存在且语义真实。
 - Markdown 本地链接可解析且使用仓库相对路径。
 - 代码路径、EP、Research、ADR 和 evidence 路径存在。
 - 新案例已加入仓库 Case Studies 索引。

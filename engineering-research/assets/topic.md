@@ -1,11 +1,16 @@
 ---
-schema_version: "2.2"
+schema_version: "2.3"
+metadata_schema: "1"
+artifact_type: research-topic
+id: {{TOPIC_ID}}
 doc_type: research-topic
 parent_id: {{PARENT_ID}}
 topic_id: {{TOPIC_ID}}
 round_id: {{ROUND_ID}}
 title: "{{TITLE}}"
+status: active
 author: "{{AUTHOR}}"
+owner: "{{OWNER}}"
 created: {{DATE}}
 updated: {{DATE}}
 ---

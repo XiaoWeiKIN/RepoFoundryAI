@@ -25,9 +25,12 @@ Top-level fields:
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | Contract version string; initially `"1"` |
+| `schema_version` | Contract version string; current producer writes `"1.1"`; `"1"` remains compatible |
+| `metadata_schema` | Shared metadata contract, currently `"1"` |
+| `artifact_type`, `id`, `title` | `research-manifest`, `R-NNN-MANIFEST`, and a portable name |
 | `research_id` | Parent `R-NNN` |
 | `status` | `active` or `sealed` |
+| `author`, `owner`, `created`, `updated` | Authorship, accountability, and portable time provenance inherited from the Research |
 | `mode` | `managed`, `linked`, or `snapshot` |
 | `roots` | Declared discovery roots |
 | `entrypoints` | Normalized entrypoint paths |

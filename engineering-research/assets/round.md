@@ -1,5 +1,7 @@
 ---
-schema_version: "1"
+schema_version: "1.1"
+metadata_schema: "1"
+artifact_type: research-round
 id: {{ROUND_ID}}
 parent_id: {{PARENT_ID}}
 title: "{{TITLE}}"
@@ -7,6 +9,7 @@ status: active
 created: {{DATE}}
 updated: {{DATE}}
 author: "{{AUTHOR}}"
+owner: "{{OWNER}}"
 ---
 
 # {{TITLE}}

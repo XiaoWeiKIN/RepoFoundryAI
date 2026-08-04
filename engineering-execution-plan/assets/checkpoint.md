@@ -1,5 +1,7 @@
 ---
-schema_version: "{{CHECKPOINT_SCHEMA_VERSION}}"
+schema_version: "1.2"
+metadata_schema: "1"
+artifact_type: checkpoint
 id: {{CHECKPOINT_ID}}
 parent_id: {{PARENT_ID}}
 title: "{{TITLE}}"
@@ -7,7 +9,11 @@ status: sealed
 previous_checkpoint: {{PREVIOUS_CHECKPOINT}}
 repository_revision: "{{REPOSITORY_REVISION}}"
 created: {{DATE}}
+updated: {{DATE}}
 created_at: {{TIMESTAMP}}
+author: "{{AUTHOR}}"
+owner: "{{OWNER}}"
+generated_by: engineering-execution-plan/epctl
 payload_sha256: {{PAYLOAD_SHA256}}
 ---
 

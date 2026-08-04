@@ -19,7 +19,10 @@ from pathlib import Path
 from typing import Iterator, Sequence
 
 
-SCHEMA_VERSION = "1"
+STATE_SCHEMA_VERSION = "1"
+ARTIFACT_SCHEMA_VERSION = "1.1"
+SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = {"1", "1.1"}
+CURRENT_METADATA_SCHEMA = "1"
 ALLOWED_OUTCOMES = ("passed", "failed", "inconclusive", "errored")
 ID_PATTERNS = {
     "B": re.compile(r"^B-(\d{3,})$"),
@@ -122,6 +125,41 @@ def utc_date() -> str:
 
 def json_text(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def metadata_actor(value: str) -> str:
+    return value.strip() or "Unassigned"
+
+
+def validate_metadata_contract(
+    path: Path,
+    metadata: dict[str, object],
+    artifact_type: str,
+    expected_id: str,
+) -> list[str]:
+    errors: list[str] = []
+    if metadata.get("metadata_schema") != CURRENT_METADATA_SCHEMA:
+        errors.append(
+            f"{path}: metadata_schema must be {CURRENT_METADATA_SCHEMA!r}"
+        )
+    if metadata.get("artifact_type") != artifact_type:
+        errors.append(f"{path}: artifact_type must be {artifact_type!r}")
+    if metadata.get("id") != expected_id:
+        errors.append(f"{path}: metadata id must be {expected_id!r}")
+    for field in ("title", "status", "author", "owner", "created", "updated"):
+        value = metadata.get(field)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{path}: metadata field {field} must be non-empty")
+    for field in ("created", "updated"):
+        value = metadata.get(field)
+        if isinstance(value, str) and value.strip():
+            try:
+                datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                errors.append(
+                    f"{path}: metadata field {field} must be an ISO date or timestamp"
+                )
+    return errors
 
 
 def canonical_json_bytes(value: object) -> bytes:
@@ -431,7 +469,7 @@ def initial_state(repo: Path) -> dict[str, object]:
         ]
         high_water[kind] = max(numbers, default=0)
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": STATE_SCHEMA_VERSION,
         "high_water": high_water,
     }
 
@@ -448,7 +486,7 @@ def load_state(repo: Path) -> dict[str, object]:
         raise BenchmarkError(f"{path}: invalid UTF-8 JSON") from exc
     if not isinstance(state, dict):
         raise BenchmarkError(f"{path}: state must be a JSON object")
-    if state.get("schema_version") != SCHEMA_VERSION:
+    if state.get("schema_version") != STATE_SCHEMA_VERSION:
         raise BenchmarkError(
             f"{path}: unsupported schema_version {state.get('schema_version')!r}"
         )
@@ -631,11 +669,13 @@ def create_suite(
     slug: str,
     title: str,
     owner: str,
+    author: str,
 ) -> Path:
     ensure_initialized(repo)
     validate_slug(slug)
     title = validate_single_line("title", title)
-    owner = validate_single_line("owner", owner)
+    owner = validate_single_line("owner", metadata_actor(owner))
+    author = validate_single_line("author", metadata_actor(author))
     with repository_lock(repo):
         state = load_state(repo)
         identifier, number = reserve_next_id(repo, state, "B")
@@ -653,6 +693,7 @@ def create_suite(
                 {
                     "ID_JSON": json_text(identifier),
                     "TITLE_JSON": json_text(title),
+                    "AUTHOR_JSON": json_text(author),
                     "OWNER_JSON": json_text(owner),
                     "DATE_JSON": json_text(utc_date()),
                     "TITLE": title,
@@ -673,6 +714,7 @@ def create_scenario(
     suite_value: str,
     slug: str,
     title: str,
+    author: str,
 ) -> Path:
     ensure_initialized(repo)
     validate_slug(slug)
@@ -686,6 +728,14 @@ def create_scenario(
                 f"{suite.identifier} requires an accountable owner before "
                 "creating a Scenario"
             )
+        scenario_author = validate_single_line(
+            "author",
+            metadata_actor(author or str(suite.metadata.get("author", ""))),
+        )
+        scenario_owner = validate_single_line(
+            "owner",
+            metadata_actor(str(suite.metadata.get("owner", ""))),
+        )
         require_complete_document(suite.path, SUITE_SECTIONS)
         state = load_state(repo)
         identifier, number = reserve_next_id(repo, state, "BS")
@@ -702,6 +752,8 @@ def create_scenario(
                 "ID_JSON": json_text(identifier),
                 "SUITE_ID_JSON": json_text(suite.identifier),
                 "TITLE_JSON": json_text(title),
+                "AUTHOR_JSON": json_text(scenario_author),
+                "OWNER_JSON": json_text(scenario_owner),
                 "DATE_JSON": json_text(utc_date()),
                 "TITLE": title,
             },
@@ -753,6 +805,7 @@ def create_run(
     subject_revision: str,
     harness_revision: str,
     supersedes_values: Sequence[str],
+    author: str,
 ) -> Path:
     ensure_initialized(repo)
     validate_slug(slug)
@@ -777,6 +830,14 @@ def create_run(
             raise BenchmarkError(f"{suite.identifier} is not active")
         require_complete_document(suite.path, SUITE_SECTIONS)
         require_complete_document(scenario.path, SCENARIO_SECTIONS)
+        run_author = validate_single_line(
+            "author",
+            metadata_actor(author or str(scenario.metadata.get("author", ""))),
+        )
+        run_owner = validate_single_line(
+            "owner",
+            metadata_actor(str(suite.metadata.get("owner", ""))),
+        )
         supersedes = validate_supersedes_for_new_run(
             repo,
             scenario.identifier,
@@ -806,6 +867,8 @@ def create_run(
                     "HARNESS_REVISION_JSON": json_text(harness_revision),
                     "SUPERSEDES_JSON": json_text(supersedes),
                     "TIMESTAMP_JSON": json_text(utc_timestamp()),
+                    "AUTHOR_JSON": json_text(run_author),
+                    "OWNER_JSON": json_text(run_owner),
                     "TITLE": title,
                 },
             )
@@ -902,8 +965,9 @@ def build_manifest(
     sealed_at: str,
     executed_by: str,
 ) -> dict[str, object]:
+    schema_version = str(metadata.get("schema_version", ""))
     manifest: dict[str, object] = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": schema_version,
         "run_id": run.identifier,
         "suite_id": metadata["suite_id"],
         "scenario_id": metadata["scenario_id"],
@@ -915,14 +979,35 @@ def build_manifest(
         "files": bundle_inventory(run.path.parent),
         "payload_sha256": "",
     }
+    if schema_version == "1.1":
+        manifest.update(
+            {
+                "metadata_schema": CURRENT_METADATA_SCHEMA,
+                "artifact_type": "benchmark-manifest",
+                "id": f"{run.identifier}-MANIFEST",
+                "title": f"{metadata.get('title', '')} — Evidence manifest",
+                "author": metadata.get("author", ""),
+                "owner": metadata.get("owner", ""),
+                "updated": sealed_at,
+            }
+        )
     manifest["payload_sha256"] = manifest_digest(manifest)
     return manifest
 
 
 def require_draft_run_contract(repo: Path, run: Record) -> None:
     metadata = run.metadata
-    if metadata.get("schema_version") != SCHEMA_VERSION:
+    if metadata.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
         raise BenchmarkError(f"{run.path}: unsupported schema_version")
+    if metadata.get("schema_version") == ARTIFACT_SCHEMA_VERSION:
+        metadata_errors = validate_metadata_contract(
+            run.path,
+            metadata,
+            "benchmark-result",
+            run.identifier,
+        )
+        if metadata_errors:
+            raise BenchmarkError("\n".join(metadata_errors))
     for field in (
         "title",
         "subject_revision",
@@ -994,7 +1079,7 @@ def verify_manifest(run: Record) -> list[str]:
         return [f"{manifest_path}: Manifest must be an object"]
 
     expected_fields = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": run.metadata.get("schema_version"),
         "run_id": run.identifier,
         "suite_id": run.metadata.get("suite_id"),
         "scenario_id": run.metadata.get("scenario_id"),
@@ -1010,6 +1095,23 @@ def verify_manifest(run: Record) -> list[str]:
                 f"{manifest_path}: {field} must be {expected!r}, "
                 f"found {manifest.get(field)!r}"
             )
+    if run.metadata.get("schema_version") == ARTIFACT_SCHEMA_VERSION:
+        manifest_id = f"{run.identifier}-MANIFEST"
+        for field, expected in (
+            ("metadata_schema", CURRENT_METADATA_SCHEMA),
+            ("artifact_type", "benchmark-manifest"),
+            ("id", manifest_id),
+        ):
+            if manifest.get(field) != expected:
+                errors.append(
+                    f"{manifest_path}: {field} must be {expected!r}"
+                )
+        for field in ("title", "author", "owner", "created", "updated"):
+            value = manifest.get(field)
+            if not isinstance(value, str) or not value.strip():
+                errors.append(
+                    f"{manifest_path}: metadata field {field} must be non-empty"
+                )
     files = manifest.get("files")
     if not isinstance(files, list):
         errors.append(f"{manifest_path}: files must be an array")
@@ -1074,6 +1176,7 @@ def seal_run(
             {
                 "status": "sealed",
                 "outcome": outcome,
+                "updated": completed,
                 "completed": completed,
                 "executed_by": executed_by,
             },
@@ -1236,12 +1339,21 @@ def validate_repository(repo: Path) -> list[str]:
     for record in suites.values():
         validate_path_identity(record, errors)
         metadata = record.metadata
-        if metadata.get("schema_version") != SCHEMA_VERSION:
+        if metadata.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
             errors.append(f"{record.path}: unsupported schema_version")
         if metadata.get("status") != "active":
             errors.append(f"{record.path}: status must be active")
         metadata_string(metadata, "title", record.path, errors)
         metadata_string(metadata, "owner", record.path, errors)
+        if metadata.get("schema_version") == ARTIFACT_SCHEMA_VERSION:
+            errors.extend(
+                validate_metadata_contract(
+                    record.path,
+                    metadata,
+                    "benchmark-suite",
+                    record.identifier,
+                )
+            )
         _, body, _ = parse_document(record.path)
         errors.extend(
             document_structure_errors(record.path, body, SUITE_SECTIONS)
@@ -1250,12 +1362,21 @@ def validate_repository(repo: Path) -> list[str]:
     for record in scenarios.values():
         validate_path_identity(record, errors)
         metadata = record.metadata
-        if metadata.get("schema_version") != SCHEMA_VERSION:
+        if metadata.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
             errors.append(f"{record.path}: unsupported schema_version")
         if metadata.get("status") != "active":
             errors.append(f"{record.path}: status must be active")
         suite_id = metadata_string(metadata, "suite_id", record.path, errors)
         metadata_string(metadata, "title", record.path, errors)
+        if metadata.get("schema_version") == ARTIFACT_SCHEMA_VERSION:
+            errors.extend(
+                validate_metadata_contract(
+                    record.path,
+                    metadata,
+                    "benchmark-scenario",
+                    record.identifier,
+                )
+            )
         suite = suites.get(suite_id)
         if suite is None:
             errors.append(f"{record.path}: Suite not found: {suite_id}")
@@ -1272,7 +1393,7 @@ def validate_repository(repo: Path) -> list[str]:
         snapshot_body = ""
         validate_path_identity(record, errors)
         metadata = record.metadata
-        if metadata.get("schema_version") != SCHEMA_VERSION:
+        if metadata.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
             errors.append(f"{record.path}: unsupported schema_version")
         suite_id = metadata_string(metadata, "suite_id", record.path, errors)
         scenario_id = metadata_string(
@@ -1285,6 +1406,15 @@ def validate_repository(repo: Path) -> list[str]:
         metadata_string(metadata, "subject_revision", record.path, errors)
         metadata_string(metadata, "harness_revision", record.path, errors)
         metadata_string(metadata, "created", record.path, errors)
+        if metadata.get("schema_version") == ARTIFACT_SCHEMA_VERSION:
+            errors.extend(
+                validate_metadata_contract(
+                    record.path,
+                    metadata,
+                    "benchmark-result",
+                    record.identifier,
+                )
+            )
         if metadata.get("manifest") != "EVIDENCE_MANIFEST.json":
             errors.append(
                 f"{record.path}: manifest must be EVIDENCE_MANIFEST.json"
@@ -1308,6 +1438,11 @@ def validate_repository(repo: Path) -> list[str]:
         except (BenchmarkError, OSError) as exc:
             errors.append(str(exc))
         else:
+            snapshot_schema = snapshot_metadata.get("schema_version")
+            if snapshot_schema not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
+                errors.append(
+                    f"{snapshot_path}: unsupported schema_version"
+                )
             if snapshot_metadata.get("id") != scenario_id:
                 errors.append(
                     f"{snapshot_path}: id must match {scenario_id}"
@@ -1315,6 +1450,15 @@ def validate_repository(repo: Path) -> list[str]:
             if snapshot_metadata.get("suite_id") != suite_id:
                 errors.append(
                     f"{snapshot_path}: suite_id must match {suite_id}"
+                )
+            if snapshot_schema == ARTIFACT_SCHEMA_VERSION:
+                errors.extend(
+                    validate_metadata_contract(
+                        snapshot_path,
+                        snapshot_metadata,
+                        "benchmark-scenario",
+                        scenario_id,
+                    )
                 )
             errors.extend(
                 document_structure_errors(
@@ -1491,6 +1635,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_suite.add_argument("--slug", required=True)
     new_suite.add_argument("--title", required=True)
     new_suite.add_argument("--owner", default="Unassigned")
+    new_suite.add_argument("--author", default="")
 
     new_scenario = subparsers.add_parser(
         "new-scenario",
@@ -1499,6 +1644,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_scenario.add_argument("suite_id")
     new_scenario.add_argument("--slug", required=True)
     new_scenario.add_argument("--title", required=True)
+    new_scenario.add_argument("--author", default="")
 
     new_run = subparsers.add_parser(
         "new-run",
@@ -1509,6 +1655,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_run.add_argument("--title", required=True)
     new_run.add_argument("--subject-revision", required=True)
     new_run.add_argument("--harness-revision", required=True)
+    new_run.add_argument("--author", default="")
     new_run.add_argument(
         "--supersedes",
         action="append",
@@ -1546,6 +1693,7 @@ def run_command(arguments: argparse.Namespace) -> int:
                 arguments.slug,
                 arguments.title,
                 arguments.owner,
+                arguments.author,
             )
         )
     elif arguments.command == "new-scenario":
@@ -1555,6 +1703,7 @@ def run_command(arguments: argparse.Namespace) -> int:
                 arguments.suite_id,
                 arguments.slug,
                 arguments.title,
+                arguments.author,
             )
         )
     elif arguments.command == "new-run":
@@ -1567,6 +1716,7 @@ def run_command(arguments: argparse.Namespace) -> int:
                 arguments.subject_revision,
                 arguments.harness_revision,
                 arguments.supersedes,
+                arguments.author,
             )
         )
     elif arguments.command == "seal-run":

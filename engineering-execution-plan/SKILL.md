@@ -20,16 +20,20 @@ flowchart LR
     Q -->|"是"| R["engineering-research 或兼容生产者<br/>问题、证据、多文档 corpus"]
     R --> S["Sealed Manifest + Synthesis<br/>版本化文件契约"]
     Q -->|"否，写明理由"| RG["Research Gate<br/>not_required"]
-    S --> A{"存在架构级选择？"}
+    S --> A{"本次路线需要独立架构决定？"}
     A -->|"是"| P["Proposed ADR"]
     P --> H["用户 / Decision Owner<br/>明确接受或拒绝"]
-    H --> D["Accepted ADR 集合<br/>依赖 / 修订关系"]
-    A -->|"否，写明理由"| AG["Architecture Gate<br/>not_required"]
-    D --> I["Architecture Input Set<br/>ADRs + Design Docs + 入口"]
-    I --> EP["ExecPlan v2.5<br/>自包含计划 + 完成证明"]
+    H --> D["Accepted ADR<br/>Decision Statement + C-NNN constraints"]
+    A -->|"否，写明理由"| AG["Architecture Decision Gate<br/>not_required"]
+    D --> C{"既有架构是否适用于本 EP？"}
+    AG --> C
+    C -->|"是"| I["Architecture Input Set<br/>ADRs + Design Docs + 入口"]
+    C -->|"否，写明理由"| NA["Architecture Compliance<br/>not_applicable"]
+    I --> M["Compliance Matrix<br/>constraint → implementation → verification"]
+    M --> EP["ExecPlan v2.7<br/>自包含计划 + 完成证明"]
+    NA --> EP
     G --> EP
     RG --> A
-    AG --> EP
 ```
 
 Engineering Research 负责减少未知并输出 sealed Manifest/Synthesis；本 skill
@@ -65,7 +69,7 @@ Research Gate 跳过理由：
 - 权威标准或用户已经固定实现方向。
 - 工作局部、可逆，且没有会改变计划路线的未知。
 
-存在两个以上可信选项，并涉及公共接口、跨系统边界、长期约束、高迁移成本、安全、数据一致性、可靠性或部署拓扑时创建 ADR。局部且易逆转的实现取舍写入 ExecPlan Decision Log，并记录 Architecture Gate 跳过理由。
+存在两个以上可信选项，并涉及公共接口、跨系统边界、长期约束、高迁移成本、安全、数据一致性、可靠性或部署拓扑时创建 ADR。局部且易逆转的实现取舍写入 ExecPlan Decision Log，并记录 Architecture Decision Gate 跳过理由。跳过新决定不代表可以忽略既有架构；仍要独立判断 Architecture Compliance。
 
 Bugfix 一旦需要 Research、ADR、任务拆分、公共契约变更或持续推进，升级为 ExecPlan。普通“修 bug”仍是实现请求；用户未要求记录时不创建 Bugfix 台账。
 
@@ -122,7 +126,10 @@ python3 <skill-dir>/scripts/epctl.py --repo . register-architecture-root \
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
   --slug cache-topology --title "Choose cache topology" --research R-001 \
-  --depends-on ADR-004 --design docs/design-docs/cache-topology.md
+  --author "Codex" --owner "Cache Platform Owner" \
+  --depends-on ADR-004 --amends ADR-003 \
+  --amends-constraint ADR-003#C-002 \
+  --design docs/design-docs/cache-topology.md
 python3 <skill-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
   --outcome accepted --decision-maker "<explicit authority>"
 python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
@@ -130,6 +137,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   --slug implement-cache --title "Implement cache topology" \
+  --author "Codex" --owner "Cache Platform Owner" \
   --research R-001 --adr ADR-004 --adr ADR-005 \
   --design docs/design-docs/cache-topology.md \
   --architecture-entrypoint docs/design-docs/index.md \
@@ -151,7 +159,8 @@ Gate 不需要正式制品：
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   --slug local-cleanup --title "Clean up local adapter" \
   --research-not-required-reason "<specific existing evidence>" \
-  --architecture-not-required-reason "<why no durable choice exists>"
+  --decision-not-required-reason "<why no durable choice exists>" \
+  --architecture-not-applicable-reason "<why no existing architecture input applies>"
 ```
 
 - 先运行 `init`；它只补缺失目录和索引，不覆盖已有内容。
@@ -166,7 +175,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
 
 1. 如果仍有会改变路线的未知，先使用 `engineering-research` 或其他兼容流程。
 2. 只让 `concluded` Research 满足 Gate；cancelled 或 active Research 都不能。
-3. schema 1.1 Research 还必须有 `owner`、`maturity: review_ready` 和完整
+3. schema 1.1/1.2 Research 还必须有 `owner`、`maturity: review_ready` 和完整
    `approved_by/approved_at/approval_ref`；decision-ready 本身不是结束授权。
 4. 验证 sealed `SYNTHESIS.md` 正文摘要。
 5. 如果控制页声明 `RESEARCH_MANIFEST.json`，还必须验证：
@@ -189,18 +198,23 @@ Agent 可以调研、比较并起草 `proposed` ADR。只有当前对话或明�
 决定前：
 
 1. 复述 sealed Synthesis 中影响选择的结论和证据路径。
-2. 写全 Context、Decision Drivers、可信选项、Outcome、Consequences、Confirmation 和 Revisit Triggers。
+2. 写全 Context、Decision Drivers、可信选项、Outcome、Decision Statement、
+   Normative Constraints、Consequences、Confirmation 和 Revisit Triggers。
 3. 把真实授权主体传给 `--decision-maker`。
 
-accepted/rejected schema 1.1 ADR 的正文、Research/ADR/Design 输入和决策授权由
-SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使用 `amends` 或执行
+新建 schema 1.3 ADR 必须给出一句可整体接受或拒绝的 `Decision Statement`，并把
+长期约束写成稳定的 `C-NNN` 行：strength、scope、constraint、confirmation。
+下游使用 `ADR-NNN#C-NNN` 引用它们。accepted/rejected schema 1.1/1.2/1.3 ADR 的正文、
+Research/ADR/Design 输入和决策授权由 SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使用 `amends` 或执行
 `supersede-adr ADR-OLD --by ADR-NEW`；不要编辑旧决定。Superseded ADR 不能满足
-新 ExecPlan 的 Architecture Gate。
+active ExecPlan 的 current architecture input。
 
 一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
 
 - `depends_on` 表示必须同时成立的 accepted 前置决定。
-- `amends` 表示新决定只修订旧决定的一部分；两者仍是当前决定。
+- `amends` 表示新决定只修订旧决定的一部分；schema 1.2/1.3 还必须用
+  `amends_constraints` / `--amends-constraint ADR-NNN#C-NNN` 精确指出被改约束，
+  两份 ADR 仍是当前决定。
 - `supersedes` 表示完整替代，旧 ADR 进入 superseded。
 - `design_refs` 指向承载接口、数据流、迁移细节的 Design Docs。
 
@@ -209,7 +223,7 @@ SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使�
 
 既有 `docs/design-docs` 等目录先用 `register-architecture-root` 注册。
 `doc_type: adr` 或文件名含 `ADR-NNN` 的文档会被发现；缺少 epctl
-`decision_maker` / seal 的 accepted 旧 ADR 可兼容满足 Gate，但验证会持续告警，
+`decision_maker` / seal 的 accepted 旧 ADR 可兼容作为 architecture input，但验证会持续告警，
 工具把它视为只读。后续变化应创建严格的新 ADR，不要就地伪造历史授权。
 
 ## 创建 ExecPlan
@@ -217,21 +231,27 @@ SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使�
 执行前读取 `references/template.md`。
 
 1. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
-2. Architecture Gate 必须引用依赖闭包内所有当前 accepted ADR，或提供具体 not-required 理由。
-3. ADR 引用的 Research 和 Design Docs 也必须进入 ExecPlan 的对应引用数组。
-4. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
-5. 对每个需要性能、容量、可靠性或回归验收的独立维度，先完成一个稳定的
+2. Architecture Decision Gate 必须由所需 accepted ADR 满足，或提供具体
+   not-required 理由；提供理由时仍可引用适用的既有 ADR。
+3. Architecture Compliance 必须独立标为 `applicable` 或 `not_applicable`：
+   applicable 时引用全部相关当前 ADR/Design Docs；not_applicable 时不得夹带
+   architecture inputs，并写明具体理由。
+4. ADR 引用的 Research 和 Design Docs 也必须进入 ExecPlan 的对应引用数组。
+5. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
+6. 对每个需要性能、容量、可靠性或回归验收的独立维度，先完成一个稳定的
    Benchmark Scenario。不要等实现完成、看到结果后才补门禁。
-6. 运行 `new-ep` 创建 v2.5 目录和模板；对每个必需 Scenario 重复
+7. 运行 `new-ep` 创建 v2.7 目录和模板；对每个必需 Scenario 重复
    `--benchmark-scenario BS-NNN`。没有 Benchmark 门禁时保留空集合。
-7. 在 `Benchmark Gate Set` 中写清每个 Scenario 驱动哪个开发决定或里程碑。
+8. 在 `Architecture Compliance Matrix` 中逐条映射所有 `ADR-NNN#C-NNN` 到实施
+   位置和 test/lint/schema/observable evidence；Design Doc 只能解释，不能覆盖 ADR。
+9. 在 `Benchmark Gate Set` 中写清每个 Scenario 驱动哪个开发决定或里程碑。
    不同环境、流量模型或判定规则保持为不同 Scenario，不聚合成不可解释的总分。
-8. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
+10. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
    - 支持路线的关键证据与置信边界；
    - accepted ADR 的接口、数据、运维、迁移和负面后果；
    - 仍需在实现中验证的未知；
    - 跳过 Gate 的具体理由。
-9. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
+11. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
    - 解释目的、术语、用户可观察结果和系统现状；
    - 给出准确仓库相对路径、接口与依赖；
    - 提供独立可验证里程碑、工作目录、命令、预期输出和证据位置；
@@ -252,7 +272,9 @@ Benchmark Gate Set、Plan、Milestones、Validation、Recovery、Interfaces。
 
 当前 checkpoint 区间内追加历史：Progress、Surprises & Discoveries、Decision Log、Blockers、Revision Notes。纠错时新增更正记录。每个停止点更新 Progress；修改当前事实时记录 Revision Notes。
 
-里程碑完成、交接前，或根文档超过约 800 行、64 KiB、50 个活跃历史事件时：
+`EXECPLAN.md` 的目标工作集不超过 500 行、48 KiB 和 30 个活跃历史事件；超过
+任一目标值时建立 checkpoint 的准备信号。800 行、64 KiB 和 50 个活跃历史事件
+是必须处理的强警戒线。里程碑完成、交接前，或出现任一级信号时：
 
 1. 把仍有效的发现和决定吸收到当前事实。
 2. 把完整输出移到 `artifacts/`。
@@ -263,6 +285,12 @@ Benchmark Gate Set、Plan、Milestones、Validation、Recovery、Interfaces。
 7. 只读根 `EXECPLAN.md` 做一次恢复检查。
 
 Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
+
+文档规模只决定是否压缩历史，不决定是否归档。一个 active EP 超过 5 个里程碑或
+10 个未完成 Task 时复核它是否仍有单一完成边界；超过 8 个里程碑或 15 个未完成
+Task 时，`status` 和 `validate` 建议把可独立验证、发布或回滚的结果拆成 successor
+EP。checkpoint 后根文件仍然过大，通常说明当前事实或工程范围过宽，应外置 Design
+Doc / artifact 或拆分 EP，不能反复 checkpoint 掩盖范围膨胀。
 
 ## Task、未知与阻塞
 
@@ -289,7 +317,7 @@ Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
 4. 确认没有 open blocker。
 5. 填写 Outcomes & Retrospective。
 6. 取得实际通过验证的 repository/workspace revision 和证据引用。
-   对 v2.5 `required_benchmark_scenarios` 中的每个 Scenario，取得恰好一个
+   对 v2.5+ `required_benchmark_scenarios` 中的每个 Scenario，取得恰好一个
    passed sealed Run。sealed Benchmark 使用
    `benchmark:BR-NNN@sha256:<manifest-payload-sha256>`；Run 的
    `subject_revision` 必须等于同一个 `verified_revision` 且 outcome 必须是
@@ -306,6 +334,18 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \
 
 不完整计划保持 active/blocked，或在明确停止时以原因归档为 cancelled。不能靠口头确认、force 或删除验收项伪装完成。
 
+`status` 的 `completion` 只报告仓库内事实：
+
+- `in_progress`：仍有未勾选验收；
+- `archive_blocked`：验收已勾选，但仍有 REQUIRED 占位、open blocker 或未结束
+  Task；
+- `ready_to_archive`：计划内容已收敛，可以执行最终验证；v2.3+ 仍须在
+  `archive-ep` 提供真实 `verified_revision` 和 `verification_evidence`；
+- `archived`：制品已以 `completed` 或 `cancelled` 移入 completed 目录。
+
+脚本不会根据长度、无活动时间或 `ready_to_archive` 自动修改、checkpoint 或归档
+EP。Agent 在里程碑完成、交接、状态检查和最终验证后消费这些信号并执行对应动作。
+
 归档只记录知识提升候选。新的架构决定仍需 proposed ADR 和独立明确授权；不要在“归档 EP”的隐含授权下接受 ADR 或修改 `AGENTS.md`。
 
 用户明确要求把模块设计、最佳实践或 EP 过程整理成分享材料时，使用独立的
@@ -315,17 +355,36 @@ candidate 本身都不构成生成案例的触发条件。
 ## 状态与验证
 
 - `status` 汇总 Research 问题、Synthesis、ADR、Benchmark Scenario Gate、验收、
-  Task、blocker、Checkpoint 和文档大小。
+  Task、blocker、Checkpoint 和文档大小，并为每个 EP 输出 `completion`、`scope`
+  与 `working_set`。`--json` 同时输出阈值计数、阻塞原因和归档命令仍需提供的输入。
 - `validate` 检查 ID、路径、状态、必需 section、引用、依赖、payload 和索引。
 - `reindex` 从事实制品重建 Research、ADR、ExecPlan 和 Bugfix 投影。
 - CI 只调用仓库内唯一检查入口；GitHub、GitLab 或其他 CI 平台不得复制校验逻辑。
 - accepted ADR 的 Confirmation 应指向测试、lint、schema check 或明确人工验收。
+- v2.6/2.7 active EP 的 ADR 必须 current，`adr_constraint_refs` 必须精确覆盖结构化
+  constraints，`adr_evidence` 必须匹配决定 seal，Compliance Matrix 必须逐条映射。
+  completed/cancelled EP 保留当时摘要，即使 ADR 后来 superseded，也仍可作为历史证明。
 - completed v2.3+ EP 必须保存 `verified_revision` 和至少一个
   `verification_evidence`，归档正文由 `archive_sha256` 封存；Checkpoint 必须
   保存 `repository_revision`。
 - `benchmark:` evidence 会验证本地 sealed Manifest、精确文件清单、SHA-256、
   `passed` outcome、Scenario Gate 的一一覆盖和共同 final revision；普通
   `ci:` / `artifact:` 引用保持原语义。
+
+## 制品元数据
+
+新建 ADR、ExecPlan、Task、Checkpoint 和 Bugfix 使用统一
+`metadata_schema: "1"`，并携带稳定的 `artifact_type`、`id`、`title`、`status`、
+`author`、`owner`、`created` 和 `updated`。当前 artifact schema 分别是 ADR
+`1.3`、ExecPlan `2.7`、Task `1`、Checkpoint `1.2`、Bugfix `1`。
+
+`author` 是当前版本的实际写作者，`owner` 是持续负责者；两者不授予
+`decision_maker`、Research approval 或 Benchmark execution 权限。新建命令优先
+显式接收 `--author`/`--owner`，Task 与 Checkpoint 在边界明确时继承父 EP。
+未知 actor 使用 `Unassigned`，不得杜撰。accepted ADR、sealed Checkpoint 与归档
+ExecPlan 把 metadata 纳入 digest；旧版 sealed 制品按原 schema 保持只读兼容。
+当前 Design Doc 使用仓库内唯一的 `DD-NNN` 和相同 common metadata；注册后的
+corpus 由 `validate` 检查，legacy Design Doc 只读兼容并告警。
 
 ## 参考
 

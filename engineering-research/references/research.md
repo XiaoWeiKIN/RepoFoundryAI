@@ -29,12 +29,14 @@ downstream decision authority.
 
 ## Metadata and authority
 
-Schema 1.1 Research keeps canonical machine-readable metadata in
+Schema 1.2 Research keeps canonical machine-readable metadata in
 `RESEARCH.md` frontmatter and projects it into the visible `Research Metadata`
 table. Run `sync-research` after editing metadata by hand.
 
 | Field | Meaning |
 |---|---|
+| `metadata_schema` | Shared cross-artifact metadata contract; currently `"1"` |
+| `artifact_type`, `id`, `title` | Portable artifact classification and stable identity |
 | `research_type` | `technical`, `architecture`, `feasibility`, `comparative`, `incident`, `domain`, or `other` |
 | `owner` | Human or team accountable for scope and terminal lifecycle authorization |
 | `author` | Person, team, or agent that prepared the current Research |
@@ -46,6 +48,9 @@ table. Run `sync-research` after editing metadata by hand.
 
 Do not invent an owner, author, approval, date, or role. An unassigned Owner is
 valid while active but mechanically blocks conclusion and cancellation.
+`author` and `owner` are provenance and accountability; neither grants
+terminal authority. Only the explicit approval event writes `approved_by`,
+`approved_at`, and `approval_ref`.
 
 `approval_ref` records where explicit authorization can be audited, such as a
 task message, issue comment, review, meeting decision, or signed change
@@ -93,7 +98,7 @@ stateDiagram-v2
 
     [*] --> Building
     Building --> Review: "mark-review-ready [--snapshot]"
-    Review --> Building: "new-round"
+    Review --> Building: "amend-current-round / new-round"
     Review --> Concluded: "explicit Owner authorization"
     Building --> Cancelled: "explicit Owner authorization + reason"
     Review --> Cancelled: "explicit Owner authorization + reason"
@@ -121,6 +126,35 @@ valid.
 again, and returns maturity to `evidence_building`. Fine-grained revisions that
 were not selected as milestones remain available through repository history,
 not duplicate files in `snapshots/`.
+
+### Correct a misunderstanding without inventing a new Round
+
+A Round represents a bounded inquiry the Owner intended to pursue, not every
+chat turn or every Agent attempt. Choose the lifecycle operation from the
+meaning of the feedback:
+
+| Owner feedback | Operation |
+|---|---|
+| “That is not what I asked; remove this direction.” while the Round is active | Edit the current Round and corpus in place. |
+| The same rejection after an unsnapshotted `review_ready` result | Run `amend-current-round`, remove the unwanted corpus, and correct the same Round. |
+| “Continue deeper”, “verify it”, or “add another perspective” | Start `new-round`. |
+| The current review has a milestone snapshot or has been handed to a downstream consumer | Preserve it and start a corrective `new-round`. |
+| Research is concluded | Never rewrite it; create a linked follow-up Research. |
+
+```mermaid
+flowchart TD
+    F["Owner feedback"] --> M{"Misunderstanding or new inquiry?"}
+    M -->|"Misunderstanding"| A{"Current review snapshotted or handed off?"}
+    A -->|"No"| C["Amend current Round in place"]
+    A -->|"Yes"| N["Create corrective new Round"]
+    M -->|"New evidence or deeper inquiry"| N
+```
+
+`amend-current-round` retains the monotonic Synthesis revision counter, makes
+the current Round active again, and returns `SYNTHESIS.md` to draft. It does
+not delete files automatically: remove only the exact unwanted topics,
+experiments, and references identified by the Owner, then refresh the manifest
+and request review again. The next review receives the next Synthesis revision.
 
 ## Evidence and experiments
 
@@ -173,7 +207,7 @@ Use `sync-research` after membership changes. Resolve missing local references
 before review readiness. Absolute source paths are provenance warnings because
 other machines cannot reproduce them without an alternate source.
 Structured topics may remain incomplete while evidence is building. Before
-review readiness, every schema 2.2 identity and semantic role, `A-NNN`
+review readiness, every schema 2.3 identity and semantic role, `A-NNN`
 analysis section, `E-NNN` evidence mapping, `S-NNN` source, and
 analysis-linked falsifier must be complete. Legacy schema 1, schema 2, and
 schema 2.1 topics retain their original validation requirements.
@@ -222,7 +256,7 @@ conclude. When authorization is ambiguous, leave the Research active.
 
 `conclude-research` requires:
 
-- active schema 1.1 Research with `maturity: review_ready`;
+- active schema 1.1 or 1.2 Research with `maturity: review_ready`;
 - non-empty `owner`;
 - `--approved-by` and `--approval-ref` backed by explicit authorization;
 - valid review-ready Synthesis and corpus.

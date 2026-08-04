@@ -67,8 +67,9 @@ Agent 写全 ADR 后停在 proposed。用户或 Decision Owner 明确接受该 A
 ```text
 使用 $engineering-execution-plan，基于 R-001 和已接受的 ADR-001，
 创建“Implement token refresh contract” ExecPlan。
-复述兼容约束、迁移义务、负面后果和仍需验证的未知，并填写里程碑、
-Concrete Steps、验收、恢复方法和准确下一步。先评审计划，不要开始实现。
+复述兼容约束、迁移义务、负面后果和仍需验证的未知；把每个
+ADR-001#C-NNN 映射到实现位置与验证方式，并填写里程碑、Concrete Steps、验收、
+恢复方法和准确下一步。先评审计划，不要开始实现。
 ```
 
 ## 多份输入
@@ -89,16 +90,36 @@ ADR 引用的每份 Research 和 Design Doc 都必须出现在 ExecPlan 中。�
 
 ## Fast track
 
-用户要求实现一个局部、可逆的 adapter 清理。现有 accepted ADR 已规定边界，没有新的架构选择：
+用户要求实现一个局部、可逆的 adapter 清理。现有 accepted ADR 已规定边界，没有
+新的架构选择，但已有架构仍然适用：
 
 ```text
 使用 $engineering-execution-plan 为 adapter boundary 清理创建一个 ExecPlan。
 现有 ADR-004 和 contract tests 已完整定义行为，因此 Research Gate 可标记
-not_required；改动保持在既有边界内且不产生持久新选择，因此 Architecture Gate
-也可标记 not_required。把这两个可核查理由写进计划。
+not_required；改动不产生独立持久选择，因此 Architecture Decision Gate 可标记
+not_required，但 ADR-004 仍是 applicable architecture input。引用 ADR-004，保留
+Architecture Compliance applicable，并把其 constraints 映射到 contract tests。
 ```
 
-理由必须可核查。“任务很小”“用户说直接做”不足以说明为何 Gate 不需要。
+理由必须可核查。“任务很小”“用户说直接做”不足以说明为何 Decision Gate 不需要，
+更不能作为忽略既有 ADR 的理由。
+
+如果模块内 helper 重命名确实不受任何 architecture input 约束，则分别记录
+Research Gate not_required、Architecture Decision Gate not_required 和
+Architecture Compliance not_applicable 的理由；三个判断不能合并成一句套话。
+
+## ADR 局部修订
+
+旧决定总体仍成立，只调整 ADR-004#C-002：
+
+```text
+使用 $engineering-execution-plan 基于 concluded R-009 起草一份 scoped amendment，
+amends ADR-004，并精确标记 ADR-004#C-002。写出新的 Decision Statement、C-NNN
+constraints 和 Confirmation，保持 proposed，等待 Decision Owner。
+```
+
+accepted 后，任何命中 ADR-004#C-002 的 active EP 都必须同时引用 amendment；只
+引用 ADR-004 会被判定为漏掉 current scoped amendment。
 
 ## ADR 替代
 
@@ -111,10 +132,12 @@ not_required；改动保持在既有边界内且不产生持久新选择，因�
 
 ```text
 使用 $engineering-execution-plan 将已接受的 ADR-009 记录为 ADR-004 的替代决定。
-更新引用旧决定的 active ExecPlan，并报告无法继续满足 Architecture Gate 的计划。
+更新引用旧决定的 active ExecPlan，并报告无法继续满足 current Architecture
+Compliance 的计划。
 ```
 
-引用 ADR-004 的 active ExecPlan 随后必须更新；superseded ADR 不能继续满足 Architecture Gate。
+引用 ADR-004 的 active ExecPlan 随后必须更新；superseded ADR 不能继续作为 active
+Architecture Compliance input。completed/cancelled EP 保留原 ADR digest，不改写历史。
 
 ## 普通修复不自动建记录
 

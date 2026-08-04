@@ -1,11 +1,16 @@
 ---
-schema_version: "1.1"
+schema_version: "1.2"
+metadata_schema: "1"
+artifact_type: research-synthesis
+id: {{ID}}
 parent_id: {{PARENT_ID}}
 title: "{{TITLE}}"
 status: draft
 revision: "0"
 created: {{DATE}}
 updated: {{DATE}}
+author: "{{AUTHOR}}"
+owner: "{{OWNER}}"
 payload_sha256:
 ---
 

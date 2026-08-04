@@ -16,7 +16,10 @@ Bugfix 是用户明确要求保存的局部缺陷记录。普通修复请求不�
 使用 `assets/bugfix.md`：
 
 - `id`：BF-NNN。
+- `metadata_schema` / `artifact_type`：当前为 `"1"` / `bugfix`。
 - `status`：open / in_progress / blocked / fixed / escalated / cancelled。
+- `author` / `owner`：当前版本写作者与持续负责者；不知道时写
+  `Unassigned`，不能用它们推断 verification executor 或决策权。
 - `severity`：用户未提供时保留 `unspecified`，不要凭“用户可见”自行判定 High。
 - `area`：模块或子系统。
 - `linked_ep`：升级时必填。

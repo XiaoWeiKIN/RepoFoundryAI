@@ -57,7 +57,8 @@ flowchart TD
 - 影响公共 API/schema/事件/配置、跨系统边界、长期技术约束、迁移成本、安全、数据一致性、可靠性或部署拓扑。
 
 否则在 ExecPlan Decision Log 记录局部取舍，并填写
-`architecture_gate_reason`。
+`architecture_decision_gate_reason`。随后仍要判断现有 ADR / Design Doc 是否适用；
+只有确实没有 architecture input 时才填写 `architecture_compliance_reason`。
 
 使用 Bugfix：
 
@@ -151,19 +152,27 @@ stateDiagram-v2
 - 编号在仓库锁内分配，扫描 active、completed、索引和高水位后取最大值 +1。
 - 允许故障跳号；删除文件后也不复用编号。
 - `RESEARCH.md`、`DECISIONS.md`、`PLANS.md`、`BUGFIXES.md` 的托管区可由 `reindex` 重建，人工区必须保留。
-- 新 ExecPlan 使用 `schema_version: "2.5"`，明确 Research / Architecture
-  Gate、ADR 依赖闭包、Design Doc 引用、可选架构入口，以及零到多个
-  `required_benchmark_scenarios`。
-- Research Gate 只接受 valid + concluded Research；Architecture Gate 只接受 valid + accepted + current ADR。
+- 新 ExecPlan 使用 `schema_version: "2.7"`，明确 Research Gate、Architecture
+  Decision Gate、Architecture Compliance、ADR 依赖闭包、Design Doc 引用、可选
+  架构入口和零到多个 `required_benchmark_scenarios`，并增加
+  `adr_constraint_refs`、`adr_evidence` 与 `Architecture Compliance Matrix`。
+- Research Gate 只接受 valid + concluded Research；Decision Gate satisfied 和
+  active Compliance input 只接受 valid + accepted + current ADR。
 - manifest-bearing Research 还必须具有 sealed、摘要一致且文档完整的受支持 manifest；无 manifest 的旧包继续走兼容路径。
-- Gate 可以为 `not_required`，但必须有理由，且不能同时保留引用。
+- Research Gate 可以为 `not_required`，但必须有理由且不能同时保留 Research 引用。
+  Architecture Decision Gate 为 `not_required` 时仍可保留适用的既有 ADR；
+  Architecture Compliance 为 `not_applicable` 时才要求 architecture inputs 为空。
 - ADR 引用的 Research 必须同时进入 ExecPlan。
 - ADR 的 `depends_on` / `amends` 必须无环，且传递闭包全部进入 ExecPlan；
   ADR 引用的 Design Docs 也必须进入 ExecPlan。
+- schema 1.2/1.3 ADR 使用稳定 `C-NNN` constraints；局部 amendment 必须列出
+  `amends_constraints`，active EP 不能漏掉命中其 constraint 的 current amendment。
+- v2.6/2.7 EP 的结构化 constraint 集、ADR payload digest 和 Compliance Matrix 必须
+  精确一致；Design Docs 不得覆盖 ADR。
 - sealed Synthesis、decided ADR 和 Checkpoint 使用 Markdown body SHA-256 检测篡改。
 - 新 Checkpoint 记录 `repository_revision`；completed v2.3+ EP 记录实际通过验证的
   revision 和证据引用，所有 archived v2.3+ EP 使用 `archive_sha256` 封存全文。
-- completed v2.5 EP 对每个必需 Benchmark Scenario 恰好接受一个 passed sealed
+- completed v2.5+ EP 对每个必需 Benchmark Scenario 恰好接受一个 passed sealed
   Run；所有 Run 绑定同一 `verified_revision`，未声明或重复 Scenario evidence
   都会阻止归档。
 - Task 使用 `parent_id: EP-NNN` 和 `depends_on: ["TASK-NNN"]`。
@@ -176,9 +185,9 @@ stateDiagram-v2
 ## 旧版兼容
 
 - 继续读取旧 `ep-NNN_name.md` 和 `README.md + progress.md + tasks/`。
-- v2.0–v2.4 `EXECPLAN.md` 保持可读、可验证、可归档；不要静默升级。
+- v2.0–v2.5 `EXECPLAN.md` 保持可读、可验证、可归档；不要静默升级。
 - v2.1 仍可 checkpoint。v2.0 建立 checkpoint 前显式迁移到至少 v2.1，并补 `Current Snapshot`。
-- 新建统一使用 v2.5 `ep-NNN_slug/EXECPLAN.md`。
+- 新建统一使用 v2.7 `ep-NNN_slug/EXECPLAN.md`。
 - 修改旧制品时保留原格式；用户要求迁移时先建立可恢复点，再合并当前事实与历史。
 - 旧 `docs/tech-debt-tracker.md` 继续读取；新仓库使用 `docs/exec-plans/tech-debt-tracker.md`。
 - `epctl` 中旧 Research 生产命令暂时保留，但新 Research 的主路径是

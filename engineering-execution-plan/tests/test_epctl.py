@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -170,6 +171,13 @@ class EpctlTestCase(unittest.TestCase):
     @staticmethod
     def complete_all_placeholders(path: Path) -> None:
         text = path.read_text(encoding="utf-8")
+        replacements = {
+            "REPLACE_WITH_SCOPE": "test architecture boundary",
+            "REPLACE_WITH_CONSTRAINT": "The implementation must preserve the test boundary.",
+            "REPLACE_WITH_CONFIRMATION": "Run the architecture contract test.",
+        }
+        for placeholder, value in replacements.items():
+            text = text.replace(placeholder, value)
         text = re.sub(
             r"<!--\s*REQUIRED(?:_[A-Z_]+)?\s*:[\s\S]*?-->",
             "Recorded evidence.",
@@ -268,6 +276,76 @@ class EpctlTestCase(unittest.TestCase):
         self.assertTrue((self.repo / "docs" / "research" / "active").is_dir())
         self.assertTrue((self.repo / "docs" / "research" / "completed").is_dir())
         self.assertTrue((self.repo / "docs" / "adr").is_dir())
+
+    def test_current_artifacts_share_the_metadata_contract(self) -> None:
+        self.init()
+        adr = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "metadata-decision",
+                "--title",
+                "Metadata decision",
+                "--author",
+                "Architecture Writer",
+                "--owner",
+                "Architecture Owner",
+            ).stdout.strip()
+        )
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "metadata-plan",
+                "--title",
+                "Metadata plan",
+                "--author",
+                "Plan Writer",
+                "--owner",
+                "Plan Owner",
+                *FAST_TRACK_ARGS,
+            ).stdout.strip()
+        )
+        task = Path(
+            self.run_cli(
+                "new-task",
+                "EP-001",
+                "--slug",
+                "metadata-task",
+                "--title",
+                "Metadata task",
+            ).stdout.strip()
+        )
+        bugfix = Path(
+            self.run_cli(
+                "new-bugfix",
+                "--slug",
+                "metadata-bug",
+                "--title",
+                "Metadata bug",
+                "--author",
+                "Bug Writer",
+                "--owner",
+                "Bug Owner",
+            ).stdout.strip()
+        )
+
+        expected_profiles = (
+            (adr, 'schema_version: "1.3"', "artifact_type: adr"),
+            (plan, 'schema_version: "2.7"', "artifact_type: exec-plan"),
+            (task, 'schema_version: "1"', "artifact_type: task"),
+            (bugfix, 'schema_version: "1"', "artifact_type: bugfix"),
+        )
+        for path, schema, artifact_type in expected_profiles:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(schema, text)
+            self.assertIn('metadata_schema: "1"', text)
+            self.assertIn(artifact_type, text)
+            for field in ("id", "title", "status", "author", "owner", "created", "updated"):
+                self.assertRegex(text, rf"(?m)^{field}:\s+\S")
+        task_text = task.read_text(encoding="utf-8")
+        self.assertIn('author: "Plan Writer"', task_text)
+        self.assertIn('owner: "Plan Owner"', task_text)
 
     def test_research_conclusion_seals_synthesis_and_detects_tampering(
         self,
@@ -446,13 +524,24 @@ class EpctlTestCase(unittest.TestCase):
             ).stdout.strip()
         )
         content = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.5"', content)
+        self.assertIn('schema_version: "2.7"', content)
+        self.assertIn('metadata_schema: "1"', content)
+        self.assertIn("artifact_type: exec-plan", content)
+        self.assertIn('author: "Unassigned"', content)
+        self.assertIn('owner: "Unassigned"', content)
         self.assertIn("required_benchmark_scenarios: []", content)
         self.assertIn("verified_revision:", content)
         self.assertIn("verification_evidence: []", content)
         self.assertIn("archive_sha256:", content)
         self.assertIn("research_gate: satisfied", content)
-        self.assertIn("architecture_gate: satisfied", content)
+        self.assertIn("architecture_decision_gate: satisfied", content)
+        self.assertIn("architecture_compliance: applicable", content)
+        self.assertIn('adr_constraint_refs: ["ADR-001#C-001"]', content)
+        self.assertRegex(
+            content,
+            r'adr_evidence: \["ADR-001@sha256:[0-9a-f]{64}"\]',
+        )
+        self.assertIn("## Architecture Compliance Matrix", content)
         self.assertIn("R-001", content)
         self.assertIn("ADR-001", content)
         validation = self.run_cli("validate")
@@ -460,6 +549,239 @@ class EpctlTestCase(unittest.TestCase):
         status = json.loads(self.run_cli("status", "--json").stdout)
         self.assertEqual(status["plans"][0]["research_gate"], "satisfied")
         self.assertEqual(status["plans"][0]["architecture_gate"], "satisfied")
+        self.assertEqual(
+            status["plans"][0]["architecture_compliance"],
+            "applicable",
+        )
+
+    def test_existing_architecture_can_apply_without_a_new_decision(self) -> None:
+        self.init()
+        research = self.new_research("existing-architecture")
+        self.conclude_research(research)
+        adr = self.new_adr("existing-boundary")
+        self.accept_adr(adr)
+
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "apply-existing-boundary",
+                "--title",
+                "Apply existing boundary",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+                "--decision-not-required-reason",
+                "The accepted decision already covers this implementation.",
+            ).stdout.strip()
+        )
+        content = plan.read_text(encoding="utf-8")
+
+        self.assertIn("architecture_decision_gate: not_required", content)
+        self.assertIn("architecture_compliance: applicable", content)
+        self.assertIn('adr_constraint_refs: ["ADR-001#C-001"]', content)
+        self.run_cli("validate")
+
+    def test_schema_12_amendments_are_scoped_to_existing_constraints(self) -> None:
+        self.init()
+        research = self.new_research("scoped-amendment")
+        self.conclude_research(research)
+        base = self.new_adr("base-boundary")
+        self.accept_adr(base)
+
+        missing_scope = self.run_cli(
+            "new-adr",
+            "--slug",
+            "unscoped-change",
+            "--title",
+            "Unscoped change",
+            "--research",
+            "R-001",
+            "--amends",
+            "ADR-001",
+            expected=2,
+        )
+        self.assertIn("missing constraint references for ADR-001", missing_scope.stderr)
+
+        unknown_scope = self.run_cli(
+            "new-adr",
+            "--slug",
+            "unknown-scope",
+            "--title",
+            "Unknown scope",
+            "--research",
+            "R-001",
+            "--amends",
+            "ADR-001",
+            "--amends-constraint",
+            "ADR-001#C-999",
+            expected=2,
+        )
+        self.assertIn("does not identify a structured constraint", unknown_scope.stderr)
+
+        amendment = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "scoped-change",
+                "--title",
+                "Scoped change",
+                "--research",
+                "R-001",
+                "--amends",
+                "ADR-001",
+                "--amends-constraint",
+                "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        self.assertIn(
+            'amends_constraints: ["ADR-001#C-001"]',
+            amendment.read_text(encoding="utf-8"),
+        )
+        self.accept_adr(amendment, "ADR-002")
+
+        stale = self.run_cli(
+            "new-ep",
+            "--slug",
+            "stale-amendment-input",
+            "--title",
+            "Stale amendment input",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-001",
+            expected=2,
+        )
+        self.assertIn("omits current scoped amendments", stale.stderr)
+
+        current = self.run_cli(
+            "new-ep",
+            "--slug",
+            "current-amendment-input",
+            "--title",
+            "Current amendment input",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-001",
+            "--adr",
+            "ADR-002",
+        )
+        self.assertIn("ep-001_current-amendment-input", current.stdout)
+        self.run_cli("validate")
+
+    def test_ep_architecture_mapping_and_adr_evidence_fail_closed(self) -> None:
+        self.init()
+        research = self.new_research("architecture-evidence")
+        self.conclude_research(research)
+        adr = self.new_adr("architecture-evidence")
+        self.accept_adr(adr)
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "architecture-evidence",
+                "--title",
+                "Architecture evidence",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        original = plan.read_text(encoding="utf-8")
+
+        self.replace_section_body(
+            plan,
+            "Architecture Compliance Matrix",
+            "\n".join(
+                (
+                    "| ADR constraint or architecture input | Implementation or preservation | Verification |",
+                    "|---|---|---|",
+                    "| ADR-001#C-999 | Preserve another boundary. | Run another test. |",
+                )
+            ),
+        )
+        mapping_error = self.run_cli("validate", expected=1)
+        self.assertIn(
+            "Architecture Compliance Matrix does not match architecture inputs",
+            mapping_error.stderr,
+        )
+
+        plan.write_text(original, encoding="utf-8")
+        self.replace_frontmatter(
+            plan,
+            "adr_evidence",
+            '["ADR-001@sha256:' + ("0" * 64) + '"]',
+        )
+        digest_error = self.run_cli("validate", expected=1)
+        self.assertIn("ADR evidence digest changed for ADR-001", digest_error.stderr)
+
+    def test_completed_ep_retains_superseded_adr_evidence(self) -> None:
+        self.init()
+        research = self.new_research("historical-architecture")
+        self.conclude_research(research)
+        old_adr = self.new_adr("historical-v1")
+        self.accept_adr(old_adr, "ADR-001")
+
+        completed_plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "historical-completed",
+                "--title",
+                "Historical completed",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        self.complete_all_placeholders(completed_plan)
+        archived = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
+        active_plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "historical-active",
+                "--title",
+                "Historical active",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        replacement = self.new_adr("historical-v2")
+        self.accept_adr(replacement, "ADR-002")
+        self.run_cli("supersede-adr", "ADR-001", "--by", "ADR-002")
+
+        stale = self.run_cli("validate", expected=1)
+        error_lines = [
+            line for line in stale.stderr.splitlines() if line.startswith("ERROR:")
+        ]
+        self.assertTrue(any(str(active_plan) in line for line in error_lines))
+        self.assertFalse(any(str(archived) in line for line in error_lines))
+
+        cancelled = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-002",
+                "--outcome",
+                "cancelled",
+                "--reason",
+                "The governing architecture was superseded.",
+            ).stdout.strip()
+        )
+        self.assertIn("status: cancelled", cancelled.read_text(encoding="utf-8"))
+        self.run_cli("validate")
 
     def test_linked_multi_adr_and_design_doc_corpus_is_dependency_closed(
         self,
@@ -596,8 +918,10 @@ relates_to:
             ).stdout.strip()
         )
         plan_text = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.5"', plan_text)
+        self.assertIn('schema_version: "2.7"', plan_text)
         self.assertIn('adr_refs: ["ADR-010", "ADR-011"]', plan_text)
+        self.assertIn("architecture_decision_gate: satisfied", plan_text)
+        self.assertIn("architecture_compliance: applicable", plan_text)
         self.assertIn(f'design_refs: ["{design_ref}"]', plan_text)
         self.assertIn(
             'architecture_entrypoint: "docs/design-docs/index.md"',
@@ -683,6 +1007,36 @@ design_refs: ["docs/outside.md"]
             invalid_design.stderr,
         )
 
+    def test_current_design_doc_metadata_ids_are_unique(self) -> None:
+        self.init()
+        design_root = self.repo / "docs" / "design-docs"
+        design_root.mkdir()
+        for name in ("one", "two"):
+            (design_root / f"{name}.md").write_text(
+                f"""---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: design-doc
+id: DD-001
+doc_type: design
+title: "Design {name}"
+status: current
+author: "Design Writer"
+owner: "Design Owner"
+created: 2026-08-04
+updated: 2026-08-04
+---
+
+# Design {name}
+""",
+                encoding="utf-8",
+            )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+
+        result = self.run_cli("validate", expected=1)
+
+        self.assertIn("duplicate Design Doc id DD-001", result.stderr)
+
     def test_declared_unknown_adr_schema_fails_closed(self) -> None:
         self.init()
         (self.repo / "docs" / "adr" / "adr-001_unknown.md").write_text(
@@ -701,7 +1055,10 @@ updated: 2026-07-28
         )
         self.run_cli("reindex")
         result = self.run_cli("validate", expected=1)
-        self.assertIn("ADR schema_version must be 1 or 1.1", result.stderr)
+        self.assertIn(
+            "ADR schema_version must be 1, 1.1, 1.2 or 1.3",
+            result.stderr,
+        )
 
     def test_accepted_adr_can_supersede_an_accepted_adr(self) -> None:
         self.init()
@@ -754,7 +1111,7 @@ updated: 2026-07-28
         )
         self.assertIn("ep-001_current-decision", current.stdout)
 
-    def test_schema_11_adr_seals_typed_inputs_and_decision_outcome(self) -> None:
+    def test_current_adr_seals_metadata_typed_inputs_and_outcome(self) -> None:
         self.init()
         research = self.new_research("sealed-inputs")
         self.conclude_research(research)
@@ -785,16 +1142,168 @@ updated: 2026-07-28
         outcome_tamper = self.run_cli("validate", expected=1)
         self.assertIn("decided ADR payload changed", outcome_tamper.stderr)
 
+        second.write_text(accepted_text, encoding="utf-8")
+        self.replace_frontmatter(second, "author", '"Tampered Writer"')
+        metadata_tamper = self.run_cli("validate", expected=1)
+        self.assertIn("decided ADR payload changed", metadata_tamper.stderr)
+
+    def test_schema_11_adr_remains_a_valid_ep_input(self) -> None:
+        self.init()
+        research = self.new_research("schema-11-compatible")
+        self.conclude_research(research)
+        adr = self.new_adr("schema-11-compatible")
+        text = adr.read_text(encoding="utf-8").replace(
+            'schema_version: "1.3"',
+            'schema_version: "1.1"',
+            1,
+        )
+        text = re.sub(
+            r"(?m)^amends_constraints:.*\n",
+            "",
+            text,
+            count=1,
+        )
+        text = re.sub(
+            r"(?ms)^## Decision Statement\s*$.*?"
+            r"(?=^## Consequences\s*$)",
+            "",
+            text,
+            count=1,
+        )
+        adr.write_text(text, encoding="utf-8")
+        self.accept_adr(adr)
+
+        accepted_text = adr.read_text(encoding="utf-8")
+
+        def scalar(key: str) -> str:
+            match = re.search(
+                rf"(?m)^{re.escape(key)}:\s*(.*)$",
+                accepted_text,
+            )
+            if not match:
+                raise AssertionError(f"missing ADR field: {key}")
+            value = match.group(1).strip()
+            return json.loads(value) if value.startswith('"') else value
+
+        frontmatter_end = accepted_text.find("\n---\n", 4)
+        legacy_payload = {
+            "schema_version": scalar("schema_version"),
+            "id": scalar("id"),
+            "title": scalar("title"),
+            "research_refs": scalar("research_refs"),
+            "depends_on": scalar("depends_on"),
+            "amends": scalar("amends"),
+            "design_refs": scalar("design_refs"),
+            "decision_maker": scalar("decision_maker"),
+            "decided": scalar("decided"),
+            "decision_outcome": "accepted",
+            "body": accepted_text[frontmatter_end + 5 :],
+        }
+        expected_legacy_digest = hashlib.sha256(
+            json.dumps(
+                legacy_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        self.assertEqual(scalar("payload_sha256"), expected_legacy_digest)
+
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "consume-schema-11",
+                "--title",
+                "Consume schema 11",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        plan_text = plan.read_text(encoding="utf-8")
+        self.assertIn("adr_constraint_refs: []", plan_text)
+        self.assertRegex(
+            plan_text,
+            r'adr_evidence: \["ADR-001@sha256:[0-9a-f]{64}"\]',
+        )
+        self.assertIn("| ADR-001 |", plan_text)
+        self.run_cli("validate")
+
+    def test_v25_execplan_remains_archive_compatible(self) -> None:
+        self.init()
+        plan = self.new_ep("v25-compatible")
+        text = plan.read_text(encoding="utf-8").replace(
+            'schema_version: "2.7"',
+            'schema_version: "2.5"',
+            1,
+        )
+        text = text.replace(
+            "architecture_decision_gate:",
+            "architecture_gate:",
+            1,
+        ).replace(
+            "architecture_decision_gate_reason:",
+            "architecture_gate_reason:",
+            1,
+        )
+        text = re.sub(
+            r"(?m)^(?:adr_constraint_refs|adr_evidence|"
+            r"architecture_compliance|architecture_compliance_reason):.*\n",
+            "",
+            text,
+        )
+        text = re.sub(
+            r"(?ms)^## Architecture Compliance Matrix\s*$.*?"
+            r"(?=^## Benchmark Gate Set\s*$)",
+            "",
+            text,
+            count=1,
+        )
+        plan.write_text(text, encoding="utf-8")
+        self.complete_all_placeholders(plan)
+
+        archived = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
+        self.assertIn(
+            'schema_version: "2.5"',
+            archived.read_text(encoding="utf-8"),
+        )
+        self.run_cli("validate")
+
     def test_v24_execplan_remains_archive_compatible(self) -> None:
         self.init()
         plan = self.new_ep("v24-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.5"',
+            'schema_version: "2.7"',
             'schema_version: "2.4"',
             1,
         )
+        text = text.replace(
+            "architecture_decision_gate:",
+            "architecture_gate:",
+            1,
+        ).replace(
+            "architecture_decision_gate_reason:",
+            "architecture_gate_reason:",
+            1,
+        )
         text = re.sub(
-            r"(?m)^required_benchmark_scenarios:.*\n",
+            r"(?m)^(?:adr_constraint_refs|adr_evidence|"
+            r"architecture_compliance|architecture_compliance_reason|"
+            r"required_benchmark_scenarios):.*\n",
+            "",
+            text,
+        )
+        text = re.sub(
+            r"(?ms)^## Architecture Compliance Matrix\s*$.*?"
+            r"(?=^## Benchmark Gate Set\s*$)",
             "",
             text,
             count=1,
@@ -825,14 +1334,16 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("legacy-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.5"',
+            'schema_version: "2.7"',
             'schema_version: "2.1"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:research_refs|research_gate|research_gate_reason|"
-            r"adr_refs|design_refs|architecture_entrypoint|"
-            r"architecture_gate|architecture_gate_reason|"
+            r"adr_refs|adr_constraint_refs|adr_evidence|design_refs|"
+            r"architecture_entrypoint|architecture_decision_gate|"
+            r"architecture_decision_gate_reason|architecture_compliance|"
+            r"architecture_compliance_reason|"
             r"required_benchmark_scenarios|"
             r"verified_revision|verification_evidence|archive_sha256):.*\n",
             "",
@@ -866,16 +1377,33 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v22-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.5"',
+            'schema_version: "2.7"',
             'schema_version: "2.2"',
+            1,
+        )
+        text = text.replace(
+            "architecture_decision_gate:",
+            "architecture_gate:",
+            1,
+        ).replace(
+            "architecture_decision_gate_reason:",
+            "architecture_gate_reason:",
             1,
         )
         text = re.sub(
             r"(?m)^(?:verified_revision|verification_evidence|"
             r"archive_sha256|design_refs|architecture_entrypoint|"
-            r"required_benchmark_scenarios):.*\n",
+            r"adr_constraint_refs|adr_evidence|architecture_compliance|"
+            r"architecture_compliance_reason|required_benchmark_scenarios):.*\n",
             "",
             text,
+        )
+        text = re.sub(
+            r"(?ms)^## Architecture Compliance Matrix\s*$.*?"
+            r"(?=^## Benchmark Gate Set\s*$)",
+            "",
+            text,
+            count=1,
         )
         text = re.sub(
             r"(?ms)^## Benchmark Gate Set\s*$.*?"
@@ -899,14 +1427,16 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v20-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.5"',
+            'schema_version: "2.7"',
             'schema_version: "2.0"',
             1,
         )
         text = re.sub(
             r"(?m)^(?:latest_checkpoint|research_refs|research_gate|"
-            r"research_gate_reason|adr_refs|architecture_gate|"
-            r"architecture_gate_reason|design_refs|architecture_entrypoint|"
+            r"research_gate_reason|adr_refs|adr_constraint_refs|adr_evidence|"
+            r"architecture_decision_gate|architecture_decision_gate_reason|"
+            r"architecture_compliance|architecture_compliance_reason|"
+            r"design_refs|architecture_entrypoint|"
             r"required_benchmark_scenarios|"
             r"verified_revision|"
             r"verification_evidence|archive_sha256):.*\n",
@@ -1128,7 +1658,7 @@ updated: 2026-07-28
             encoding="utf-8",
         )
         tampered = self.run_cli("validate", expected=1)
-        self.assertIn("archived v2.5 plan changed", tampered.stderr)
+        self.assertIn("archived v2.7 plan changed", tampered.stderr)
         plans_index = (self.repo / "docs" / "PLANS.md").read_text(
             encoding="utf-8"
         )
@@ -1467,7 +1997,9 @@ updated: 2026-07-28
         self.assertIn("BLK-001 | resolved", sealed)
         self.assertIn("Keep compatibility at the boundary", sealed)
         self.assertIn("status: sealed", sealed)
-        self.assertIn('schema_version: "1.1"', sealed)
+        self.assertIn('schema_version: "1.2"', sealed)
+        self.assertIn('metadata_schema: "1"', sealed)
+        self.assertIn("artifact_type: checkpoint", sealed)
         self.assertIn(
             'repository_revision: "test:workspace-revision"',
             sealed,
@@ -1578,14 +2110,20 @@ updated: 2026-07-28
             ).stdout
         )
         checkpoint = self.repo / payload["path"]
+        original = checkpoint.read_text(encoding="utf-8")
         checkpoint.write_text(
-            checkpoint.read_text(encoding="utf-8") + "\nTampered.\n",
+            original + "\nTampered.\n",
             encoding="utf-8",
         )
 
         result = self.run_cli("validate", expected=1)
 
         self.assertIn("sealed checkpoint payload changed", result.stderr)
+
+        checkpoint.write_text(original, encoding="utf-8")
+        self.replace_frontmatter(checkpoint, "author", '"Tampered Writer"')
+        metadata_result = self.run_cli("validate", expected=1)
+        self.assertIn("sealed checkpoint payload changed", metadata_result.stderr)
 
     def test_checkpoint_refuses_unresolved_template(self) -> None:
         self.init()
@@ -1621,6 +2159,80 @@ updated: 2026-07-28
         result = self.run_cli("validate")
 
         self.assertIn("root working set is", result.stderr)
+
+    def test_status_recommends_checkpoint_before_hard_limit(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        text = plan.read_text(encoding="utf-8")
+        text += "\n" + "\n".join(
+            f"working-set line {number}" for number in range(400)
+        )
+        plan.write_text(text, encoding="utf-8")
+
+        result = self.run_cli("validate")
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        plan_status = status["plans"][0]
+
+        self.assertIn("checkpoint recommended", result.stderr)
+        self.assertEqual(plan_status["working_set"], "checkpoint_recommended")
+        self.assertLessEqual(plan_status["root_lines"], 800)
+
+    def test_status_reports_scope_review_and_split_signals(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.replace_section_body(
+            plan,
+            "Milestones",
+            "\n\n".join(
+                f"### Milestone {number}: Outcome {number}\n\nDefined outcome."
+                for number in range(1, 7)
+            ),
+        )
+
+        review = json.loads(self.run_cli("status", "--json").stdout)["plans"][0]
+        self.assertEqual(review["milestones"], 6)
+        self.assertEqual(review["scope"], "scope_review")
+
+        self.replace_section_body(
+            plan,
+            "Milestones",
+            "\n\n".join(
+                f"### Milestone {number}: Outcome {number}\n\nDefined outcome."
+                for number in range(1, 10)
+            ),
+        )
+        split = json.loads(self.run_cli("status", "--json").stdout)["plans"][0]
+
+        self.assertEqual(split["milestones"], 9)
+        self.assertEqual(split["scope"], "split_recommended")
+
+    def test_status_distinguishes_archive_readiness_from_blockers(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        initial = json.loads(self.run_cli("status", "--json").stdout)["plans"][0]
+        self.assertEqual(initial["completion"], "in_progress")
+
+        self.complete_all_placeholders(plan)
+        ready = json.loads(self.run_cli("status", "--json").stdout)["plans"][0]
+        self.assertEqual(ready["completion"], "ready_to_archive")
+        self.assertEqual(
+            ready["archive_inputs_required"],
+            ["verified_revision", "verification_evidence"],
+        )
+
+        self.run_cli(
+            "new-task",
+            "EP-001",
+            "--slug",
+            "late-task",
+            "--title",
+            "Late task",
+        )
+        blocked = json.loads(self.run_cli("status", "--json").stdout)["plans"][0]
+
+        self.assertEqual(blocked["completion"], "archive_blocked")
+        self.assertEqual(blocked["completion_blockers"], ["unfinished_tasks"])
+        self.assertEqual(blocked["unfinished_tasks"], 1)
 
 
 if __name__ == "__main__":

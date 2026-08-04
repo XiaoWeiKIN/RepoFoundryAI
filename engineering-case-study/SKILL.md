@@ -137,6 +137,12 @@ docs/case-studies/<descriptive-slug>-YYYY-MM-DD.md
 ```
 
 - 新文章默认 `status: draft`。
+- 扫描现有 Case Study frontmatter 后分配不复用的 `CS-NNN`；双语版本共享同一
+  logical ID，并通过 `language` 与 `translation_of` 区分文件。
+- 使用 `metadata_schema: "1"`、`artifact_type: case-study`、stable `id`、
+  `title`、`status`、`author`、`owner`、`created` 和 `updated`。`author` 是本版
+  实际写作者，`owner` 是负责复核与维护的人或角色；未知时写 `Unassigned`，
+  不从 Git committer 或来源制品 Owner 猜测。
 - frontmatter 写明 `language: zh-CN` 或 `language: en`。双语文件互相写入
   `translation_of`，但每一份都必须能独立阅读。
 - 记录准确 `source_revision`；工作树含未提交实现时写明 dirty 状态及相关 diff，
@@ -152,6 +158,8 @@ docs/case-studies/<descriptive-slug>-YYYY-MM-DD.md
 - 普通生成保持 `draft`。
 - 只有用户明确要求“定稿、可发布、完成验证”，且所有事实和发布检查通过时，
   才把状态改为 `verified`，填写 `last_verified`。
+- 发布复核者与 `author`/`owner` 不等价；如仓库需要独立 approval actor，应使用
+  单独字段或 review evidence，不要用作者身份隐含授权。
 - 对外发送、发布平台写入或通知他人属于独立外部动作；用户只要求生成文章时，
   只写仓库文件。
 
