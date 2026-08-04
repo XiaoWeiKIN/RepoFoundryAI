@@ -136,6 +136,37 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         return path
 
+    def write_pre_project_skill_schema3_manifest(self) -> Path:
+        path = self.repo / foundryctl.HARNESS_MANIFEST
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["core"]["version"] = "1.0.0"
+        for adapter in payload["adapters"]:
+            if adapter["id"] == "codex":
+                adapter["version"] = "2.0.0"
+        removed = {
+            foundryctl.CORE_PROJECT_SKILL_PATH,
+            foundryctl.CODEX_PROJECT_SKILL_PATH,
+        }
+        payload["files"] = [
+            record for record in payload["files"]
+            if record["path"] not in removed
+        ]
+        for record in payload["files"]:
+            if record["owner_kind"] == "core":
+                record["template_version"] = "1.0.0"
+            elif record.get("owner_id") == "codex":
+                record["template_version"] = "2.0.0"
+        payload["instruction_files"] = [
+            {"path": "AGENTS.md", "max_lines": 100}
+        ]
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        for relative in removed:
+            (self.repo / relative).unlink()
+        return path
+
     def test_codex_bootstrap_dry_run_does_not_write(self) -> None:
         payload = json.loads(
             self.run_cli("bootstrap", "--profile", "codex").stdout
@@ -191,7 +222,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(payload["activation_protocol_version"], 1)
         self.assertEqual(
             [item["id"] for item in payload["adapters"]],
-            ["codex", "portable"],
+            ["codex", "claude", "portable"],
         )
         by_id = {item["id"]: item for item in payload["adapters"]}
         self.assertEqual(by_id["codex"]["enforcement"], "native")
@@ -208,6 +239,13 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(
             by_id["portable"]["capabilities"]["mutation_gate"],
             "cli",
+        )
+        self.assertEqual(by_id["claude"]["version"], "1.0.0")
+        self.assertEqual(by_id["claude"]["enforcement"], "cli")
+        self.assertEqual(by_id["claude"]["capabilities"]["skills"], "native")
+        self.assertEqual(
+            by_id["claude"]["capabilities"]["lifecycle_events"],
+            [],
         )
 
     def test_portable_bootstrap_creates_no_codex_paths(self) -> None:
@@ -238,6 +276,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertFalse((self.repo / "AGENTS.md").exists())
         self.assertFalse((self.repo / ".codex").exists())
         self.assertFalse((self.repo / ".agents").exists())
+        self.assertFalse((self.repo / ".claude").exists())
         self.assertTrue(
             (self.repo / foundryctl.CORE_ROUTER_PATH).is_file()
         )
@@ -246,6 +285,128 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.run_cli("validate", "--adapter", "portable")
         self.run_cli("spec", "validate")
+
+    def test_claude_bootstrap_creates_native_project_skills_only(self) -> None:
+        applied = json.loads(
+            self.run_cli(
+                "bootstrap",
+                "--adapter",
+                "claude",
+                "--apply",
+            ).stdout
+        )
+
+        self.assertEqual(applied["adapters"], ["claude"])
+        for relative in (
+            foundryctl.CORE_PROJECT_SKILL_PATH,
+            foundryctl.CLAUDE_PROJECT_SKILL_PATH,
+            foundryctl.CLAUDE_SPEC_SKILL_PATH,
+        ):
+            target = self.repo / relative
+            self.assertTrue(target.is_file(), relative)
+            self.assertFalse(target.is_symlink(), relative)
+        self.assertFalse((self.repo / "AGENTS.md").exists())
+        self.assertFalse((self.repo / ".agents").exists())
+        self.assertFalse((self.repo / ".codex").exists())
+        self.assertFalse(
+            (self.repo / "docs/agent-guides/README.md").exists()
+        )
+        manifest = json.loads(
+            (self.repo / foundryctl.HARNESS_MANIFEST).read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            manifest["adapters"],
+            [{"id": "claude", "version": "1.0.0", "enforcement": "cli"}],
+        )
+        self.assertEqual(
+            manifest["instruction_files"],
+            foundryctl.instruction_files_for_versions(
+                "1.1.0",
+                (("claude", "1.0.0"),),
+            ),
+        )
+        self.run_cli("validate", "--adapter", "claude")
+
+    def test_all_adapters_are_deterministic_idempotent_and_scoped(self) -> None:
+        preview = json.loads(
+            self.run_cli("bootstrap", "--all-adapters").stdout
+        )
+        self.assertEqual(preview["adapters"], ["codex", "claude", "portable"])
+        preview_paths = {
+            item.get("path") for item in preview["actions"]
+            if isinstance(item, dict)
+        }
+        for relative in (
+            foundryctl.CORE_PROJECT_SKILL_PATH,
+            foundryctl.CODEX_PROJECT_SKILL_PATH,
+            foundryctl.CLAUDE_PROJECT_SKILL_PATH,
+            foundryctl.CLAUDE_SPEC_SKILL_PATH,
+            "docs/agent-guides/README.md",
+        ):
+            self.assertIn(relative, preview_paths)
+        self.assertEqual(list(self.repo.iterdir()), [])
+
+        first = json.loads(
+            self.run_cli(
+                "bootstrap",
+                "--all-adapters",
+                "--apply",
+            ).stdout
+        )
+        second = json.loads(
+            self.run_cli(
+                "bootstrap",
+                "--all-adapters",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(first["adapters"], ["codex", "claude", "portable"])
+        self.assertEqual(second["created"], [])
+        self.assertEqual(second["updated"], [])
+        for adapter_id in foundryctl.ADAPTER_ORDER:
+            self.run_cli("validate", "--adapter", adapter_id)
+
+        claude_skill = self.repo / foundryctl.CLAUDE_SPEC_SKILL_PATH
+        claude_skill.write_text("# drift\n", encoding="utf-8")
+        self.run_cli("validate", "--adapter", "codex")
+        self.run_cli("validate", "--adapter", "portable")
+        result = self.run_cli(
+            "validate",
+            "--adapter",
+            "claude",
+            expected=1,
+        )
+        self.assertIn("HARNESS_CLAUDE_ADAPTER_DRIFT", result.stderr)
+
+    def test_claude_skill_conflict_blocks_every_project_write(self) -> None:
+        target = self.repo / foundryctl.CLAUDE_PROJECT_SKILL_PATH
+        target.parent.mkdir(parents=True)
+        target.write_text("# repository-owned Skill\n", encoding="utf-8")
+
+        preview = json.loads(
+            self.run_cli("bootstrap", "--adapter", "claude").stdout
+        )
+        conflict = next(
+            action for action in preview["actions"]
+            if action.get("path") == foundryctl.CLAUDE_PROJECT_SKILL_PATH
+        )
+        self.assertEqual(conflict["action"], "conflict")
+        failed = self.run_cli(
+            "bootstrap",
+            "--adapter",
+            "claude",
+            "--apply",
+            expected=2,
+        )
+        self.assertIn("generated adapter/Core bytes differ", failed.stderr)
+        self.assertEqual(
+            target.read_text(encoding="utf-8"),
+            "# repository-owned Skill\n",
+        )
+        self.assertFalse((self.repo / foundryctl.HARNESS_MANIFEST).exists())
+        self.assertFalse((self.repo / foundryctl.CORE_PROJECT_SKILL_PATH).exists())
 
     def test_codex_and_portable_coexist_with_scoped_validation(self) -> None:
         first = json.loads(
@@ -326,6 +487,17 @@ class FoundryctlTestCase(unittest.TestCase):
             expected=2,
         )
         self.assertIn("HARNESS_ADAPTER_SELECTION_CONFLICT", conflict.stderr)
+        all_conflict = self.run_cli(
+            "bootstrap",
+            "--all-adapters",
+            "--adapter",
+            "codex",
+            expected=2,
+        )
+        self.assertIn(
+            "HARNESS_ADAPTER_SELECTION_CONFLICT",
+            all_conflict.stderr,
+        )
         duplicate = self.run_cli(
             "bootstrap",
             "--adapter",
@@ -356,6 +528,8 @@ class FoundryctlTestCase(unittest.TestCase):
             "docs/SECURITY.md",
             "docs/design-docs/index.md",
             ".repo-foundry/engineering-specs/spec_router.py",
+            ".repo-foundry/skills/repo-foundry-ai/SKILL.md",
+            ".agents/skills/repo-foundry-ai/SKILL.md",
             ".agents/skills/engineering-specs/SKILL.md",
             ".agents/skills/engineering-specs/agents/openai.yaml",
             ".agents/skills/engineering-specs/scripts/spec_router.py",
@@ -382,15 +556,18 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertEqual(
             manifest["core"],
-            {"version": "1.0.0"},
+            {"version": "1.1.0"},
         )
         self.assertEqual(
             manifest["adapters"],
-            [{"id": "codex", "version": "2.0.0", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.1.0", "enforcement": "native"}],
         )
         self.assertEqual(
             manifest["instruction_files"],
-            [{"path": "AGENTS.md", "max_lines": 100}],
+            foundryctl.instruction_files_for_versions(
+                "1.1.0",
+                (("codex", "2.1.0"),),
+            ),
         )
         self.assertEqual(
             [item["path"] for item in manifest["files"]],
@@ -556,7 +733,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(migrated["schema_version"], 3)
         self.assertEqual(
             migrated["adapters"],
-            [{"id": "codex", "version": "2.0.0", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.1.0", "enforcement": "native"}],
         )
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
@@ -637,6 +814,90 @@ class FoundryctlTestCase(unittest.TestCase):
                 (self.repo / relative).read_text(encoding="utf-8"),
                 foundryctl.asset_text(asset),
             )
+        self.run_cli("validate", "--harness")
+
+    def test_schema3_component_upgrade_adds_project_skills_safely(self) -> None:
+        self.run_cli("bootstrap", "--adapter", "codex", "--apply")
+        manifest_path = self.write_pre_project_skill_schema3_manifest()
+
+        validation = self.run_cli("validate", "--harness")
+        self.assertIn("HARNESS_CORE_UPGRADE_AVAILABLE", validation.stderr)
+        self.assertIn("HARNESS_ADAPTER_UPGRADE_AVAILABLE", validation.stderr)
+        preview = json.loads(
+            self.run_cli("upgrade", "--to", "0.2.0").stdout
+        )
+        self.assertEqual(
+            {
+                item["path"] for item in preview["actions"]
+                if item["action"] == "create_file"
+            },
+            {
+                foundryctl.CORE_PROJECT_SKILL_PATH,
+                foundryctl.CODEX_PROJECT_SKILL_PATH,
+            },
+        )
+        self.assertFalse((self.repo / foundryctl.CORE_PROJECT_SKILL_PATH).exists())
+        self.assertFalse((self.repo / foundryctl.CODEX_PROJECT_SKILL_PATH).exists())
+
+        applied = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.2.0",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(
+            set(applied["created"]),
+            {
+                foundryctl.CORE_PROJECT_SKILL_PATH,
+                foundryctl.CODEX_PROJECT_SKILL_PATH,
+            },
+        )
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(migrated["core"]["version"], "1.1.0")
+        self.assertEqual(migrated["adapters"][0]["version"], "2.1.0")
+        self.assertEqual(
+            [item["id"] for item in migrated["applied_migrations"]],
+            [
+                "core-1.0.0-to-1.1.0",
+                "adapter-codex-2.0.0-to-2.1.0",
+            ],
+        )
+        self.run_cli("validate", "--harness")
+
+    def test_old_schema3_can_register_claude_in_one_bootstrap(self) -> None:
+        self.run_cli("bootstrap", "--adapter", "codex", "--apply")
+        manifest_path = self.write_pre_project_skill_schema3_manifest()
+
+        applied = json.loads(
+            self.run_cli(
+                "bootstrap",
+                "--adapter",
+                "claude",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(applied["adapters"], ["codex", "claude"])
+        for relative in (
+            foundryctl.CORE_PROJECT_SKILL_PATH,
+            foundryctl.CODEX_PROJECT_SKILL_PATH,
+            foundryctl.CLAUDE_PROJECT_SKILL_PATH,
+            foundryctl.CLAUDE_SPEC_SKILL_PATH,
+        ):
+            self.assertIn(relative, applied["created"])
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [item["id"] for item in manifest["adapters"]],
+            ["codex", "claude"],
+        )
+        self.assertEqual(
+            [item["id"] for item in manifest["applied_migrations"]],
+            [
+                "core-1.0.0-to-1.1.0",
+                "adapter-codex-2.0.0-to-2.1.0",
+            ],
+        )
         self.run_cli("validate", "--harness")
 
     def test_schema2_upgrade_splits_router_and_preserves_spec_state(self) -> None:
@@ -919,6 +1180,15 @@ class FoundryctlTestCase(unittest.TestCase):
             )
             result = self.run_cli("validate", "--harness", expected=1)
             self.assertIn(expected_code, result.stderr)
+
+        incompatible = json.loads(json.dumps(original))
+        incompatible["core"]["version"] = "1.0.0"
+        manifest_path.write_text(
+            json.dumps(incompatible, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        result = self.run_cli("validate", "--harness", expected=1)
+        self.assertIn("HARNESS_COMPONENT_INCOMPATIBLE", result.stderr)
 
         manifest_path.write_text(
             json.dumps(original, indent=2, sort_keys=True) + "\n",

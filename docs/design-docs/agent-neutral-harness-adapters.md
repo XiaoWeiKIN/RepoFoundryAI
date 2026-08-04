@@ -45,8 +45,9 @@ flowchart TB
     H --> P["Adapter protocol"]
     A --> P
     P --> X["Codex adapter"]
+    P --> Z["Claude adapter"]
     P --> Y["Portable manual adapter"]
-    P -.-> Z["Claude Code and future adapters"]
+    P -.-> F["Future adapters"]
 ```
 
 The Core owns repository facts, generated neutral documents, manifest shape,
@@ -86,11 +87,12 @@ The effective enforcement level is observable state. Documentation and CLI
 output must not describe `cli` or `advisory` behavior as a native runtime
 guarantee.
 
-The first implementation ships two adapters:
+The current implementation ships three adapters:
 
 | Adapter | Purpose | Enforcement |
 |---|---|---|
 | `codex` | Preserve the current AGENTS, Skill, trusted Hook, injection, write-gate, subagent, and Stop behavior | native for supported Hook paths |
+| `claude` | Install native project Skills while using explicit Core Router commands for activation and audit | native Skill discovery; CLI/advisory enforcement |
 | `portable` | Provide product-independent instructions and explicit Router CLI commands without installing product configuration | CLI plus advisory instructions |
 
 Additional products implement the same adapter descriptor and normalized
@@ -118,8 +120,9 @@ docs/
 ├── SECURITY.md
 └── design-docs/index.md
 .repo-foundry/
-└── engineering-specs/
-    └── spec_router.py
+├── engineering-specs/
+│   └── spec_router.py
+└── skills/repo-foundry-ai/SKILL.md
 ```
 
 Adapters add only their own entrypoints:
@@ -127,10 +130,15 @@ Adapters add only their own entrypoints:
 ```text
 # Codex adapter
 AGENTS.md
+.agents/skills/repo-foundry-ai/SKILL.md
 .agents/skills/engineering-specs/
 ├── SKILL.md
 └── agents/openai.yaml
 .codex/hooks.json
+
+# Claude adapter
+.claude/skills/repo-foundry-ai/SKILL.md
+.claude/skills/engineering-specs/SKILL.md
 
 # Portable adapter
 docs/agent-guides/README.md
@@ -141,6 +149,14 @@ The Core Router executable has one canonical installed path under
 independent copies of the activation engine. RepoFoundry records every
 generated Core and adapter file with its template version and installed
 SHA-256 so upgrades preserve customized bytes.
+
+The [Claude Code Skills precedence contract](https://code.claude.com/docs/en/slash-commands#where-skills-live)
+gives a personal Skill precedence over a project Skill with the same name.
+RepoFoundry deliberately retains the `repo-foundry-ai` name at both
+scopes: the distribution root Skill delegates to the canonical project Skill
+when that file exists, while the thin `.claude/skills/` entrypoint covers
+clones without a personal registration. Both routes converge on repository
+state rather than a user-home copy of the workflow.
 
 ## Harness manifest schema 3
 
@@ -156,13 +172,18 @@ strict, ordered, and forward-failing:
     "version": "0.2.0"
   },
   "core": {
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "enforcement": "native"
+    },
+    {
+      "id": "claude",
+      "version": "1.0.0",
+      "enforcement": "cli"
     },
     {
       "id": "portable",
@@ -205,16 +226,20 @@ New commands name adapters explicitly:
 ```text
 foundryctl bootstrap --adapter portable
 foundryctl bootstrap --adapter codex
-foundryctl bootstrap --adapter codex --adapter portable
+foundryctl bootstrap --adapter claude
+foundryctl bootstrap --all-adapters
 foundryctl adapter list
 foundryctl validate --harness
 foundryctl validate --adapter codex
+foundryctl validate --adapter claude
 foundryctl upgrade --to 0.2.0
 ```
 
 Bootstrap remains preview-first and preflights the complete Core plus adapter
 plan before any write. Adapter IDs are unique and output is deterministically
-ordered.
+ordered. `--all-adapters` expands to the complete registry order and conflicts
+with `--profile` or explicit `--adapter`; it never infers committed state from
+locally installed Agent hosts.
 
 For one compatibility release:
 
@@ -278,10 +303,11 @@ turn ID. Including the adapter prevents collisions when two coding-agent
 products work in the same repository concurrently. Receipts remain ephemeral
 operational state rather than project policy or normative evidence.
 
-When no native lifecycle integration exists, the portable adapter uses the
-same Core operations through `begin`, `candidates`, `activate`, `status`, and
-`audit`. It provides auditable CLI behavior without claiming automatic write
-interception.
+When no native lifecycle integration exists, the Claude and portable adapters
+use the same Core operations through `begin`, `candidates`, `activate`,
+`status`, and `audit`. Claude exposes those instructions through a native
+project Skill; portable uses a neutral guide. Both provide auditable CLI
+behavior without claiming automatic write interception.
 
 ## Spec Manager boundary
 
@@ -324,6 +350,13 @@ Schema `2` has one Codex profile and eleven seeded records. Migration to schema
 Existing Specs selection, lock, local Markdown, and Catalog version never
 change as a side effect of this Harness migration.
 
+Schema `3` component upgrades remain readable by their declared versions.
+Core `1.0.0` omits the canonical project Skill, and Codex `2.0.0` omits its
+thin root Skill. A previewed upgrade to Core `1.1.0` and Codex `2.1.0`, or a
+bootstrap that adds an adapter, creates those generated paths only when they
+are absent or still have provable template provenance and records one Core and
+adapter migration. Unknown or customized target bytes remain conflicts.
+
 ## Safety and ownership
 
 - Adapter installation never rewrites repository-owned content.
@@ -347,15 +380,17 @@ change as a side effect of this Harness migration.
   migration, and compatibility CLI.
 - `scripts/spec_manager.py`: remove instruction-route ownership and expose only
   provider-neutral Spec state validation.
-- `assets/`: separate Core templates from `adapters/codex` and
-  `adapters/portable` templates.
+- `assets/`: separate Core templates from `adapters/codex`,
+  `adapters/claude`, and `adapters/portable` templates.
 - Activation Engine: own candidates, Applicability receipt, dependency closure,
   local digest verification, normalized events, and audit.
 - Codex adapter: own Hook payload translation, tool-path extraction, Hook output
   translation, `AGENTS.md`, Skill metadata, and `.codex/hooks.json`.
-- tests: prove Core independence, Codex behavior parity, portable fallback,
-  multi-adapter coexistence, schema migration, customization preservation, and
-  rollback.
+- Claude adapter: own project Skill discovery entrypoints and truthful
+  CLI/advisory activation instructions without installing Hooks.
+- tests: prove Core independence, Codex behavior parity, Claude and portable
+  fallback, multi-adapter coexistence, schema/component migration,
+  customization preservation, and rollback.
 - docs and root Skill: present RepoFoundry as Agent-neutral with first-class
   adapters rather than a Codex-only Harness.
 
@@ -364,8 +399,8 @@ change as a side effect of this Harness migration.
 - A Core or portable Bootstrap writes no `.codex` file and does not require
   `AGENTS.md`.
 - A Codex Bootstrap preserves the `v0.1.0` user-visible Harness behavior.
-- Codex and portable adapters can coexist over one manifest, Spec lock, managed
-  index, and Activation Engine.
+- Codex, Claude, and portable adapters can coexist over one manifest, Spec
+  lock, managed index, and Activation Engine.
 - The same candidate paths and activation choice produce the same direct IDs,
   dependency closure, requirements, and audit result through Codex and manual
   entrypoints.

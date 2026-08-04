@@ -92,12 +92,18 @@ target may contain:
 target-repository/
 ├── AGENTS.md                         # Codex adapter only
 ├── ARCHITECTURE.md
-├── .repo-foundry/engineering-specs/
-│   └── spec_router.py                # shared activation engine
-├── .agents/skills/engineering-specs/ # Codex adapter entrypoint
-│   ├── SKILL.md
-│   ├── agents/openai.yaml
-│   └── scripts/spec_router.py
+├── .repo-foundry/
+│   ├── engineering-specs/spec_router.py # shared activation engine
+│   └── skills/repo-foundry-ai/SKILL.md  # canonical project workflow
+├── .agents/skills/                   # Codex adapter entrypoints
+│   ├── repo-foundry-ai/SKILL.md
+│   └── engineering-specs/
+│       ├── SKILL.md
+│       ├── agents/openai.yaml
+│       └── scripts/spec_router.py
+├── .claude/skills/                   # Claude project Skills
+│   ├── repo-foundry-ai/SKILL.md
+│   └── engineering-specs/SKILL.md
 ├── .codex/
 │   └── hooks.json                     # reviewed project activation guards
 ├── scripts/
@@ -172,13 +178,28 @@ host registrations unchanged and creates none on a fresh install. Override the
 Claude Code configuration root with `CLAUDE_CONFIG_DIR` or `--claude-home`.
 Directory symlink discovery requires Claude Code 2.1.203 or later.
 
-This host registration makes `/repo-foundry-ai` discoverable in Claude Code;
-it does not claim a native Claude project Harness adapter. Use the portable
-adapter for repositories until a separately versioned Claude adapter ships:
+Host registration makes `/repo-foundry-ai` discoverable from the personal
+installation. Project registration is a separate, repository-owned operation.
+Install Claude Skills in the current project, or every bundled adapter in
+deterministic order, with:
 
 ```bash
-repofoundry --repo . bootstrap --adapter portable --apply
+repofoundry --repo . bootstrap --adapter claude --apply
+repofoundry --repo . bootstrap --all-adapters --apply
 ```
+
+The Claude adapter creates regular files under `.claude/skills/`; it does not
+link to a home directory. It provides native Skill discovery and uses the
+shared project Router with explicit CLI activation and audit. It does not
+claim Claude lifecycle Hooks or a mechanical mutation gate. `--all-adapters`
+always expands to `codex`, `claude`, and `portable`; it never depends on which
+hosts happen to be installed on the current machine.
+
+Claude Code gives a personal Skill precedence over a project Skill with the
+same name. RepoFoundry keeps the public `/repo-foundry-ai` name at both scopes:
+the installed personal entrypoint must read the repository's canonical
+`.repo-foundry/skills/repo-foundry-ai/SKILL.md` when present. A clone without a
+personal registration discovers the thin project entrypoint directly.
 
 The command reports the active package home, CLI path, host links, and every
 backup it preserves. If the bin directory is not already on `PATH`, it prints
@@ -275,10 +296,12 @@ EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 repofoundry --version
 repofoundry --repo . adapter list
 repofoundry --repo . bootstrap --adapter portable
+repofoundry --repo . bootstrap --adapter claude --apply
 repofoundry --repo . \
-  bootstrap --adapter codex --adapter portable --spec languages/go --apply
+  bootstrap --all-adapters --spec languages/go --apply
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
+repofoundry --repo . validate --adapter claude
 repofoundry --repo . upgrade --to 0.2.0
 repofoundry --repo . upgrade --to 0.2.0 --apply
 
@@ -299,14 +322,18 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.2.0` introduces Harness schema `3`, Harness Core `1.0.0`, Codex
-adapter `2.0.0`, Portable adapter `1.0.0`, and activation protocol `1`.
+RepoFoundry `0.2.0` uses Harness schema `3`, Harness Core `1.1.0`, Codex
+adapter `2.1.0`, Claude adapter `1.0.0`, Portable adapter `1.0.0`, and
+activation protocol `1`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.2.0 --apply`. A versioned seed is replaced only when its bytes
-still match the recorded installed SHA-256; customized or provenance-unknown
-files are preserved, and post-write validation failure rolls the migration
-back. See the [versioning and migration design](./docs/design-docs/repo-foundry-versioning-and-migrations.md).
+`upgrade --to 0.2.0 --apply`. Earlier schema `3` Core `1.0.0` and Codex `2.0.0`
+contracts also stay readable; an upgrade, or a previewed bootstrap that adds
+an adapter, records the component migrations and creates the new project Skill
+paths. A versioned seed is replaced only when its bytes still match the
+recorded installed SHA-256; customized or provenance-unknown files are
+preserved, and post-write validation failure rolls the migration back. See the
+[versioning and migration design](./docs/design-docs/repo-foundry-versioning-and-migrations.md).
 
 Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
@@ -327,8 +354,9 @@ optional Specs. Required Specs and transitive dependencies remain automatic.
 
 Installation and task activation are separate. Bootstrap installs exactly one
 shared activation engine; it does not turn every Spec into a Skill. The Codex
-adapter exposes `$engineering-specs`, while Portable exposes the same engine
-through explicit CLI instructions. Before implementation or code review, the
+adapter exposes `$engineering-specs` with native Hooks. Claude discovers a
+project `$engineering-specs` Skill, and Claude plus Portable use the same
+engine through explicit CLI steps. Before implementation or code review, the
 engine:
 
 1. matches planned paths to the locked Catalog scopes;
@@ -357,8 +385,9 @@ inject the activated local documents before the first write, and audit changed
 paths at `Stop`. Project hooks run only after the repository is trusted and the
 exact commands are reviewed through Codex `/hooks`. If hooks are disabled or
 unavailable, run the Router's `begin` before any write and finish with
-`audit --message` over the five-label handoff. Portable uses this manual flow
-by design and reports CLI/advisory enforcement rather than a mechanical gate.
+`audit --message` over the five-label handoff. Claude and Portable use this
+manual flow by design and report CLI/advisory enforcement rather than a
+mechanical gate.
 
 ## Boundaries keep the system trustworthy
 

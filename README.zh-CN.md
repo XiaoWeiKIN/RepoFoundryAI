@@ -85,12 +85,18 @@ RepoFoundry 只创建已选择能力拥有的路径。完整使用后，目标�
 target-repository/
 ├── AGENTS.md                         # 仅 Codex adapter
 ├── ARCHITECTURE.md
-├── .repo-foundry/engineering-specs/
-│   └── spec_router.py                # 共享激活引擎
-├── .agents/skills/engineering-specs/ # Codex adapter 入口
-│   ├── SKILL.md
-│   ├── agents/openai.yaml
-│   └── scripts/spec_router.py
+├── .repo-foundry/
+│   ├── engineering-specs/spec_router.py # 共享激活引擎
+│   └── skills/repo-foundry-ai/SKILL.md  # 项目规范工作流
+├── .agents/skills/                   # Codex adapter 入口
+│   ├── repo-foundry-ai/SKILL.md
+│   └── engineering-specs/
+│       ├── SKILL.md
+│       ├── agents/openai.yaml
+│       └── scripts/spec_router.py
+├── .claude/skills/                   # Claude 项目 Skills
+│   ├── repo-foundry-ai/SKILL.md
+│   └── engineering-specs/SKILL.md
 ├── .codex/
 │   └── hooks.json                     # 经审查的项目激活门禁
 ├── scripts/
@@ -158,13 +164,23 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 可通过 `CLAUDE_CONFIG_DIR` 或 `--claude-home` 覆盖。
 目录软链接发现要求 Claude Code 2.1.203 或更高版本。
 
-这项宿主注册只负责让 Claude Code 发现 `/repo-foundry-ai`，不把它描述成完整的
-Claude 项目 Harness adapter。在独立版本的 Claude adapter 发布前，项目继续使用
-portable adapter：
+宿主注册只负责让个人安装中的 `/repo-foundry-ai` 可发现；项目注册是另一个由仓库
+持有的操作。为当前项目安装 Claude Skills，或按确定顺序安装全部 adapter：
 
 ```bash
-repofoundry --repo . bootstrap --adapter portable --apply
+repofoundry --repo . bootstrap --adapter claude --apply
+repofoundry --repo . bootstrap --all-adapters --apply
 ```
+
+Claude adapter 在 `.claude/skills/` 下创建普通文件，不链接用户 home。它提供原生
+Skill discovery，通过共享项目 Router 显式执行 CLI 激活与审计，但不宣称 Claude
+生命周期 Hooks 或机械写入门禁。`--all-adapters` 总是展开为 `codex`、`claude`、
+`portable`，不会因当前机器安装了哪些宿主而变化。
+
+Claude Code 对同名 Skill 采用个人级优先于项目级的规则。RepoFoundry 在两个 scope
+都保留 `/repo-foundry-ai` 品牌入口：已安装的个人入口发现项目 canonical 文件时，
+必须读取 `.repo-foundry/skills/repo-foundry-ai/SKILL.md`；没有个人注册的 clone 则
+直接发现薄项目入口。
 
 命令会报告当前 package home、CLI 路径、宿主链接和所有保留的备份。如果 bin
 目录尚未进入 `PATH`，安装器会输出需要加入的精确目录。安装后验证：
@@ -253,10 +269,12 @@ EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 repofoundry --version
 repofoundry --repo . adapter list
 repofoundry --repo . bootstrap --adapter portable
+repofoundry --repo . bootstrap --adapter claude --apply
 repofoundry --repo . \
-  bootstrap --adapter codex --adapter portable --spec languages/go --apply
+  bootstrap --all-adapters --spec languages/go --apply
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
+repofoundry --repo . validate --adapter claude
 repofoundry --repo . upgrade --to 0.2.0
 repofoundry --repo . upgrade --to 0.2.0 --apply
 
@@ -276,12 +294,14 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.2.0` 引入 Harness schema `3`、Harness Core `1.0.0`、Codex
-adapter `2.0.0`、Portable adapter `1.0.0` 与激活协议 `1`；它们与 Engineering
-Specs Catalog 各自独立演进。schema `1` 和 `2` 继续可读，但只有显式执行
-`upgrade --to 0.2.0 --apply` 才会迁移。versioned seed 只有在文件字节仍匹配记录的
-installed SHA-256 时才自动替换；定制文件或来源未知文件保持原样，写后验证失败会
-回滚。完整契约见
+RepoFoundry `0.2.0` 使用 Harness schema `3`、Harness Core `1.1.0`、Codex
+adapter `2.1.0`、Claude adapter `1.0.0`、Portable adapter `1.0.0` 与激活协议
+`1`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
+可读，但只有显式执行 `upgrade --to 0.2.0 --apply` 才会迁移。较早的 schema `3`
+Core `1.0.0` 与 Codex `2.0.0` 契约也继续可读；显式 upgrade 或一次预览过的
+adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
+字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
+原样，写后验证失败会回滚。完整契约见
 [版本与迁移设计](./docs/design-docs/repo-foundry-versioning-and-migrations.md)。
 
 Engineering Specs 来自独立的
@@ -300,8 +320,9 @@ Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
 ## 为每个任务激活规范
 
 安装与任务激活是两个阶段。Bootstrap 只安装一个共享激活引擎，不会把每份 Spec
-都变成 Skill。Codex adapter 暴露 `$engineering-specs`，Portable adapter 通过显式
-CLI instruction 使用同一引擎。实现或评审前，引擎会：
+都变成 Skill。Codex adapter 通过原生 Hooks 暴露 `$engineering-specs`；Claude
+发现项目级 `$engineering-specs` Skill，Claude 与 Portable 都通过显式 CLI 步骤
+使用同一引擎。实现或评审前，引擎会：
 
 1. 用计划路径匹配 lock 中的 Catalog 作用域；
 2. 要求 Agent 读取候选 description 与 Applicability；
@@ -325,8 +346,8 @@ Codex adapter 翻译原生事件：生成的 Hooks 在 `UserPromptSubmit` 建立
 `Stop` 审计实际变更路径。项目只有在仓库受信任、用户通过 Codex `/hooks` 审查
 精确命令后才运行这些 Hooks。Hooks 被禁用或不可用时，Skill 仍是人工契约，但不再
 具有机械写入门禁；Agent 必须在写入前运行 Router `begin`，并在完成前用包含五字段
-交接的 `audit --message` 检查路径。Portable 默认采用这条手动路径，并明确报告
-CLI/advisory enforcement，而不是机械门禁。
+交接的 `audit --message` 检查路径。Claude 与 Portable 默认采用这条手动路径，
+并明确报告 CLI/advisory enforcement，而不是机械门禁。
 
 ## 清晰边界保证系统可信
 

@@ -600,6 +600,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         for product_token in (
             "Codex",
+            "Claude",
             "UserPromptSubmit",
             "SubagentStart",
             "PreToolUse",
@@ -607,6 +608,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             "permissionDecision",
             ".codex",
             ".agents",
+            ".claude",
             "openai",
         ):
             self.assertNotIn(product_token, core_text)
@@ -636,6 +638,52 @@ class RepositoryContractTestCase(unittest.TestCase):
         self.assertTrue(
             (ROOT / "assets/adapters/portable/agent-guide.md").is_file()
         )
+
+    def test_project_skill_assets_are_thin_portable_and_well_formed(self) -> None:
+        assets = {
+            "core": (
+                ROOT / "assets/core/repo-foundry-ai/SKILL.md",
+                "name: repo-foundry-ai",
+                120,
+            ),
+            "codex": (
+                ROOT / "assets/adapters/codex/repo-foundry-ai/SKILL.md",
+                "name: repo-foundry-ai",
+                80,
+            ),
+            "claude": (
+                ROOT / "assets/adapters/claude/repo-foundry-ai/SKILL.md",
+                "name: repo-foundry-ai",
+                80,
+            ),
+            "claude-specs": (
+                ROOT / "assets/adapters/claude/engineering-specs/SKILL.md",
+                "name: engineering-specs",
+                120,
+            ),
+        }
+        for label, (path, expected_name, maximum) in assets.items():
+            text = path.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("---\n"), label)
+            self.assertIn(expected_name, text, label)
+            self.assertIn("description:", text, label)
+            self.assertLessEqual(len(text.splitlines()), maximum, label)
+            self.assertNotIn("~/", text, label)
+            self.assertNotIn("/Users/", text, label)
+            self.assertNotIn("/home/", text, label)
+
+        canonical_path = ".repo-foundry/skills/repo-foundry-ai/SKILL.md"
+        self.assertIn(canonical_path, assets["codex"][0].read_text(encoding="utf-8"))
+        self.assertIn(canonical_path, assets["claude"][0].read_text(encoding="utf-8"))
+        claude_specs = assets["claude-specs"][0].read_text(encoding="utf-8")
+        self.assertIn(
+            ".repo-foundry/engineering-specs/spec_router.py",
+            claude_specs,
+        )
+        self.assertIn("--adapter-id claude", claude_specs)
+        self.assertNotIn("hooks.json", claude_specs)
+        distribution_skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn(canonical_path, distribution_skill)
 
     def test_workflow_has_no_bundled_engineering_spec_content(self) -> None:
         self.assertFalse((ROOT / "engineering-specs").exists())

@@ -1,0 +1,18 @@
+EP-012 canonical repository check evidence
+Date: 2026-08-04
+
+Command:
+python3 -B scripts/check.py
+
+Result:
+- Exit 0.
+- Engineering Research: 29 tests passed.
+- Engineering Benchmark: 8 tests passed.
+- Engineering Execution Plan: 37 tests passed.
+- RepoFoundry AI, installer, repository contracts, Spec Manager, and Router:
+  95 tests passed.
+- Research repository validation: errors 0, warnings 0.
+- Execution Plan repository validation: errors 0, warnings 0.
+- Managed indexes, Markdown links, package metadata, Engineering Spec
+  ownership, and Git whitespace checks passed.
+- Final line: [check] all integrity checks passed
