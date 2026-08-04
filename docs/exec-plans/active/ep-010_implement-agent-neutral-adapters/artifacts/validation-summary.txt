@@ -1,0 +1,22 @@
+EP-010 validation summary
+Recorded: 2026-08-04T02:56:03Z
+
+python3 -B -m unittest tests.test_foundryctl tests.test_spec_router tests.test_spec_manager tests.test_repository_contracts
+Result: 72 tests passed; exit 0.
+
+python3 -B /Users/wangxiaowei1/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
+Result: Skill is valid; exit 0.
+
+python3 -B /Users/wangxiaowei1/.codex/skills/.system/skill-creator/scripts/quick_validate.py assets/adapters/codex/engineering-specs
+Result: Skill is valid; exit 0.
+
+python3 -B engineering-execution-plan/scripts/epctl.py --repo . validate
+Result: 0 errors, 0 warnings; exit 0.
+
+python3 -B scripts/check.py
+Result: all integrity checks passed; Research 29, Benchmark 8,
+Engineering Execution Plan 37, RepoFoundry/repository 72 tests; exit 0.
+
+python3 -B scripts/foundryctl.py adapter list
+Result: schema 3 / activation protocol 1; codex 2.0.0 (native) and
+portable 1.0.0 (cli) reported with their tested capability declarations.

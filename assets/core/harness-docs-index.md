@@ -7,7 +7,8 @@ Last verified: unknown
 
 ## Start Here
 
-- Repository guidance: `AGENTS.md`
+- Agent guidance: use the installed adapter entrypoints recorded in
+  `docs/.engineering/harness.json`.
 - Architecture map: `ARCHITECTURE.md`
 - Project overview and development setup: `README.md`
 

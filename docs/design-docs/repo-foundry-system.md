@@ -2,8 +2,8 @@
 doc_type: design
 title: RepoFoundry AI system identity and packaging
 status: current
-adr_refs: ["ADR-007", "ADR-008", "ADR-009"]
-updated: 2026-08-03
+adr_refs: ["ADR-007", "ADR-008", "ADR-009", "ADR-011", "ADR-012"]
+updated: 2026-08-04
 ---
 
 # RepoFoundry AI System Identity and Packaging
@@ -52,7 +52,7 @@ the engineering environment in which multiple workflows can operate.
 | Root Skill ID | `repo-foundry-ai` |
 | Root Skill display name | `RepoFoundry AI` |
 | Root CLI | `scripts/foundryctl.py` |
-| Distribution version source | `VERSION` (`0.1.0`) |
+| Distribution version source | `VERSION` (`0.2.0`) |
 | Installation variable used in examples | `REPO_FOUNDRY_HOME` |
 | New Harness and Spec manifest owner | `repo-foundry` |
 | Persistent target state directory | `docs/.engineering/` |

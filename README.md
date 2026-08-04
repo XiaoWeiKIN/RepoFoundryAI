@@ -83,9 +83,11 @@ target may contain:
 
 ```text
 target-repository/
-├── AGENTS.md
+├── AGENTS.md                         # Codex adapter only
 ├── ARCHITECTURE.md
-├── .agents/skills/engineering-specs/ # one project-local task Router Skill
+├── .repo-foundry/engineering-specs/
+│   └── spec_router.py                # shared activation engine
+├── .agents/skills/engineering-specs/ # Codex adapter entrypoint
 │   ├── SKILL.md
 │   ├── agents/openai.yaml
 │   └── scripts/spec_router.py
@@ -108,7 +110,9 @@ target-repository/
     │   ├── harness.json
     │   ├── specs.json
     │   └── specs.lock.json
-    ├── agent-guides/managed/
+    ├── agent-guides/
+    │   ├── README.md                  # Portable adapter entrypoint
+    │   └── managed/
     ├── design-docs/
     ├── research/{active,completed}/
     ├── adr/
@@ -158,9 +162,10 @@ when they preserve these package roots.
 Bootstrap a repository:
 
 ```text
-Use $repo-foundry-ai to inspect this repository, preview the Codex Harness
-Bootstrap, and report create, preserve, and conflict actions. Apply only after
-the preview is conflict-free, then validate the Harness and local Specs.
+Use $repo-foundry-ai to inspect this repository, preview the Agent-neutral
+Harness Core and suitable adapters, and report create, preserve, and conflict
+actions. Apply only after the preview is conflict-free, then validate the
+Harness and local Specs.
 ```
 
 Route specialized work:
@@ -213,12 +218,14 @@ RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
 python3 "$FOUNDRYCTL" --version
-python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex
+python3 "$FOUNDRYCTL" --repo . adapter list
+python3 "$FOUNDRYCTL" --repo . bootstrap --adapter portable
 python3 "$FOUNDRYCTL" --repo . \
-  bootstrap --profile codex --spec languages/go --apply
+  bootstrap --adapter codex --adapter portable --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . validate --harness
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0 --apply
+python3 "$FOUNDRYCTL" --repo . validate --adapter codex
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0 --apply
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
@@ -234,13 +241,14 @@ python3 "$EPCTL" --repo . status
 
 Bootstrap, Harness upgrades, and Spec writes are preview-first. Bootstrap
 creates missing paths and preserves repository-owned files. An agent
-instruction file registered by the Codex profile must stay at or below 100
-physical lines.
+instruction file registered by an adapter must stay within that adapter's line
+budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.1.0` introduces Harness schema `2` and Codex profile `1.0.0`.
+RepoFoundry `0.2.0` introduces Harness schema `3`, Harness Core `1.0.0`, Codex
+adapter `2.0.0`, Portable adapter `1.0.0`, and activation protocol `1`.
 Those versions evolve independently from the Engineering Specs Catalog.
-Schema `1` stays readable but is changed only by an explicit
-`upgrade --to 0.1.0 --apply`. A versioned seed is replaced only when its bytes
+Schemas `1` and `2` stay readable but are changed only by an explicit
+`upgrade --to 0.2.0 --apply`. A versioned seed is replaced only when its bytes
 still match the recorded installed SHA-256; customized or provenance-unknown
 files are preserved, and post-write validation failure rolls the migration
 back. See the [versioning and migration design](./docs/design-docs/repo-foundry-versioning-and-migrations.md).
@@ -262,9 +270,11 @@ optional Specs. Required Specs and transitive dependencies remain automatic.
 
 ## Activate Specifications for each task
 
-Installation and task activation are separate. Bootstrap generates exactly one
-project-local `$engineering-specs` Router Skill; it does not turn every Spec
-into a Skill. Before implementation or code review, the Router:
+Installation and task activation are separate. Bootstrap installs exactly one
+shared activation engine; it does not turn every Spec into a Skill. The Codex
+adapter exposes `$engineering-specs`, while Portable exposes the same engine
+through explicit CLI instructions. Before implementation or code review, the
+engine:
 
 1. matches planned paths to the locked Catalog scopes;
 2. asks the Agent to read candidate descriptions and Applicability;
@@ -276,22 +286,24 @@ into a Skill. Before implementation or code review, the Router:
 
 ```mermaid
 flowchart LR
-    P["Prompt + planned paths"] --> R["$engineering-specs Router"]
+    P["Prompt + planned paths"] --> D["Agent adapter"]
+    D --> R["shared activation engine"]
     L["locked local Specs"] --> R
     R --> A["turn activation receipt"]
-    A --> G["trusted Codex Hooks"]
-    G --> W["implementation or review"]
+    A --> W["implementation or review"]
     W --> H["changed-path + handoff audit"]
 ```
 
-The generated Codex Hooks establish a Git baseline on `UserPromptSubmit`, pass
+The Core understands only normalized `session_start`, `subagent_start`,
+`before_mutation`, and `stop` events. The Codex adapter translates its native
+events: generated Hooks establish a Git baseline on `UserPromptSubmit`, pass
 the contract to subagents, deny Bash or `apply_patch` writes before activation,
 inject the activated local documents before the first write, and audit changed
 paths at `Stop`. Project hooks run only after the repository is trusted and the
 exact commands are reviewed through Codex `/hooks`. If hooks are disabled or
 unavailable, run the Router's `begin` before any write and finish with
-`audit --message` over the five-label handoff. The Skill remains the manual
-contract, but there is no mechanical write gate.
+`audit --message` over the five-label handoff. Portable uses this manual flow
+by design and reports CLI/advisory enforcement rather than a mechanical gate.
 
 ## Boundaries keep the system trustworthy
 
@@ -303,6 +315,8 @@ contract, but there is no mechanical write gate.
 - Bootstrap does not overwrite repository-owned documentation.
 - Normative Engineering Specs stay in their independent repository.
 - RepoFoundry generates one task Router, not one Skill per Specification.
+- Core contains no Agent-product event, tool payload, trust model, or
+  instruction-file format; adapters own those translations.
 - Project Hooks are guardrails inside a trusted Codex project, not a universal
   enforcement guarantee for other agents or disabled hook environments.
 - Case Studies are created only after an explicit sharing request.
@@ -354,6 +368,7 @@ RepoFoundry AI:
 - [System identity and packaging](./docs/design-docs/repo-foundry-system.md)
 - [Versioning and Harness migrations](./docs/design-docs/repo-foundry-versioning-and-migrations.md)
 - [Engineering Spec resolution](./docs/design-docs/engineering-spec-management.md)
+- [Agent-neutral Harness and adapters](./docs/design-docs/agent-neutral-harness-adapters.md)
 
 Professional capabilities:
 
@@ -373,4 +388,7 @@ Decision and implementation:
 - [ADR-007 — Adopt RepoFoundry](./docs/adr/adr-007_repo-foundry-identity.md)
 - [ADR-008 — Use RepoFoundry AI externally](./docs/adr/adr-008_repofoundry-ai-brand.md)
 - [ADR-009 — Align the root Skill name with RepoFoundry AI](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
+- [ADR-011 — Separate Core from Agent adapters](./docs/adr/adr-011_agent-neutral-harness-adapters.md)
+- [ADR-012 — Separate Spec activation from runtime adapters](./docs/adr/adr-012_agent-neutral-spec-activation.md)
 - [EP-006 — Migrate to RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
+- [EP-010 — Implement Agent-neutral adapters](./docs/exec-plans/active/ep-010_implement-agent-neutral-adapters/EXECPLAN.md)

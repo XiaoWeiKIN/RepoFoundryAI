@@ -2,28 +2,34 @@
 doc_type: design
 title: RepoFoundry versioning and Harness migrations
 status: current
-updated: 2026-08-03
+adr_refs: ["ADR-011", "ADR-012"]
+updated: 2026-08-04
 ---
 
 # RepoFoundry Versioning and Harness Migrations
 
 ## Purpose
 
-RepoFoundry must be able to improve its Skill, scripts, profiles, and generated
+RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and generated
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The first versioned distribution is `0.1.0`. It writes Harness schema `2` and
-Codex profile `1.0.0`. Engineering Specifications keep their independent
-Catalog version and lock lifecycle.
+The current distribution is `0.2.0`. It writes Harness schema `3`, Core
+`1.0.0`, Codex adapter `2.0.0`, Portable adapter `1.0.0`, and activation
+protocol `1`. Engineering Specifications keep their independent Catalog
+version and lock lifecycle. Distribution `0.1.0`, schema `2`, and Codex profile
+`1.0.0` remain explicit migration inputs rather than the current model.
 
 ## Independent version planes
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.1.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
-| Harness schema | `2` | `schema_version` | JSON state shape and validation contract |
-| Codex profile | `1.0.0` | `profile.version`, per-file template metadata | Seed set and template behavior |
+| RepoFoundry distribution | `0.2.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
+| Harness Core | `1.0.0` | `core.version`, Core file records | Product-neutral repository and activation behavior |
+| Codex adapter | `2.0.0` | `adapters[]`, adapter file records | Codex instructions, Hooks, and event translation |
+| Portable adapter | `1.0.0` | `adapters[]`, adapter file records | CLI and advisory integration |
+| Activation protocol | `1` | Core executable and adapter capability output | Normalized event and decision semantics |
 | Engineering Specs Catalog | `1.2.0` by default | `specs.json`, `specs.lock.json` | Independently selected engineering guidance release |
 
 No plane inherits another plane's version. A Spec update does not migrate the
@@ -31,11 +37,13 @@ Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
 
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.1.0"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.2.0"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
-    U --> H["Harness schema 2"]
-    U --> C["Codex profile 1.0.0"]
-    C --> F["Seed metadata<br/>template + installed SHA-256"]
+    U --> H["Harness schema 3"]
+    U --> C["Harness Core 1.0.0"]
+    U --> A["Codex + Portable adapters"]
+    C --> F["Core file provenance"]
+    A --> F
     S["Specs Catalog<br/>independent SemVer"] --> L["specs.json + specs.lock.json"]
     H -.->|"does not select"| L
 ```
@@ -45,8 +53,8 @@ flowchart LR
 Every distributed change updates the planes it actually changes:
 
 - bump `VERSION` for every RepoFoundry release;
-- bump the Codex profile whenever any seeded template bytes, required seed set,
-  or profile behavior changes;
+- bump Core or the owning adapter whenever its template bytes, required seed
+  set, or behavior changes;
 - bump the Harness schema whenever the persistent JSON shape or interpretation
   changes, while retaining explicit readers for supported older schemas;
 - add deterministic migration logic and fixtures before publishing a release
@@ -54,10 +62,9 @@ Every distributed change updates the planes it actually changes:
 - update the Specs Catalog only in its own repository and select it through
   `spec update`.
 
-In particular, template bytes must never change while keeping the same profile
-version. Schema `2` intentionally verifies that invariant against the bundled
-assets. A distribution-only script or Skill fix may leave the schema and
-profile versions unchanged.
+In particular, template bytes must never change while keeping the same owning
+Core or adapter version. A distribution-only script or Skill fix may leave the
+schema, Core, and adapter versions unchanged.
 
 ## Schema compatibility
 
@@ -65,15 +72,16 @@ The reader is deliberately asymmetric:
 
 - schema `1` is accepted as a legacy, read-only contract and emits
   `HARNESS_SCHEMA_UPGRADE_AVAILABLE`;
-- schema `2` is accepted when its producer, profile, templates, and migration
-  records are not newer than the installed distribution;
-- an unknown future schema, producer, profile, template, or migration version
+- schema `2` is accepted as the versioned Codex-profile migration input;
+- schema `3` is accepted when its producer, Core, adapters, templates, and
+  migration records are not newer than the installed distribution;
+- an unknown future schema, producer, Core, adapter, template, or migration version
   fails closed;
 - `bootstrap` never migrates an existing manifest; migration requires the
   explicit `upgrade` command.
 
-Schema `2` records the producer and profile plus one provenance record for each
-seeded file. A versioned record contains the template SHA-256 and the SHA-256
+Schema `3` records the producer, Core, adapters, and unique Core/adapter owner
+for each seeded file. A versioned record contains the template SHA-256 and the SHA-256
 installed at the last safe adoption point. A pre-existing file that cannot be
 matched to a bundled template is recorded as `legacy-unversioned` with null
 hashes so a future release cannot mistake it for an overwrite-safe seed.
@@ -110,8 +118,8 @@ flowchart TD
 | File equals its recorded `installed_sha256` and a newer template exists | Replace it and record the new hashes |
 | Versioned file differs from `installed_sha256` | Conflict; preserve bytes and require a manual merge |
 | `legacy-unversioned` project-editable document differs from the current template | Preserve permanently until explicitly reconciled |
-| A new generated Router or Hook seed is absent | Create it during the explicit profile upgrade |
-| A generated Router or Hook path contains different bytes | Conflict; require explicit reconciliation |
+| A new generated Core or adapter seed is absent | Create it during the explicit upgrade |
+| A generated Core or adapter path contains different bytes | Conflict; require explicit reconciliation |
 | Required file missing, wrong type, or reached through a symlink | Conflict |
 
 This policy makes customization detection evidence-based. Timestamps, Git
@@ -119,7 +127,7 @@ status, and heuristic text matching are not accepted as overwrite authority.
 
 ## Migration history and idempotence
 
-Successful structural and profile migrations append stable records to
+Successful structural, Core, and adapter migrations append stable records to
 `applied_migrations`. The records have no wall-clock timestamp so the manifest
 remains reproducible. Reapplying the same target produces no file or manifest
 updates and never duplicates a migration ID.

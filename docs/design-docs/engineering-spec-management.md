@@ -2,11 +2,17 @@
 doc_type: design
 title: Engineering Spec resolution and project materialization
 status: current
-adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-010"]
-updated: 2026-08-03
+adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-010", "ADR-012"]
+updated: 2026-08-04
 ---
 
 # Engineering Spec Resolution and Project Materialization
+
+> Current adapter boundary: ADR-012 and
+> [Agent-neutral Harness and Engineering Spec adapters](agent-neutral-harness-adapters.md)
+> move candidate, activation, dependency, digest, receipt, and audit semantics
+> into the shared Core. Codex-specific routes and Hooks described below are the
+> Codex adapter, not a requirement of Spec content or `spec_manager.py`.
 
 ## Purpose
 
@@ -309,10 +315,11 @@ foundryctl spec validate
   equivalent. Repeated `--spec ID` values replace the complete optional direct
   selection; `--required-only` removes every optional direct ID.
 - `validate` performs no writes and verifies the manifest, lock, managed
-  content, project Spec references, routing index, and `AGENTS.md` route. It
-  performs no network or Git operation.
+  content, project Spec references, and routing index. It performs no network
+  or Git operation and owns no adapter instruction route.
 
-`foundryctl bootstrap --profile codex` includes the same Spec plan and
+`foundryctl bootstrap --adapter codex` includes the same Spec plan;
+`--profile codex` remains a deprecated compatibility alias. Bootstrap
 accepts optional initial `--spec-repository` and `--spec-version` values.
 `--spec-ref` selects an explicit development source instead. Repeated
 `--spec ID` values choose optional Specs; omitting them creates a required-only

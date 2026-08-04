@@ -17,6 +17,9 @@ how accepted choices are realized.
 - [Aggregation Skill packaging baseline](engineering-workflow-packaging.md) —
   ADR-004/005 boundaries; public naming is amended by the RepoFoundry AI
   identity document.
-- [Codex project documentation bootstrap](codex-project-bootstrap.md)
+- [Codex project documentation bootstrap](codex-project-bootstrap.md) —
+  compatibility behavior now implemented by the Codex adapter.
 - [RepoFoundry versioning and Harness migrations](repo-foundry-versioning-and-migrations.md)
-- [Engineering Spec resolution and project materialization](engineering-spec-management.md)
+- [Engineering Spec resolution and project materialization](engineering-spec-management.md) —
+  Catalog and materialization contract; activation is amended by ADR-012.
+- [Agent-neutral Harness and Engineering Spec adapters](agent-neutral-harness-adapters.md)

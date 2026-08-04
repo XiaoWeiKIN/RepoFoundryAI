@@ -2,8 +2,8 @@
 doc_type: design
 title: EngineeringWorkflow skill packaging
 status: current
-adr_refs: ["ADR-004", "ADR-005"]
-updated: 2026-07-31
+adr_refs: ["ADR-004", "ADR-005", "ADR-011", "ADR-012"]
+updated: 2026-08-04
 ---
 
 # EngineeringWorkflow Skill Packaging
@@ -13,6 +13,9 @@ boundaries adopted by ADR-004 and ADR-005. Its product identifiers and path
 examples record the original packaging baseline.
 [RepoFoundry AI system identity and packaging](repo-foundry-system.md) amends
 that naming while retaining these structural boundaries.
+[Agent-neutral Harness and Engineering Spec adapters](agent-neutral-harness-adapters.md)
+amends the root asset layout and Bootstrap command examples below; they remain
+the `0.1.0` packaging baseline rather than current adapter paths.
 
 Decision records:
 [ADR-004](../adr/adr-004_separate-workflow-orchestration-from-execution-planning.md)

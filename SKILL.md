@@ -1,7 +1,7 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，从独立 Git 仓库解析并同步用户显式选择的通用、语言级和项目级 Engineering Specs，生成项目级 $engineering-specs Router Skill 与受信任 Codex Hooks，并把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。适用于用户要求初始化或升级项目脚手架、创建或整理 AGENTS.md/ARCHITECTURE.md、安装或更新命名规范与 Go 等语言规范、让 Agent 在实现或评审前激活适用 Spec、建立 docs 文档控制面、应用 Codex Harness 实践、检查 AGENTS.md 100 行上限、统一验证工程文档入口，或不确定一个工程请求应该进入测量、研究、决策实施还是案例写作。Bootstrap 和 upgrade 默认只预览，仓库检测只推荐可选 Spec；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、物化必选与用户选择的本地 Specs，并组合 engineering-execution-plan 初始化。
+  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、选择一个或多个 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-execution-plan 初始化。
 ---
 
 # RepoFoundry AI
@@ -12,9 +12,12 @@ Harness、Spec 解析和能力路由；专业制品生命周期仍由四个独�
 
 ```mermaid
 flowchart LR
-    W["repo-foundry-ai<br/>Inventory + Scaffold + Harness"]
+    W["repo-foundry-ai<br/>Inventory + Scaffold + Harness Core"]
     W -.->|"Git fetch + immutable lock"| S["EngineeringSpecifications<br/>Core + language guidance"]
-    W --> T["$engineering-specs<br/>task Router + trusted Hooks"]
+    W --> A["Agent adapter protocol"]
+    A --> X["Codex adapter<br/>native Hooks"]
+    A --> P["Portable adapter<br/>CLI + advisory"]
+    W --> T["Engineering Specs<br/>shared activation engine"]
     S --> T
     W --> B["engineering-benchmark<br/>可复现测量"]
     W --> R["engineering-research<br/>问题与证据综合"]
@@ -28,16 +31,20 @@ flowchart LR
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --profile codex
+  adapter list
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --profile codex --spec languages/go --apply
+  bootstrap --adapter portable
+
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  bootstrap --adapter codex --adapter portable \
+  --spec languages/go --apply
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.1.0
+  upgrade --to 0.2.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -52,32 +59,36 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 5. 完成后运行 Harness 验证；详细契约见
    [bootstrap.md](references/bootstrap.md)。
 
-Codex profile 创建短 `AGENTS.md`、`ARCHITECTURE.md`、文档索引、质量、可靠性、
-安全、Design Doc 入口、本地 Engineering Specs、一个项目级 `$engineering-specs`
-Router Skill 与 `.codex/hooks.json`。Core Spec 必选；仓库证据只推荐可选 Spec，
+Core 创建 `ARCHITECTURE.md`、文档索引、质量、可靠性、安全、Design Doc 入口、
+本地 Engineering Specs 与唯一的
+`.repo-foundry/engineering-specs/spec_router.py` 激活引擎。`codex` adapter 额外创建
+短 `AGENTS.md`、项目级 `$engineering-specs` Skill、薄事件翻译器和
+`.codex/hooks.json`；`portable` adapter 只创建产品中立的
+`docs/agent-guides/README.md`，通过 CLI 与 advisory instruction 使用同一引擎。
+Core Spec 必选；仓库证据只推荐可选 Spec，
 用户通过可重复 `--spec <id>` 显式选择安装。选择写入
 `docs/.engineering/specs.json`，精确版本与 SHA-256 写入
-`specs.lock.json`；lock 同时记录解析后的完整 Git commit。Codex 从
-Router 按计划路径、任务意图和 `docs/agent-guides/managed/index.md` 激活规范。
+`specs.lock.json`；lock 同时记录解析后的完整 Git commit。所有 adapter 都从
+同一个 Router 按计划路径、任务意图和 `docs/agent-guides/managed/index.md` 激活规范。
 项目规则通过 manifest 引用，工具不改写其内容。未知项目事实保留
 `BOOTSTRAP_TODO`，不得编造命令、Owner、架构、SLO 或安全控制。
 
-所有注册的 Agent instruction 文件按物理行计数。根 `AGENTS.md` 必须不超过
+所有注册的 Agent instruction 文件按物理行计数。Codex adapter 的根 `AGENTS.md` 必须不超过
 100 行；模板目标不超过 80 行，为项目维护保留余量。Harness 契约写入
 `docs/.engineering/harness.json`，EP 状态继续写入 `docs/.epctl/`。
 
 ## 升级 Harness
 
 先读取 `VERSION`，再检查目标仓库的 `docs/.engineering/harness.json`。RepoFoundry
-产品版本、Harness schema、profile 版本和 Engineering Specs Catalog 版本是四条
-独立版本线；不要用 `spec update` 代替 Harness migration，也不要在 bootstrap 中
+产品版本、Harness schema、Core 版本、各 adapter 版本、激活协议版本和
+Engineering Specs Catalog 版本是独立版本线；不要用 `spec update` 代替 Harness migration，也不要在 bootstrap 中
 静默迁移。
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.1.0
+  upgrade --to 0.2.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.1.0 --apply
+  upgrade --to 0.2.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -94,7 +105,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --profile codex --spec languages/go --apply
+  bootstrap --adapter codex --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec update --spec-version 1.2.0 --spec languages/go --apply
@@ -115,13 +126,15 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 
 ## 激活任务规范
 
-Bootstrap 只生成一个 Router Skill，不为每份 Spec 创建 Skill。实现或评审前调用
-`$engineering-specs`：先列出计划路径的候选，再读取每个候选的 Applicability，
+Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。Codex 中实现或
+评审前调用 `$engineering-specs`；Portable 流程运行同一引擎的
+`begin/candidates/activate`：先列出计划路径的候选，再读取每个候选的 Applicability，
 记录本 Turn 的适用 ID 或带理由的 `none`。激活会自动加入 `requires` 闭包；首次
 写入前，受信任 Hook 注入摘要已验证的本地全文，并要求 Agent 重新评估后重试。
 
-`UserPromptSubmit` 建立 Git 基线，`SubagentStart` 传递同一契约，`PreToolUse`
-阻断未激活的 Bash/`apply_patch` 写入，`Stop` 审计实际变更路径与五字段交接。
+Core 只识别 `session_start`、`subagent_start`、`before_mutation`、`stop` 四类标准化
+事件。Codex adapter 将 `UserPromptSubmit`、`SubagentStart`、`PreToolUse`、`Stop`
+翻译到这些事件，并保持既有写入门禁与五字段交接审计。
 项目 Hooks 只有在仓库受信任且用户通过 Codex `/hooks` 审查精确命令后才生效；
 Hook 不可用时仍必须手动遵循 Router Skill 并运行其 `audit` 命令。
 
@@ -151,6 +164,7 @@ Skill 必须保持可独立安装和运行；只有 `repo-foundry-ai` 可以显�
 - 不接收、记录或管理 Git 凭据；只使用用户已有的 credential helper / SSH agent。
 - 不把项目自定义 Spec 复制进托管目录或改写其内容。
 - 不把每份 Spec 包装成独立 Skill；Agent 适配只由一个项目级 Router 持有。
+- 不把产品事件名、工具 payload、信任配置或 instruction 格式放进 Harness Core。
 - 不把未受信任或被禁用的项目 Hook 描述成机械强制保证。
 - 不把某个 Agent、代码托管平台或本机安装路径写入文件契约。
 - 不把 Harness manifest 放进 `.epctl`；项目级状态与 EP 状态分开持有。

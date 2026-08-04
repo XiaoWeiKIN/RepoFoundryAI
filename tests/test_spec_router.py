@@ -71,6 +71,12 @@ class SpecRouterTestCase(unittest.TestCase):
             / "scripts"
             / "spec_router.py"
         )
+        self.core_router = (
+            self.repo
+            / ".repo-foundry"
+            / "engineering-specs"
+            / "spec_router.py"
+        )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -108,6 +114,27 @@ class SpecRouterTestCase(unittest.TestCase):
     ) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(
             [sys.executable, "-B", str(self.router), *arguments],
+            cwd=self.repo,
+            input=(json.dumps(stdin) if stdin is not None else None),
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != expected:
+            self.fail(
+                f"expected {expected}, got {result.returncode}\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+        return result
+
+    def run_core(
+        self,
+        *arguments: str,
+        stdin: dict[str, object] | None = None,
+        expected: int = 0,
+    ) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            [sys.executable, "-B", str(self.core_router), *arguments],
             cwd=self.repo,
             input=(json.dumps(stdin) if stdin is not None else None),
             text=True,
@@ -160,6 +187,7 @@ class SpecRouterTestCase(unittest.TestCase):
 
     def test_bootstrap_generates_one_valid_router_skill_and_hooks(self) -> None:
         self.assertTrue(self.router.is_file())
+        self.assertTrue(self.core_router.is_file())
         self.assertTrue(
             (self.repo / ".agents/skills/engineering-specs/SKILL.md").is_file()
         )
@@ -174,6 +202,121 @@ class SpecRouterTestCase(unittest.TestCase):
         self.assertIn("$engineering-specs", agents)
         self.run_foundry("spec", "validate")
         self.run_foundry("validate", "--harness")
+
+    def test_codex_and_portable_share_results_but_isolate_receipts(self) -> None:
+        self.initialize_turn()
+        codex_candidates = json.loads(
+            self.run_router(
+                "candidates",
+                "--path",
+                "service/main.go",
+            ).stdout
+        )
+        codex_activation = self.activate_go("service/main.go")
+
+        portable_start = {
+            "protocol_version": 1,
+            "event": "session_start",
+            "adapter_id": "portable",
+            "session_id": "session-1",
+            "turn_id": "turn-1",
+            "prompt": "Rename the public Go service API",
+        }
+        started = json.loads(
+            self.run_core("event", stdin=portable_start).stdout
+        )
+        self.assertEqual(started["decision"], "allow")
+        self.assertIn("Adapter ID: `portable`", started["context"])
+        portable_candidates = json.loads(
+            self.run_core(
+                "candidates",
+                "--path",
+                "service/main.go",
+            ).stdout
+        )
+        portable_activation = json.loads(
+            self.run_core(
+                "activate",
+                "--adapter-id",
+                "portable",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+                "--path",
+                "service/main.go",
+                "--spec",
+                "languages/go",
+            ).stdout
+        )
+
+        self.assertEqual(
+            [item["id"] for item in portable_candidates["candidates"]],
+            [item["id"] for item in codex_candidates["candidates"]],
+        )
+        self.assertEqual(
+            portable_activation["activated_specs"],
+            codex_activation["activated_specs"],
+        )
+        mutation = {
+            "protocol_version": 1,
+            "event": "before_mutation",
+            "adapter_id": "portable",
+            "session_id": "session-1",
+            "turn_id": "turn-1",
+            "tool": {
+                "category": "file_write",
+                "name": "portable-write",
+                "paths": ["service/main.go"],
+                "input": {},
+            },
+        }
+        first_write = json.loads(
+            self.run_core("event", stdin=mutation).stdout
+        )
+        self.assertEqual(first_write["decision"], "deny")
+        self.assertIn("BEGIN languages/go", first_write["context"])
+        second_write = json.loads(
+            self.run_core("event", stdin=mutation).stdout
+        )
+        self.assertEqual(second_write, {"decision": "allow"})
+        codex_status = json.loads(
+            self.run_router(
+                "status",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+            ).stdout
+        )
+        portable_status = json.loads(
+            self.run_core(
+                "status",
+                "--adapter-id",
+                "portable",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+            ).stdout
+        )
+        self.assertEqual(codex_status["adapter_id"], "codex")
+        self.assertEqual(portable_status["adapter_id"], "portable")
+
+    def test_normalized_protocol_fails_closed_on_future_version(self) -> None:
+        result = self.run_core(
+            "event",
+            stdin={
+                "protocol_version": 2,
+                "event": "session_start",
+                "adapter_id": "portable",
+                "session_id": "session-1",
+                "turn_id": "turn-1",
+            },
+            expected=2,
+        )
+
+        self.assertIn("ROUTER_PROTOCOL_UNSUPPORTED", result.stderr)
 
     def test_subagent_receives_the_same_turn_routing_contract(self) -> None:
         self.initialize_turn()
