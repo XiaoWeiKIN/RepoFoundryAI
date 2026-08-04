@@ -48,11 +48,49 @@ flowchart LR
     H -.->|"does not select"| L
 ```
 
+## Distribution installation is not Harness migration
+
+The public `install.py` entrypoint owns acquisition and activation of the
+RepoFoundry distribution on one macOS or Linux user machine. The same command
+performs a first install, advances to a newer stable release, or reports an
+idempotent no-op. It does not discover or mutate target repositories.
+
+```mermaid
+flowchart LR
+    O["One-line installer"] --> R["Stable GitHub Release"]
+    R --> G["Tag resolved to commit"]
+    G --> S["Safe staged package<br/>archive + package SHA-256"]
+    S --> A["Atomic current release"]
+    A --> C["repofoundry CLI"]
+    C --> P["Explicit per-project<br/>Harness migration preview"]
+    P -->|"--apply"| H["Repository Harness updated"]
+    A -.->|"never scans projects"| H
+```
+
+The default install prefix contains immutable, source-addressed directories in
+`releases/`, a relative `current` symlink, and a local `install.json`. That
+installation manifest records the active version, release ID, package digest,
+GitHub tag/commit/archive digest or explicit local source, launcher, and host
+integration links. It is local distribution provenance and never appears in a
+repository Harness manifest.
+
+The installer uses `curl` transport when available and a certificate-validating
+standard-library HTTPS fallback. It validates all archive paths before extraction, rejects links and
+non-regular members, bounds remote payload sizes, verifies package identity and
+`foundryctl --version`, then switches the active release. Pre-existing
+non-managed launchers or host registrations are moved to reported backups.
+Network, extraction, validation, or activation failure preserves the previous
+active release. Host detection and registration are installer adapters; the
+installed package remains usable through the portable CLI without any
+product-specific private directory.
+
 ## Release invariants
 
 Every distributed change updates the planes it actually changes:
 
 - bump `VERSION` for every RepoFoundry release;
+- publish `install.py` in every release so the stable one-line entrypoint can
+  install that release and later versions;
 - bump Core or the owning adapter whenever its template bytes, required seed
   set, or behavior changes;
 - bump the Harness schema whenever the persistent JSON shape or interpretation
