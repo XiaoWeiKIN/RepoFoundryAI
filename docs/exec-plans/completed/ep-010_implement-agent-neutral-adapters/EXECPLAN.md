@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-010
 title: "Implement Agent-neutral Harness and Engineering Spec adapters"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -13,9 +13,9 @@ architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
 architecture_gate_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "c09bab6a1ceef6fe47d6d964818598fc8e0d40db"
+verification_evidence: ["docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/artifacts/validation-summary.txt", "python3 -B scripts/check.py (exit 0)"]
+archive_sha256: 80db3095bfedb9df304c827b9bc197e807adc227b09fd996272363f09009b442
 created: 2026-08-04
 updated: 2026-08-04
 owner: "RepoFoundry Maintainer"
@@ -249,7 +249,7 @@ Validate governance and the complete repository:
 
 Expected: epctl reports `errors: 0`; the canonical check exits 0. Store any
 long transcript or migration fixture output under
-`docs/exec-plans/active/ep-010_implement-agent-neutral-adapters/artifacts/` and
+`docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/artifacts/` and
 link it from Progress rather than pasting it into this plan.
 
 ## Validation and Acceptance
@@ -410,8 +410,8 @@ handling; portable callers use `begin`, `candidates`, `activate`, `status`, and
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-010_implement-agent-neutral-adapters/EXECPLAN.md`
-- Validation summary: `docs/exec-plans/active/ep-010_implement-agent-neutral-adapters/artifacts/validation-summary.txt`
+- Plan: `docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md`
+- Validation summary: `docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/artifacts/validation-summary.txt`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
