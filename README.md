@@ -135,28 +135,92 @@ Bootstrap never invents repository facts. Unknown commands, owners,
 architecture, SLOs, and security controls remain explicit `BOOTSTRAP_TODO`
 markers for maintainers to resolve.
 
-## Install or upgrade with one command
+## Install once, enable each repository explicitly
 
-The one-command installer currently supports macOS and Linux and requires
-Python 3.10+ plus `curl`. Run the same command for a first install or an
-upgrade:
+RepoFoundry has two independent scopes. The **distribution installation** puts
+the CLI and optional personal Skill entrypoints in your user environment. The
+**repository Bootstrap** writes a versioned Harness and project Skills only to
+the repository you select. Installing or upgrading the distribution never
+scans or changes project repositories.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+```mermaid
+flowchart LR
+    I["Install or upgrade<br/>user scope"] --> P["Preview Bootstrap<br/>repository scope"]
+    P --> A["Apply explicitly"]
+    A --> V["Validate Harness"]
 ```
 
-The installer selects the latest stable GitHub release, resolves its tag to an
-immutable commit, records the downloaded archive SHA-256, validates the staged
-package, and atomically activates it. By default it installs under the XDG user
-data directory, exposes `repofoundry` in the user-local bin directory, and
-registers the root Skill with every detected Codex or Claude Code host. Claude
-Code registration follows its official configuration root: the Skill lives at
-`$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai` when that variable is set, and at
-`~/.claude/skills/repo-foundry-ai` otherwise. Other Agents can use the same CLI
-and portable adapter without either host directory. Repeating the command at
-the current release is a no-op.
+### Fast path: install and enable every bundled adapter
 
-Choose an exact release or host policy by passing arguments after `python3 -`:
+The installer supports macOS and Linux and requires Python 3.10+ plus `curl`.
+
+1. Install the latest stable release. Run the same command later to upgrade:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+   ```
+
+2. From the target repository, preview the Agent-neutral Core and every bundled
+   project adapter:
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters
+   ```
+
+3. Review the `create`, `preserve`, and `conflict` actions. Apply only a
+   conflict-free plan, then validate the result:
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters --apply
+   repofoundry --repo . validate
+   ```
+
+`--all-adapters` always expands to `codex`, `claude`, and `portable` in a
+deterministic order. The result does not depend on which Agent products are
+installed on the machine.
+
+### Enable only the adapter you need
+
+Use the same preview-then-apply flow with one or more explicit adapters:
+
+```bash
+# Claude Code only: preview, then apply
+repofoundry --repo . bootstrap --adapter claude
+repofoundry --repo . bootstrap --adapter claude --apply
+
+# Codex and the product-neutral guide
+repofoundry --repo . bootstrap --adapter codex --adapter portable
+repofoundry --repo . bootstrap --adapter codex --adapter portable --apply
+```
+
+| Adapter | Project-owned entrypoint |
+|---|---|
+| `codex` | `AGENTS.md`, `.agents/skills/`, and reviewed `.codex/` guards |
+| `claude` | Native project Skills under `.claude/skills/` |
+| `portable` | Product-neutral guidance under `docs/agent-guides/` |
+
+All adapters share the canonical workflow at
+`.repo-foundry/skills/repo-foundry-ai/SKILL.md` and the Core Spec Router. The
+Claude adapter creates regular project files; it never links the repository to
+a home directory. Claude Code gives a personal Skill precedence over a project
+Skill with the same name, so the personal entrypoint delegates to the canonical
+project workflow when that file exists.
+
+### `--host` controls personal discovery, not project compatibility
+
+You do not need to pass `--host` for normal installation. Its default value is
+`auto`, which registers the personal RepoFoundry Skill with every detected
+Codex or Claude Code installation. Other Agents can still use the CLI and the
+portable project adapter without either host directory.
+
+| Installer option | Personal Skill behavior |
+|---|---|
+| `--host auto` | Register every detected supported host; this is the default |
+| `--host codex` | Ensure the Codex personal Skill link exists |
+| `--host claude` | Ensure the Claude Code personal Skill link exists |
+| `--host none` | Leave existing registrations unchanged and create none |
+
+Examples:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
@@ -164,47 +228,40 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-`--host codex` and `--host claude` ensure the requested personal Skill link,
-backing up an existing non-managed path before replacing it. `--host auto`
-registers every detected supported host, while `--host none` leaves existing
-host registrations unchanged and creates none on a fresh install. Override the
-Claude Code configuration root with `CLAUDE_CONFIG_DIR` or `--claude-home`.
-Directory symlink discovery requires Claude Code 2.1.203 or later.
+The installer backs up an existing non-managed target before replacing it.
+Claude Code uses `$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai` when
+`CLAUDE_CONFIG_DIR` is set and `~/.claude/skills/repo-foundry-ai` otherwise;
+`--claude-home` overrides both. Directory symlink discovery requires Claude
+Code 2.1.203 or later.
 
-Host registration makes `/repo-foundry-ai` discoverable from the personal
-installation. Project registration is a separate, repository-owned operation.
-Install Claude Skills in the current project, or every bundled adapter in
-deterministic order, with:
+### Upgrade the distribution, then migrate repositories explicitly
+
+Rerunning the one-line installer atomically activates the latest stable release
+and is a no-op when that release is already active. It resolves the release tag
+to an immutable commit, records the archive SHA-256, and validates the staged
+package before activation.
+
+Repository migration remains a separate, preview-first operation. After a
+distribution upgrade, run this in each existing project and replace `0.2.0`
+with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . bootstrap --adapter claude --apply
-repofoundry --repo . bootstrap --all-adapters --apply
+repofoundry --repo . upgrade --to 0.2.0
+repofoundry --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . validate
 ```
 
-The Claude adapter creates regular files under `.claude/skills/`; it does not
-link to a home directory. It provides native Skill discovery and uses the
-shared project Router with explicit CLI activation and audit. It does not
-claim Claude lifecycle Hooks or a mechanical mutation gate. `--all-adapters`
-always expands to `codex`, `claude`, and `portable`; it never depends on which
-hosts happen to be installed on the current machine.
-
-Claude Code gives a personal Skill precedence over a project Skill with the
-same name. RepoFoundry keeps the public `/repo-foundry-ai` name at both scopes:
-the installed personal entrypoint must read the repository's canonical
-`.repo-foundry/skills/repo-foundry-ai/SKILL.md` when present. A clone without a
-personal registration discovers the thin project entrypoint directly.
-
-The command reports the active package home, CLI path, host links, and every
-backup it preserves. If the bin directory is not already on `PATH`, it prints
-the exact directory to add. Verify the result with:
+Check the active installation and available adapters at any time:
 
 ```bash
 repofoundry --version
 repofoundry --repo . adapter list
 ```
 
-For environments that prohibit piping downloaded code directly to an
-interpreter, download and inspect the installer first:
+### Inspect first or install from a checkout
+
+If your environment prohibits piping downloaded code to an interpreter,
+download and inspect the installer before running it:
 
 ```bash
 curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
@@ -212,13 +269,7 @@ less /tmp/repofoundry-install.py
 python3 /tmp/repofoundry-install.py
 ```
 
-Distribution upgrade and repository migration are deliberately separate. The
-installer never scans or changes project repositories. After installing a new
-RepoFoundry release, preview and explicitly apply any Harness migration in each
-project with `repofoundry --repo PATH upgrade --to VERSION` and then the same
-command plus `--apply`.
-
-Maintainers can still install an explicit checkout without network access:
+Maintainers can install an explicit checkout without downloading a release:
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
