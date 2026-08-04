@@ -1,8 +1,16 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: design-doc
+id: DD-001
 doc_type: design
 title: RepoFoundry AI design documents
 status: current
-updated: 2026-08-03
+adr_refs: []
+author: "Codex"
+owner: "RepoFoundry Maintainer"
+created: 2026-07-30
+updated: 2026-08-04
 ---
 
 # Design Documents
@@ -23,3 +31,6 @@ how accepted choices are realized.
 - [Engineering Spec resolution and project materialization](engineering-spec-management.md) —
   Catalog and materialization contract; activation is amended by ADR-012.
 - [Agent-neutral Harness and Engineering Spec adapters](agent-neutral-harness-adapters.md)
+- [Artifact Metadata Contract](artifact-metadata-contract.md) — semantic
+  provenance, identity, responsibility, time, compatibility, and integrity for
+  governed engineering artifacts.

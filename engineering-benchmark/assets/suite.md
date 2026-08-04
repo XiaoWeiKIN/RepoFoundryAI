@@ -1,8 +1,11 @@
 ---
-schema_version: "1"
+schema_version: "1.1"
+metadata_schema: "1"
+artifact_type: benchmark-suite
 id: {{ID_JSON}}
 title: {{TITLE_JSON}}
 status: "active"
+author: {{AUTHOR_JSON}}
 owner: {{OWNER_JSON}}
 created: {{DATE_JSON}}
 updated: {{DATE_JSON}}

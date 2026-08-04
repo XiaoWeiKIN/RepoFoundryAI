@@ -24,15 +24,28 @@ ep-NNN_slug/
 
 ## 何时建立 Checkpoint
 
-出现以下任一情况时建立：
+规模信号采用两级阈值：
+
+| 指标 | `checkpoint_recommended` | `checkpoint_required` |
+|---|---:|---:|
+| 根文档 | 超过 500 行 | 超过 800 行 |
+| 根文档 bytes | 超过 48 KiB | 超过 64 KiB |
+| 活跃历史事件 | 超过 30 条 | 超过 50 条 |
+
+以下停止点也应建立 checkpoint：
 
 - 一个可独立验证的里程碑完成。
 - 准备跨会话交接或长时间暂停。
-- 根文档超过约 800 行或 64 KiB。
-- 活跃历史事件超过 50 条。
 - 大量已解决 blocker、发现和决策开始遮蔽当前下一步。
 
-这些是默认警戒线，不是完成条件。`validate` 超过警戒线只给 warning。
+这些信号不是完成条件。`validate` 只发 warning，不自动修改计划；`status` 在
+`working_set` 输出 `bounded`、`checkpoint_recommended` 或
+`checkpoint_required`。
+
+Checkpoint 只压缩历史。如果 checkpoint 后根文件仍超过目标值，先把接口细节、
+完整输出和长期设计分别移到 Design Doc 或 `artifacts/`。如果剩余工作包含多个可
+独立验证、发布或回滚的结果，创建 successor EP。反复 checkpoint 不能修复范围
+过宽。
 
 ## Checkpoint 前置条件
 
@@ -72,7 +85,13 @@ python3 <skill-dir>/scripts/epctl.py --repo . checkpoint EP-023 \
 - 封存 Revision Notes。
 - 更新 `Current Snapshot`、`latest_checkpoint` 和索引更新时间。
 - 记录 `repository_revision`，说明历史对应的代码或工作区版本。
-- 为 checkpoint payload 写入 SHA-256；后续编辑会使 `validate` 失败。
+- 创建 schema 1.2 Checkpoint，继承父 EP 的 author/owner，并记录
+  `metadata_schema: "1"`、`artifact_type: checkpoint` 和 `generated_by`。
+- 为包含 frontmatter metadata 与正文的 canonical checkpoint payload 写入
+  SHA-256；后续修改 attribution、revision 或正文都会使 `validate` 失败。
+
+旧 schema 1/1.1 Checkpoint 按原 body-only digest 保持兼容，不为补 metadata
+改写已封存历史。
 
 ## 永远留在根文档的内容
 

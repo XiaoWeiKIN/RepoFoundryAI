@@ -1,8 +1,15 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: design-doc
+id: DD-005
 doc_type: design
 title: Engineering Spec resolution and project materialization
 status: current
 adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-010", "ADR-012"]
+author: "Codex"
+owner: "RepoFoundry Maintainer"
+created: 2026-07-31
 updated: 2026-08-04
 ---
 

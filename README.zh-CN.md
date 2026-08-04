@@ -52,6 +52,12 @@ flowchart LR
 四个专业 Skill 可以独立安装。它们通过版本化仓库文件交接，不依赖私有运行时
 导入。
 
+这些治理制品还共享一层语义元数据：稳定 type/ID、title/status、author/owner 与
+created/updated。作者身份不等于 Research approval、ADR 决策权或 Benchmark
+执行身份。原始证据由 content-addressed Manifest 携带等价 provenance；源码和
+生成索引继续使用 Git、CODEOWNERS 与 generator provenance。详见
+[Artifact Metadata Contract](./docs/design-docs/artifact-metadata-contract.md)。
+
 ## 证据向前流动，授权边界保持清晰
 
 ```mermaid
@@ -400,6 +406,7 @@ RepoFoundry AI：
 - [版本与 Harness 迁移](./docs/design-docs/repo-foundry-versioning-and-migrations.md)
 - [Engineering Spec 解析](./docs/design-docs/engineering-spec-management.md)
 - [Agent-neutral Harness 与 adapters](./docs/design-docs/agent-neutral-harness-adapters.md)
+- [Artifact Metadata Contract](./docs/design-docs/artifact-metadata-contract.md)
 
 专业能力：
 
@@ -421,5 +428,6 @@ RepoFoundry AI：
 - [ADR-009 — 根 Skill 名称与 RepoFoundry AI 对齐](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
 - [ADR-011 — 分离 Core 与 Agent adapters](./docs/adr/adr-011_agent-neutral-harness-adapters.md)
 - [ADR-012 — 分离 Spec 激活与 runtime adapters](./docs/adr/adr-012_agent-neutral-spec-activation.md)
+- [ADR-014 — 治理制品元数据契约（proposed）](./docs/adr/adr-014_governed-artifact-metadata-contract.md)
 - [EP-006 — 迁移到 RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
 - [EP-010 — 实现 Agent-neutral adapters](./docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md)

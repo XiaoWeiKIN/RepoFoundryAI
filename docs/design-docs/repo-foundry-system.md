@@ -1,8 +1,15 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: design-doc
+id: DD-004
 doc_type: design
 title: RepoFoundry AI system identity and packaging
 status: current
 adr_refs: ["ADR-007", "ADR-008", "ADR-009", "ADR-011", "ADR-012"]
+author: "Codex"
+owner: "RepoFoundry Maintainer"
+created: 2026-07-31
 updated: 2026-08-04
 ---
 

@@ -1,5 +1,7 @@
 ---
-schema_version: "1"
+schema_version: "1.1"
+metadata_schema: "1"
+artifact_type: benchmark-result
 id: {{ID_JSON}}
 suite_id: {{SUITE_ID_JSON}}
 scenario_id: {{SCENARIO_ID_JSON}}
@@ -11,6 +13,9 @@ harness_revision: {{HARNESS_REVISION_JSON}}
 supersedes: {{SUPERSEDES_JSON}}
 manifest: "EVIDENCE_MANIFEST.json"
 created: {{TIMESTAMP_JSON}}
+updated: {{TIMESTAMP_JSON}}
+author: {{AUTHOR_JSON}}
+owner: {{OWNER_JSON}}
 completed: ""
 executed_by: ""
 ---

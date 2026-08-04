@@ -1,9 +1,14 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: bugfix
 id: {{ID}}
 title: "{{TITLE}}"
 status: open
 severity: "{{SEVERITY}}"
 area: "{{AREA}}"
+author: "{{AUTHOR}}"
+owner: "{{OWNER}}"
 created: {{DATE}}
 updated: {{DATE}}
 linked_ep:

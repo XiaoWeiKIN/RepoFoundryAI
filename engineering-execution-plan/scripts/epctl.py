@@ -71,6 +71,7 @@ EXECPLAN_SECTIONS = (
 EXECPLAN_V21_SECTIONS = ("Current Snapshot",)
 EXECPLAN_V22_SECTIONS = ("Research and Architecture Inputs",)
 EXECPLAN_V25_SECTIONS = ("Benchmark Gate Set",)
+EXECPLAN_V26_SECTIONS = ("Architecture Compliance Matrix",)
 BENCHMARK_SUITE_SECTIONS = (
     "Purpose and Scope",
     "Subject Under Test",
@@ -139,6 +140,10 @@ ADR_SECTIONS = (
     "More Information",
     "Revision Notes",
 )
+ADR_V12_SECTIONS = (
+    "Decision Statement",
+    "Normative Constraints",
+)
 TASK_SECTIONS = ("Context", "Change", "Constraints", "Validation", "Blockers", "Notes")
 BUGFIX_SECTIONS = (
     "Symptom",
@@ -165,9 +170,16 @@ BUGFIX_COMPLETED_STATUSES = {"fixed", "escalated", "cancelled"}
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 BLOCKER_ID_RE = re.compile(r"\bBLK-(\d{3,})\b", re.IGNORECASE)
 RESEARCH_QUESTION_ID_RE = re.compile(r"RQ-(\d{3,})", re.IGNORECASE)
+ROOT_LINE_RECOMMENDATION = 500
+ROOT_BYTE_RECOMMENDATION = 48 * 1024
+HISTORY_EVENT_RECOMMENDATION = 30
 ROOT_LINE_WARNING = 800
 ROOT_BYTE_WARNING = 64 * 1024
 HISTORY_EVENT_WARNING = 50
+MILESTONE_REVIEW_THRESHOLD = 5
+MILESTONE_SPLIT_THRESHOLD = 8
+UNFINISHED_TASK_REVIEW_THRESHOLD = 10
+UNFINISHED_TASK_SPLIT_THRESHOLD = 15
 ID_RE = {
     "EP": re.compile(r"\bEP-(\d{3,})\b", re.IGNORECASE),
     "BF": re.compile(r"\bBF-(\d{3,})\b", re.IGNORECASE),
@@ -176,11 +188,23 @@ ID_RE = {
     "CP": re.compile(r"\bCP-(\d{3,})\b", re.IGNORECASE),
     "R": re.compile(r"\bR-(\d{3,})\b", re.IGNORECASE),
     "ADR": re.compile(r"\bADR-(\d{3,})\b", re.IGNORECASE),
+    "DD": re.compile(r"\bDD-(\d{3,})\b", re.IGNORECASE),
     "BS": re.compile(r"\bBS-(\d{3,})\b", re.IGNORECASE),
 }
 BENCHMARK_EVIDENCE_RE = re.compile(
     r"^benchmark:(BR-\d{3,})@sha256:([0-9a-f]{64})$"
 )
+ADR_CONSTRAINT_RE = re.compile(
+    r"^(ADR-\d{3,})#(C-\d{3,})$",
+    re.IGNORECASE,
+)
+LOCAL_CONSTRAINT_RE = re.compile(r"^C-(\d{3,})$", re.IGNORECASE)
+ADR_EVIDENCE_RE = re.compile(
+    r"^(ADR-\d{3,})@sha256:([0-9a-f]{64})$",
+    re.IGNORECASE,
+)
+ADR_CONSTRAINT_STRENGTHS = {"must", "must_not", "should", "may"}
+CURRENT_METADATA_SCHEMA = "1"
 
 
 class EpctlError(RuntimeError):
@@ -230,6 +254,43 @@ def yaml_string(value: str) -> str:
         .replace("\r", " ")
         .replace("\n", " ")
     )
+
+
+def metadata_actor(value: str) -> str:
+    return value.strip() or "Unassigned"
+
+
+def validate_metadata_contract(
+    path: Path,
+    data: dict[str, str],
+    artifact_type: str,
+    expected_id: str,
+) -> list[str]:
+    errors: list[str] = []
+    if data.get("metadata_schema") != CURRENT_METADATA_SCHEMA:
+        errors.append(
+            f"{path}: metadata_schema must be {CURRENT_METADATA_SCHEMA!r}"
+        )
+    if data.get("artifact_type") != artifact_type:
+        errors.append(f"{path}: artifact_type must be {artifact_type!r}")
+    if data.get("id") != expected_id:
+        errors.append(f"{path}: metadata id must be {expected_id!r}")
+    for field in ("title", "status", "author", "owner", "created", "updated"):
+        if not data.get(field, "").strip():
+            errors.append(f"{path}: metadata field {field} must be non-empty")
+    for field in ("created", "updated"):
+        value = data.get(field, "")
+        if value:
+            try:
+                dt.date.fromisoformat(value)
+            except ValueError:
+                try:
+                    dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError:
+                    errors.append(
+                        f"{path}: metadata field {field} must be an ISO date or timestamp"
+                    )
+    return errors
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -689,6 +750,7 @@ def parse_legacy_frontmatter(text: str) -> tuple[dict[str, str], int, int]:
             "research_refs",
             "depends_on",
             "amends",
+            "amends_constraints",
             "supersedes",
             "design_refs",
         }:
@@ -743,6 +805,7 @@ def adr_document_data(path: Path) -> tuple[dict[str, str], bool]:
             "research_refs",
             "depends_on",
             "amends",
+            "amends_constraints",
             "supersedes",
             "design_refs",
         ):
@@ -1001,6 +1064,170 @@ def parse_string_array(value: str, field: str) -> list[str]:
     if len(set(raw)) != len(raw):
         raise EpctlError(f"{field} contains duplicate values")
     return raw
+
+
+def normalize_adr_constraint_refs(
+    values: Iterable[str],
+    field: str,
+) -> list[str]:
+    normalized: list[str] = []
+    for value in values:
+        candidate = inline_text(value).upper()
+        match = ADR_CONSTRAINT_RE.fullmatch(candidate)
+        if not match:
+            raise EpctlError(
+                f"Invalid {field} reference {value!r}; expected ADR-NNN#C-NNN"
+            )
+        adr_match = ID_RE["ADR"].fullmatch(match.group(1))
+        constraint_match = LOCAL_CONSTRAINT_RE.fullmatch(match.group(2))
+        if not adr_match or not constraint_match:  # defensive; regexes agree
+            raise EpctlError(f"Invalid {field} reference: {value!r}")
+        canonical = (
+            f"ADR-{int(adr_match.group(1)):03d}#"
+            f"C-{int(constraint_match.group(1)):03d}"
+        )
+        if canonical in normalized:
+            raise EpctlError(f"{field} contains duplicate references")
+        normalized.append(canonical)
+    return normalized
+
+
+def parse_adr_constraint_array(value: str, field: str) -> list[str]:
+    return normalize_adr_constraint_refs(parse_string_array(value, field), field)
+
+
+def adr_constraint_rows(text: str) -> list[list[str]]:
+    body = section(text, "Normative Constraints") or ""
+    rows: list[list[str]] = []
+    for line in body.splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = split_table_row(line)
+        if not cells or cells[0].lower() == "id" or set(cells[0]) == {"-"}:
+            continue
+        rows.append(cells)
+    return rows
+
+
+def adr_constraint_refs(text: str, adr_id: str) -> list[str]:
+    refs: list[str] = []
+    for cells in adr_constraint_rows(text):
+        if not cells:
+            continue
+        match = LOCAL_CONSTRAINT_RE.fullmatch(cells[0].upper())
+        if match:
+            refs.append(f"{adr_id}#C-{int(match.group(1)):03d}")
+    return refs
+
+
+def unresolved_contract_cell(value: str) -> bool:
+    normalized = inline_text(value).strip().lower()
+    return (
+        not normalized
+        or normalized.startswith("replace_with_")
+        or normalized in {"tbd", "todo", "unknown", "<replace>"}
+    )
+
+
+def architecture_compliance_rows(text: str) -> list[list[str]]:
+    body = section(text, "Architecture Compliance Matrix") or ""
+    rows: list[list[str]] = []
+    for line in body.splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = split_table_row(line)
+        if (
+            not cells
+            or cells[0].lower() == "adr constraint or architecture input"
+            or set(cells[0]) == {"-"}
+            or cells[0] == "—"
+        ):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def render_architecture_compliance_rows(
+    adr_refs: Iterable[str],
+    repo: Path,
+    design_refs: Iterable[str],
+    architecture_entrypoint: str,
+) -> tuple[list[str], str]:
+    structured_refs: list[str] = []
+    row_refs: list[str] = []
+    for adr_id in adr_refs:
+        adr_path = find_adr(repo, adr_id)
+        constraints = adr_constraint_refs(
+            adr_path.read_text(encoding="utf-8"),
+            adr_id,
+        )
+        if constraints:
+            structured_refs.extend(constraints)
+            row_refs.extend(constraints)
+        else:
+            row_refs.append(adr_id)
+    if not row_refs:
+        row_refs.extend(design_refs)
+    if not row_refs and architecture_entrypoint:
+        row_refs.append(architecture_entrypoint)
+    if not row_refs:
+        return [], "| — | No architecture input applies to this EP. | — |"
+    rows = "\n".join(
+        f"| {reference} | <!-- REQUIRED: State how this plan implements or "
+        f"preserves {reference}. --> | <!-- REQUIRED: State the test, lint, "
+        f"schema check, or observable evidence for {reference}. --> |"
+        for reference in row_refs
+    )
+    return structured_refs, rows
+
+
+def adr_evidence_values(
+    adr_refs: Iterable[str],
+    adr_data_by_id: dict[str, dict[str, str]],
+) -> list[str]:
+    evidence: list[str] = []
+    for adr_id in adr_refs:
+        digest = inline_text(adr_data_by_id[adr_id].get("payload_sha256", ""))
+        if re.fullmatch(r"[0-9a-f]{64}", digest):
+            evidence.append(f"{adr_id}@sha256:{digest}")
+    return evidence
+
+
+def parse_adr_evidence(value: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for item in parse_string_array(value, "adr_evidence"):
+        match = ADR_EVIDENCE_RE.fullmatch(item)
+        if not match:
+            raise EpctlError(
+                "adr_evidence entries must use ADR-NNN@sha256:<64-hex>"
+            )
+        adr_id = normalize_reference_ids((match.group(1),), "ADR")[0]
+        if adr_id in result:
+            raise EpctlError("adr_evidence contains duplicate ADR references")
+        result[adr_id] = match.group(2).lower()
+    return result
+
+
+def current_constraint_amendments(
+    repo: Path,
+    constraint_refs: Iterable[str],
+) -> dict[str, list[str]]:
+    applicable = set(constraint_refs)
+    amendments: dict[str, list[str]] = {}
+    if not applicable:
+        return amendments
+    for path in adr_files(repo):
+        data, _ = adr_document_data(path)
+        if data.get("status") != "accepted":
+            continue
+        amended = parse_adr_constraint_array(
+            data.get("amends_constraints", "[]"),
+            "amends_constraints",
+        )
+        matching = sorted(applicable & set(amended))
+        if matching:
+            amendments[data.get("id", "")] = matching
+    return amendments
 
 
 def normalize_benchmark_scenario_ids(values: Iterable[str]) -> list[str]:
@@ -1586,8 +1813,6 @@ def validate_design_ref(
     except EpctlError as exc:
         return [str(exc)], warnings
     path = repo / refs[0]
-    if entrypoint:
-        return errors, warnings
     try:
         data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
     except EpctlError:
@@ -1598,6 +1823,22 @@ def validate_design_ref(
                 f"{path}: linked Design Doc has no readable metadata"
             )
             return errors, warnings
+    if data.get("metadata_schema"):
+        design_id = data.get("id", "")
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "design-doc",
+                design_id,
+            )
+        )
+        if not ID_RE["DD"].fullmatch(design_id):
+            errors.append(f"{path}: Design Doc id must use DD-NNN")
+    else:
+        warnings.append(
+            f"{path}: legacy Design Doc has no Artifact Metadata Contract"
+        )
     doc_type = data.get("doc_type", "")
     if doc_type and doc_type != "design":
         errors.append(f"{path}: design_refs target has doc_type {doc_type!r}")
@@ -1613,6 +1854,51 @@ def validate_design_ref(
     return errors, warnings
 
 
+def validate_design_doc_corpus(repo: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    seen_paths: set[Path] = set()
+    paths_by_id: dict[str, Path] = {}
+    for root in architecture_roots(repo, existing_only=True):
+        for path in sorted(root.rglob("*.md")):
+            resolved = path.resolve(strict=False)
+            if resolved in seen_paths or path.is_symlink():
+                continue
+            seen_paths.add(resolved)
+            try:
+                data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+            except (EpctlError, OSError, UnicodeDecodeError):
+                continue
+            if data.get("doc_type", "").lower() != "design":
+                continue
+            if not data.get("metadata_schema"):
+                warnings.append(
+                    f"{path}: legacy Design Doc has no Artifact Metadata Contract"
+                )
+                continue
+            design_id = data.get("id", "")
+            errors.extend(
+                validate_metadata_contract(
+                    path,
+                    data,
+                    "design-doc",
+                    design_id,
+                )
+            )
+            if not ID_RE["DD"].fullmatch(design_id):
+                errors.append(f"{path}: Design Doc id must use DD-NNN")
+                continue
+            previous = paths_by_id.get(design_id)
+            if previous is not None:
+                errors.append(
+                    f"{path}: duplicate Design Doc id {design_id}; "
+                    f"already used by {previous}"
+                )
+            else:
+                paths_by_id[design_id] = path
+    return errors, warnings
+
+
 def adr_relations(data: dict[str, str]) -> list[str]:
     relations: list[str] = []
     for field in ("depends_on", "amends"):
@@ -1623,8 +1909,12 @@ def adr_relations(data: dict[str, str]) -> list[str]:
 def adr_input_closure(
     repo: Path,
     adr_values: Iterable[str],
+    *,
+    allowed_statuses: set[str] | None = None,
+    historical: bool = False,
 ) -> tuple[list[str], dict[str, dict[str, str]]]:
     requested = normalize_reference_ids(adr_values, "ADR")
+    valid_statuses = allowed_statuses or {"accepted"}
     ordered: list[str] = []
     data_by_id: dict[str, dict[str, str]] = {}
     visiting: list[str] = []
@@ -1636,11 +1926,16 @@ def adr_input_closure(
         if adr_id in data_by_id:
             return
         path = find_adr(repo, adr_id)
-        adr_errors, _, data = validate_adr(path)
-        if adr_errors or data.get("status") != "accepted":
+        adr_errors, _, data = validate_adr(path, historical=historical)
+        if adr_errors or data.get("status") not in valid_statuses:
             details = "; ".join(adr_errors) if adr_errors else data.get("status", "")
+            if valid_statuses == {"accepted"} and not historical:
+                raise EpctlError(
+                    f"{adr_id} must be valid, accepted and current: {details}"
+                )
             raise EpctlError(
-                f"{adr_id} must be valid, accepted and current: {details}"
+                f"{adr_id} must be valid with status in "
+                f"{sorted(valid_statuses)}: {details}"
             )
         visiting.append(adr_id)
         for dependency in adr_relations(data):
@@ -1675,7 +1970,7 @@ def payload_sha256(text: str) -> str:
 
 
 def adr_payload_sha256(text: str, data: dict[str, str]) -> str:
-    if data.get("schema_version") != "1.1":
+    if data.get("schema_version") not in {"1.1", "1.2", "1.3"}:
         return payload_sha256(text)
     decision_payload = {
         "schema_version": data.get("schema_version", ""),
@@ -1694,6 +1989,18 @@ def adr_payload_sha256(text: str, data: dict[str, str]) -> str:
         ),
         "body": frontmatter_body(text),
     }
+    if data.get("schema_version") in {"1.2", "1.3"}:
+        decision_payload["amends_constraints"] = data.get(
+            "amends_constraints",
+            "",
+        )
+    if data.get("schema_version") == "1.3":
+        decision_payload["metadata_schema"] = data.get("metadata_schema", "")
+        decision_payload["artifact_type"] = data.get("artifact_type", "")
+        decision_payload["author"] = data.get("author", "")
+        decision_payload["owner"] = data.get("owner", "")
+        decision_payload["created"] = data.get("created", "")
+        decision_payload["updated"] = data.get("updated", "")
     canonical = json.dumps(
         decision_payload,
         ensure_ascii=False,
@@ -1776,8 +2083,11 @@ def validate_research_manifest(
         return [f"{path}: invalid Research manifest: {exc}"]
     if not isinstance(data, dict):
         return [f"{path}: Research manifest must be an object"]
-    if data.get("schema_version") != "1":
-        errors.append(f"{path}: Research manifest schema_version must be 1")
+    manifest_schema = data.get("schema_version")
+    if manifest_schema not in {"1", "1.1"}:
+        errors.append(
+            f"{path}: Research manifest schema_version must be 1 or 1.1"
+        )
     if data.get("research_id") != parent_id:
         errors.append(f"{path}: research_id must be {parent_id}")
     status = data.get("status")
@@ -1786,6 +2096,18 @@ def validate_research_manifest(
         errors.append(f"{path}: invalid Research manifest status {status!r}")
     if mode not in {"managed", "linked", "snapshot"}:
         errors.append(f"{path}: invalid Research manifest mode {mode!r}")
+    if manifest_schema == "1.1":
+        for field, expected in (
+            ("metadata_schema", "1"),
+            ("artifact_type", "research-manifest"),
+            ("id", f"{parent_id}-MANIFEST"),
+        ):
+            if data.get(field) != expected:
+                errors.append(f"{path}: {field} must be {expected!r}")
+        for field in ("title", "author", "owner", "created", "updated"):
+            value = data.get(field)
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{path}: metadata field {field} must be non-empty")
     if require_sealed and status != "sealed":
         errors.append(f"{path}: concluded Research requires sealed manifest")
     documents = data.get("documents")
@@ -1877,8 +2199,117 @@ def history_event_count(text: str) -> int:
     return count
 
 
-def new_research(repo: Path, slug: str, title: str, owner: str) -> Path:
+def milestone_count(text: str) -> int:
+    body = section(text, "Milestones") or ""
+    return sum(
+        1
+        for line in visible_markdown_lines(body)
+        if re.match(r"^###\s+\S", line)
+    )
+
+
+def working_set_state(
+    root_lines: int,
+    root_bytes: int,
+    live_history_events: int,
+) -> str:
+    if (
+        root_lines > ROOT_LINE_WARNING
+        or root_bytes > ROOT_BYTE_WARNING
+        or live_history_events > HISTORY_EVENT_WARNING
+    ):
+        return "checkpoint_required"
+    if (
+        root_lines > ROOT_LINE_RECOMMENDATION
+        or root_bytes > ROOT_BYTE_RECOMMENDATION
+        or live_history_events > HISTORY_EVENT_RECOMMENDATION
+    ):
+        return "checkpoint_recommended"
+    return "bounded"
+
+
+def scope_state(milestones: int, unfinished_tasks: int) -> str:
+    if (
+        milestones > MILESTONE_SPLIT_THRESHOLD
+        or unfinished_tasks > UNFINISHED_TASK_SPLIT_THRESHOLD
+    ):
+        return "split_recommended"
+    if (
+        milestones > MILESTONE_REVIEW_THRESHOLD
+        or unfinished_tasks > UNFINISHED_TASK_REVIEW_THRESHOLD
+    ):
+        return "scope_review"
+    return "bounded"
+
+
+def completion_state(
+    text: str,
+    status: str,
+    task_statuses: Iterable[str],
+) -> tuple[str, list[str]]:
+    if status in PLAN_COMPLETED_STATUSES:
+        return "archived", []
+    acceptance = checkboxes(section(text, "Validation and Acceptance") or "")
+    if not acceptance or not all(acceptance):
+        return "in_progress", []
+    blockers: list[str] = []
+    if marker_names(text):
+        blockers.append("required_placeholders")
+    if unresolved_blockers(text):
+        blockers.append("open_blockers")
+    if any(task not in {"done", "cancelled"} for task in task_statuses):
+        blockers.append("unfinished_tasks")
+    if blockers:
+        return "archive_blocked", blockers
+    return "ready_to_archive", []
+
+
+def plan_lifecycle_metrics(
+    text: str,
+    status: str,
+    task_statuses: Iterable[str],
+) -> dict[str, object]:
+    tasks = list(task_statuses)
+    root_lines = len(text.splitlines())
+    root_bytes = len(text.encode("utf-8"))
+    live_history_events = history_event_count(text)
+    milestones = milestone_count(text)
+    unfinished_tasks = sum(
+        task not in {"done", "cancelled"} for task in tasks
+    )
+    completion, completion_blockers = completion_state(text, status, tasks)
+    archived = status in PLAN_COMPLETED_STATUSES
+    return {
+        "completion": completion,
+        "completion_blockers": completion_blockers,
+        "working_set": (
+            "archived"
+            if archived
+            else working_set_state(root_lines, root_bytes, live_history_events)
+        ),
+        "scope": (
+            "archived"
+            if archived
+            else scope_state(milestones, unfinished_tasks)
+        ),
+        "root_lines": root_lines,
+        "root_bytes": root_bytes,
+        "live_history_events": live_history_events,
+        "milestones": milestones,
+        "unfinished_tasks": unfinished_tasks,
+    }
+
+
+def new_research(
+    repo: Path,
+    slug: str,
+    title: str,
+    owner: str,
+    author: str,
+) -> Path:
     validate_slug(slug)
+    owner_value = metadata_actor(owner)
+    author_value = metadata_actor(author)
     with repo_lock(repo):
         init_repo(repo)
         item_id = next_id(repo, "R")
@@ -1896,7 +2327,8 @@ def new_research(repo: Path, slug: str, title: str, owner: str) -> Path:
             {
                 "ID": item_id,
                 "TITLE": yaml_string(title),
-                "OWNER": yaml_string(owner),
+                "OWNER": yaml_string(owner_value),
+                "AUTHOR": yaml_string(author_value),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
                 "DIR_NAME": directory_name,
@@ -1905,8 +2337,11 @@ def new_research(repo: Path, slug: str, title: str, owner: str) -> Path:
         synthesis_text = render_asset(
             "synthesis.md",
             {
+                "ID": f"{item_id}-SYNTHESIS",
                 "PARENT_ID": item_id,
                 "TITLE": yaml_string(f"{title} — Synthesis"),
+                "AUTHOR": yaml_string(author_value),
+                "OWNER": yaml_string(owner_value),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
             },
@@ -1947,20 +2382,45 @@ def new_adr(
     slug: str,
     title: str,
     owner: str,
+    author: str,
     research_values: Iterable[str],
     depends_on_values: Iterable[str],
     amends_values: Iterable[str],
+    amends_constraint_values: Iterable[str],
     design_values: Iterable[str],
 ) -> Path:
     validate_slug(slug)
+    owner_value = metadata_actor(owner)
+    author_value = metadata_actor(author)
     research_refs = normalize_reference_ids(research_values, "R")
     depends_on = normalize_reference_ids(depends_on_values, "ADR")
     amends = normalize_reference_ids(amends_values, "ADR")
+    amends_constraints = normalize_adr_constraint_refs(
+        amends_constraint_values,
+        "amends_constraints",
+    )
     overlap = set(depends_on) & set(amends)
     if overlap:
         raise EpctlError(
             "ADR cannot both depend on and amend: " + ", ".join(sorted(overlap))
         )
+    amended_constraint_parents = {
+        reference.split("#", 1)[0] for reference in amends_constraints
+    }
+    if amended_constraint_parents != set(amends):
+        missing = set(amends) - amended_constraint_parents
+        extra = amended_constraint_parents - set(amends)
+        details: list[str] = []
+        if missing:
+            details.append(
+                "missing constraint references for " + ", ".join(sorted(missing))
+            )
+        if extra:
+            details.append(
+                "constraint references without --amends "
+                + ", ".join(sorted(extra))
+            )
+        raise EpctlError("Scoped amendments are inconsistent: " + "; ".join(details))
     with repo_lock(repo):
         init_repo(repo)
         design_refs = normalize_document_refs(repo, design_values, "design_refs")
@@ -1987,6 +2447,20 @@ def new_adr(
                 raise EpctlError(
                     f"{related_id} must be valid, accepted and current: {details}"
                 )
+        for constraint_ref in amends_constraints:
+            related_id = constraint_ref.split("#", 1)[0]
+            related_path = find_adr(repo, related_id)
+            available = set(
+                adr_constraint_refs(
+                    related_path.read_text(encoding="utf-8"),
+                    related_id,
+                )
+            )
+            if constraint_ref not in available:
+                raise EpctlError(
+                    f"{constraint_ref} does not identify a structured constraint "
+                    f"in {related_id}; supersede legacy or unstructured decisions"
+                )
         item_id = next_id(repo, "ADR")
         number = int(item_id.split("-")[1])
         path = repo / "docs" / "adr" / f"adr-{number:03d}_{slug}.md"
@@ -1999,10 +2473,15 @@ def new_adr(
             {
                 "ID": item_id,
                 "TITLE": yaml_string(title),
-                "OWNER": yaml_string(owner),
+                "OWNER": yaml_string(owner_value),
+                "AUTHOR": yaml_string(author_value),
                 "RESEARCH_REFS": refs_json,
                 "DEPENDS_ON": json.dumps(depends_on, ensure_ascii=False),
                 "AMENDS": json.dumps(amends, ensure_ascii=False),
+                "AMENDS_CONSTRAINTS": json.dumps(
+                    amends_constraints,
+                    ensure_ascii=False,
+                ),
                 "DESIGN_REFS": json.dumps(design_refs, ensure_ascii=False),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
@@ -2034,15 +2513,19 @@ def new_ep(
     slug: str,
     title: str,
     owner: str,
+    author: str,
     research_values: Iterable[str],
     adr_values: Iterable[str],
     design_values: Iterable[str],
     benchmark_scenario_values: Iterable[str],
     architecture_entrypoint_value: str,
     research_not_required_reason: str,
-    architecture_not_required_reason: str,
+    decision_not_required_reason: str,
+    architecture_not_applicable_reason: str,
 ) -> Path:
     validate_slug(slug)
+    owner_value = metadata_actor(owner)
+    author_value = metadata_actor(author)
     research_refs = normalize_reference_ids(research_values, "R")
     adr_refs = normalize_reference_ids(adr_values, "ADR")
     benchmark_scenario_refs = normalize_benchmark_scenario_ids(
@@ -2050,7 +2533,8 @@ def new_ep(
     )
     raw_design_values = list(design_values)
     research_reason = inline_text(research_not_required_reason)
-    architecture_reason = inline_text(architecture_not_required_reason)
+    decision_reason = inline_text(decision_not_required_reason)
+    compliance_reason = inline_text(architecture_not_applicable_reason)
     if research_refs and research_reason:
         raise EpctlError(
             "Use Research references or --research-not-required-reason, not both"
@@ -2060,21 +2544,10 @@ def new_ep(
             "new-ep requires concluded --research references or "
             "--research-not-required-reason"
         )
-    if adr_refs and architecture_reason:
+    if not adr_refs and not decision_reason:
         raise EpctlError(
-            "Use ADR references or --architecture-not-required-reason, not both"
-        )
-    if not adr_refs and not architecture_reason:
-        raise EpctlError(
-            "new-ep requires accepted --adr references or "
-            "--architecture-not-required-reason"
-        )
-    if architecture_reason and (
-        raw_design_values or inline_text(architecture_entrypoint_value)
-    ):
-        raise EpctlError(
-            "Design references and architecture entrypoint require a satisfied "
-            "Architecture Gate"
+            "new-ep requires accepted --adr references or a "
+            "--decision-not-required-reason"
         )
     with repo_lock(repo):
         init_repo(repo)
@@ -2101,6 +2574,20 @@ def new_ep(
                 (architecture_entrypoint_value,),
                 "architecture_entrypoint",
             )[0]
+        has_architecture_inputs = bool(
+            adr_refs or design_refs or architecture_entrypoint
+        )
+        if has_architecture_inputs and compliance_reason:
+            raise EpctlError(
+                "--architecture-not-applicable-reason cannot be used when "
+                "architecture inputs are present"
+            )
+        if not has_architecture_inputs and not compliance_reason:
+            compliance_reason = decision_reason
+        if not has_architecture_inputs and not compliance_reason:
+            raise EpctlError(
+                "Architecture compliance not_applicable requires a reason"
+            )
         for research_id in research_refs:
             research_path = find_research(repo, research_id, "completed")
             errors, _ = validate_research(research_path)
@@ -2138,6 +2625,28 @@ def new_ep(
                     f"{adr_id} requires Design Doc references missing from the plan: "
                     + ", ".join(sorted(missing_designs))
                 )
+        structured_constraint_refs, compliance_rows = (
+            render_architecture_compliance_rows(
+                adr_refs,
+                repo,
+                design_refs,
+                architecture_entrypoint,
+            )
+        )
+        scoped_amendments = current_constraint_amendments(
+            repo,
+            structured_constraint_refs,
+        )
+        missing_amendments = set(scoped_amendments) - set(adr_refs)
+        if missing_amendments:
+            details = "; ".join(
+                f"{adr_id} (amends {', '.join(scoped_amendments[adr_id])})"
+                for adr_id in sorted(missing_amendments)
+            )
+            raise EpctlError(
+                "Plan ADR set omits current scoped amendments: " + details
+            )
+        adr_evidence = adr_evidence_values(adr_refs, adr_data_by_id)
         item_id = next_id(repo, "EP")
         number = int(item_id.split("-")[1])
         directory_name = f"ep-{number:03d}_{slug}"
@@ -2151,7 +2660,8 @@ def new_ep(
             {
                 "ID": item_id,
                 "TITLE": yaml_string(title),
-                "OWNER": yaml_string(owner),
+                "OWNER": yaml_string(owner_value),
+                "AUTHOR": yaml_string(author_value),
                 "RESEARCH_REFS": json.dumps(
                     research_refs, ensure_ascii=False
                 ),
@@ -2160,6 +2670,14 @@ def new_ep(
                 ),
                 "RESEARCH_GATE_REASON": yaml_string(research_reason),
                 "ADR_REFS": json.dumps(adr_refs, ensure_ascii=False),
+                "ADR_CONSTRAINT_REFS": json.dumps(
+                    structured_constraint_refs,
+                    ensure_ascii=False,
+                ),
+                "ADR_EVIDENCE": json.dumps(
+                    adr_evidence,
+                    ensure_ascii=False,
+                ),
                 "DESIGN_REFS": json.dumps(design_refs, ensure_ascii=False),
                 "REQUIRED_BENCHMARK_SCENARIOS": json.dumps(
                     benchmark_scenario_refs,
@@ -2174,10 +2692,19 @@ def new_ep(
                 "ARCHITECTURE_ENTRYPOINT": yaml_string(
                     architecture_entrypoint
                 ),
-                "ARCHITECTURE_GATE": (
-                    "satisfied" if adr_refs else "not_required"
+                "ARCHITECTURE_DECISION_GATE": (
+                    "not_required" if decision_reason else "satisfied"
                 ),
-                "ARCHITECTURE_GATE_REASON": yaml_string(architecture_reason),
+                "ARCHITECTURE_DECISION_GATE_REASON": yaml_string(
+                    decision_reason
+                ),
+                "ARCHITECTURE_COMPLIANCE": (
+                    "applicable" if has_architecture_inputs else "not_applicable"
+                ),
+                "ARCHITECTURE_COMPLIANCE_REASON": yaml_string(
+                    compliance_reason
+                ),
+                "ARCHITECTURE_COMPLIANCE_ROWS": compliance_rows,
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
                 "DIR_NAME": directory_name,
@@ -2204,12 +2731,24 @@ def new_ep(
         return path
 
 
-def new_task(repo: Path, plan_id: str, slug: str, title: str, owner: str) -> Path:
+def new_task(
+    repo: Path,
+    plan_id: str,
+    slug: str,
+    title: str,
+    owner: str,
+    author: str,
+) -> Path:
     validate_slug(slug)
     with repo_lock(repo):
         plan_path = find_plan(repo, plan_id, "active")
         if plan_path.name != "EXECPLAN.md":
             raise EpctlError("new-task requires a v2 plan with EXECPLAN.md")
+        plan_data, _, _ = parse_frontmatter(
+            plan_path.read_text(encoding="utf-8")
+        )
+        owner_value = metadata_actor(owner or plan_data.get("owner", ""))
+        author_value = metadata_actor(author or plan_data.get("author", ""))
         tasks_dir = plan_path.parent / "tasks"
         reject_symlink_path(repo, tasks_dir)
         tasks_dir.mkdir(exist_ok=True)
@@ -2229,7 +2768,8 @@ def new_task(repo: Path, plan_id: str, slug: str, title: str, owner: str) -> Pat
                 "TASK_ID": task_id,
                 "TITLE": yaml_string(title),
                 "PARENT_ID": plan_id.upper(),
-                "OWNER": yaml_string(owner),
+                "OWNER": yaml_string(owner_value),
+                "AUTHOR": yaml_string(author_value),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
             },
@@ -2239,9 +2779,17 @@ def new_task(repo: Path, plan_id: str, slug: str, title: str, owner: str) -> Pat
 
 
 def new_bugfix(
-    repo: Path, slug: str, title: str, area: str, severity: str
+    repo: Path,
+    slug: str,
+    title: str,
+    area: str,
+    severity: str,
+    owner: str,
+    author: str,
 ) -> Path:
     validate_slug(slug)
+    owner_value = metadata_actor(owner)
+    author_value = metadata_actor(author)
     with repo_lock(repo):
         init_repo(repo)
         item_id = next_id(repo, "BF")
@@ -2261,6 +2809,8 @@ def new_bugfix(
                 "TITLE": yaml_string(title),
                 "AREA": yaml_string(area),
                 "SEVERITY": yaml_string(severity),
+                "OWNER": yaml_string(owner_value),
+                "AUTHOR": yaml_string(author_value),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
             },
@@ -2346,17 +2896,24 @@ def validate_benchmark_scenario_reference(
     except (EpctlError, OSError, UnicodeDecodeError) as exc:
         return [f"{path}: invalid Benchmark Scenario: {exc}"]
     errors: list[str] = []
-    expected_fields = {
-        "schema_version": "1",
-        "id": scenario_id,
-        "status": "active",
-    }
+    expected_fields = {"id": scenario_id, "status": "active"}
     for field, expected in expected_fields.items():
         if data.get(field) != expected:
             errors.append(
                 f"{path}: {field} must be {expected!r}, "
                 f"found {data.get(field)!r}"
             )
+    if data.get("schema_version") not in {"1", "1.1"}:
+        errors.append(f"{path}: schema_version must be '1' or '1.1'")
+    if data.get("schema_version") == "1.1":
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "benchmark-scenario",
+                scenario_id,
+            )
+        )
     if not inline_text(data.get("title", "")):
         errors.append(f"{path}: title must be a non-empty string")
     errors.extend(
@@ -2378,8 +2935,10 @@ def validate_benchmark_scenario_reference(
         except (EpctlError, OSError, UnicodeDecodeError) as exc:
             errors.append(f"{suite_path}: invalid Benchmark Suite: {exc}")
         else:
-            if suite_data.get("schema_version") != "1":
-                errors.append(f"{suite_path}: schema_version must be '1'")
+            if suite_data.get("schema_version") not in {"1", "1.1"}:
+                errors.append(
+                    f"{suite_path}: schema_version must be '1' or '1.1'"
+                )
             if suite_data.get("id") != suite_id:
                 errors.append(
                     f"{suite_path}: id does not match Scenario suite_id {suite_id}"
@@ -2388,6 +2947,15 @@ def validate_benchmark_scenario_reference(
                 errors.append(f"{suite_path}: status must be 'active'")
             if not inline_text(suite_data.get("title", "")):
                 errors.append(f"{suite_path}: title must be a non-empty string")
+            if suite_data.get("schema_version") == "1.1":
+                errors.extend(
+                    validate_metadata_contract(
+                        suite_path,
+                        suite_data,
+                        "benchmark-suite",
+                        suite_id,
+                    )
+                )
             owner = inline_text(suite_data.get("owner", ""))
             if not owner or owner == "Unassigned":
                 errors.append(
@@ -2537,7 +3105,6 @@ def validate_benchmark_evidence_reference(
 
     errors: list[str] = []
     expected_fields = {
-        "schema_version": "1",
         "run_id": run_id,
         "status": "sealed",
         "outcome": "passed",
@@ -2548,6 +3115,25 @@ def validate_benchmark_evidence_reference(
                 f"{manifest_path}: {field} must be {expected!r}, "
                 f"found {manifest.get(field)!r}"
             )
+    manifest_schema = manifest.get("schema_version")
+    if manifest_schema not in {"1", "1.1"}:
+        errors.append(
+            f"{manifest_path}: schema_version must be '1' or '1.1'"
+        )
+    if manifest_schema == "1.1":
+        for field, expected in (
+            ("metadata_schema", "1"),
+            ("artifact_type", "benchmark-manifest"),
+            ("id", f"{run_id}-MANIFEST"),
+        ):
+            if manifest.get(field) != expected:
+                errors.append(f"{manifest_path}: {field} must be {expected!r}")
+        for field in ("title", "author", "owner", "created", "updated"):
+            value = manifest.get(field)
+            if not isinstance(value, str) or not inline_text(value):
+                errors.append(
+                    f"{manifest_path}: metadata field {field} must be non-empty"
+                )
     for field in (
         "suite_id",
         "scenario_id",
@@ -2592,7 +3178,7 @@ def validate_benchmark_evidence_reference(
             errors.append(f"{result_path}: invalid Benchmark Result: {exc}")
         else:
             result_expectations = {
-                "schema_version": "1",
+                "schema_version": manifest_schema,
                 "id": run_id,
                 "suite_id": manifest.get("suite_id"),
                 "scenario_id": manifest.get("scenario_id"),
@@ -2606,6 +3192,15 @@ def validate_benchmark_evidence_reference(
                     errors.append(
                         f"{result_path}: {field} does not match the Manifest"
                     )
+            if result_data.get("schema_version") == "1.1":
+                errors.extend(
+                    validate_metadata_contract(
+                        result_path,
+                        result_data,
+                        "benchmark-result",
+                        run_id,
+                    )
+                )
             if result_data.get("subject_revision") != verified_revision:
                 errors.append(
                     f"{result_path}: subject_revision "
@@ -2632,9 +3227,9 @@ def validate_benchmark_evidence_reference(
                 f"{scenario_path}: invalid Benchmark Scenario: {exc}"
             )
         else:
-            if scenario_data.get("schema_version") != "1":
+            if scenario_data.get("schema_version") not in {"1", "1.1"}:
                 errors.append(
-                    f"{scenario_path}: schema_version must be '1'"
+                    f"{scenario_path}: schema_version must be '1' or '1.1'"
                 )
             if scenario_data.get("id") != manifest.get("scenario_id"):
                 errors.append(
@@ -2643,6 +3238,15 @@ def validate_benchmark_evidence_reference(
             if scenario_data.get("suite_id") != manifest.get("suite_id"):
                 errors.append(
                     f"{scenario_path}: suite_id does not match the Manifest"
+                )
+            if scenario_data.get("schema_version") == "1.1":
+                errors.extend(
+                    validate_metadata_contract(
+                        scenario_path,
+                        scenario_data,
+                        "benchmark-scenario",
+                        str(manifest.get("scenario_id", "")),
+                    )
                 )
             if marker_names(scenario_text):
                 errors.append(
@@ -2744,9 +3348,11 @@ def checkpoint_plan(
             "2.3",
             "2.4",
             "2.5",
+            "2.6",
+            "2.7",
         }:
             raise EpctlError(
-                "checkpoint requires schema_version 2.1 through 2.5 "
+                "checkpoint requires schema_version 2.1 through 2.7 "
                 "and ## Current Snapshot"
             )
         errors, _ = validate_plan(plan_path)
@@ -2863,7 +3469,6 @@ def checkpoint_plan(
         candidate = render_asset(
             "checkpoint.md",
             {
-                "CHECKPOINT_SCHEMA_VERSION": "1.1",
                 "CHECKPOINT_ID": checkpoint_id,
                 "PARENT_ID": plan_id.upper(),
                 "TITLE": yaml_string(inline_text(title)),
@@ -2871,6 +3476,12 @@ def checkpoint_plan(
                 "REPOSITORY_REVISION": yaml_string(revision),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
+                "AUTHOR": yaml_string(
+                    metadata_actor(data.get("author", ""))
+                ),
+                "OWNER": yaml_string(
+                    metadata_actor(data.get("owner", ""))
+                ),
                 "PAYLOAD_SHA256": "PENDING",
                 "SUMMARY": summary.strip(),
                 "NEXT_ACTION": next_action.strip(),
@@ -2881,7 +3492,7 @@ def checkpoint_plan(
                 "ARCHIVED_REVISIONS": archived_revisions,
             },
         )
-        digest = payload_sha256(candidate)
+        digest = canonical_document_sha256(candidate, "payload_sha256")
         candidate = candidate.replace(
             "payload_sha256: PENDING",
             f"payload_sha256: {digest}",
@@ -3099,8 +3710,10 @@ def validate_synthesis(
     except EpctlError as exc:
         return [f"{path}: {exc}"], warnings
     schema_version = data.get("schema_version")
-    if schema_version not in {"1", "1.1"}:
-        errors.append(f"{path}: synthesis schema_version must be 1 or 1.1")
+    if schema_version not in {"1", "1.1", "1.2"}:
+        errors.append(
+            f"{path}: synthesis schema_version must be 1, 1.1 or 1.2"
+        )
     if data.get("parent_id") != parent_id:
         errors.append(f"{path}: parent_id must be {parent_id}")
     if not data.get("title"):
@@ -3114,11 +3727,20 @@ def validate_synthesis(
     status = data.get("status", "")
     allowed_statuses = (
         {"draft", "review_ready", "sealed"}
-        if schema_version == "1.1"
+        if schema_version in {"1.1", "1.2"}
         else {"draft", "sealed"}
     )
     if status not in allowed_statuses:
         errors.append(f"{path}: invalid synthesis status {status!r}")
+    if data.get("metadata_schema"):
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "research-synthesis",
+                f"{parent_id}-SYNTHESIS",
+            )
+        )
     errors.extend(validate_required_sections(path, text, SYNTHESIS_SECTIONS))
     required = bool(marker_names(text))
     if require_sealed and status != "sealed":
@@ -3158,8 +3780,12 @@ def validate_research(
     research_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "R"))
     schema_version = data.get("schema_version")
-    if schema_version not in {"1", "1.1"}:
-        errors.append(f"{path}: Research schema_version must be 1 or 1.1")
+    if schema_version not in {"1", "1.1", "1.2"}:
+        errors.append(f"{path}: Research schema_version must be 1, 1.1 or 1.2")
+    if data.get("metadata_schema") and research_id:
+        errors.extend(
+            validate_metadata_contract(path, data, "research", research_id)
+        )
     location = "completed" if "/completed/" in path.as_posix() else "active"
     allowed = (
         RESEARCH_COMPLETED_STATUSES
@@ -3224,7 +3850,7 @@ def validate_research(
             )
         if marker_names(text):
             errors.append(f"{path}: concluded Research has required placeholders")
-        if schema_version == "1.1":
+        if schema_version in {"1.1", "1.2"}:
             if data.get("maturity") != "review_ready":
                 errors.append(
                     f"{path}: concluded Research must have review_ready maturity"
@@ -3248,6 +3874,8 @@ def validate_research(
 
 def validate_adr(
     path: Path,
+    *,
+    historical: bool = False,
 ) -> tuple[list[str], list[str], dict[str, str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -3260,9 +3888,19 @@ def validate_adr(
     repo = repository_from_artifact(path)
     if strict:
         errors.extend(validate_common_frontmatter(path, data, "ADR"))
-        if data.get("schema_version") not in {"1", "1.1"}:
-            errors.append(f"{path}: ADR schema_version must be 1 or 1.1")
+        if data.get("schema_version") not in {"1", "1.1", "1.2", "1.3"}:
+            errors.append(
+                f"{path}: ADR schema_version must be 1, 1.1, 1.2 or 1.3"
+            )
         errors.extend(validate_required_sections(path, text, ADR_SECTIONS))
+        if data.get("schema_version") in {"1.2", "1.3"}:
+            errors.extend(
+                validate_required_sections(path, text, ADR_V12_SECTIONS)
+            )
+        if data.get("schema_version") == "1.3" and adr_id:
+            errors.extend(
+                validate_metadata_contract(path, data, "adr", adr_id)
+            )
     else:
         if not ID_RE["ADR"].fullmatch(adr_id):
             errors.append(
@@ -3291,6 +3929,10 @@ def validate_adr(
                 data.get(field, ""), prefix, field
             )
         design_refs = parse_string_array(data.get("design_refs", ""), "design_refs")
+        amends_constraints = parse_adr_constraint_array(
+            data.get("amends_constraints", ""),
+            "amends_constraints",
+        )
     except EpctlError as exc:
         errors.append(f"{path}: {exc}")
         arrays = {
@@ -3300,14 +3942,21 @@ def validate_adr(
             "supersedes": [],
         }
         design_refs = []
+        amends_constraints = []
     research_refs = arrays["research_refs"]
     depends_on = arrays["depends_on"]
     amends = arrays["amends"]
     supersedes = arrays["supersedes"]
-    if data.get("schema_version") == "1.1":
-        for field in ("depends_on", "amends", "design_refs"):
+    if data.get("schema_version") in {"1.1", "1.2", "1.3"}:
+        required_fields = ["depends_on", "amends", "design_refs"]
+        if data.get("schema_version") in {"1.2", "1.3"}:
+            required_fields.append("amends_constraints")
+        for field in required_fields:
             if field not in data:
-                errors.append(f"{path}: schema 1.1 ADR requires {field}")
+                errors.append(
+                    f"{path}: schema {data.get('schema_version')} ADR requires "
+                    f"{field}"
+                )
     for field, values in (
         ("depends_on", depends_on),
         ("amends", amends),
@@ -3336,6 +3985,11 @@ def validate_adr(
         research_errors, _ = validate_research(research_path)
         if research_errors or research_data.get("status") != "concluded":
             errors.append(f"{path}: {research_id} is not valid and concluded")
+    relation_statuses = (
+        {"accepted", "superseded"}
+        if historical or status in {"rejected", "superseded"}
+        else {"accepted"}
+    )
     for related_id in (*depends_on, *amends):
         try:
             related_path = find_adr(repo, related_id)
@@ -3343,10 +3997,85 @@ def validate_adr(
         except EpctlError:
             errors.append(f"{path}: related ADR {related_id} is missing")
             continue
-        if related_data.get("status") != "accepted":
+        if related_data.get("status") not in relation_statuses:
             errors.append(
-                f"{path}: {related_id} in depends_on/amends must be accepted"
+                f"{path}: {related_id} in depends_on/amends must have status in "
+                f"{sorted(relation_statuses)}"
             )
+    if data.get("schema_version") in {"1.2", "1.3"}:
+        decision_statement = re.sub(
+            r"<!--[\s\S]*?-->",
+            "",
+            section(text, "Decision Statement") or "",
+        )
+        statement_issues = warnings if status == "proposed" else errors
+        if unresolved_contract_cell(decision_statement):
+            statement_issues.append(
+                f"{path}: structured ADR needs a Decision Statement"
+            )
+        constraint_rows = adr_constraint_rows(text)
+        seen_constraints: set[str] = set()
+        incomplete_constraints = warnings if status == "proposed" else errors
+        if not constraint_rows:
+            incomplete_constraints.append(
+                f"{path}: structured ADR needs a normative constraint"
+            )
+        for cells in constraint_rows:
+            if len(cells) != 5:
+                errors.append(
+                    f"{path}: Normative Constraints rows require 5 columns"
+                )
+                continue
+            constraint_id, strength, scope, constraint, confirmation = cells
+            match = LOCAL_CONSTRAINT_RE.fullmatch(constraint_id.upper())
+            if not match:
+                errors.append(
+                    f"{path}: invalid constraint ID {constraint_id!r}; "
+                    "expected C-NNN"
+                )
+                continue
+            canonical = f"C-{int(match.group(1)):03d}"
+            if canonical in seen_constraints:
+                errors.append(f"{path}: duplicate constraint ID {canonical}")
+            seen_constraints.add(canonical)
+            if strength.lower() not in ADR_CONSTRAINT_STRENGTHS:
+                errors.append(
+                    f"{path}: {canonical} strength must be one of "
+                    + ", ".join(sorted(ADR_CONSTRAINT_STRENGTHS))
+                )
+            for label, value in (
+                ("scope", scope),
+                ("constraint", constraint),
+                ("confirmation", confirmation),
+            ):
+                if unresolved_contract_cell(value):
+                    incomplete_constraints.append(
+                        f"{path}: {canonical} has unresolved {label}"
+                    )
+        amended_parents = {
+            reference.split("#", 1)[0] for reference in amends_constraints
+        }
+        if amended_parents != set(amends):
+            errors.append(
+                f"{path}: structured amends_constraints must cover exactly "
+                "the ADRs listed in amends"
+            )
+        for constraint_ref in amends_constraints:
+            related_id = constraint_ref.split("#", 1)[0]
+            try:
+                related_path = find_adr(repo, related_id)
+            except EpctlError:
+                continue
+            available = set(
+                adr_constraint_refs(
+                    related_path.read_text(encoding="utf-8"),
+                    related_id,
+                )
+            )
+            if constraint_ref not in available:
+                errors.append(
+                    f"{path}: amended constraint {constraint_ref} does not exist"
+                )
     for design_ref in design_refs:
         design_errors, design_warnings = validate_design_ref(repo, design_ref)
         errors.extend(f"{path}: {error}" for error in design_errors)
@@ -3406,6 +4135,10 @@ def validate_task(
         return [f"{path}: {exc}"], warnings
     task_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "TASK"))
+    if data.get("schema_version") == "1" and task_id:
+        errors.extend(
+            validate_metadata_contract(path, data, "task", task_id)
+        )
     parent_id = data.get("parent_id") or data.get("parent")
     if parent_id != plan_id:
         errors.append(f"{path}: parent_id must be {plan_id}")
@@ -3473,12 +4206,16 @@ def validate_checkpoint(
                 f"{path}: frontmatter id {checkpoint_id} does not match path"
             )
     checkpoint_schema = data.get("schema_version", "")
-    if checkpoint_schema not in {"1", "1.1"}:
-        errors.append(f"{path}: checkpoint schema_version must be 1 or 1.1")
-    if checkpoint_schema == "1.1" and not inline_text(
+    if checkpoint_schema not in {"1", "1.1", "1.2"}:
+        errors.append(
+            f"{path}: checkpoint schema_version must be 1, 1.1 or 1.2"
+        )
+    if checkpoint_schema in {"1.1", "1.2"} and not inline_text(
         data.get("repository_revision", "")
     ):
-        errors.append(f"{path}: schema 1.1 checkpoint requires repository_revision")
+        errors.append(
+            f"{path}: checkpoint requires repository_revision"
+        )
     if data.get("parent_id") != plan_id:
         errors.append(f"{path}: parent_id must be {plan_id}")
     if data.get("status") != "sealed":
@@ -3497,13 +4234,26 @@ def validate_checkpoint(
         dt.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
     except ValueError:
         errors.append(f"{path}: created_at must be an ISO timestamp")
+    if checkpoint_schema == "1.2" and checkpoint_id:
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "checkpoint",
+                checkpoint_id,
+            )
+        )
     errors.extend(
         validate_required_sections(path, text, CHECKPOINT_SECTIONS)
     )
     if marker_names(text):
         errors.append(f"{path}: required placeholders remain")
     expected_digest = data.get("payload_sha256", "")
-    actual_digest = payload_sha256(text)
+    actual_digest = (
+        canonical_document_sha256(text, "payload_sha256")
+        if checkpoint_schema == "1.2"
+        else payload_sha256(text)
+    )
     if not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
         errors.append(f"{path}: invalid payload_sha256")
     elif expected_digest != actual_digest:
@@ -3542,6 +4292,10 @@ def validate_plan(
     plan_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "EP"))
     schema_version = data.get("schema_version", "2.0")
+    if (schema_version == "2.7" or data.get("metadata_schema")) and plan_id:
+        errors.extend(
+            validate_metadata_contract(path, data, "exec-plan", plan_id)
+        )
     required_benchmark_scenarios: list[str] | None = None
     if schema_version not in {
         "2.0",
@@ -3550,9 +4304,11 @@ def validate_plan(
         "2.3",
         "2.4",
         "2.5",
+        "2.6",
+        "2.7",
     }:
         errors.append(f"{path}: unsupported schema_version {schema_version!r}")
-    if schema_version in {"2.1", "2.2", "2.3", "2.4", "2.5"}:
+    if schema_version in {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V21_SECTIONS)
         )
@@ -3563,7 +4319,12 @@ def validate_plan(
             f"{path}: v2.0 plan has no bounded checkpoint model; "
             "add schema_version 2.1 and ## Current Snapshot before checkpointing"
         )
-    if schema_version in {"2.2", "2.3", "2.4", "2.5"}:
+    status = data.get("status", "")
+    location = "completed" if "/completed/" in path.as_posix() else "active"
+    historical_plan = (
+        location == "completed" and status in PLAN_COMPLETED_STATUSES
+    ) or archive_status == "cancelled"
+    if schema_version in {"2.2", "2.3", "2.4", "2.5", "2.6", "2.7"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V22_SECTIONS)
         )
@@ -3580,14 +4341,29 @@ def validate_plan(
             )
             design_refs = (
                 parse_string_array(data.get("design_refs", ""), "design_refs")
-                if schema_version in {"2.4", "2.5"}
+                if schema_version in {"2.4", "2.5", "2.6", "2.7"}
                 else []
+            )
+            adr_constraint_ref_values = (
+                parse_adr_constraint_array(
+                    data.get("adr_constraint_refs", ""),
+                    "adr_constraint_refs",
+                )
+                if schema_version in {"2.6", "2.7"}
+                else []
+            )
+            adr_evidence = (
+                parse_adr_evidence(data.get("adr_evidence", ""))
+                if schema_version in {"2.6", "2.7"}
+                else {}
             )
         except EpctlError as exc:
             errors.append(f"{path}: {exc}")
             research_refs = []
             adr_refs = []
             design_refs = []
+            adr_constraint_ref_values = []
+            adr_evidence = {}
         repo = repository_from_artifact(path)
         inputs = section(text, "Research and Architecture Inputs") or ""
         research_gate = data.get("research_gate", "")
@@ -3627,50 +4403,129 @@ def validate_plan(
                     f"{path}: Research and Architecture Inputs must mention "
                     f"{research_id}"
                 )
-        architecture_gate = data.get("architecture_gate", "")
-        architecture_reason = inline_text(
-            data.get("architecture_gate_reason", "")
+        architecture_entrypoint = (
+            inline_text(data.get("architecture_entrypoint", ""))
+            if schema_version in {"2.4", "2.5", "2.6", "2.7"}
+            else ""
         )
-        if architecture_gate == "satisfied":
-            if not adr_refs:
+        if schema_version in {"2.6", "2.7"}:
+            decision_gate = data.get("architecture_decision_gate", "")
+            decision_reason = inline_text(
+                data.get("architecture_decision_gate_reason", "")
+            )
+            if decision_gate == "satisfied":
+                if not adr_refs:
+                    errors.append(
+                        f"{path}: satisfied Architecture Decision Gate requires "
+                        "adr_refs"
+                    )
+                if decision_reason:
+                    errors.append(
+                        f"{path}: satisfied Architecture Decision Gate cannot "
+                        "have a skip reason"
+                    )
+            elif decision_gate == "not_required":
+                if not decision_reason:
+                    errors.append(
+                        f"{path}: not_required Architecture Decision Gate "
+                        "requires a reason"
+                    )
+            else:
                 errors.append(
-                    f"{path}: satisfied Architecture Gate requires adr_refs"
+                    f"{path}: invalid architecture_decision_gate "
+                    f"{decision_gate!r}"
                 )
-            if architecture_reason:
+            compliance = data.get("architecture_compliance", "")
+            compliance_reason = inline_text(
+                data.get("architecture_compliance_reason", "")
+            )
+            has_architecture_inputs = bool(
+                adr_refs or design_refs or architecture_entrypoint
+            )
+            if compliance == "applicable":
+                if not has_architecture_inputs:
+                    errors.append(
+                        f"{path}: applicable architecture compliance requires "
+                        "ADR, Design Doc, or entrypoint inputs"
+                    )
+                if compliance_reason:
+                    errors.append(
+                        f"{path}: applicable architecture compliance cannot "
+                        "have a not-applicable reason"
+                    )
+            elif compliance == "not_applicable":
+                if has_architecture_inputs:
+                    errors.append(
+                        f"{path}: not_applicable architecture compliance "
+                        "cannot have architecture inputs"
+                    )
+                if not compliance_reason:
+                    errors.append(
+                        f"{path}: not_applicable architecture compliance "
+                        "requires a reason"
+                    )
+                if adr_constraint_ref_values or adr_evidence:
+                    errors.append(
+                        f"{path}: not_applicable architecture compliance "
+                        "cannot have ADR constraints or evidence"
+                    )
+            else:
                 errors.append(
-                    f"{path}: satisfied Architecture Gate cannot have a skip reason"
-                )
-        elif architecture_gate == "not_required":
-            if adr_refs:
-                errors.append(
-                    f"{path}: not_required Architecture Gate cannot have adr_refs"
-                )
-            if not architecture_reason:
-                errors.append(
-                    f"{path}: not_required Architecture Gate requires a reason"
-                )
-            if design_refs or (
-                schema_version in {"2.4", "2.5"}
-                and inline_text(data.get("architecture_entrypoint", ""))
-            ):
-                errors.append(
-                    f"{path}: not_required Architecture Gate cannot have "
-                    "Design Docs or an architecture entrypoint"
+                    f"{path}: invalid architecture_compliance {compliance!r}"
                 )
         else:
-            errors.append(
-                f"{path}: invalid architecture_gate {architecture_gate!r}"
+            architecture_gate = data.get("architecture_gate", "")
+            architecture_reason = inline_text(
+                data.get("architecture_gate_reason", "")
             )
+            if architecture_gate == "satisfied":
+                if not adr_refs:
+                    errors.append(
+                        f"{path}: satisfied Architecture Gate requires adr_refs"
+                    )
+                if architecture_reason:
+                    errors.append(
+                        f"{path}: satisfied Architecture Gate cannot have a "
+                        "skip reason"
+                    )
+            elif architecture_gate == "not_required":
+                if adr_refs:
+                    errors.append(
+                        f"{path}: not_required Architecture Gate cannot have "
+                        "adr_refs"
+                    )
+                if not architecture_reason:
+                    errors.append(
+                        f"{path}: not_required Architecture Gate requires a reason"
+                    )
+                if design_refs or architecture_entrypoint:
+                    errors.append(
+                        f"{path}: not_required Architecture Gate cannot have "
+                        "Design Docs or an architecture entrypoint"
+                    )
+            else:
+                errors.append(
+                    f"{path}: invalid architecture_gate {architecture_gate!r}"
+                )
         adr_data_by_id: dict[str, dict[str, str]] = {}
+        allowed_adr_statuses = (
+            {"accepted", "superseded"} if historical_plan else {"accepted"}
+        )
         for adr_id in adr_refs:
             try:
                 adr_path = find_adr(repo, adr_id)
             except EpctlError:
                 errors.append(f"{path}: missing accepted ADR {adr_id}")
                 continue
-            adr_errors, _, adr_data = validate_adr(adr_path)
-            if adr_errors or adr_data.get("status") != "accepted":
-                errors.append(f"{path}: {adr_id} is not valid, accepted and current")
+            adr_errors, _, adr_data = validate_adr(
+                adr_path,
+                historical=historical_plan,
+            )
+            if adr_errors or adr_data.get("status") not in allowed_adr_statuses:
+                errors.append(
+                    f"{path}: {adr_id} is not valid with status in "
+                    f"{sorted(allowed_adr_statuses)}"
+                )
             else:
                 adr_data_by_id[adr_id] = adr_data
             missing_research = set(
@@ -3687,7 +4542,12 @@ def validate_plan(
                 )
         if adr_data_by_id:
             try:
-                closure, closure_data = adr_input_closure(repo, adr_refs)
+                closure, closure_data = adr_input_closure(
+                    repo,
+                    adr_refs,
+                    allowed_statuses=allowed_adr_statuses,
+                    historical=historical_plan,
+                )
             except EpctlError as exc:
                 errors.append(f"{path}: {exc}")
                 closure = []
@@ -3710,7 +4570,7 @@ def validate_plan(
                         f"{path}: {adr_id} requires missing Design Docs "
                         + ", ".join(sorted(missing_designs))
                     )
-        if schema_version in {"2.4", "2.5"}:
+        if schema_version in {"2.4", "2.5", "2.6", "2.7"}:
             if "design_refs" not in data:
                 errors.append(f"{path}: missing frontmatter field design_refs")
             if "architecture_entrypoint" not in data:
@@ -3726,9 +4586,6 @@ def validate_plan(
                         f"{path}: Research and Architecture Inputs must mention "
                         f"{design_ref}"
                     )
-            architecture_entrypoint = inline_text(
-                data.get("architecture_entrypoint", "")
-            )
             if architecture_entrypoint:
                 item_errors, item_warnings = validate_design_ref(
                     repo,
@@ -3742,7 +4599,165 @@ def validate_plan(
                         f"{path}: Research and Architecture Inputs must mention "
                         f"{architecture_entrypoint}"
                     )
-    if schema_version == "2.5":
+        if schema_version in {"2.6", "2.7"}:
+            errors.extend(
+                validate_required_sections(path, text, EXECPLAN_V26_SECTIONS)
+            )
+            for field in (
+                "adr_constraint_refs",
+                "adr_evidence",
+                "architecture_decision_gate",
+                "architecture_decision_gate_reason",
+                "architecture_compliance",
+                "architecture_compliance_reason",
+            ):
+                if field not in data:
+                    errors.append(f"{path}: missing frontmatter field {field}")
+            expected_constraint_refs: list[str] = []
+            expected_matrix_refs: list[str] = []
+            for adr_id in adr_refs:
+                if adr_id not in adr_data_by_id:
+                    continue
+                adr_path = find_adr(repo, adr_id)
+                constraints = adr_constraint_refs(
+                    adr_path.read_text(encoding="utf-8"),
+                    adr_id,
+                )
+                if constraints:
+                    expected_constraint_refs.extend(constraints)
+                    expected_matrix_refs.extend(constraints)
+                else:
+                    expected_matrix_refs.append(adr_id)
+            if not expected_matrix_refs and design_refs:
+                expected_matrix_refs.extend(design_refs)
+            if (
+                not expected_matrix_refs
+                and architecture_entrypoint
+            ):
+                expected_matrix_refs.append(architecture_entrypoint)
+            if not historical_plan:
+                try:
+                    scoped_amendments = current_constraint_amendments(
+                        repo,
+                        expected_constraint_refs,
+                    )
+                except EpctlError as exc:
+                    errors.append(f"{path}: {exc}")
+                    scoped_amendments = {}
+                missing_amendments = set(scoped_amendments) - set(adr_refs)
+                if missing_amendments:
+                    details = "; ".join(
+                        f"{adr_id} (amends "
+                        f"{', '.join(scoped_amendments[adr_id])})"
+                        for adr_id in sorted(missing_amendments)
+                    )
+                    errors.append(
+                        f"{path}: active EP omits current scoped amendments: "
+                        + details
+                    )
+            if set(adr_constraint_ref_values) != set(expected_constraint_refs):
+                missing = set(expected_constraint_refs) - set(
+                    adr_constraint_ref_values
+                )
+                extra = set(adr_constraint_ref_values) - set(
+                    expected_constraint_refs
+                )
+                details: list[str] = []
+                if missing:
+                    details.append("missing " + ", ".join(sorted(missing)))
+                if extra:
+                    details.append("unexpected " + ", ".join(sorted(extra)))
+                errors.append(
+                    f"{path}: adr_constraint_refs do not match referenced ADRs: "
+                    + "; ".join(details)
+                )
+            for constraint_ref in adr_constraint_ref_values:
+                if constraint_ref not in inputs:
+                    errors.append(
+                        f"{path}: Research and Architecture Inputs must mention "
+                        f"{constraint_ref}"
+                    )
+            expected_evidence_ids = {
+                adr_id
+                for adr_id, adr_data in adr_data_by_id.items()
+                if re.fullmatch(
+                    r"[0-9a-f]{64}",
+                    inline_text(adr_data.get("payload_sha256", "")),
+                )
+            }
+            if set(adr_evidence) != expected_evidence_ids:
+                missing = expected_evidence_ids - set(adr_evidence)
+                extra = set(adr_evidence) - expected_evidence_ids
+                details = []
+                if missing:
+                    details.append("missing " + ", ".join(sorted(missing)))
+                if extra:
+                    details.append("unexpected " + ", ".join(sorted(extra)))
+                errors.append(
+                    f"{path}: adr_evidence does not match sealed ADR inputs: "
+                    + "; ".join(details)
+                )
+            for adr_id, digest in adr_evidence.items():
+                adr_data = adr_data_by_id.get(adr_id)
+                if adr_data and digest != adr_data.get("payload_sha256", ""):
+                    errors.append(
+                        f"{path}: ADR evidence digest changed for {adr_id}"
+                    )
+                evidence_ref = f"{adr_id}@sha256:{digest}"
+                if evidence_ref not in inputs:
+                    errors.append(
+                        f"{path}: Research and Architecture Inputs must mention "
+                        f"{evidence_ref}"
+                    )
+            matrix_rows = architecture_compliance_rows(text)
+            matrix_refs: list[str] = []
+            matrix_incomplete = (
+                errors
+                if historical_plan or archive_status == "completed"
+                else warnings
+            )
+            for cells in matrix_rows:
+                if len(cells) != 3:
+                    errors.append(
+                        f"{path}: Architecture Compliance Matrix rows require "
+                        "3 columns"
+                    )
+                    continue
+                reference = cells[0]
+                if ADR_CONSTRAINT_RE.fullmatch(reference):
+                    reference = normalize_adr_constraint_refs(
+                        (reference,),
+                        "Architecture Compliance Matrix",
+                    )[0]
+                elif ID_RE["ADR"].fullmatch(reference):
+                    reference = normalize_reference_ids((reference,), "ADR")[0]
+                if reference in matrix_refs:
+                    errors.append(
+                        f"{path}: duplicate architecture compliance row "
+                        f"{reference}"
+                    )
+                matrix_refs.append(reference)
+                for label, value in (
+                    ("implementation", cells[1]),
+                    ("verification", cells[2]),
+                ):
+                    if unresolved_contract_cell(value):
+                        matrix_incomplete.append(
+                            f"{path}: {reference} has unresolved {label} mapping"
+                        )
+            if set(matrix_refs) != set(expected_matrix_refs):
+                missing = set(expected_matrix_refs) - set(matrix_refs)
+                extra = set(matrix_refs) - set(expected_matrix_refs)
+                details = []
+                if missing:
+                    details.append("missing " + ", ".join(sorted(missing)))
+                if extra:
+                    details.append("unexpected " + ", ".join(sorted(extra)))
+                errors.append(
+                    f"{path}: Architecture Compliance Matrix does not match "
+                    "architecture inputs: " + "; ".join(details)
+                )
+    if schema_version in {"2.5", "2.6", "2.7"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V25_SECTIONS)
         )
@@ -3786,7 +4801,7 @@ def validate_plan(
     completing = archive_status == "completed" or (
         archive_status is None and status == "completed"
     )
-    if schema_version in {"2.3", "2.4", "2.5"}:
+    if schema_version in {"2.3", "2.4", "2.5", "2.6", "2.7"}:
         attestation_version = schema_version
         if "verified_revision" not in data:
             errors.append(f"{path}: missing frontmatter field verified_revision")
@@ -3945,24 +4960,71 @@ def validate_plan(
         errors.append(
             f"{path}: Current Snapshot must link {latest_checkpoint}"
         )
-    if schema_version in {"2.1", "2.2", "2.3", "2.4", "2.5"} and not re.search(
+    if schema_version in {
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+    } and not re.search(
         r"(?im)^-\s+Next action:\s+\S",
         snapshot,
     ):
         errors.append(f"{path}: Current Snapshot requires a non-empty Next action")
-    root_bytes = len(text.encode("utf-8"))
-    root_lines = len(text.splitlines())
-    event_count = history_event_count(text)
-    if root_bytes > ROOT_BYTE_WARNING or root_lines > ROOT_LINE_WARNING:
-        warnings.append(
-            f"{path}: root working set is {root_lines} lines/{root_bytes} bytes; "
-            "create a checkpoint"
-        )
-    if event_count > HISTORY_EVENT_WARNING:
-        warnings.append(
-            f"{path}: {event_count} live history events exceed "
-            f"the {HISTORY_EVENT_WARNING}-event checkpoint threshold"
-        )
+    lifecycle = plan_lifecycle_metrics(text, status, task_statuses.values())
+    if status in PLAN_ACTIVE_STATUSES:
+        root_lines = lifecycle["root_lines"]
+        root_bytes = lifecycle["root_bytes"]
+        event_count = lifecycle["live_history_events"]
+        if root_bytes > ROOT_BYTE_WARNING or root_lines > ROOT_LINE_WARNING:
+            warnings.append(
+                f"{path}: root working set is {root_lines} lines/"
+                f"{root_bytes} bytes; create a checkpoint"
+            )
+        elif (
+            root_bytes > ROOT_BYTE_RECOMMENDATION
+            or root_lines > ROOT_LINE_RECOMMENDATION
+        ):
+            warnings.append(
+                f"{path}: root working set is {root_lines} lines/"
+                f"{root_bytes} bytes; checkpoint recommended before the "
+                "working set reaches its hard threshold"
+            )
+        if event_count > HISTORY_EVENT_WARNING:
+            warnings.append(
+                f"{path}: {event_count} live history events exceed "
+                f"the {HISTORY_EVENT_WARNING}-event checkpoint threshold"
+            )
+        elif event_count > HISTORY_EVENT_RECOMMENDATION:
+            warnings.append(
+                f"{path}: {event_count} live history events exceed the "
+                f"{HISTORY_EVENT_RECOMMENDATION}-event checkpoint "
+                "recommendation"
+            )
+        if lifecycle["scope"] == "split_recommended":
+            warnings.append(
+                f"{path}: active scope has {lifecycle['milestones']} milestones "
+                f"and {lifecycle['unfinished_tasks']} unfinished tasks; split "
+                "independently verifiable outcomes into successor EPs"
+            )
+        elif lifecycle["scope"] == "scope_review":
+            warnings.append(
+                f"{path}: active scope has {lifecycle['milestones']} milestones "
+                f"and {lifecycle['unfinished_tasks']} unfinished tasks; review "
+                "whether the EP still has one completion boundary"
+            )
+        if lifecycle["completion"] == "ready_to_archive":
+            warnings.append(
+                f"{path}: plan content is ready to archive; run final "
+                "verification and archive-ep with the required attestation"
+            )
+        elif lifecycle["completion"] == "archive_blocked":
+            warnings.append(
+                f"{path}: checked acceptance is not archivable; blockers: "
+                + ", ".join(lifecycle["completion_blockers"])
+            )
     return errors, warnings
 
 
@@ -3998,6 +5060,11 @@ def validate_bugfix(
     except EpctlError as exc:
         return [f"{path}: {exc}"], warnings
     errors.extend(validate_common_frontmatter(path, data, "BF"))
+    bugfix_id = data.get("id", "")
+    if data.get("schema_version") == "1" and bugfix_id:
+        errors.extend(
+            validate_metadata_contract(path, data, "bugfix", bugfix_id)
+        )
     status = data.get("status", "")
     location = "completed" if "/completed/" in path.as_posix() else "active"
     allowed = BUGFIX_COMPLETED_STATUSES if location == "completed" else BUGFIX_ACTIVE_STATUSES
@@ -4056,6 +5123,13 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
             errors.append(f"{root}: registered architecture root is missing")
         elif root.is_symlink():
             errors.append(f"{root}: symbolic links are not supported")
+    try:
+        design_errors, design_warnings = validate_design_doc_corpus(repo)
+    except EpctlError as exc:
+        errors.append(str(exc))
+    else:
+        errors.extend(design_errors)
+        warnings.extend(design_warnings)
     docs_root = repo / "docs"
     if docs_root.exists():
         for path in docs_root.rglob("*"):
@@ -4242,6 +5316,11 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                     f"{item_id}: supersession backlink from {old_id} is invalid"
                 )
         for relation in ("depends_on", "amends"):
+            related_statuses = (
+                {"accepted", "superseded"}
+                if data.get("status") in {"rejected", "superseded"}
+                else {"accepted"}
+            )
             try:
                 related_ids = parse_reference_array(
                     data.get(relation, ""),
@@ -4256,9 +5335,10 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                     errors.append(
                         f"{item_id}: {relation} ADR {related_id} is missing"
                     )
-                elif related.get("status") != "accepted":
+                elif related.get("status") not in related_statuses:
                     errors.append(
-                        f"{item_id}: {relation} ADR {related_id} must be accepted"
+                        f"{item_id}: {relation} ADR {related_id} must have "
+                        f"status in {sorted(related_statuses)}"
                     )
 
     adr_graph: dict[str, list[str]] = {}
@@ -4670,7 +5750,13 @@ def archive_ep(
         text = path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
         schema_version = data.get("schema_version")
-        has_completion_attestation = schema_version in {"2.3", "2.4", "2.5"}
+        has_completion_attestation = schema_version in {
+            "2.3",
+            "2.4",
+            "2.5",
+            "2.6",
+            "2.7",
+        }
         if outcome == "completed" and has_completion_attestation:
             if not verified_revision:
                 raise EpctlError(
@@ -4681,7 +5767,7 @@ def archive_ep(
                     "Completed v2.3+ EP requires at least one --evidence"
                 )
             required_benchmark_scenarios: list[str] | None = None
-            if schema_version == "2.5":
+            if schema_version in {"2.5", "2.6", "2.7"}:
                 required_benchmark_scenarios = parse_reference_array(
                     data.get("required_benchmark_scenarios", ""),
                     "BS",
@@ -4879,6 +5965,14 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "decision_maker": data.get("decision_maker", ""),
                 "depends_on": parse_inline_ids(data.get("depends_on", ""), "ADR"),
                 "amends": parse_inline_ids(data.get("amends", ""), "ADR"),
+                "amends_constraints": parse_string_array(
+                    data.get("amends_constraints", "[]"),
+                    "amends_constraints",
+                ),
+                "constraints": adr_constraint_refs(
+                    text,
+                    data.get("id", ""),
+                ),
                 "design_refs": parse_string_array(
                     data.get("design_refs", ""),
                     "design_refs",
@@ -4912,14 +6006,50 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
             except EpctlError:
                 continue
             tasks.append(task_data.get("status", "unknown"))
+        lifecycle = plan_lifecycle_metrics(
+            text,
+            data.get("status", ""),
+            tasks,
+        )
+        archive_inputs = (
+            ["verified_revision", "verification_evidence"]
+            if data.get("status", "") in PLAN_ACTIVE_STATUSES
+            and data.get("schema_version", "")
+            in {"2.3", "2.4", "2.5", "2.6", "2.7"}
+            else []
+        )
+        decision_gate = data.get(
+            "architecture_decision_gate",
+            data.get("architecture_gate", "legacy"),
+        )
+        architecture_compliance = data.get(
+            "architecture_compliance",
+            (
+                "applicable"
+                if data.get("architecture_gate") == "satisfied"
+                else "not_applicable"
+                if data.get("architecture_gate") == "not_required"
+                else "legacy"
+            ),
+        )
         plans.append(
             {
                 "id": data.get("id", ""),
                 "title": data.get("title", ""),
                 "status": data.get("status", ""),
                 "research_gate": data.get("research_gate", "legacy"),
-                "architecture_gate": data.get("architecture_gate", "legacy"),
+                "architecture_gate": decision_gate,
+                "architecture_decision_gate": decision_gate,
+                "architecture_compliance": architecture_compliance,
                 "adr_refs": parse_inline_ids(data.get("adr_refs", ""), "ADR"),
+                "adr_constraint_refs": parse_string_array(
+                    data.get("adr_constraint_refs", "[]"),
+                    "adr_constraint_refs",
+                ),
+                "adr_evidence": parse_string_array(
+                    data.get("adr_evidence", "[]"),
+                    "adr_evidence",
+                ),
                 "design_refs": parse_string_array(
                     data.get("design_refs", ""),
                     "design_refs",
@@ -4934,11 +6064,18 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 if tasks
                 else "—",
                 "open_blockers": len(unresolved_blockers(text)),
+                "completion": lifecycle["completion"],
+                "completion_blockers": lifecycle["completion_blockers"],
+                "archive_inputs_required": archive_inputs,
+                "working_set": lifecycle["working_set"],
+                "scope": lifecycle["scope"],
                 "latest_checkpoint": data.get("latest_checkpoint", ""),
                 "checkpoints": len(checkpoint_files(path)),
-                "root_lines": len(text.splitlines()),
-                "root_bytes": len(text.encode("utf-8")),
-                "live_history_events": history_event_count(text),
+                "root_lines": lifecycle["root_lines"],
+                "root_bytes": lifecycle["root_bytes"],
+                "live_history_events": lifecycle["live_history_events"],
+                "milestones": lifecycle["milestones"],
+                "unfinished_tasks": lifecycle["unfinished_tasks"],
                 "last_activity": last_activity(text, data),
                 "path": path.relative_to(repo).as_posix(),
             }
@@ -4994,10 +6131,10 @@ def print_status(repo: Path, as_json: bool) -> None:
         )
     print()
     print(
-        "| ADR | Title | Status | Relations | Research | Designs | Contract | "
+        "| ADR | Title | Status | Relations | Constraints | Research | Designs | Contract | "
         "Decision maker | Superseded by | Last activity |"
     )
-    print("|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     for row in payload["adrs"]:
         relations = [
             *(f"depends:{item}" for item in row["depends_on"]),
@@ -5006,6 +6143,7 @@ def print_status(repo: Path, as_json: bool) -> None:
         print(
             f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
             f"{md_cell(', '.join(relations) or '—')} | "
+            f"{len(row['constraints']) or '—'} | "
             f"{md_cell(', '.join(row['research_refs']) or '—')} | "
             f"{len(row['design_refs']) or '—'} | {row['contract']} | "
             f"{md_cell(str(row['decision_maker']) or '—')} | "
@@ -5013,14 +6151,17 @@ def print_status(repo: Path, as_json: bool) -> None:
         )
     print()
     print(
-        "| EP | Title | Status | Gates (R/ADR/Benchmark) | Acceptance | Tasks | "
-        "Open blockers | Checkpoint | Root | Events | Last activity |"
+        "| EP | Title | Status | Completion | Scope | Working set | "
+        "Gates (R/Decision/Compliance/Benchmark) | Acceptance | Tasks | Open blockers | "
+        "Checkpoint | Root | Events | Last activity |"
     )
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for row in payload["plans"]:
         print(
             f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
-            f"{row['research_gate']}/{row['architecture_gate']}/"
+            f"{row['completion']} | {row['scope']} | {row['working_set']} | "
+            f"{row['research_gate']}/{row['architecture_decision_gate']}/"
+            f"{row['architecture_compliance']}/"
             f"{len(row['benchmark_scenarios'])} | "
             f"{row['acceptance']} | {row['tasks']} | {row['open_blockers']} | "
             f"{row['latest_checkpoint'] or '—'} ({row['checkpoints']}) | "
@@ -5060,6 +6201,7 @@ def build_parser() -> argparse.ArgumentParser:
     research.add_argument("--slug", required=True)
     research.add_argument("--title", required=True)
     research.add_argument("--owner", default="")
+    research.add_argument("--author", default="")
 
     archive_research_parser = sub.add_parser(
         "archive-research",
@@ -5080,6 +6222,7 @@ def build_parser() -> argparse.ArgumentParser:
     adr.add_argument("--slug", required=True)
     adr.add_argument("--title", required=True)
     adr.add_argument("--owner", default="")
+    adr.add_argument("--author", default="")
     adr.add_argument(
         "--research",
         action="append",
@@ -5100,6 +6243,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="ADR-NNN",
         help="Accepted ADR narrowed or extended by this decision; repeatable",
+    )
+    adr.add_argument(
+        "--amends-constraint",
+        action="append",
+        default=[],
+        metavar="ADR-NNN#C-NNN",
+        help=(
+            "Structured constraint changed in each --amends ADR; repeat for "
+            "multiple constraints"
+        ),
     )
     adr.add_argument(
         "--design",
@@ -5135,11 +6288,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     ep = sub.add_parser(
         "new-ep",
-        help="Create a gated v2.5 ExecPlan from architecture and benchmark inputs",
+        help="Create a gated v2.7 ExecPlan from architecture and benchmark inputs",
     )
     ep.add_argument("--slug", required=True)
     ep.add_argument("--title", required=True)
     ep.add_argument("--owner", default="")
+    ep.add_argument("--author", default="")
     ep.add_argument(
         "--research",
         action="append",
@@ -5178,19 +6332,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional index or overview for the architecture input set",
     )
     ep.add_argument("--research-not-required-reason", default="")
-    ep.add_argument("--architecture-not-required-reason", default="")
+    ep.add_argument(
+        "--decision-not-required-reason",
+        "--architecture-not-required-reason",
+        dest="decision_not_required_reason",
+        default="",
+        help=(
+            "Why this EP creates no new durable architecture decision; the "
+            "legacy --architecture-not-required-reason spelling remains an alias"
+        ),
+    )
+    ep.add_argument(
+        "--architecture-not-applicable-reason",
+        default="",
+        help="Why no existing ADR or architecture input applies to this EP",
+    )
 
     task = sub.add_parser("new-task", help="Create a task under an active v2 plan")
     task.add_argument("plan_id")
     task.add_argument("--slug", required=True)
     task.add_argument("--title", required=True)
     task.add_argument("--owner", default="")
+    task.add_argument("--author", default="")
 
     bug = sub.add_parser("new-bugfix", help="Create a persistent bugfix record")
     bug.add_argument("--slug", required=True)
     bug.add_argument("--title", required=True)
     bug.add_argument("--area", default="unspecified")
     bug.add_argument("--severity", default="unspecified")
+    bug.add_argument("--owner", default="")
+    bug.add_argument("--author", default="")
 
     debt = sub.add_parser("new-debt", help="Add an active technical debt entry")
     debt.add_argument("--description", required=True)
@@ -5278,7 +6449,15 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "register-architecture-root":
             print(register_architecture_root(repo, args.path))
         elif args.command == "new-research":
-            print(new_research(repo, args.slug, args.title, args.owner))
+            print(
+                new_research(
+                    repo,
+                    args.slug,
+                    args.title,
+                    args.owner,
+                    args.author,
+                )
+            )
         elif args.command == "archive-research":
             print(
                 archive_research(
@@ -5295,9 +6474,11 @@ def main(argv: list[str] | None = None) -> int:
                     args.slug,
                     args.title,
                     args.owner,
+                    args.author,
                     args.research,
                     args.depends_on,
                     args.amends,
+                    args.amends_constraint,
                     args.design,
                 )
             )
@@ -5319,21 +6500,38 @@ def main(argv: list[str] | None = None) -> int:
                     args.slug,
                     args.title,
                     args.owner,
+                    args.author,
                     args.research,
                     args.adr,
                     args.design,
                     args.benchmark_scenario,
                     args.architecture_entrypoint,
                     args.research_not_required_reason,
-                    args.architecture_not_required_reason,
+                    args.decision_not_required_reason,
+                    args.architecture_not_applicable_reason,
                 )
             )
         elif args.command == "new-task":
-            print(new_task(repo, args.plan_id, args.slug, args.title, args.owner))
+            print(
+                new_task(
+                    repo,
+                    args.plan_id,
+                    args.slug,
+                    args.title,
+                    args.owner,
+                    args.author,
+                )
+            )
         elif args.command == "new-bugfix":
             print(
                 new_bugfix(
-                    repo, args.slug, args.title, args.area, args.severity
+                    repo,
+                    args.slug,
+                    args.title,
+                    args.area,
+                    args.severity,
+                    args.owner,
+                    args.author,
                 )
             )
         elif args.command == "new-debt":

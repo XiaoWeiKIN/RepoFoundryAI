@@ -1,8 +1,15 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: design-doc
+id: DD-006
 doc_type: design
 title: RepoFoundry versioning and Harness migrations
 status: current
 adr_refs: ["ADR-011", "ADR-012"]
+author: "Codex"
+owner: "RepoFoundry Maintainer"
+created: 2026-08-03
 updated: 2026-08-04
 ---
 

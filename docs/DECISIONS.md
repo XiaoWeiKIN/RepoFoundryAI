@@ -35,4 +35,5 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 | ADR-010 | Use one project-local Engineering Specs Router with trusted Hook enforcement | accepted | 2026-08-03 | [] |  | [ADR](adr/adr-010_spec-task-activation-router.md) |
 | ADR-011 | Separate the RepoFoundry core from Agent product adapters | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-011_agent-neutral-harness-adapters.md) |
 | ADR-012 | Separate Engineering Spec activation from Agent runtime adapters | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-012_agent-neutral-spec-activation.md) |
+| ADR-014 | Require semantic metadata for governed engineering artifacts | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-014_governed-artifact-metadata-contract.md) |
 <!-- ADRCTL:COMPLETED:END -->

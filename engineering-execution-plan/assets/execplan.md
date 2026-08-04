@@ -1,5 +1,7 @@
 ---
-schema_version: "2.5"
+schema_version: "2.7"
+metadata_schema: "1"
+artifact_type: exec-plan
 id: {{ID}}
 title: "{{TITLE}}"
 status: active
@@ -8,16 +10,21 @@ research_refs: {{RESEARCH_REFS}}
 research_gate: {{RESEARCH_GATE}}
 research_gate_reason: "{{RESEARCH_GATE_REASON}}"
 adr_refs: {{ADR_REFS}}
+adr_constraint_refs: {{ADR_CONSTRAINT_REFS}}
+adr_evidence: {{ADR_EVIDENCE}}
 design_refs: {{DESIGN_REFS}}
 architecture_entrypoint: "{{ARCHITECTURE_ENTRYPOINT}}"
-architecture_gate: {{ARCHITECTURE_GATE}}
-architecture_gate_reason: "{{ARCHITECTURE_GATE_REASON}}"
+architecture_decision_gate: {{ARCHITECTURE_DECISION_GATE}}
+architecture_decision_gate_reason: "{{ARCHITECTURE_DECISION_GATE_REASON}}"
+architecture_compliance: {{ARCHITECTURE_COMPLIANCE}}
+architecture_compliance_reason: "{{ARCHITECTURE_COMPLIANCE_REASON}}"
 required_benchmark_scenarios: {{REQUIRED_BENCHMARK_SCENARIOS}}
 verified_revision:
 verification_evidence: []
 archive_sha256:
 created: {{DATE}}
 updated: {{DATE}}
+author: "{{AUTHOR}}"
 owner: "{{OWNER}}"
 ---
 
@@ -54,12 +61,25 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 
 - Research gate: `{{RESEARCH_GATE}}`.
 - Research references: {{RESEARCH_REFS}}.
-- Architecture gate: `{{ARCHITECTURE_GATE}}`.
+- Architecture decision gate: `{{ARCHITECTURE_DECISION_GATE}}`.
+- Architecture compliance: `{{ARCHITECTURE_COMPLIANCE}}`.
 - ADR references: {{ADR_REFS}}.
+- ADR constraint references: {{ADR_CONSTRAINT_REFS}}.
+- ADR evidence: {{ADR_EVIDENCE}}.
 - Design document references: {{DESIGN_REFS}}.
 - Architecture entrypoint: `{{ARCHITECTURE_ENTRYPOINT}}`.
 
 <!-- REQUIRED: Restate the Research conclusions, accepted ADR consequences, implementation constraints, and remaining unknowns needed to execute this plan without opening upstream artifacts. Explain each not-required reason when a gate was explicitly skipped. -->
+
+## Architecture Compliance Matrix
+
+| ADR constraint or architecture input | Implementation or preservation | Verification |
+|---|---|---|
+{{ARCHITECTURE_COMPLIANCE_ROWS}}
+
+Every structured constraint from every referenced ADR must appear exactly once.
+For a legacy ADR without structured constraints, restate its applicable decision
+at document level. Design Docs are explanatory inputs and cannot override an ADR.
 
 ## Benchmark Gate Set
 

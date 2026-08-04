@@ -100,6 +100,9 @@ python3 <skill-dir>/scripts/researchctl.py --repo . new-topic R-001 \
   --slug http-security --title "HTTP security boundary" \
   --question RQ-002 --author "Security Researcher"
 
+python3 <skill-dir>/scripts/researchctl.py --repo . amend-current-round R-001 \
+  --reason "Owner rejected the interpreted scope before milestone handoff"
+
 python3 <skill-dir>/scripts/researchctl.py --repo . mark-review-ready R-001
 python3 <skill-dir>/scripts/researchctl.py --repo . \
   mark-review-ready R-001 --snapshot
@@ -121,7 +124,7 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
    `owner`、`author` 和 `research_type` 必须真实；未知就保留未分配，禁止杜撰。
 3. 用 Round 组织每次有界研究迭代；用 `new-topic` 创建关联 `RQ-NNN` 的
    structured topic，其他 managed 分析写到 `notes/`，existing corpus 用 linked
-   模式登记。新 Topic 使用 schema 2.2，并自动获得 Research 内唯一且不可复用的
+   模式登记。新 Topic 使用 schema 2.3，并自动获得 Research 内唯一且不可复用的
    `RT-NNN`：首屏给答案、置信度、适用边界和决策影响；正文先建立心智模型，
    再用连续分析帮助读者理解；证据索引放到 Handoff 之后供评审追溯。
 4. 保留 Topic 的 `RT-NNN`，改标题或移动文件时不得重编号。跨文档引用写成
@@ -140,10 +143,28 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
 8. 没有 open Research Question、open blocker 或 REQUIRED 标记时，执行
    `mark-review-ready`。普通轮次不加 `--snapshot`；正式评审、下游交接或重大
    决策节点才加。两者都不是结束授权。
-9. 用户要求继续深入或讨论某一点时，用 `new-round` 恢复研究；保留已有
-   Synthesis milestone snapshot。默认发现与上下文装载不读取历史快照。
-10. 只有用户或声明的 Research Owner 明确说出结束、定稿、归档或 conclude，
+9. 区分“纠正误解”和“继续研究”：用户明确否定当前未封存结果，说明它不是自己
+   要研究的内容时，若当前 review 没有 milestone snapshot，使用
+   `amend-current-round` 原地重开当前 Round，撤掉错误专题并修正 Synthesis；不要
+   为 Agent 的误解创建新 Round。若当前 Round 仍为 active，直接原地编辑。
+10. 用户在已认可方向上继续深入、复核或补证据时，用 `new-round`；已有 milestone
+    snapshot 或下游交接时也必须新增 Round，不能改写已形成的评审边界。默认发现与
+    上下文装载不读取历史快照。
+11. 只有用户或声明的 Research Owner 明确说出结束、定稿、归档或 conclude，
     才执行 `conclude-research` 并记录 `approved_by` 与可审计 `approval_ref`。
+
+## 制品元数据
+
+新制品使用统一 `metadata_schema: "1"`：Research `1.2`、Synthesis `1.2`、
+Round `1.1`、Topic `2.3`、Manifest `1.1`。它们都必须携带稳定 `artifact_type`、
+`id`、`title`、`status`、`author`、`owner`、`created` 和 `updated`。
+
+`author` 表示当前版本的实际写作者，`owner` 表示持续负责 Research 生命周期的
+人或角色；两者都不能替代 `approved_by`。未知 actor 写成 `Unassigned`，不要猜测。
+它允许 active 草稿存在，但不能绕过 terminal Owner gate。新 Topic 与 Round 继承
+Research Owner；显式 `--author` 优先，否则继承或诚实保留未分配。当前 metadata
+进入 Synthesis/Manifest 的封存边界；旧版 sealed package 保持只读，不仅为了补字段
+而改写。
 
 **禁止把“decision-ready”“问题已回答”“完成第一版”“继续”推断为结束授权。**
 Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保留已获得的
@@ -160,6 +181,10 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
   每个普通 Round 留一份，也不要改成需要串联恢复的增量 patch。
 - concluded 的 snapshot、manifest 和 Synthesis 不可编辑。最终授权前的新证据
   创建同一 Research 的新 Round；最终授权后的新证据创建关联的新 Research。
+- Round 表达一次用户认可的问题推进，不表达每次聊天回合。对当前 active Round
+  直接修订；对未生成 milestone snapshot、未交接的最新 review，可按用户明确反馈
+  原地修正。被用户否定的误解性专题应从 managed corpus 撤出，版本痕迹交给 Git
+  和简洁的 correction note，而不是伪装成 completed evidence。
 - 如果新证据改变已接受架构方向，由下游治理工具创建 superseding ADR。
 - 外部 Deep Research、BMAD 或人工文档都是 corpus 输入，不改变文件契约。
 
