@@ -16,6 +16,7 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | ID | Title | Status | Updated | Path |
 |---|---|---|---|---|
 | EP-006 | Migrate EngineeringWorkflow to RepoFoundry AI | active | 2026-08-01 | [EXECPLAN](exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md) |
+| EP-011 | Add one-command RepoFoundry AI install and upgrade | active | 2026-08-04 | [EXECPLAN](exec-plans/active/ep-011_one-command-install-upgrade/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed

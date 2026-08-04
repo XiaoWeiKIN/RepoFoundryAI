@@ -121,30 +121,59 @@ RepoFoundry AI 记录证据，但不接管项目自己的测量实现。
 Bootstrap 不会编造仓库事实。未知命令、Owner、架构、SLO 和安全控制会保留为
 `BOOTSTRAP_TODO`，等待维护者确认。
 
-## 安装发行包
+## 一条命令安装或升级
 
-RepoFoundry AI 要求 Python 3.10+ 和 Git。治理 CLI 只依赖 Python 标准库。
-
-外部仓库改名属于独立托管操作。在正式 URL 得到确认前，使用仓库 Owner 提供的
-地址：
+一键安装器当前支持 macOS 和 Linux，需要 Python 3.10+ 与 `curl`。首次安装和
+后续升级使用同一条命令：
 
 ```bash
-git clone <repo-url> /absolute/path/to/RepoFoundry
-export REPO_FOUNDRY_HOME=/absolute/path/to/RepoFoundry
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
 ```
 
-根据宿主的 Skill 发现机制，注册根目录和需要的专业 Skill：
+安装器默认选择 GitHub 最新稳定 Release，把 tag 解析到不可变 commit，记录下载
+归档的 SHA-256，验证暂存包后再原子切换当前版本。默认安装到 XDG 用户数据目录，
+在用户本地 bin 目录暴露 `repofoundry`，并且只在检测到 Codex 时注册根 Skill。
+其他 Agent 可以直接使用同一 CLI 和 portable adapter，不需要 Codex 目录。重复执行
+当前版本会返回 no-op。
 
-```text
-/absolute/path/to/RepoFoundry
-/absolute/path/to/RepoFoundry/engineering-benchmark
-/absolute/path/to/RepoFoundry/engineering-research
-/absolute/path/to/RepoFoundry/engineering-execution-plan
-/absolute/path/to/RepoFoundry/engineering-case-study
+在 `python3 -` 后传参即可固定版本或宿主策略：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-RepoFoundry 不要求安装到某个 Agent 的私有目录。只要保留这些 package root，
-目录扫描、符号链接和宿主配置都可以使用。
+`--host none` 不新增宿主注册，也不会删除既有注册，适合只使用 CLI 或自行配置
+Agent host 的环境。
+
+命令会报告当前 package home、CLI 路径、宿主链接和所有保留的备份。如果 bin
+目录尚未进入 `PATH`，安装器会输出需要加入的精确目录。安装后验证：
+
+```bash
+repofoundry --version
+repofoundry --repo . adapter list
+```
+
+如果环境禁止把下载内容直接交给解释器，可以先下载审查再执行：
+
+```bash
+curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
+less /tmp/repofoundry-install.py
+python3 /tmp/repofoundry-install.py
+```
+
+发行包升级与项目迁移严格分离。安装器不会扫描或修改任何项目仓库。安装新版
+RepoFoundry 后，仍需在每个项目中先执行
+`repofoundry --repo PATH upgrade --to VERSION` 预览，再加 `--apply` 明确应用
+Harness 迁移。
+
+维护者也可以从显式 checkout 离线安装：
+
+```bash
+git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
+python3 /absolute/path/to/RepoFoundryAI/install.py --source /absolute/path/to/RepoFoundryAI
+export REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
+```
 
 ## 从 Prompt 开始
 
@@ -196,26 +225,26 @@ Skill 通过这些 CLI 修改状态并验证制品。维护者也可以直接用
 诊断问题：
 
 ```bash
-FOUNDRYCTL="$REPO_FOUNDRY_HOME/scripts/foundryctl.py"
+REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
 BENCHCTL="$REPO_FOUNDRY_HOME/engineering-benchmark/scripts/benchctl.py"
 RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
-python3 "$FOUNDRYCTL" --version
-python3 "$FOUNDRYCTL" --repo . adapter list
-python3 "$FOUNDRYCTL" --repo . bootstrap --adapter portable
-python3 "$FOUNDRYCTL" --repo . \
+repofoundry --version
+repofoundry --repo . adapter list
+repofoundry --repo . bootstrap --adapter portable
+repofoundry --repo . \
   bootstrap --adapter codex --adapter portable --spec languages/go --apply
-python3 "$FOUNDRYCTL" --repo . validate --harness
-python3 "$FOUNDRYCTL" --repo . validate --adapter codex
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . validate --harness
+repofoundry --repo . validate --adapter codex
+repofoundry --repo . upgrade --to 0.2.0
+repofoundry --repo . upgrade --to 0.2.0 --apply
 
-python3 "$FOUNDRYCTL" --repo . spec plan
-python3 "$FOUNDRYCTL" --repo . spec sync --apply
-python3 "$FOUNDRYCTL" --repo . \
+repofoundry --repo . spec plan
+repofoundry --repo . spec sync --apply
+repofoundry --repo . \
   spec update --spec-version 1.2.0 --spec languages/go --apply
-python3 "$FOUNDRYCTL" --repo . spec validate
+repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
 python3 "$RESEARCHCTL" --repo . validate

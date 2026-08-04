@@ -25,6 +25,25 @@ flowchart LR
     W --> C["engineering-case-study<br/>工程分享"]
 ```
 
+## 安装或升级 RepoFoundry AI
+
+首次安装和后续升级使用同一条命令：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+```
+
+安装器选择最新稳定 GitHub Release，把 tag 固定到 commit，记录归档 SHA-256，
+验证完整暂存包后原子切换当前版本，并暴露 `repofoundry` CLI。默认只为检测到的
+Agent host 注册发现入口；`--host codex` 显式注册 Codex，`--host none` 只安装
+产品中立的 CLI 且不改动既有宿主注册。`--version MAJOR.MINOR.PATCH` 固定版本，重复安装同一版本为
+no-op，旧的不可变 release 和被替换的非托管宿主目录保留用于恢复。
+
+发行包升级不扫描或修改项目仓库。安装新版工具后，目标项目仍必须单独执行
+`repofoundry --repo PATH upgrade --to VERSION` 预览 Harness migration，并在用户
+明确要求后加 `--apply`。需要审查远程脚本时，先下载 `install.py`、阅读内容，
+再用 `python3 install.py` 执行。
+
 ## 初始化项目
 
 使用确定性脚本。把 `<repo-foundry-ai-dir>` 解析为本 Skill 所在目录：

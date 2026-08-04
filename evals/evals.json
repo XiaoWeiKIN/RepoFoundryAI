@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "帮我把这个仓库初始化成 Codex agent-first 项目：先预览要创建的文档，再应用。保留已有文件，AGENTS.md 无论如何不能超过 100 行。",
-      "expected_output": "先用 foundryctl bootstrap --profile codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，组合 engineering-execution-plan 初始化，并生成单个项目级 $engineering-specs Router Skill 与 .codex/hooks.json。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
+      "expected_output": "先用 foundryctl bootstrap --adapter codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，组合 engineering-execution-plan 初始化，并生成单个项目级 $engineering-specs Router Skill 与 .codex/hooks.json。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
       "files": [],
       "assertions": [
         {
@@ -158,6 +158,34 @@
         {
           "name": "states_the_trust_boundary",
           "description": "说明项目 Hooks 需要仓库信任与精确命令审查，不能承诺对其他 Agent 的通用强制"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "我不想手工 clone 和配置目录。给我一条命令安装 RepoFoundry AI，以后继续执行同一条命令就能安全升级；不要顺便改任何项目仓库。",
+      "expected_output": "使用公开 install.py 一行命令安装或升级最新稳定 Release。安装器把 release tag 固定到 commit，记录 archive 与 package SHA-256，在切换 current 前验证完整暂存包，暴露 repofoundry CLI，并只为检测到或显式选择的 Agent host 创建发现链接。同版本重复执行为 no-op，旧 release 与被替换的非托管目录保留用于恢复。工具分发升级不扫描项目；Harness 迁移仍需在每个项目单独 preview 并显式 --apply。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_one_install_and_upgrade_command",
+          "description": "首次安装、升级和同版本 no-op 使用同一公开命令"
+        },
+        {
+          "name": "pins_and_validates_the_release",
+          "description": "稳定 release tag 解析到 commit，安全提取并记录 archive/package SHA-256 后才激活"
+        },
+        {
+          "name": "keeps_distribution_agent_neutral",
+          "description": "发行包安装在中立位置，host 注册可检测、可选择且不进入 Harness Core 契约"
+        },
+        {
+          "name": "separates_project_migration",
+          "description": "安装器不扫描或迁移项目，Harness upgrade 继续 preview-first 并要求显式 apply"
+        },
+        {
+          "name": "preserves_recovery_paths",
+          "description": "激活失败恢复旧状态，非托管宿主路径先备份，旧版本 release 保留"
         }
       ]
     }

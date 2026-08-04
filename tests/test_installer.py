@@ -1,0 +1,422 @@
+from __future__ import annotations
+
+import importlib.util
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[1]
+INSTALLER_PATH = ROOT / "install.py"
+SPEC = importlib.util.spec_from_file_location("repofoundry_installer", INSTALLER_PATH)
+assert SPEC is not None and SPEC.loader is not None
+installer = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = installer
+SPEC.loader.exec_module(installer)
+
+
+class InstallerTestCase(unittest.TestCase):
+    def run_installer(
+        self,
+        source: Path,
+        prefix: Path,
+        bin_dir: Path,
+        *arguments: str,
+        expected: int = 0,
+    ) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(INSTALLER_PATH),
+                "--source",
+                str(source),
+                "--prefix",
+                str(prefix),
+                "--bin-dir",
+                str(bin_dir),
+                *arguments,
+                "--json",
+            ],
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+        if result.returncode != expected:
+            self.fail(
+                f"expected exit {expected}, got {result.returncode}\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+        return result
+
+    @staticmethod
+    def copy_source(source: Path, version: str) -> None:
+        shutil.copytree(
+            ROOT,
+            source,
+            ignore=shutil.ignore_patterns(
+                ".git",
+                ".mypy_cache",
+                ".pytest_cache",
+                ".ruff_cache",
+                "__pycache__",
+                "*.pyc",
+            ),
+        )
+        (source / "VERSION").write_text(f"{version}\n", encoding="utf-8")
+
+    def test_local_install_and_repeat_are_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            bin_dir = root / "bin"
+            first = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "none",
+                ).stdout
+            )
+            self.assertEqual(first["action"], "installed")
+            self.assertEqual(first["version"], "0.2.0")
+            self.assertFalse(first["project_harnesses_modified"])
+            self.assertEqual(first["host_integrations"], [])
+            self.assertTrue((prefix / "current").is_symlink())
+            self.assertEqual(
+                (prefix / "current" / "VERSION").read_text(encoding="utf-8").strip(),
+                "0.2.0",
+            )
+            launcher = bin_dir / "repofoundry"
+            self.assertTrue(launcher.is_file())
+            self.assertTrue(os.access(launcher, os.X_OK))
+            version = subprocess.run(
+                [str(launcher), "--version"],
+                text=True,
+                capture_output=True,
+                timeout=30,
+                check=True,
+            )
+            self.assertEqual(version.stdout.strip(), "RepoFoundry AI 0.2.0")
+            releases_before = sorted((prefix / "releases").iterdir())
+
+            second = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "none",
+                ).stdout
+            )
+            self.assertEqual(second["action"], "unchanged")
+            self.assertEqual(second["backups"], [])
+            self.assertEqual(releases_before, sorted((prefix / "releases").iterdir()))
+
+    def test_upgrade_switches_current_and_retains_old_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_one = root / "source-one"
+            source_two = root / "source-two"
+            self.copy_source(source_one, "0.1.0")
+            self.copy_source(source_two, "0.2.1")
+            prefix = root / "prefix"
+            bin_dir = root / "bin"
+
+            first = json.loads(
+                self.run_installer(
+                    source_one,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "none",
+                ).stdout
+            )
+            second = json.loads(
+                self.run_installer(
+                    source_two,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "none",
+                ).stdout
+            )
+            self.assertEqual(first["action"], "installed")
+            self.assertEqual(second["action"], "upgraded")
+            self.assertEqual(len(list((prefix / "releases").iterdir())), 2)
+            self.assertEqual(
+                (prefix / "current" / "VERSION").read_text(encoding="utf-8").strip(),
+                "0.2.1",
+            )
+            version = subprocess.run(
+                [str(bin_dir / "repofoundry"), "--version"],
+                text=True,
+                capture_output=True,
+                timeout=30,
+                check=True,
+            )
+            self.assertEqual(version.stdout.strip(), "RepoFoundry AI 0.2.1")
+            refused = self.run_installer(
+                source_one,
+                prefix,
+                bin_dir,
+                "--host",
+                "none",
+                expected=1,
+            )
+            self.assertIn("refusing to downgrade", refused.stderr)
+            self.assertEqual(
+                (prefix / "current" / "VERSION").read_text(encoding="utf-8").strip(),
+                "0.2.1",
+            )
+
+    def test_existing_codex_skill_is_backed_up_before_linking(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            bin_dir = root / "bin"
+            codex_home = root / "codex"
+            existing = codex_home / "skills" / "repo-foundry-ai"
+            existing.mkdir(parents=True)
+            (existing / "custom.txt").write_bytes(b"keep-me\n")
+
+            result = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "codex",
+                    "--codex-home",
+                    str(codex_home),
+                ).stdout
+            )
+            self.assertTrue(existing.is_symlink())
+            self.assertEqual(existing.resolve(), (prefix / "current").resolve())
+            self.assertEqual(len(result["backups"]), 1)
+            backup = Path(result["backups"][0])
+            self.assertEqual((backup / "custom.txt").read_bytes(), b"keep-me\n")
+            self.assertEqual(result["host_integrations"][0]["host"], "codex")
+
+            repeated = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "codex",
+                    "--codex-home",
+                    str(codex_home),
+                ).stdout
+            )
+            self.assertEqual(repeated["action"], "unchanged")
+            self.assertEqual(repeated["backups"], [])
+
+            cli_only = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "none",
+                    "--codex-home",
+                    str(codex_home),
+                ).stdout
+            )
+            self.assertTrue(existing.is_symlink())
+            self.assertEqual(cli_only["host_integrations"][0]["host"], "codex")
+
+    def test_unsafe_local_source_fails_before_activation(self) -> None:
+        if not hasattr(os, "symlink"):
+            self.skipTest("symbolic links are unavailable")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            self.copy_source(source, "0.2.0")
+            os.symlink("VERSION", source / "unsafe-link")
+            prefix = root / "prefix"
+            bin_dir = root / "bin"
+            result = self.run_installer(
+                source,
+                prefix,
+                bin_dir,
+                "--host",
+                "none",
+                expected=1,
+            )
+            self.assertIn("cannot contain symlinks", result.stderr)
+            self.assertFalse((prefix / "current").exists())
+            self.assertFalse((bin_dir / "repofoundry").exists())
+
+    def test_install_prefix_cannot_recursively_enter_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            self.copy_source(source, "0.2.0")
+            prefix = source / "nested-install"
+            result = self.run_installer(
+                source,
+                prefix,
+                root / "bin",
+                "--host",
+                "none",
+                expected=1,
+            )
+            self.assertIn("cannot be inside the local source tree", result.stderr)
+            self.assertFalse(prefix.exists())
+
+    def test_explicit_version_mismatch_fails_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            bin_dir = root / "bin"
+            result = self.run_installer(
+                ROOT,
+                prefix,
+                bin_dir,
+                "--version",
+                "9.9.9",
+                "--host",
+                "none",
+                expected=1,
+            )
+            self.assertIn("does not match requested version", result.stderr)
+            self.assertFalse((prefix / "current").exists())
+            self.assertFalse((bin_dir / "repofoundry").exists())
+
+    def test_future_install_metadata_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            prefix.mkdir()
+            (prefix / "install.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "product": "repo-foundry-ai",
+                        "active_release": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = self.run_installer(
+                ROOT,
+                prefix,
+                root / "bin",
+                "--host",
+                "none",
+                expected=1,
+            )
+            self.assertIn("newer than this installer", result.stderr)
+            self.assertFalse((prefix / "current").exists())
+            self.assertFalse((prefix / "releases").exists())
+
+    def test_remote_response_size_is_bounded(self) -> None:
+        with self.assertRaisesRegex(installer.InstallError, "safety limit"):
+            installer.read_response(io.BytesIO(b"12345"), 4)
+
+    def test_launcher_failure_rolls_back_activation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            bin_dir = root / "bin"
+            source = installer.PackageSource(
+                root=ROOT,
+                version="0.2.0",
+                provenance={"kind": "local", "path": str(ROOT)},
+            )
+            original_run = installer.subprocess.run
+
+            def fail_launcher(command, *args, **kwargs):
+                if command and str(command[0]).endswith("repofoundry"):
+                    return subprocess.CompletedProcess(command, 1, "", "injected")
+                return original_run(command, *args, **kwargs)
+
+            with mock.patch.object(installer.subprocess, "run", side_effect=fail_launcher):
+                with self.assertRaisesRegex(
+                    installer.InstallError, "installed launcher validation failed"
+                ):
+                    installer.install_package(
+                        source,
+                        prefix,
+                        bin_dir,
+                        [],
+                        root / "codex",
+                        False,
+                    )
+            self.assertFalse((prefix / "current").exists())
+            self.assertFalse((prefix / "install.json").exists())
+            self.assertFalse((bin_dir / "repofoundry").exists())
+            self.assertEqual(list((prefix / "releases").iterdir()), [])
+
+    def test_archive_traversal_and_links_are_rejected(self) -> None:
+        for unsafe_member in ("../escape", "root/link"):
+            with self.subTest(member=unsafe_member):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    archive = root / "unsafe.tar.gz"
+                    with tarfile.open(archive, "w:gz") as package:
+                        member = tarfile.TarInfo(unsafe_member)
+                        if unsafe_member.endswith("link"):
+                            member.type = tarfile.SYMTYPE
+                            member.linkname = "VERSION"
+                            package.addfile(member)
+                        else:
+                            content = b"unsafe"
+                            member.size = len(content)
+                            package.addfile(member, io.BytesIO(content))
+                    destination = root / "extract"
+                    destination.mkdir()
+                    with self.assertRaises(installer.InstallError):
+                        installer.extract_archive(archive, destination)
+                    self.assertFalse((root / "escape").exists())
+
+    def test_release_resolution_is_stable_and_commit_pinned(self) -> None:
+        tag_object = "a" * 40
+        commit = "b" * 40
+
+        def fake_github_json(_repository: str, endpoint: str):
+            if endpoint == "releases/latest":
+                return {
+                    "tag_name": "v0.2.0",
+                    "draft": False,
+                    "prerelease": False,
+                }
+            if endpoint == "git/ref/tags/v0.2.0":
+                return {"object": {"type": "tag", "sha": tag_object}}
+            if endpoint == f"git/tags/{tag_object}":
+                return {"object": {"type": "commit", "sha": commit}}
+            raise AssertionError(endpoint)
+
+        with mock.patch.object(installer, "github_json", side_effect=fake_github_json):
+            tag = installer.release_tag("owner/repository", "latest")
+            self.assertEqual(tag, "v0.2.0")
+            self.assertEqual(
+                installer.resolve_tag_commit("owner/repository", tag),
+                commit,
+            )
+
+        with mock.patch.object(
+            installer,
+            "github_json",
+            return_value={
+                "tag_name": "v0.2.0",
+                "draft": False,
+                "prerelease": True,
+            },
+        ):
+            with self.assertRaisesRegex(installer.InstallError, "not a stable"):
+                installer.release_tag("owner/repository", "latest")
+
+
+if __name__ == "__main__":
+    unittest.main()

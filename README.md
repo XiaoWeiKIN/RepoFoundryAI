@@ -129,33 +129,65 @@ Bootstrap never invents repository facts. Unknown commands, owners,
 architecture, SLOs, and security controls remain explicit `BOOTSTRAP_TODO`
 markers for maintainers to resolve.
 
-## Install the distribution
+## Install or upgrade with one command
 
-RepoFoundry AI requires Python 3.10+ and Git. Its governance CLIs use only the
-Python standard library.
-
-The external repository rename is a separate hosting operation. Until the
-canonical hosting URL is confirmed, clone from the repository URL supplied by
-its owner:
+The one-command installer currently supports macOS and Linux and requires
+Python 3.10+ plus `curl`. Run the same command for a first install or an
+upgrade:
 
 ```bash
-git clone <repo-url> /absolute/path/to/RepoFoundry
-export REPO_FOUNDRY_HOME=/absolute/path/to/RepoFoundry
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
 ```
 
-Register the root and any professional Skills your agent host should discover:
+The installer selects the latest stable GitHub release, resolves its tag to an
+immutable commit, records the downloaded archive SHA-256, validates the staged
+package, and atomically activates it. By default it installs under the XDG user
+data directory, exposes `repofoundry` in the user-local bin directory, and
+registers the root Skill with Codex only when that host is detected. Other
+Agents can use the same CLI and portable adapter without a Codex directory.
+Repeating the command at the current release is a no-op.
 
-```text
-/absolute/path/to/RepoFoundry
-/absolute/path/to/RepoFoundry/engineering-benchmark
-/absolute/path/to/RepoFoundry/engineering-research
-/absolute/path/to/RepoFoundry/engineering-execution-plan
-/absolute/path/to/RepoFoundry/engineering-case-study
+Choose an exact release or host policy by passing arguments after `python3 -`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-RepoFoundry does not require installation inside an agent-specific private
-directory. Directory scanning, symbolic links, or host configuration all work
-when they preserve these package roots.
+`--host none` leaves existing host registrations unchanged and creates none on
+a fresh install. It is useful for CLI-only or manually configured Agent hosts.
+
+The command reports the active package home, CLI path, host links, and every
+backup it preserves. If the bin directory is not already on `PATH`, it prints
+the exact directory to add. Verify the result with:
+
+```bash
+repofoundry --version
+repofoundry --repo . adapter list
+```
+
+For environments that prohibit piping downloaded code directly to an
+interpreter, download and inspect the installer first:
+
+```bash
+curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
+less /tmp/repofoundry-install.py
+python3 /tmp/repofoundry-install.py
+```
+
+Distribution upgrade and repository migration are deliberately separate. The
+installer never scans or changes project repositories. After installing a new
+RepoFoundry release, preview and explicitly apply any Harness migration in each
+project with `repofoundry --repo PATH upgrade --to VERSION` and then the same
+command plus `--apply`.
+
+Maintainers can still install an explicit checkout without network access:
+
+```bash
+git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
+python3 /absolute/path/to/RepoFoundryAI/install.py --source /absolute/path/to/RepoFoundryAI
+export REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
+```
 
 ## Start with a Prompt
 
@@ -212,26 +244,26 @@ Skills invoke these CLIs for state changes and validation. Humans can use them
 directly for automation or diagnosis:
 
 ```bash
-FOUNDRYCTL="$REPO_FOUNDRY_HOME/scripts/foundryctl.py"
+REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
 BENCHCTL="$REPO_FOUNDRY_HOME/engineering-benchmark/scripts/benchctl.py"
 RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
-python3 "$FOUNDRYCTL" --version
-python3 "$FOUNDRYCTL" --repo . adapter list
-python3 "$FOUNDRYCTL" --repo . bootstrap --adapter portable
-python3 "$FOUNDRYCTL" --repo . \
+repofoundry --version
+repofoundry --repo . adapter list
+repofoundry --repo . bootstrap --adapter portable
+repofoundry --repo . \
   bootstrap --adapter codex --adapter portable --spec languages/go --apply
-python3 "$FOUNDRYCTL" --repo . validate --harness
-python3 "$FOUNDRYCTL" --repo . validate --adapter codex
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . validate --harness
+repofoundry --repo . validate --adapter codex
+repofoundry --repo . upgrade --to 0.2.0
+repofoundry --repo . upgrade --to 0.2.0 --apply
 
-python3 "$FOUNDRYCTL" --repo . spec plan
-python3 "$FOUNDRYCTL" --repo . spec sync --apply
-python3 "$FOUNDRYCTL" --repo . \
+repofoundry --repo . spec plan
+repofoundry --repo . spec sync --apply
+repofoundry --repo . \
   spec update --spec-version 1.2.0 --spec languages/go --apply
-python3 "$FOUNDRYCTL" --repo . spec validate
+repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
 python3 "$RESEARCHCTL" --repo . validate
