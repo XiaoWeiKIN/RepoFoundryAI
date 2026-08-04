@@ -1,0 +1,26 @@
+EP-011 validation summary
+Recorded: 2026-08-04T03:38:19Z
+
+python3 -B -m unittest tests.test_foundryctl tests.test_spec_router tests.test_spec_manager tests.test_installer tests.test_repository_contracts
+Result: 84 tests passed; exit 0.
+
+python3 -B /Users/wangxiaowei1/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
+Result: Skill is valid; exit 0.
+
+python3 -B /Users/wangxiaowei1/.codex/skills/.system/skill-creator/scripts/quick_validate.py assets/adapters/codex/engineering-specs
+Result: Skill is valid; exit 0.
+
+python3 -B engineering-execution-plan/scripts/epctl.py --repo . validate
+Result: 0 errors, 0 warnings; exit 0.
+
+python3 -B scripts/check.py
+Result: all integrity checks passed; Research 29, Benchmark 8,
+Engineering Execution Plan 37, RepoFoundry/repository 84 tests; exit 0.
+
+Live stable-release validation:
+- Requested: v0.1.0
+- Resolved commit: 2c54bb85a1fb88096eee0ef63ac30bc44d300329
+- Archive SHA-256: f2288b57063ae17725506a8acb8bf9b72571061efcd9974097d66daf76b78cc4
+- Package SHA-256: 5f374cbbe59d12e26e8baafa0aedbca3b5dc1cb00a117a332127c2d6c8edc726
+- First action: installed; launcher output: RepoFoundry AI 0.1.0
+- Repeated action: unchanged; no backups; project_harnesses_modified=false

@@ -267,8 +267,15 @@ class RepositoryContractTestCase(unittest.TestCase):
             "简体中文 | [English](README.md)",
             chinese_readme.splitlines()[:5],
         )
-        self.assertIn("<repo-url>", readme)
-        self.assertIn("<repo-url>", chinese_readme)
+        repository_url = "https://github.com/XiaoWeiKIN/RepoFoundryAI"
+        installer_url = (
+            "https://raw.githubusercontent.com/"
+            "XiaoWeiKIN/RepoFoundryAI/main/install.py"
+        )
+        self.assertIn(repository_url, readme)
+        self.assertIn(repository_url, chinese_readme)
+        self.assertIn(installer_url, readme)
+        self.assertIn(installer_url, chinese_readme)
         self.assertNotIn(
             "https://github.com/XiaoWeiKIN/RepoFoundry.git",
             readme,
@@ -353,6 +360,42 @@ class RepositoryContractTestCase(unittest.TestCase):
                 encoding="utf-8"
             ),
         )
+
+    def test_one_command_installer_has_a_stable_neutral_contract(self) -> None:
+        installer_path = ROOT / "install.py"
+        installer = installer_path.read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_REPOSITORY = "XiaoWeiKIN/RepoFoundryAI"', installer)
+        self.assertIn('"project_harnesses_modified": False', installer)
+        self.assertIn('choices=("auto", "codex", "none")', installer)
+        self.assertIn('"releases/latest"', installer)
+        self.assertIn("resolve_tag_commit", installer)
+        self.assertIn("archive_sha256", installer)
+
+        help_result = subprocess.run(
+            [sys.executable, "-B", str(installer_path), "--help"],
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=True,
+        )
+        for option in (
+            "--version",
+            "--prefix",
+            "--bin-dir",
+            "--host",
+            "--codex-home",
+            "--source",
+            "--allow-downgrade",
+            "--json",
+        ):
+            self.assertIn(option, help_result.stdout)
+
+        command = (
+            "curl -fsSL https://raw.githubusercontent.com/"
+            "XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -"
+        )
+        for document in (ROOT / "README.md", ROOT / "README.zh-CN.md", ROOT / "SKILL.md"):
+            self.assertIn(command, document.read_text(encoding="utf-8"))
 
     def test_repofoundry_ai_brand_assets_are_valid(self) -> None:
         brand = ROOT / "assets" / "brand"

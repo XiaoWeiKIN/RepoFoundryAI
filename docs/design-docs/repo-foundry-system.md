@@ -51,6 +51,8 @@ the engineering environment in which multiple workflows can operate.
 | Primary claim | `Turn any repository into an AI-ready engineering system.` |
 | Root Skill ID | `repo-foundry-ai` |
 | Root Skill display name | `RepoFoundry AI` |
+| Distribution installer | `install.py` |
+| Installed command | `repofoundry` |
 | Root CLI | `scripts/foundryctl.py` |
 | Distribution version source | `VERSION` (`0.2.0`) |
 | Installation variable used in examples | `REPO_FOUNDRY_HOME` |
@@ -89,6 +91,12 @@ flowchart TB
 
 `foundryctl` is a deterministic implementation surface used by the root Skill.
 It does not become an agent runtime or a general workflow engine.
+
+`install.py` is the distribution boundary above `foundryctl`. It acquires and
+atomically activates a stable local package, generates the `repofoundry`
+launcher, and connects detected Agent hosts to that package. It never owns
+repository Bootstrap, Harness migration, Spec selection, or professional
+artifact lifecycles.
 
 ## Brand assets encode repository boundary and AI transformation
 
