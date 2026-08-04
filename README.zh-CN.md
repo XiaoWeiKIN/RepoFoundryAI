@@ -133,24 +133,85 @@ RepoFoundry AI 记录证据，但不接管项目自己的测量实现。
 Bootstrap 不会编造仓库事实。未知命令、Owner、架构、SLO 和安全控制会保留为
 `BOOTSTRAP_TODO`，等待维护者确认。
 
-## 一条命令安装或升级
+## 一次安装，逐仓库启用
 
-一键安装器当前支持 macOS 和 Linux，需要 Python 3.10+ 与 `curl`。首次安装和
-后续升级使用同一条命令：
+RepoFoundry 包含两个相互独立的作用域。**发行包安装**把 CLI 和可选的个人 Skill
+入口放进用户环境；**仓库 Bootstrap**只向明确指定的仓库写入版本化 Harness 与
+项目 Skills。安装或升级发行包不会扫描、修改任何项目仓库。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+```mermaid
+flowchart LR
+    I["安装或升级<br/>用户作用域"] --> P["预览 Bootstrap<br/>仓库作用域"]
+    P --> A["明确应用"]
+    A --> V["验证 Harness"]
 ```
 
-安装器默认选择 GitHub 最新稳定 Release，把 tag 解析到不可变 commit，记录下载
-归档的 SHA-256，验证暂存包后再原子切换当前版本。默认安装到 XDG 用户数据目录，
-在用户本地 bin 目录暴露 `repofoundry`，并为检测到的 Codex 与 Claude Code 注册根
-Skill。Claude Code 注册遵循其官方配置根目录：
-设置环境变量时使用 `$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai`，否则使用
-`~/.claude/skills/repo-foundry-ai`。其他 Agent 可以直接使用同一 CLI 和 portable
-adapter，不需要这两个宿主目录。重复执行当前版本会返回 no-op。
+### 快速开始：安装并启用全部 adapter
 
-在 `python3 -` 后传参即可固定版本或宿主策略：
+安装器支持 macOS 和 Linux，需要 Python 3.10+ 与 `curl`。
+
+1. 安装最新稳定版。以后升级仍运行同一条命令：
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+   ```
+
+2. 进入目标仓库，预览 Agent-neutral Core 与全部项目 adapter：
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters
+   ```
+
+3. 检查输出中的 `create`、`preserve` 和 `conflict`。确认计划无冲突后再应用，
+   随后验证 Harness：
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters --apply
+   repofoundry --repo . validate
+   ```
+
+`--all-adapters` 始终按确定顺序展开为 `codex`、`claude` 和 `portable`。结果不受
+当前机器安装了哪些 Agent 产品影响。
+
+### 只启用需要的 adapter
+
+指定一个或多个 adapter 时，仍然先预览，再加 `--apply` 应用：
+
+```bash
+# 只启用 Claude Code：先预览，再应用
+repofoundry --repo . bootstrap --adapter claude
+repofoundry --repo . bootstrap --adapter claude --apply
+
+# 同时启用 Codex 与产品无关的 portable 指南
+repofoundry --repo . bootstrap --adapter codex --adapter portable
+repofoundry --repo . bootstrap --adapter codex --adapter portable --apply
+```
+
+| Adapter | 仓库持有的入口 |
+|---|---|
+| `codex` | `AGENTS.md`、`.agents/skills/` 与经过评审的 `.codex/` guards |
+| `claude` | `.claude/skills/` 下的原生项目 Skills |
+| `portable` | `docs/agent-guides/` 下的产品无关指南 |
+
+所有 adapter 共享 `.repo-foundry/skills/repo-foundry-ai/SKILL.md` 中的 canonical
+workflow 和 Core Spec Router。Claude adapter 创建普通项目文件，不会把仓库链接到
+用户 home。Claude Code 对同名 Skill 采用个人级优先规则；项目 canonical workflow
+存在时，个人入口会转交给该项目文件。
+
+### `--host` 只控制个人入口
+
+常规安装无需传入 `--host`。默认值 `auto` 会为检测到的 Codex 和 Claude Code
+注册个人 RepoFoundry Skill。其他 Agent 仍可直接使用 CLI 与 portable 项目
+adapter，不依赖这两个宿主目录。
+
+| 安装参数 | 个人 Skill 行为 |
+|---|---|
+| `--host auto` | 注册检测到的全部受支持宿主；这是默认值 |
+| `--host codex` | 确保 Codex 个人 Skill 链接存在 |
+| `--host claude` | 确保 Claude Code 个人 Skill 链接存在 |
+| `--host none` | 保留已有注册，不创建新注册 |
+
+示例：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
@@ -158,39 +219,37 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-`--host codex` 与 `--host claude` 会确保对应的个人 Skill 链接存在；如果目标位置
-已有非托管内容，安装器会先备份再替换。`--host auto` 注册检测到的全部受支持
-宿主；`--host none` 不新增宿主注册，也不会删除既有注册。Claude Code 配置根目录
-可通过 `CLAUDE_CONFIG_DIR` 或 `--claude-home` 覆盖。
+目标位置存在非托管内容时，安装器会先备份再替换。Claude Code 在设置
+`CLAUDE_CONFIG_DIR` 时使用
+`$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai`，否则使用
+`~/.claude/skills/repo-foundry-ai`；`--claude-home` 可以覆盖这两个位置。
 目录软链接发现要求 Claude Code 2.1.203 或更高版本。
 
-宿主注册只负责让个人安装中的 `/repo-foundry-ai` 可发现；项目注册是另一个由仓库
-持有的操作。为当前项目安装 Claude Skills，或按确定顺序安装全部 adapter：
+### 先升级发行包，再逐仓库迁移
+
+重新运行一键安装命令会原子切换到最新稳定版；当前稳定版已经激活时返回 no-op。
+安装器把 Release tag 解析为不可变 commit，记录归档 SHA-256，并在激活前验证
+暂存包。
+
+项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
+需要迁移到其他版本时，把 `0.2.0` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . bootstrap --adapter claude --apply
-repofoundry --repo . bootstrap --all-adapters --apply
+repofoundry --repo . upgrade --to 0.2.0
+repofoundry --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . validate
 ```
 
-Claude adapter 在 `.claude/skills/` 下创建普通文件，不链接用户 home。它提供原生
-Skill discovery，通过共享项目 Router 显式执行 CLI 激活与审计，但不宣称 Claude
-生命周期 Hooks 或机械写入门禁。`--all-adapters` 总是展开为 `codex`、`claude`、
-`portable`，不会因当前机器安装了哪些宿主而变化。
-
-Claude Code 对同名 Skill 采用个人级优先于项目级的规则。RepoFoundry 在两个 scope
-都保留 `/repo-foundry-ai` 品牌入口：已安装的个人入口发现项目 canonical 文件时，
-必须读取 `.repo-foundry/skills/repo-foundry-ai/SKILL.md`；没有个人注册的 clone 则
-直接发现薄项目入口。
-
-命令会报告当前 package home、CLI 路径、宿主链接和所有保留的备份。如果 bin
-目录尚未进入 `PATH`，安装器会输出需要加入的精确目录。安装后验证：
+随时可以检查当前安装和可用 adapter：
 
 ```bash
 repofoundry --version
 repofoundry --repo . adapter list
 ```
 
-如果环境禁止把下载内容直接交给解释器，可以先下载审查再执行：
+### 先审查安装器，或从 checkout 安装
+
+如果环境禁止把下载内容直接交给解释器，可以先下载并审查：
 
 ```bash
 curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
@@ -198,12 +257,7 @@ less /tmp/repofoundry-install.py
 python3 /tmp/repofoundry-install.py
 ```
 
-发行包升级与项目迁移严格分离。安装器不会扫描或修改任何项目仓库。安装新版
-RepoFoundry 后，仍需在每个项目中先执行
-`repofoundry --repo PATH upgrade --to VERSION` 预览，再加 `--apply` 明确应用
-Harness 迁移。
-
-维护者也可以从显式 checkout 离线安装：
+维护者也可以从显式 checkout 安装，无需下载 Release：
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
