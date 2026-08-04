@@ -303,6 +303,132 @@ class SpecRouterTestCase(unittest.TestCase):
         self.assertEqual(codex_status["adapter_id"], "codex")
         self.assertEqual(portable_status["adapter_id"], "portable")
 
+    def test_claude_manual_flow_shares_results_and_isolates_receipts(self) -> None:
+        self.initialize_turn()
+        codex_candidates = json.loads(
+            self.run_router(
+                "candidates",
+                "--path",
+                "service/main.go",
+            ).stdout
+        )
+        codex_activation = self.activate_go("service/main.go")
+
+        self.run_core(
+            "begin",
+            "--adapter-id",
+            "claude",
+            "--session-id",
+            "session-1",
+            "--turn-id",
+            "turn-1",
+            "--prompt",
+            "Rename the public Go service API",
+        )
+        claude_candidates = json.loads(
+            self.run_core(
+                "candidates",
+                "--path",
+                "service/main.go",
+            ).stdout
+        )
+        claude_activation = json.loads(
+            self.run_core(
+                "activate",
+                "--adapter-id",
+                "claude",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+                "--path",
+                "service/main.go",
+                "--spec",
+                "languages/go",
+            ).stdout
+        )
+        self.assertEqual(
+            [item["id"] for item in claude_candidates["candidates"]],
+            [item["id"] for item in codex_candidates["candidates"]],
+        )
+        self.assertEqual(
+            claude_activation["activated_specs"],
+            codex_activation["activated_specs"],
+        )
+        claude_status = json.loads(
+            self.run_core(
+                "status",
+                "--adapter-id",
+                "claude",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+            ).stdout
+        )
+        codex_status = json.loads(
+            self.run_router(
+                "status",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+            ).stdout
+        )
+        self.assertEqual(claude_status["adapter_id"], "claude")
+        self.assertEqual(codex_status["adapter_id"], "codex")
+        handoff = "\n".join(
+            (
+                "Activated specifications: languages/go",
+                "Activated requirements: naming",
+                "Verification: router tests",
+                "Exceptions: none",
+                "Compatibility or migration: none",
+            )
+        )
+        audit = json.loads(
+            self.run_core(
+                "audit",
+                "--adapter-id",
+                "claude",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+                "--message",
+                handoff,
+            ).stdout
+        )
+        self.assertTrue(audit["ok"])
+
+        self.run_core(
+            "begin",
+            "--adapter-id",
+            "claude",
+            "--session-id",
+            "session-1",
+            "--turn-id",
+            "turn-none",
+        )
+        explicit_none = json.loads(
+            self.run_core(
+                "activate",
+                "--adapter-id",
+                "claude",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-none",
+                "--path",
+                "README.md",
+                "--none",
+                "--reason",
+                "Documentation-only task has no applicable locked Spec",
+            ).stdout
+        )
+        self.assertEqual(explicit_none["decision"], "none")
+        self.assertEqual(explicit_none["activated_specs"], [])
+
     def test_normalized_protocol_fails_closed_on_future_version(self) -> None:
         result = self.run_core(
             "event",

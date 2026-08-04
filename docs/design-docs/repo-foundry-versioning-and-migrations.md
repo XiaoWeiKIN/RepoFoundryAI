@@ -15,10 +15,11 @@ files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
 The current distribution is `0.2.0`. It writes Harness schema `3`, Core
-`1.0.0`, Codex adapter `2.0.0`, Portable adapter `1.0.0`, and activation
-protocol `1`. Engineering Specifications keep their independent Catalog
-version and lock lifecycle. Distribution `0.1.0`, schema `2`, and Codex profile
-`1.0.0` remain explicit migration inputs rather than the current model.
+`1.1.0`, Codex adapter `2.1.0`, Claude adapter `1.0.0`, Portable adapter
+`1.0.0`, and activation protocol `1`. Engineering Specifications keep their
+independent Catalog version and lock lifecycle. Distribution `0.1.0`, schemas
+`1` and `2`, Core `1.0.0`, Codex adapter `2.0.0`, and Codex profile `1.0.0`
+remain migration inputs rather than the current model.
 
 ## Independent version planes
 
@@ -26,8 +27,9 @@ version and lock lifecycle. Distribution `0.1.0`, schema `2`, and Codex profile
 |---|---:|---|---|
 | RepoFoundry distribution | `0.2.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
-| Harness Core | `1.0.0` | `core.version`, Core file records | Product-neutral repository and activation behavior |
-| Codex adapter | `2.0.0` | `adapters[]`, adapter file records | Codex instructions, Hooks, and event translation |
+| Harness Core | `1.1.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and activation behavior |
+| Codex adapter | `2.1.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
+| Claude adapter | `1.0.0` | `adapters[]`, adapter file records | Claude project Skills with CLI/advisory activation |
 | Portable adapter | `1.0.0` | `adapters[]`, adapter file records | CLI and advisory integration |
 | Activation protocol | `1` | Core executable and adapter capability output | Normalized event and decision semantics |
 | Engineering Specs Catalog | `1.2.0` by default | `specs.json`, `specs.lock.json` | Independently selected engineering guidance release |
@@ -40,8 +42,8 @@ flowchart LR
     D["RepoFoundry distribution<br/>VERSION 0.2.0"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
-    U --> C["Harness Core 1.0.0"]
-    U --> A["Codex + Portable adapters"]
+    U --> C["Harness Core 1.1.0"]
+    U --> A["Codex + Claude + Portable adapters"]
     C --> F["Core file provenance"]
     A --> F
     S["Specs Catalog<br/>independent SemVer"] --> L["specs.json + specs.lock.json"]
@@ -115,8 +117,13 @@ The reader is deliberately asymmetric:
   migration records are not newer than the installed distribution;
 - an unknown future schema, producer, Core, adapter, template, or migration version
   fails closed;
-- `bootstrap` never migrates an existing manifest; migration requires the
-  explicit `upgrade` command.
+- schema `1` or `2` migration requires the explicit `upgrade` command;
+- schema `3` is interpreted by its declared component versions, so Core
+  `1.0.0` and Codex `2.0.0` remain valid without the newer project Skill
+  records;
+- a schema `3` bootstrap that adds an adapter may also create missing new
+  generated paths and record Core/adapter component migrations after the same
+  conflict-free preview; replacing an older seed still requires `upgrade`.
 
 Schema `3` records the producer, Core, adapters, and unique Core/adapter owner
 for each seeded file. A versioned record contains the template SHA-256 and the SHA-256
@@ -173,3 +180,10 @@ updates and never duplicates a migration ID.
 The current distribution bundles only migrations to its own version. Selecting
 another target returns `UPGRADE_TARGET_UNAVAILABLE`; fetching and executing
 remote migration code is outside the CLI trust boundary.
+
+The Core `1.0.0` to `1.1.0` migration adds
+`.repo-foundry/skills/repo-foundry-ai/SKILL.md`. The Codex `2.0.0` to `2.1.0`
+migration adds `.agents/skills/repo-foundry-ai/SKILL.md`. Both are generated,
+repository-relative regular files. Claude `1.0.0` is a new adapter rather than
+a migration of personal host registration; it owns only its two
+`.claude/skills/` entrypoints.

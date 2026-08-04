@@ -1,0 +1,27 @@
+EP-012 focused verification evidence
+Date: 2026-08-04
+
+python3 -B -m unittest -v tests.test_foundryctl
+- 45 tests passed.
+- Covers Claude-only bootstrap, deterministic all-adapter registration,
+  idempotence, conflict atomicity, adapter-scoped drift, old schema 3 component
+  compatibility, explicit upgrade, one-bootstrap Claude adoption, and existing
+  Harness/Spec migration behavior.
+
+python3 -B -m unittest -v tests.test_spec_router
+- 11 tests passed.
+- Covers Claude begin/candidates/activate/status/audit, explicit-none,
+  Codex/portable result parity, and adapter-isolated receipts.
+
+python3 -B -m unittest -v tests.test_repository_contracts
+- 13 tests passed.
+- Covers product-neutral Core boundaries, project Skill frontmatter, line
+  budgets, repository-relative paths, thin adapter entrypoints, and installer
+  neutrality.
+
+python3 -B -m unittest -v \
+  tests.test_installer.InstallerTestCase.test_package_requires_every_project_skill_entrypoint \
+  tests.test_installer.InstallerTestCase.test_local_install_and_repeat_are_idempotent
+- 2 tests passed.
+- Covers release-package completeness for all four project Skill assets and
+  idempotent local installation.

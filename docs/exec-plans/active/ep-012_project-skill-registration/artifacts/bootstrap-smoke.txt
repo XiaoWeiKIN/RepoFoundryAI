@@ -1,0 +1,32 @@
+EP-012 project Skill registration smoke evidence
+Date: 2026-08-04
+
+Fixture:
+- Disposable repository: /tmp/repofoundry-project-skill-smoke.Uk8vgw/target
+- Local immutable Git Catalog fixture; no production repository was mutated.
+
+Commands exercised:
+- foundryctl bootstrap --all-adapters --spec-repository <fixture> --spec-ref main
+- foundryctl bootstrap --all-adapters --spec-repository <fixture> --spec-ref main --apply
+- foundryctl bootstrap --all-adapters --apply
+- foundryctl validate --harness
+- foundryctl validate --adapter codex
+- foundryctl validate --adapter claude
+- foundryctl validate --adapter portable
+
+Observed results:
+- Dry-run adapter order: codex, claude, portable.
+- Dry-run: 28 create_file actions, 0 conflicts, and no target writes.
+- Apply: 46 created paths, 0 updated paths.
+- Repeated apply: 0 created paths, 0 updated paths, 0 conflicts.
+- Harness validation: exit 0, errors 0, warnings 7.
+- Codex validation: exit 0, errors 0, warnings 7.
+- Claude validation: exit 0, errors 0, warnings 6.
+- Portable validation: exit 0, errors 0, warnings 6.
+- Warnings are expected BOOTSTRAP_TODO markers in repository-fact templates.
+
+Generated project Skill paths verified by executable tests and validation:
+- .repo-foundry/skills/repo-foundry-ai/SKILL.md
+- .agents/skills/repo-foundry-ai/SKILL.md
+- .claude/skills/repo-foundry-ai/SKILL.md
+- .claude/skills/engineering-specs/SKILL.md

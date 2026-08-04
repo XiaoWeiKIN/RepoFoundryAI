@@ -45,12 +45,16 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.0.0"
-CODEX_ADAPTER_VERSION = "2.0.0"
+CORE_HARNESS_VERSION = "1.1.0"
+CODEX_ADAPTER_VERSION = "2.1.0"
+CLAUDE_ADAPTER_VERSION = "1.0.0"
 PORTABLE_ADAPTER_VERSION = "1.0.0"
 ACTIVATION_PROTOCOL_VERSION = 1
 CODEX_AGENT_MAX_LINES = 100
 CODEX_AGENT_TEMPLATE_TARGET_LINES = 80
+CORE_SKILL_MAX_LINES = 120
+ADAPTER_SKILL_MAX_LINES = 80
+CLAUDE_SPEC_SKILL_MAX_LINES = 120
 PORTABLE_GUIDE_MAX_LINES = 120
 BOOTSTRAP_TODO_MARKER = "BOOTSTRAP_TODO"
 LEGACY_UNVERSIONED = "legacy-unversioned"
@@ -150,6 +154,7 @@ CORE_BOOTSTRAP_DIRECTORIES = (
     HARNESS_STATE_DIRECTORY,
     "docs/design-docs",
     ".repo-foundry/engineering-specs",
+    ".repo-foundry/skills/repo-foundry-ai",
 )
 CORE_FILE_ASSETS = (
     ("ARCHITECTURE.md", "core/harness-architecture.md"),
@@ -162,26 +167,54 @@ CORE_FILE_ASSETS = (
         ".repo-foundry/engineering-specs/spec_router.py",
         "core/engineering-specs/spec_router.py",
     ),
+    (
+        ".repo-foundry/skills/repo-foundry-ai/SKILL.md",
+        "core/repo-foundry-ai/SKILL.md",
+    ),
 )
 CODEX_ADAPTER_DIRECTORIES = (
+    ".agents/skills/repo-foundry-ai",
     ".agents/skills/engineering-specs/agents",
     ".agents/skills/engineering-specs/scripts",
     ".codex",
 )
 CODEX_ADAPTER_FILE_ASSETS = (
     ("AGENTS.md", "adapters/codex/AGENTS.md"),
+    (
+        ".agents/skills/repo-foundry-ai/SKILL.md",
+        "adapters/codex/repo-foundry-ai/SKILL.md",
+    ),
     *CODEX_ROUTER_FILE_ASSETS,
+)
+CLAUDE_ADAPTER_DIRECTORIES = (
+    ".claude/skills/repo-foundry-ai",
+    ".claude/skills/engineering-specs",
+)
+CLAUDE_ADAPTER_FILE_ASSETS = (
+    (
+        ".claude/skills/repo-foundry-ai/SKILL.md",
+        "adapters/claude/repo-foundry-ai/SKILL.md",
+    ),
+    (
+        ".claude/skills/engineering-specs/SKILL.md",
+        "adapters/claude/engineering-specs/SKILL.md",
+    ),
 )
 PORTABLE_ADAPTER_DIRECTORIES = ("docs/agent-guides",)
 PORTABLE_ADAPTER_FILE_ASSETS = (
     ("docs/agent-guides/README.md", "adapters/portable/agent-guide.md"),
 )
-ADAPTER_ORDER = ("codex", "portable")
+ADAPTER_ORDER = ("codex", "claude", "portable")
 ADAPTER_VERSIONS = {
     "codex": CODEX_ADAPTER_VERSION,
+    "claude": CLAUDE_ADAPTER_VERSION,
     "portable": PORTABLE_ADAPTER_VERSION,
 }
-ADAPTER_ENFORCEMENT = {"codex": "native", "portable": "cli"}
+ADAPTER_ENFORCEMENT = {
+    "codex": "native",
+    "claude": "cli",
+    "portable": "cli",
+}
 ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
     "codex": {
         "instructions": "file",
@@ -197,6 +230,15 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
         "completion_audit": "native",
         "project_trust": "user_review",
     },
+    "claude": {
+        "instructions": "none",
+        "skills": "native",
+        "lifecycle_events": [],
+        "context_injection": "advisory",
+        "mutation_gate": "cli",
+        "completion_audit": "cli",
+        "project_trust": "user_review",
+    },
     "portable": {
         "instructions": "file",
         "skills": "none",
@@ -209,10 +251,12 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
 }
 ADAPTER_DIRECTORIES = {
     "codex": CODEX_ADAPTER_DIRECTORIES,
+    "claude": CLAUDE_ADAPTER_DIRECTORIES,
     "portable": PORTABLE_ADAPTER_DIRECTORIES,
 }
 ADAPTER_FILE_ASSETS = {
     "codex": CODEX_ADAPTER_FILE_ASSETS,
+    "claude": CLAUDE_ADAPTER_FILE_ASSETS,
     "portable": PORTABLE_ADAPTER_FILE_ASSETS,
 }
 CORE_TEMPLATE_IDS = {
@@ -225,10 +269,16 @@ CORE_TEMPLATE_IDS = {
     ".repo-foundry/engineering-specs/spec_router.py": (
         "core/engineering-specs-activation-engine"
     ),
+    ".repo-foundry/skills/repo-foundry-ai/SKILL.md": (
+        "core/repo-foundry-ai-project-skill"
+    ),
 }
 ADAPTER_TEMPLATE_IDS = {
     "codex": {
         "AGENTS.md": "codex/agents",
+        ".agents/skills/repo-foundry-ai/SKILL.md": (
+            "codex/repo-foundry-ai-project-skill"
+        ),
         ".agents/skills/engineering-specs/SKILL.md": (
             "codex/engineering-specs-skill"
         ),
@@ -240,25 +290,49 @@ ADAPTER_TEMPLATE_IDS = {
         ),
         ".codex/hooks.json": "codex/engineering-specs-hooks",
     },
+    "claude": {
+        ".claude/skills/repo-foundry-ai/SKILL.md": (
+            "claude/repo-foundry-ai-project-skill"
+        ),
+        ".claude/skills/engineering-specs/SKILL.md": (
+            "claude/engineering-specs-skill"
+        ),
+    },
     "portable": {
         "docs/agent-guides/README.md": "portable/agent-guide",
     },
 }
 CORE_GENERATED_FILES = frozenset(
-    {".repo-foundry/engineering-specs/spec_router.py"}
+    {
+        ".repo-foundry/engineering-specs/spec_router.py",
+        ".repo-foundry/skills/repo-foundry-ai/SKILL.md",
+    }
 )
 ADAPTER_GENERATED_FILES = {
     "codex": frozenset(
         {
+            ".agents/skills/repo-foundry-ai/SKILL.md",
             ".agents/skills/engineering-specs/SKILL.md",
             ".agents/skills/engineering-specs/agents/openai.yaml",
             ".agents/skills/engineering-specs/scripts/spec_router.py",
             ".codex/hooks.json",
         }
     ),
+    "claude": frozenset(
+        {
+            ".claude/skills/repo-foundry-ai/SKILL.md",
+            ".claude/skills/engineering-specs/SKILL.md",
+        }
+    ),
     "portable": frozenset({"docs/agent-guides/README.md"}),
 }
 CORE_ROUTER_PATH = ".repo-foundry/engineering-specs/spec_router.py"
+CORE_PROJECT_SKILL_PATH = ".repo-foundry/skills/repo-foundry-ai/SKILL.md"
+CODEX_PROJECT_SKILL_PATH = ".agents/skills/repo-foundry-ai/SKILL.md"
+CLAUDE_PROJECT_SKILL_PATH = ".claude/skills/repo-foundry-ai/SKILL.md"
+CLAUDE_SPEC_SKILL_PATH = ".claude/skills/engineering-specs/SKILL.md"
+CORE_PROJECT_SKILL_INTRODUCED = "1.1.0"
+CODEX_PROJECT_SKILL_INTRODUCED = "2.1.0"
 
 
 class FoundryctlError(RuntimeError):
@@ -732,6 +806,95 @@ def selected_file_assets(
     return tuple(records)
 
 
+def versioned_file_assets(
+    core_version: str,
+    adapter_versions: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str, str, str | None], ...]:
+    """Return the file contract declared by a schema 3 manifest.
+
+    Schema 3 predates project-local Skills, so component versions—not the
+    schema number—determine whether those newer managed paths are required.
+    """
+    core_cutoff = semver_tuple(
+        CORE_PROJECT_SKILL_INTRODUCED,
+        "Core project Skill introduction",
+    )
+    core_assets = tuple(
+        (relative, asset, "core", None)
+        for relative, asset in CORE_FILE_ASSETS
+        if relative != CORE_PROJECT_SKILL_PATH
+        or semver_tuple(core_version, "core.version") >= core_cutoff
+    )
+    records = list(core_assets)
+    for adapter_id, version in adapter_versions:
+        assets = ADAPTER_FILE_ASSETS[adapter_id]
+        if adapter_id == "codex" and semver_tuple(
+            version,
+            "codex adapter version",
+        ) < semver_tuple(
+            CODEX_PROJECT_SKILL_INTRODUCED,
+            "Codex project Skill introduction",
+        ):
+            assets = tuple(
+                item for item in assets if item[0] != CODEX_PROJECT_SKILL_PATH
+            )
+        records.extend(
+            (relative, asset, "adapter", adapter_id)
+            for relative, asset in assets
+        )
+    return tuple(records)
+
+
+def instruction_files_for_versions(
+    core_version: str,
+    adapter_versions: tuple[tuple[str, str], ...],
+) -> list[dict[str, object]]:
+    instruction_files: list[dict[str, object]] = []
+    if semver_tuple(core_version, "core.version") >= semver_tuple(
+        CORE_PROJECT_SKILL_INTRODUCED,
+        "Core project Skill introduction",
+    ):
+        instruction_files.append(
+            {"path": CORE_PROJECT_SKILL_PATH, "max_lines": CORE_SKILL_MAX_LINES}
+        )
+    for adapter_id, version in adapter_versions:
+        if adapter_id == "codex":
+            instruction_files.append(
+                {"path": "AGENTS.md", "max_lines": CODEX_AGENT_MAX_LINES}
+            )
+            if semver_tuple(version, "codex adapter version") >= semver_tuple(
+                CODEX_PROJECT_SKILL_INTRODUCED,
+                "Codex project Skill introduction",
+            ):
+                instruction_files.append(
+                    {
+                        "path": CODEX_PROJECT_SKILL_PATH,
+                        "max_lines": ADAPTER_SKILL_MAX_LINES,
+                    }
+                )
+        elif adapter_id == "claude":
+            instruction_files.extend(
+                (
+                    {
+                        "path": CLAUDE_PROJECT_SKILL_PATH,
+                        "max_lines": ADAPTER_SKILL_MAX_LINES,
+                    },
+                    {
+                        "path": CLAUDE_SPEC_SKILL_PATH,
+                        "max_lines": CLAUDE_SPEC_SKILL_MAX_LINES,
+                    },
+                )
+            )
+        elif adapter_id == "portable":
+            instruction_files.append(
+                {
+                    "path": "docs/agent-guides/README.md",
+                    "max_lines": PORTABLE_GUIDE_MAX_LINES,
+                }
+            )
+    return instruction_files
+
+
 def file_template_id(
     relative: str,
     owner_kind: str,
@@ -816,18 +979,13 @@ def harness_manifest(
             records.append(dict(previous))
         else:
             records.append(current)
-    instruction_files: list[dict[str, object]] = []
-    if "codex" in adapters:
-        instruction_files.append(
-            {"path": "AGENTS.md", "max_lines": CODEX_AGENT_MAX_LINES}
-        )
-    if "portable" in adapters:
-        instruction_files.append(
-            {
-                "path": "docs/agent-guides/README.md",
-                "max_lines": PORTABLE_GUIDE_MAX_LINES,
-            }
-        )
+    adapter_versions = tuple(
+        (adapter_id, ADAPTER_VERSIONS[adapter_id]) for adapter_id in adapters
+    )
+    instruction_files = instruction_files_for_versions(
+        CORE_HARNESS_VERSION,
+        adapter_versions,
+    )
     return {
         "schema_version": HARNESS_SCHEMA_VERSION,
         "owner": HARNESS_OWNER,
@@ -984,6 +1142,7 @@ def validate_harness_v3_manifest_data(
     if not isinstance(raw_adapters, list) or not raw_adapters:
         raise FoundryctlError(f"{prefix} adapters contract")
     adapter_ids: list[str] = []
+    declared_adapter_versions: list[tuple[str, str]] = []
     for index, adapter in enumerate(raw_adapters):
         label = f"adapters[{index}]"
         if not isinstance(adapter, dict) or set(adapter) != {
@@ -1013,22 +1172,47 @@ def validate_harness_v3_manifest_data(
                 f"HARNESS_ADAPTER_TOO_NEW: {path}: {adapter_id}@{version}; "
                 f"installed is {ADAPTER_VERSIONS[adapter_id]}"
             )
+        declared_adapter_versions.append((adapter_id, version))
         if adapter["enforcement"] != ADAPTER_ENFORCEMENT[adapter_id]:
             raise FoundryctlError(f"{prefix} {label}.enforcement")
     normalized_adapters = normalize_adapter_ids(adapter_ids)
     if tuple(adapter_ids) != normalized_adapters:
         raise FoundryctlError(f"{prefix} adapters order contract")
+    core_supports_project_skill = parsed_core >= semver_tuple(
+        CORE_PROJECT_SKILL_INTRODUCED,
+        "Core project Skill introduction",
+    )
+    for adapter_id, version in declared_adapter_versions:
+        requires_project_skill = adapter_id == "claude" or (
+            adapter_id == "codex"
+            and semver_tuple(version, "codex adapter version") >= semver_tuple(
+                CODEX_PROJECT_SKILL_INTRODUCED,
+                "Codex project Skill introduction",
+            )
+        )
+        if requires_project_skill and not core_supports_project_skill:
+            raise FoundryctlError(
+                f"HARNESS_COMPONENT_INCOMPATIBLE: {path}: "
+                f"{adapter_id}@{version} requires Core "
+                f">={CORE_PROJECT_SKILL_INTRODUCED}"
+            )
 
     if data["components"] != ["engineering-execution-plan"]:
         raise FoundryctlError(f"{prefix} components contract")
-    expected_static = harness_manifest(None, normalized_adapters)
-    if data["instruction_files"] != expected_static["instruction_files"]:
+    expected_instruction_files = instruction_files_for_versions(
+        str(core["version"]),
+        tuple(declared_adapter_versions),
+    )
+    if data["instruction_files"] != expected_instruction_files:
         raise FoundryctlError(f"{prefix} instruction_files contract")
 
     raw_files = data["files"]
     if not isinstance(raw_files, list):
         raise FoundryctlError(f"{prefix} files contract")
-    expected_assets = selected_file_assets(normalized_adapters)
+    expected_assets = versioned_file_assets(
+        str(core["version"]),
+        tuple(declared_adapter_versions),
+    )
     expected_paths = [item[0] for item in expected_assets]
     actual_paths = [
         item.get("path") if isinstance(item, dict) else None
@@ -1083,7 +1267,11 @@ def validate_harness_v3_manifest_data(
             continue
         if not isinstance(version, str):
             raise FoundryctlError(f"{prefix} {label}.template_version")
-        maximum = file_template_version(owner_kind, owner_id)
+        maximum = (
+            str(core["version"])
+            if owner_kind == "core"
+            else dict(declared_adapter_versions)[str(owner_id)]
+        )
         if semver_tuple(version, f"{label}.template_version") > semver_tuple(
             maximum,
             f"{label} owner version",
@@ -1100,7 +1288,12 @@ def validate_harness_v3_manifest_data(
             raise FoundryctlError(
                 f"{prefix} {label}: expected lowercase SHA-256 hashes"
             )
-        if version == maximum and template_digest != sha256_text(asset_text(asset)):
+        installed_maximum = file_template_version(owner_kind, owner_id)
+        if (
+            maximum == installed_maximum
+            and version == installed_maximum
+            and template_digest != sha256_text(asset_text(asset))
+        ):
             raise FoundryctlError(
                 f"{prefix} {label}.template_sha256 does not match the "
                 "installed RepoFoundry template"
@@ -1827,6 +2020,49 @@ def append_migration(
         for item in migrations
     ):
         migrations.append(migration)
+
+
+def append_component_migrations(
+    candidate: dict[str, object],
+    previous: dict[str, object],
+) -> None:
+    """Record schema 3 Core/adapter version transitions once."""
+    if harness_schema_version(previous) != HARNESS_SCHEMA_VERSION:
+        return
+    previous_core = previous["core"]
+    if not isinstance(previous_core, dict):  # pragma: no cover - validated
+        raise FoundryctlError("Harness Core contract is invalid")
+    old_core = str(previous_core["version"])
+    if old_core != CORE_HARNESS_VERSION:
+        append_migration(
+            candidate,
+            migration_record(
+                f"core-{old_core}-to-{CORE_HARNESS_VERSION}",
+                "core",
+                old_core,
+                CORE_HARNESS_VERSION,
+            ),
+        )
+    raw_adapters = previous["adapters"]
+    if not isinstance(raw_adapters, list):  # pragma: no cover - validated
+        raise FoundryctlError("Harness adapter contract is invalid")
+    for adapter in raw_adapters:
+        if not isinstance(adapter, dict):  # pragma: no cover - validated
+            continue
+        adapter_id = str(adapter["id"])
+        old_version = str(adapter["version"])
+        new_version = ADAPTER_VERSIONS[adapter_id]
+        if old_version == new_version:
+            continue
+        append_migration(
+            candidate,
+            migration_record(
+                f"adapter-{adapter_id}-{old_version}-to-{new_version}",
+                "adapter",
+                f"{adapter_id}@{old_version}",
+                f"{adapter_id}@{new_version}",
+            ),
+        )
 
 
 def _legacy_plan_harness_upgrade(
@@ -2715,6 +2951,7 @@ def plan_harness_upgrade(
         if isinstance(record, dict)
     ]
     if schema == HARNESS_SCHEMA_VERSION:
+        append_component_migrations(candidate, manifest)
         producer = manifest["producer"]
         core = manifest["core"]
         assert isinstance(producer, dict)
@@ -3033,29 +3270,59 @@ def _validate_template_file(
     return []
 
 
-def validate_activation_engine(repo: Path) -> tuple[list[str], list[str]]:
-    asset = dict(CORE_FILE_ASSETS)[CORE_ROUTER_PATH]
-    return (
+def validate_activation_engine(
+    repo: Path,
+    core_version: str = CORE_HARNESS_VERSION,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    assets = {
+        relative: asset
+        for relative, asset, owner_kind, _ in versioned_file_assets(
+            core_version,
+            (),
+        )
+        if owner_kind == "core" and relative in CORE_GENERATED_FILES
+    }
+    errors.extend(
         _validate_template_file(
             repo,
             CORE_ROUTER_PATH,
-            asset,
+            assets[CORE_ROUTER_PATH],
             "HARNESS_SPEC_ENGINE",
-        ),
-        [],
+        )
     )
+    if CORE_PROJECT_SKILL_PATH in assets:
+        errors.extend(
+            _validate_template_file(
+                repo,
+                CORE_PROJECT_SKILL_PATH,
+                assets[CORE_PROJECT_SKILL_PATH],
+                "HARNESS_CORE_SKILL",
+            )
+        )
+    return errors, []
 
 
 def validate_adapter(
     repo: Path,
     adapter_id: str,
+    adapter_version: str | None = None,
 ) -> tuple[list[str], list[str]]:
     if adapter_id not in ADAPTER_ORDER:
         return [f"HARNESS_ADAPTER_UNSUPPORTED: {adapter_id}"], []
     errors: list[str] = []
     warnings: list[str] = []
+    selected_version = adapter_version or ADAPTER_VERSIONS[adapter_id]
+    assets = tuple(
+        (relative, asset)
+        for relative, asset, _, owner_id in versioned_file_assets(
+            "1.0.0",
+            ((adapter_id, selected_version),),
+        )
+        if owner_id == adapter_id
+    )
     if adapter_id == "codex":
-        for relative, asset in CODEX_ADAPTER_FILE_ASSETS:
+        for relative, asset in assets:
             if relative in {
                 "AGENTS.md",
                 CODEX_HOOKS_FILE,
@@ -3091,16 +3358,26 @@ def validate_adapter(
                         "HARNESS_CODEX_ROUTE_MISSING: AGENTS.md: "
                         + ", ".join(missing)
                     )
-    else:
-        relative, asset = PORTABLE_ADAPTER_FILE_ASSETS[0]
-        errors.extend(
-            _validate_template_file(
-                repo,
-                relative,
-                asset,
-                "HARNESS_PORTABLE_ADAPTER",
+    elif adapter_id == "claude":
+        for relative, asset in assets:
+            errors.extend(
+                _validate_template_file(
+                    repo,
+                    relative,
+                    asset,
+                    "HARNESS_CLAUDE_ADAPTER",
+                )
             )
-        )
+    else:
+        for relative, asset in assets:
+            errors.extend(
+                _validate_template_file(
+                    repo,
+                    relative,
+                    asset,
+                    "HARNESS_PORTABLE_ADAPTER",
+                )
+            )
     return errors, warnings
 
 
@@ -3167,6 +3444,16 @@ def validate_harness(
         warnings.extend(legacy_warnings)
     else:
         installed = _manifest_adapter_ids(manifest)
+        core = manifest["core"]
+        raw_adapters = manifest["adapters"]
+        assert isinstance(core, dict)
+        assert isinstance(raw_adapters, list)
+        core_version = str(core["version"])
+        installed_versions = {
+            str(item["id"]): str(item["version"])
+            for item in raw_adapters
+            if isinstance(item, dict)
+        }
         requested = installed if adapter_ids is None else normalize_adapter_ids(
             list(adapter_ids)
         )
@@ -3182,16 +3469,15 @@ def validate_harness(
             for record in files
             if isinstance(record, dict)
         }
-        checked_paths = {
-            relative
-            for relative, _, _, _ in selected_file_assets(())
-        }
-        for adapter_id in requested:
-            if adapter_id in installed:
-                checked_paths.update(
-                    relative
-                    for relative, _ in ADAPTER_FILE_ASSETS[adapter_id]
-                )
+        checked_contract = versioned_file_assets(
+            core_version,
+            tuple(
+                (adapter_id, installed_versions[adapter_id])
+                for adapter_id in requested
+                if adapter_id in installed
+            ),
+        )
+        checked_paths = {relative for relative, _, _, _ in checked_contract}
         for relative in sorted(checked_paths):
             target = repo / relative
             reason = managed_path_conflict(repo, target, "file")
@@ -3213,13 +3499,20 @@ def validate_harness(
                 errors.append(
                     f"HARNESS_FILE_UNREGISTERED: {relative}: missing manifest record"
                 )
-        engine_errors, engine_warnings = validate_activation_engine(repo)
+        engine_errors, engine_warnings = validate_activation_engine(
+            repo,
+            core_version,
+        )
         errors.extend(engine_errors)
         warnings.extend(engine_warnings)
         for adapter_id in requested:
             if adapter_id not in installed:
                 continue
-            adapter_errors, adapter_warnings = validate_adapter(repo, adapter_id)
+            adapter_errors, adapter_warnings = validate_adapter(
+                repo,
+                adapter_id,
+                installed_versions[adapter_id],
+            )
             errors.extend(adapter_errors)
             warnings.extend(adapter_warnings)
         instruction_files = manifest["instruction_files"]
@@ -3451,6 +3744,7 @@ def bootstrap_plan(
             applied_migrations=list(existing_manifest["applied_migrations"]),
             existing_records=old_records,
         )
+        append_component_migrations(candidate_manifest, existing_manifest)
         if candidate_manifest == existing_manifest:
             actions.append({"action": "preserve", "path": HARNESS_MANIFEST})
         else:
@@ -3814,6 +4108,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=ADAPTER_ORDER,
         help="Install an Agent adapter; repeat to install multiple adapters",
     )
+    bootstrap.add_argument(
+        "--all-adapters",
+        action="store_true",
+        help="Install every bundled adapter in deterministic registry order",
+    )
     add_spec_source_arguments(bootstrap)
     add_spec_selection_arguments(bootstrap)
     bootstrap_mode = bootstrap.add_mutually_exclusive_group()
@@ -3930,13 +4229,22 @@ def main(argv: list[str] | None = None) -> int:
     try:
         repo = normalize_repo(args.repo)
         if args.command == "bootstrap":
+            if args.all_adapters and (
+                args.profile is not None or args.adapter_ids is not None
+            ):
+                raise FoundryctlError(
+                    "HARNESS_ADAPTER_SELECTION_CONFLICT: --all-adapters "
+                    "cannot be combined with --profile or --adapter"
+                )
             if args.profile is not None and args.adapter_ids is not None:
                 raise FoundryctlError(
                     "HARNESS_ADAPTER_SELECTION_CONFLICT: --profile cannot be "
                     "combined with --adapter"
                 )
             compatibility_warnings: tuple[str, ...] = ()
-            if args.profile is not None:
+            if args.all_adapters:
+                adapters = ADAPTER_ORDER
+            elif args.profile is not None:
                 adapters = ("codex",)
                 compatibility_warnings = (
                     "HARNESS_PROFILE_ALIAS_DEPRECATED: --profile codex maps "
@@ -4050,7 +4358,12 @@ def main(argv: list[str] | None = None) -> int:
                 if harness_path(repo).exists():
                     manifest = load_harness_manifest(repo)
                     if harness_schema_version(manifest) == HARNESS_SCHEMA_VERSION:
-                        engine_errors, engine_warnings = validate_activation_engine(repo)
+                        core = manifest["core"]
+                        assert isinstance(core, dict)
+                        engine_errors, engine_warnings = validate_activation_engine(
+                            repo,
+                            str(core["version"]),
+                        )
                         errors.extend(engine_errors)
                         warnings.extend(engine_warnings)
                 for warning in warnings:
