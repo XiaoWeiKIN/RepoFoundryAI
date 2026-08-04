@@ -235,6 +235,123 @@ class InstallerTestCase(unittest.TestCase):
             self.assertTrue(existing.is_symlink())
             self.assertEqual(cli_only["host_integrations"][0]["host"], "codex")
 
+    def test_existing_claude_skill_is_backed_up_and_codex_link_is_retained(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prefix = root / "prefix"
+            bin_dir = root / "bin"
+            codex_home = root / "codex"
+            claude_home = root / "claude"
+            codex_skill = codex_home / "skills" / "repo-foundry-ai"
+            claude_skill = claude_home / "skills" / "repo-foundry-ai"
+            claude_skill.mkdir(parents=True)
+            (claude_skill / "custom.txt").write_bytes(b"keep-claude\n")
+
+            self.run_installer(
+                ROOT,
+                prefix,
+                bin_dir,
+                "--host",
+                "codex",
+                "--codex-home",
+                str(codex_home),
+                "--claude-home",
+                str(claude_home),
+            )
+            result = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "claude",
+                    "--codex-home",
+                    str(codex_home),
+                    "--claude-home",
+                    str(claude_home),
+                ).stdout
+            )
+
+            self.assertTrue(codex_skill.is_symlink())
+            self.assertTrue(claude_skill.is_symlink())
+            self.assertEqual(codex_skill.resolve(), (prefix / "current").resolve())
+            self.assertEqual(claude_skill.resolve(), (prefix / "current").resolve())
+            self.assertEqual(len(result["backups"]), 1)
+            backup = Path(result["backups"][0])
+            self.assertIn("claude-skill", backup.name)
+            self.assertEqual((backup / "custom.txt").read_bytes(), b"keep-claude\n")
+            self.assertEqual(
+                {item["host"] for item in result["host_integrations"]},
+                {"codex", "claude"},
+            )
+
+            repeated = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "claude",
+                    "--codex-home",
+                    str(codex_home),
+                    "--claude-home",
+                    str(claude_home),
+                ).stdout
+            )
+            self.assertEqual(repeated["action"], "unchanged")
+            self.assertEqual(repeated["backups"], [])
+
+            cli_only = json.loads(
+                self.run_installer(
+                    ROOT,
+                    prefix,
+                    bin_dir,
+                    "--host",
+                    "none",
+                    "--codex-home",
+                    str(codex_home),
+                    "--claude-home",
+                    str(claude_home),
+                ).stdout
+            )
+            self.assertEqual(
+                {item["host"] for item in cli_only["host_integrations"]},
+                {"codex", "claude"},
+            )
+            self.assertTrue(codex_skill.is_symlink())
+            self.assertTrue(claude_skill.is_symlink())
+
+    def test_auto_detects_codex_and_claude_configuration_homes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / "codex"
+            claude_home = root / "claude"
+            codex_home.mkdir()
+            claude_home.mkdir()
+            with mock.patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(
+                    installer.select_hosts(
+                        "auto",
+                        codex_home,
+                        False,
+                        claude_home,
+                        False,
+                    ),
+                    ["codex", "claude"],
+                )
+
+    def test_claude_config_dir_sets_default_home(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            configured = str(Path(temporary) / "claude-config")
+            with mock.patch.dict(
+                os.environ,
+                {"CLAUDE_CONFIG_DIR": configured},
+                clear=False,
+            ):
+                self.assertEqual(installer.default_claude_home(), Path(configured))
+
     def test_unsafe_local_source_fails_before_activation(self) -> None:
         if not hasattr(os, "symlink"):
             self.skipTest("symbolic links are unavailable")
@@ -349,13 +466,16 @@ class InstallerTestCase(unittest.TestCase):
                         source,
                         prefix,
                         bin_dir,
-                        [],
+                        ["claude"],
                         root / "codex",
                         False,
+                        root / "claude",
                     )
             self.assertFalse((prefix / "current").exists())
             self.assertFalse((prefix / "install.json").exists())
             self.assertFalse((bin_dir / "repofoundry").exists())
+            claude_skill = root / "claude" / "skills" / "repo-foundry-ai"
+            self.assertFalse(claude_skill.exists() or claude_skill.is_symlink())
             self.assertEqual(list((prefix / "releases").iterdir()), [])
 
     def test_archive_traversal_and_links_are_rejected(self) -> None:
