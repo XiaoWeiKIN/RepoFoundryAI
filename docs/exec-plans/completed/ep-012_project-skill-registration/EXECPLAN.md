@@ -2,7 +2,7 @@
 schema_version: "2.5"
 id: EP-012
 title: "Add project-scoped RepoFoundry AI Skill registration"
-status: active
+status: completed
 latest_checkpoint: CP-001
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -13,9 +13,9 @@ architecture_entrypoint: "docs/design-docs/index.md"
 architecture_gate: satisfied
 architecture_gate_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:666d546cdcebbbc982dd7e69cd2bdcd5e97db972"
+verification_evidence: ["docs/exec-plans/completed/ep-012_project-skill-registration/artifacts/check.txt", "docs/exec-plans/completed/ep-012_project-skill-registration/artifacts/bootstrap-smoke.txt", "docs/exec-plans/completed/ep-012_project-skill-registration/artifacts/focused-tests.txt", "https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/30885559441", "https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/23"]
+archive_sha256: ade7f308a364216e6588b9778f73ea6544f5c04c0ae30d6fcadf826a45356b9f
 created: 2026-08-04
 updated: 2026-08-04
 owner: "RepoFoundry Maintainer"
@@ -46,8 +46,11 @@ bootstrap runs.
 
 - Latest checkpoint: [CP-001](history/cp-001_project-skill-local-acceptance.md).
 - Current milestone: Milestone 4: release-ready delivery
-- Current state: Implemented canonical project workflow, Codex and Claude Skill entrypoints, deterministic all-adapter bootstrap, component-version migrations, scoped validation, documentation, and local acceptance.
-- Next action: Review the final diff, commit, push, create the PR, and verify remote CI before archival.
+- Current state: Implementation revision `666d546cdcebbbc982dd7e69cd2bdcd5e97db972`
+  passed Python 3.10, Python 3.14, and `ep-integrity` in PR #23 after all local
+  acceptance completed.
+- Next action: Archive EP-012 with the verified revision and evidence URLs,
+  then push the sealed plan state and confirm final PR checks.
 - Open blockers: none.
 
 ## Context and Orientation
@@ -250,7 +253,7 @@ All commands run from the repository root.
   "$TEMP_REPO" bootstrap --all-adapters`; expect a no-write preview containing
   the canonical Core Skill, Codex root Skill, both Claude Skills, and the
   ordered adapter set. Evidence:
-  `docs/exec-plans/active/ep-012_project-skill-registration/artifacts/bootstrap-smoke.txt`.
+  `docs/exec-plans/completed/ep-012_project-skill-registration/artifacts/bootstrap-smoke.txt`.
 - [x] Apply the same command with `--apply`, repeat it, and run `validate
   --harness`, `validate --adapter codex`, `validate --adapter claude`, and
   `validate --adapter portable`; expect zero exits and no second-run create or
@@ -265,8 +268,10 @@ All commands run from the repository root.
 - [x] Run `python3 -B scripts/check.py`; expect all repository, Research,
   Benchmark, Execution Plan, Harness, migration, Spec, Markdown, and whitespace
   checks to pass. Evidence: `artifacts/check.txt`.
-- [ ] Verify GitHub CI for Python 3.10, Python 3.14, and `ep-integrity`; expect
-  all required checks to pass. Evidence: PR check URLs recorded before archive.
+- [x] Verify GitHub CI for Python 3.10, Python 3.14, and `ep-integrity`; all
+  required checks passed. Evidence:
+  `https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/30885559441`,
+  jobs `91915869789`, `91915869820`, and `91917449062`.
 
 ### Required Benchmark Scenario Gates
 
@@ -300,7 +305,9 @@ are disposable and never serve as evidence sources beyond captured output.
   precedence, added canonical-project delegation to the distribution Skill,
   required every new entrypoint during package validation, and reran the
   canonical check with 95 repository tests passing.
-- [ ] Run remote acceptance, record PR evidence, and archive EP-012.
+- [x] (2026-08-04T07:01:11Z) Created PR #23 and verified implementation commit
+  `666d546cdcebbbc982dd7e69cd2bdcd5e97db972` on Python 3.10, Python 3.14,
+  and the aggregate `ep-integrity` job.
 
 ## Surprises & Discoveries
 
@@ -325,12 +332,31 @@ are disposable and never serve as evidence sources beyond captured output.
 
 ## Outcomes & Retrospective
 
-Implementation is in progress. Complete this section only after all acceptance
-items pass at one verified revision.
+RepoFoundry AI now installs one canonical project workflow and exposes it
+through regular, repository-relative Codex and Claude Skill entrypoints. The
+Claude adapter reports native discovery but honest CLI/advisory activation;
+all adapters share one Core Router, Spec lock, receipt protocol, and manifest.
+`bootstrap --all-adapters` is deterministic, preview-first, idempotent, and
+conflict-atomic.
+
+The most important migration result is that schema 3 remains stable while its
+independently versioned file contract evolves. Old Core 1.0.0 and Codex 2.0.0
+manifests remain valid inputs; upgrade or adapter adoption can add the new
+generated Skills with explicit component migration records. Customized bytes
+still fail closed. Official Claude precedence required the distribution root
+Skill to delegate to the repository canonical Skill when a personal same-name
+entrypoint wins discovery.
+
+Local canonical validation, a disposable three-adapter repository smoke, and
+all three remote gates passed at
+`666d546cdcebbbc982dd7e69cd2bdcd5e97db972`. The local one-command installer
+was also re-run: Codex and Claude personal registrations now point to the new
+immutable `0.2.0` package, and no project Harness was modified by installation.
 
 ### Knowledge promotion candidates
 
-- None.
+- Preserve the component-version-aware schema reader and personal-to-project
+  Skill delegation pattern in future adapter authoring guidance.
 
 ## Interfaces and Dependencies
 
@@ -356,9 +382,12 @@ activation engine.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-012_project-skill-registration/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-012_project-skill-registration/EXECPLAN.md`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
 
 - 2026-08-04T06:41:51Z — Sealed CP-001; refreshed Current Snapshot and preserved historical detail.
+- 2026-08-04T07:01:11Z — PR #23 remote gates passed for implementation commit
+  `666d546cdcebbbc982dd7e69cd2bdcd5e97db972`; completion evidence is ready for
+  archive sealing.
