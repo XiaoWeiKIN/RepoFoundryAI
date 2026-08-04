@@ -62,6 +62,18 @@ class RepositoryContractTestCase(unittest.TestCase):
             "Recorded contract-test evidence.",
             text,
         )
+        text = text.replace(
+            "REPLACE_WITH_SCOPE",
+            "tenant settings cache read path",
+        )
+        text = text.replace(
+            "REPLACE_WITH_CONSTRAINT",
+            "Cache keys must include the tenant identifier",
+        )
+        text = text.replace(
+            "REPLACE_WITH_CONFIRMATION",
+            "tenant isolation contract test",
+        )
         text = re.sub(r"(?m)^-\s+\[ \]", "- [x]", text)
         path.write_text(text, encoding="utf-8")
 
@@ -217,10 +229,18 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.5"', plan_text)
+            self.assertIn('schema_version: "2.6"', plan_text)
             self.assertIn("required_benchmark_scenarios: []", plan_text)
             self.assertIn("research_gate: satisfied", plan_text)
-            self.assertIn("architecture_gate: satisfied", plan_text)
+            self.assertIn(
+                "architecture_decision_gate: satisfied",
+                plan_text,
+            )
+            self.assertIn("architecture_compliance: applicable", plan_text)
+            self.assertIn(
+                'adr_constraint_refs: ["ADR-001#C-001"]',
+                plan_text,
+            )
             self.complete_placeholders(plan)
             archived_plan = Path(
                 self.run_cli(
@@ -657,7 +677,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.5"', plan_text)
+            self.assertIn('schema_version: "2.6"', plan_text)
             self.assertIn(
                 'required_benchmark_scenarios: ["BS-001", "BS-002"]',
                 plan_text,

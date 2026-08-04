@@ -23,7 +23,7 @@ flowchart LR
     D11["oql-dynamic-attribute-typing.md"]
     D12["spans-env-placement-routing.md"]
     IDX["index.md"]
-    EP["EP-001 v2.5"]
+    EP["EP-001 v2.6"]
 
     A11 -->|"depends_on"| A10
     A12 -->|"depends_on"| A10
@@ -90,7 +90,8 @@ design_refs: ["docs/design-docs/spans-env-placement-routing.md"]
 
 这只是补充关系元数据，不是补签决定。`epctl` 不会自动改写 legacy ADR，也不会
 从 `relates_to` 猜测关系。旧 ADR 缺少 `decision_maker` 和 seal 时，验证器会
-告警但允许 accepted 状态兼容满足 Gate；后续方向变化应创建严格 schema 1.1 ADR。
+告警但允许 accepted 状态兼容作为 current architecture input；后续方向变化应创建
+严格 schema 1.2 ADR。
 
 ## 3. 创建依赖闭合的 EP
 
@@ -110,16 +111,31 @@ python3 "$EPCTL" --repo . new-ep \
   --architecture-entrypoint docs/design-docs/index.md
 ```
 
-生成的 v2.5 frontmatter 包含：
+生成的 v2.6 frontmatter 包含：
 
 ```yaml
 research_gate: not_required
 adr_refs: ["ADR-010", "ADR-011", "ADR-012"]
+adr_constraint_refs: []
+adr_evidence: []
 design_refs: ["docs/design-docs/oql-dynamic-attribute-typing.md", "docs/design-docs/spans-env-placement-routing.md"]
 architecture_entrypoint: "docs/design-docs/index.md"
-architecture_gate: satisfied
+architecture_decision_gate: satisfied
+architecture_compliance: applicable
 required_benchmark_scenarios: []
 ```
+
+这些 legacy ADR 没有 schema 1.2 constraint IDs 或 payload seal，因此两个数组为空，
+Compliance Matrix 按 ADR 整体映射：
+
+| ADR constraint or architecture input | Implementation or preservation | Verification |
+|---|---|---|
+| ADR-010 | 保持属性存储基座不变 | storage contract tests |
+| ADR-011 | 实现 JSON Map 双模式 | OQL typing tests |
+| ADR-012 | 实现 Env Placement 路由 | routing integration tests |
+
+严格 schema 1.2 ADR 会改为逐条 `ADR-NNN#C-NNN` 映射，并在 `adr_evidence` 中固定
+决定 payload。Design Docs 提供解释，不覆盖上表中的 ADR 约束。
 
 如果只写 `--adr ADR-011 --adr ADR-012`，命令会因缺少依赖闭包中的 ADR-010
 失败。如果漏掉 ADR 声明的 Design Doc，也会失败。
@@ -133,8 +149,8 @@ python3 -B /absolute/path/to/repository/scripts/check.py
 
 `config.json`、ADR、Design Docs、EP 和验证脚本都在仓库内，因此 GitHub
 Actions、GitLab CI 或其他平台只需调用同一个 canonical check。CI 能保证路径、
-状态、依赖闭包、引用和 schema 一致；架构语义仍由 Decision Owner / Code Owner
-评审。
+状态、依赖闭包、current amendment、引用、ADR digest 和 Compliance Matrix 一致；
+架构语义仍由 Decision Owner / Code Owner 评审。
 
 Design Doc 可以持续迭代，不对整个目录做内容 hash。EP 完成时绑定真正通过验证
 的代码 revision 与 CI evidence，并用 `archive_sha256` 封存完成态计划。

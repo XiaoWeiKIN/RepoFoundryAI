@@ -117,6 +117,13 @@ class ResearchctlTestCase(unittest.TestCase):
     @staticmethod
     def complete_placeholders(path: Path) -> None:
         text = path.read_text(encoding="utf-8")
+        replacements = {
+            "REPLACE_WITH_SCOPE": "test architecture boundary",
+            "REPLACE_WITH_CONSTRAINT": "The implementation must preserve the test boundary.",
+            "REPLACE_WITH_CONFIRMATION": "Run the architecture contract test.",
+        }
+        for placeholder, value in replacements.items():
+            text = text.replace(placeholder, value)
         text = re.sub(
             r"<!--\s*REQUIRED(?:_[A-Z_]+)?\s*:[\s\S]*?-->",
             "Recorded evidence.",
@@ -1130,6 +1137,67 @@ Synthesis should retain the current contract.
             (research.parent / "snapshots" / "synthesis-v001.md").exists()
         )
         self.assertTrue(snapshot.is_file())
+        self.run_cli("validate")
+
+    def test_unsnapshotted_review_can_amend_current_round_in_place(self) -> None:
+        research = self.new_research("correct-misunderstanding")
+        self.prepare_for_conclusion(research)
+        round_file = research.parent / "rounds" / "rr-001_baseline.md"
+
+        amended = Path(
+            self.run_cli(
+                "amend-current-round",
+                "R-001",
+                "--reason",
+                "The owner rejected the interpreted scope.",
+            ).stdout.strip()
+        )
+
+        controller = research.read_text(encoding="utf-8")
+        synthesis = (research.parent / "SYNTHESIS.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(amended, round_file)
+        self.assertIn("current_round: RR-001", controller)
+        self.assertIn("maturity: evidence_building", controller)
+        self.assertIn(
+            "| RR-001 | Baseline investigation | active |", controller
+        )
+        self.assertIn("status: active", round_file.read_text(encoding="utf-8"))
+        self.assertIn("status: draft", synthesis)
+        self.assertIn('synthesis_revision: "1"', controller)
+        self.assertEqual(
+            list((research.parent / "rounds").glob("rr-002_*.md")), []
+        )
+        self.run_cli("validate")
+
+        self.run_cli("mark-review-ready", "R-001")
+        controller = research.read_text(encoding="utf-8")
+        self.assertIn('synthesis_revision: "2"', controller)
+        self.assertIn(
+            "| RR-001 | Baseline investigation | completed |", controller
+        )
+        self.run_cli("validate")
+
+    def test_snapshotted_review_cannot_amend_current_round(self) -> None:
+        research = self.new_research("preserve-review-boundary")
+        self.prepare_for_conclusion(research)
+        self.run_cli("mark-review-ready", "R-001", "--snapshot")
+        controller_before = research.read_text(encoding="utf-8")
+        synthesis = research.parent / "SYNTHESIS.md"
+        synthesis_before = synthesis.read_text(encoding="utf-8")
+
+        denied = self.run_cli(
+            "amend-current-round",
+            "R-001",
+            "--reason",
+            "The owner wants a different scope.",
+            expected=2,
+        )
+
+        self.assertIn("milestone snapshot", denied.stderr)
+        self.assertEqual(research.read_text(encoding="utf-8"), controller_before)
+        self.assertEqual(synthesis.read_text(encoding="utf-8"), synthesis_before)
         self.run_cli("validate")
 
     def test_review_snapshot_tampering_survives_manifest_refresh_detection(

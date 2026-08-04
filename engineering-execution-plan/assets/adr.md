@@ -1,11 +1,12 @@
 ---
-schema_version: "1.1"
+schema_version: "1.2"
 id: {{ID}}
 title: "{{TITLE}}"
 status: proposed
 research_refs: {{RESEARCH_REFS}}
 depends_on: {{DEPENDS_ON}}
 amends: {{AMENDS}}
+amends_constraints: {{AMENDS_CONSTRAINTS}}
 design_refs: {{DESIGN_REFS}}
 supersedes: []
 superseded_by:
@@ -43,6 +44,18 @@ later changes require an amending or superseding ADR.
 
 <!-- REQUIRED: State the selected or rejected outcome and why it best satisfies the decision drivers. Remove this marker before deciding the ADR. -->
 
+## Decision Statement
+
+<!-- REQUIRED: State the normative decision in one concise sentence that can be accepted, rejected, amended, or superseded as a whole. -->
+
+## Normative Constraints
+
+| ID | Strength | Scope | Constraint | Confirmation |
+|---|---|---|---|---|
+| C-001 | must | REPLACE_WITH_SCOPE | REPLACE_WITH_CONSTRAINT | REPLACE_WITH_CONFIRMATION |
+
+<!-- REQUIRED: Replace the example with every durable constraint created by this decision. Keep IDs stable. Strength must be must, must_not, should, or may. The ADR body is normative; linked Design Docs may explain it but cannot silently add or override constraints. -->
+
 ## Consequences
 
 <!-- REQUIRED: Record positive, negative, neutral, migration, operational, and future-development consequences. -->
@@ -60,6 +73,7 @@ later changes require an amending or superseding ADR.
 - Research references: {{RESEARCH_REFS}}
 - Prerequisite ADRs: {{DEPENDS_ON}}
 - Amended ADRs: {{AMENDS}}
+- Amended constraints: {{AMENDS_CONSTRAINTS}}
 - Design documents: {{DESIGN_REFS}}
 - Related ExecPlans: none yet.
 

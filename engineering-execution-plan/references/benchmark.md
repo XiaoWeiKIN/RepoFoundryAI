@@ -46,7 +46,7 @@ from the accepted ADR and the ExecPlan's Validation and Acceptance section.
 
 ## Multiple Scenario gate
 
-ExecPlan v2.5 declares its full Benchmark acceptance boundary before
+ExecPlan v2.5+ declares its full Benchmark acceptance boundary before
 implementation:
 
 ```yaml
@@ -79,7 +79,7 @@ flowchart LR
     R3 --> E
 ```
 
-For a completed v2.5 EP, the accepted `benchmark:` references must form an
+For a completed v2.5+ EP, the accepted `benchmark:` references must form an
 exact one-to-one cover of the declared Scenario set:
 
 - every required Scenario has exactly one valid passed sealed Run;

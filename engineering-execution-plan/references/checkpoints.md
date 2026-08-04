@@ -24,15 +24,28 @@ ep-NNN_slug/
 
 ## 何时建立 Checkpoint
 
-出现以下任一情况时建立：
+规模信号采用两级阈值：
+
+| 指标 | `checkpoint_recommended` | `checkpoint_required` |
+|---|---:|---:|
+| 根文档 | 超过 500 行 | 超过 800 行 |
+| 根文档 bytes | 超过 48 KiB | 超过 64 KiB |
+| 活跃历史事件 | 超过 30 条 | 超过 50 条 |
+
+以下停止点也应建立 checkpoint：
 
 - 一个可独立验证的里程碑完成。
 - 准备跨会话交接或长时间暂停。
-- 根文档超过约 800 行或 64 KiB。
-- 活跃历史事件超过 50 条。
 - 大量已解决 blocker、发现和决策开始遮蔽当前下一步。
 
-这些是默认警戒线，不是完成条件。`validate` 超过警戒线只给 warning。
+这些信号不是完成条件。`validate` 只发 warning，不自动修改计划；`status` 在
+`working_set` 输出 `bounded`、`checkpoint_recommended` 或
+`checkpoint_required`。
+
+Checkpoint 只压缩历史。如果 checkpoint 后根文件仍超过目标值，先把接口细节、
+完整输出和长期设计分别移到 Design Doc 或 `artifacts/`。如果剩余工作包含多个可
+独立验证、发布或回滚的结果，创建 successor EP。反复 checkpoint 不能修复范围
+过宽。
 
 ## Checkpoint 前置条件
 

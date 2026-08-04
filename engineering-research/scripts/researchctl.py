@@ -3241,6 +3241,116 @@ def new_round(
         return round_file
 
 
+def amend_current_round(
+    repo: Path,
+    research_id: str,
+    reason: str,
+) -> Path:
+    correction_reason = reason.strip()
+    if not correction_reason:
+        raise ResearchctlError("An in-place correction requires --reason")
+    with repo_lock(repo):
+        research_path = find_research(repo, research_id, "active")
+        research_text = research_path.read_text(encoding="utf-8")
+        data, _, _ = parse_frontmatter(research_text)
+        require_iterative_research(research_path, research_text, data)
+        if data.get("status") != "active":
+            raise ResearchctlError("Resolve blockers before correcting a round")
+        if data.get("maturity") != "review_ready":
+            raise ResearchctlError(
+                "In-place correction requires the current unsnapshotted review; "
+                "edit an active evidence-building round directly"
+            )
+
+        synthesis_file = synthesis_path(research_path, data)
+        synthesis_text = synthesis_file.read_text(encoding="utf-8")
+        synthesis_data, _, _ = parse_frontmatter(synthesis_text)
+        if synthesis_data.get("status") != "review_ready":
+            raise ResearchctlError(
+                "Current Synthesis must be review_ready before in-place correction"
+            )
+        pre_errors, _ = validate_research(research_path)
+        if pre_errors:
+            raise ResearchctlError(
+                "Research is invalid before in-place correction:\n- "
+                + "\n- ".join(pre_errors)
+            )
+        if matching_synthesis_snapshot(research_path.parent, synthesis_text):
+            raise ResearchctlError(
+                "Current review has a milestone snapshot; start a new round "
+                "instead of rewriting that review boundary"
+            )
+
+        current_round = data.get("current_round", "")
+        round_file = find_round_path(research_path.parent, current_round)
+        round_text = round_file.read_text(encoding="utf-8")
+        round_data, _, _ = parse_frontmatter(round_text)
+        if round_data.get("status") != "completed":
+            raise ResearchctlError(
+                "Current Research Round must be completed before reopening it"
+            )
+
+        outcome = (
+            f"- {date_string()} — Reopened for in-place correction before "
+            f"milestone handoff: {correction_reason}"
+        )
+        round_candidate = set_round_status(round_file, "active", outcome)
+        research_candidate = update_round_row_status(
+            research_text, current_round, "active"
+        )
+        research_candidate = update_frontmatter(
+            research_candidate,
+            {
+                "maturity": "evidence_building",
+                "updated": date_string(),
+            },
+        )
+        research_candidate = replace_section(
+            research_candidate,
+            "Outcome",
+            f"Research is active in {current_round} for an in-place correction. "
+            "Existing milestone snapshots, if any, remain immutable.",
+        )
+        research_candidate = append_section_entry(
+            research_candidate,
+            "Revision Notes",
+            f"- {timestamp_string()} — Reopened {current_round} for in-place "
+            f"correction before milestone handoff: {correction_reason}",
+        )
+        research_candidate = sync_research_metadata(research_candidate)
+        synthesis_candidate = update_frontmatter(
+            synthesis_text,
+            {
+                "status": "draft",
+                "updated": date_string(),
+                "payload_sha256": "",
+            },
+        )
+
+        manifest_file = manifest_path(research_path, data)
+        manifest_before = manifest_file.read_text(encoding="utf-8")
+        try:
+            atomic_write(round_file, round_candidate)
+            atomic_write(research_path, research_candidate)
+            atomic_write(synthesis_file, synthesis_candidate)
+            refresh_manifest(repo, research_path)
+            rebuild_index(repo)
+            post_errors, _ = validate_research(research_path)
+            if post_errors:
+                raise ResearchctlError(
+                    "In-place correction produced invalid artifacts:\n- "
+                    + "\n- ".join(post_errors)
+                )
+        except Exception:
+            atomic_write(round_file, round_text)
+            atomic_write(research_path, research_text)
+            atomic_write(synthesis_file, synthesis_text)
+            atomic_write(manifest_file, manifest_before)
+            rebuild_index(repo)
+            raise
+        return round_file
+
+
 def matching_synthesis_snapshot(package: Path, synthesis_text: str) -> Path | None:
     expected_payload = payload_sha256(synthesis_text)
     for path in sorted((package / "snapshots").glob("synthesis-v*.md")):
@@ -3880,6 +3990,16 @@ def build_parser() -> argparse.ArgumentParser:
     round_parser.add_argument("--title", required=True)
     round_parser.add_argument("--author", default="")
 
+    amend_parser = subparsers.add_parser(
+        "amend-current-round",
+        help=(
+            "Reopen the current unsnapshotted review for an in-place "
+            "scope correction"
+        ),
+    )
+    amend_parser.add_argument("research_id")
+    amend_parser.add_argument("--reason", required=True)
+
     review_parser = subparsers.add_parser(
         "mark-review-ready",
         help="Content-address a review-ready Synthesis without concluding Research",
@@ -3989,6 +4109,14 @@ def main(argv: list[str] | None = None) -> int:
                     args.slug,
                     args.title,
                     args.author,
+                )
+            )
+        elif args.command == "amend-current-round":
+            print(
+                amend_current_round(
+                    repo,
+                    args.research_id,
+                    args.reason,
                 )
             )
         elif args.command == "mark-review-ready":

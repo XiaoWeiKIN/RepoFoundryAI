@@ -93,7 +93,7 @@ stateDiagram-v2
 
     [*] --> Building
     Building --> Review: "mark-review-ready [--snapshot]"
-    Review --> Building: "new-round"
+    Review --> Building: "amend-current-round / new-round"
     Review --> Concluded: "explicit Owner authorization"
     Building --> Cancelled: "explicit Owner authorization + reason"
     Review --> Cancelled: "explicit Owner authorization + reason"
@@ -121,6 +121,35 @@ valid.
 again, and returns maturity to `evidence_building`. Fine-grained revisions that
 were not selected as milestones remain available through repository history,
 not duplicate files in `snapshots/`.
+
+### Correct a misunderstanding without inventing a new Round
+
+A Round represents a bounded inquiry the Owner intended to pursue, not every
+chat turn or every Agent attempt. Choose the lifecycle operation from the
+meaning of the feedback:
+
+| Owner feedback | Operation |
+|---|---|
+| “That is not what I asked; remove this direction.” while the Round is active | Edit the current Round and corpus in place. |
+| The same rejection after an unsnapshotted `review_ready` result | Run `amend-current-round`, remove the unwanted corpus, and correct the same Round. |
+| “Continue deeper”, “verify it”, or “add another perspective” | Start `new-round`. |
+| The current review has a milestone snapshot or has been handed to a downstream consumer | Preserve it and start a corrective `new-round`. |
+| Research is concluded | Never rewrite it; create a linked follow-up Research. |
+
+```mermaid
+flowchart TD
+    F["Owner feedback"] --> M{"Misunderstanding or new inquiry?"}
+    M -->|"Misunderstanding"| A{"Current review snapshotted or handed off?"}
+    A -->|"No"| C["Amend current Round in place"]
+    A -->|"Yes"| N["Create corrective new Round"]
+    M -->|"New evidence or deeper inquiry"| N
+```
+
+`amend-current-round` retains the monotonic Synthesis revision counter, makes
+the current Round active again, and returns `SYNTHESIS.md` to draft. It does
+not delete files automatically: remove only the exact unwanted topics,
+experiments, and references identified by the Owner, then refresh the manifest
+and request review again. The next review receives the next Synthesis revision.
 
 ## Evidence and experiments
 

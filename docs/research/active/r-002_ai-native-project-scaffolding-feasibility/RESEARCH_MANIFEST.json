@@ -1,0 +1,50 @@
+{
+  "documents": [
+    {
+      "base": "package",
+      "bytes": 20426,
+      "path": "notes/commercial-and-delivery-feasibility.md",
+      "role": "topic",
+      "sha256": "32bf50590470817121a024ab6a80a3a8f5aae06d56007bb34553b87774b8ebac",
+      "topic_id": "RT-001"
+    },
+    {
+      "base": "package",
+      "bytes": 2235,
+      "path": "rounds/rr-001_baseline.md",
+      "role": "round",
+      "sha256": "0bfec87aee2ef64ec1d9629764ce0ab7f209af4f530a7c06d1be11c96b5297b0"
+    }
+  ],
+  "entrypoints": [],
+  "mode": "managed",
+  "payload_sha256": "",
+  "research_id": "R-002",
+  "roots": [
+    {
+      "base": "package",
+      "include": [
+        "**/*.md"
+      ],
+      "path": "notes"
+    },
+    {
+      "base": "package",
+      "include": [
+        "**/*.md"
+      ],
+      "path": "rounds",
+      "role": "round"
+    },
+    {
+      "base": "package",
+      "include": [
+        "**/*.md"
+      ],
+      "path": "snapshots",
+      "role": "snapshot"
+    }
+  ],
+  "schema_version": "1",
+  "status": "active"
+}

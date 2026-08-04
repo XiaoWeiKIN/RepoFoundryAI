@@ -188,9 +188,14 @@ proposed ADR：
 ADR 必须停在 proposed；不要替 Decision Owner 接受。
 ```
 
-填完 ADR 的全部 REQUIRED section，其中至少写清三项内容：
+填完 ADR 的全部 REQUIRED section，其中至少写清这些内容：
 
 - Outcome：选择 5 秒 L1 + 30 秒 Redis L2。
+- Decision Statement：tenant settings read path 必须采用数据库为 source of truth
+  的 5 秒 L1 + 30 秒 Redis L2。
+- Normative Constraints：用稳定编号记录可被 EP 引用的约束，例如
+  `C-001` tenant-safe key、`C-002` TTL 与数据库回源、`C-003` 两层独立
+  kill switch；每条都写明作用范围和机械确认方式。
 - Consequences：增加 Redis 依赖、双层观测和失效排障成本。
 - Confirmation：压测、tenant isolation 测试、Redis outage fallback 和
   invalidation backlog 测试。
@@ -215,13 +220,15 @@ Architecture Gate，给出真实文件路径、里程碑、验证命令、回滚
 先创建并评审计划，不要开始实现。
 ```
 
-生成的 EP 应明确两个 Gate：
+生成的 EP 应明确 Research Gate、Architecture Decision Gate 与持续合规状态：
 
 ```yaml
 research_refs: ["R-001"]
 research_gate: satisfied
 adr_refs: ["ADR-001"]
-architecture_gate: satisfied
+adr_constraint_refs: ["ADR-001#C-001", "ADR-001#C-002", "ADR-001#C-003"]
+architecture_decision_gate: satisfied
+architecture_compliance: applicable
 ```
 
 `Research and Architecture Inputs` 至少复述：
@@ -231,6 +238,10 @@ architecture_gate: satisfied
 - 安全边界：key 包含 `tenant_id` 和 cache schema version；
 - 运维边界：两层独立 kill switch，Redis 失败回源数据库；
 - 未完成验证：Redis outage 与 invalidation backlog。
+
+`Architecture Compliance Matrix` 必须把 `ADR-001#C-001` 至
+`ADR-001#C-003` 各映射一次到实施位置和验证方式。Design Doc 可以解释实现，
+但不能静默覆盖这些 ADR 约束。
 
 一个可执行的里程碑序列是：
 
@@ -256,7 +267,7 @@ verification_evidence 必须引用真实 CI 和仓库内验收产物。
 ```
 
 `verified_revision` 绑定“哪些代码被验证过”，evidence 绑定“在哪里可以复核”。
-复选框全部勾选但缺少这两类信息时，v2.5 EP 仍不能完成。非 Git 仓库可以使用
+复选框全部勾选但缺少这两类信息时，v2.6 EP 仍不能完成。非 Git 仓库可以使用
 稳定的 `snapshot:<id>`；该契约不依赖 GitHub 或 GitLab。
 
 ## 最后一条 Prompt 验证完整链路
@@ -264,7 +275,8 @@ verification_evidence 必须引用真实 CI 和仓库内验收产物。
 ```text
 使用 $engineering-research 和 $engineering-execution-plan
 对 R-001、ADR-001、EP-001 做最终一致性检查。
-验证 manifest、Synthesis seal、Owner 授权、ADR 决策者、两个 Gate、
+验证 manifest、Synthesis seal、Owner 授权、Research/Architecture Decision Gate、
+ADR 约束的 Architecture Compliance Matrix、
 verified revision 和 evidence，并报告任何 error；不要用自动修复掩盖问题。
 ```
 
@@ -272,7 +284,8 @@ verified revision 和 evidence，并报告任何 error；不要用自动修复�
 
 - R-001 是 `concluded`，Synthesis 与 manifest 都是 sealed。
 - ADR-001 是 `accepted`，并记录真实 Decision Owner。
-- 实施前 EP-001 是 `active`，两个 Gate 都是 `satisfied`；真实验收和上述归档
+- 实施前 EP-001 是 `active`，Research 与 Architecture Decision Gate 都是
+  `satisfied`，Architecture Compliance 是 `applicable`；真实验收和上述归档
   Prompt 完成后，它才是带 revision/evidence 的 sealed `completed`。
 - Research 与 Execution Plan 的校验都没有 error。
 
