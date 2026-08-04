@@ -86,17 +86,17 @@ python3 <skill-dir>/scripts/benchctl.py --repo . init
 
 python3 <skill-dir>/scripts/benchctl.py --repo . new-suite \
   --slug spans-placement --title "Spans placement strategies" \
-  --owner "Observability Performance Owner"
+  --owner "Observability Performance Owner" --author "Codex"
 
 python3 <skill-dir>/scripts/benchctl.py --repo . new-scenario B-001 \
   --slug placement-order-key \
-  --title "Compare placement order-key strategies"
+  --title "Compare placement order-key strategies" --author "Codex"
 
 python3 <skill-dir>/scripts/benchctl.py --repo . new-run BS-001 \
   --slug candidate-a \
   --title "Candidate A at 10k spans/s" \
   --subject-revision "git:<subject-commit>" \
-  --harness-revision "git:<harness-commit>"
+  --harness-revision "git:<harness-commit>" --author "Codex"
 
 python3 <skill-dir>/scripts/benchctl.py --repo . seal-run BR-001 \
   --outcome passed \
@@ -157,3 +157,15 @@ python3 <skill-dir>/scripts/benchctl.py --repo . reindex
 
 消费者依赖 `RESULT.md` 与 `EVIDENCE_MANIFEST.json` 的版本化文件契约，不依赖
 本 Skill 的安装位置，也不要求安装 `benchctl`。
+
+## 制品元数据
+
+新 Suite、Scenario、Result 与 Evidence Manifest 使用 artifact schema `1.1` 和
+`metadata_schema: "1"`。它们携带稳定 type/ID、title/status、author/owner 与
+created/updated。Scenario 继承 Suite owner，Run 继承 Suite owner 与 Scenario
+author，除非调用者显式提供新的 `--author`。
+
+`author` 表示协议或结果文档的写作者，`owner` 表示 Benchmark 责任边界；两者都
+不能替代封存事件的 `executed_by`。Raw CSV、日志、Trace、截图和 profiler 文件
+不嵌入重复 metadata，由 Evidence Manifest 携带 provenance 并用 SHA-256 绑定。
+sealed bundle 的 metadata 不可原地修订；旧 schema 1 bundle 保持兼容。

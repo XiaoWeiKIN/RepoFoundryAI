@@ -277,6 +277,76 @@ class EpctlTestCase(unittest.TestCase):
         self.assertTrue((self.repo / "docs" / "research" / "completed").is_dir())
         self.assertTrue((self.repo / "docs" / "adr").is_dir())
 
+    def test_current_artifacts_share_the_metadata_contract(self) -> None:
+        self.init()
+        adr = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "metadata-decision",
+                "--title",
+                "Metadata decision",
+                "--author",
+                "Architecture Writer",
+                "--owner",
+                "Architecture Owner",
+            ).stdout.strip()
+        )
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "metadata-plan",
+                "--title",
+                "Metadata plan",
+                "--author",
+                "Plan Writer",
+                "--owner",
+                "Plan Owner",
+                *FAST_TRACK_ARGS,
+            ).stdout.strip()
+        )
+        task = Path(
+            self.run_cli(
+                "new-task",
+                "EP-001",
+                "--slug",
+                "metadata-task",
+                "--title",
+                "Metadata task",
+            ).stdout.strip()
+        )
+        bugfix = Path(
+            self.run_cli(
+                "new-bugfix",
+                "--slug",
+                "metadata-bug",
+                "--title",
+                "Metadata bug",
+                "--author",
+                "Bug Writer",
+                "--owner",
+                "Bug Owner",
+            ).stdout.strip()
+        )
+
+        expected_profiles = (
+            (adr, 'schema_version: "1.3"', "artifact_type: adr"),
+            (plan, 'schema_version: "2.7"', "artifact_type: exec-plan"),
+            (task, 'schema_version: "1"', "artifact_type: task"),
+            (bugfix, 'schema_version: "1"', "artifact_type: bugfix"),
+        )
+        for path, schema, artifact_type in expected_profiles:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(schema, text)
+            self.assertIn('metadata_schema: "1"', text)
+            self.assertIn(artifact_type, text)
+            for field in ("id", "title", "status", "author", "owner", "created", "updated"):
+                self.assertRegex(text, rf"(?m)^{field}:\s+\S")
+        task_text = task.read_text(encoding="utf-8")
+        self.assertIn('author: "Plan Writer"', task_text)
+        self.assertIn('owner: "Plan Owner"', task_text)
+
     def test_research_conclusion_seals_synthesis_and_detects_tampering(
         self,
     ) -> None:
@@ -454,7 +524,11 @@ class EpctlTestCase(unittest.TestCase):
             ).stdout.strip()
         )
         content = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.6"', content)
+        self.assertIn('schema_version: "2.7"', content)
+        self.assertIn('metadata_schema: "1"', content)
+        self.assertIn("artifact_type: exec-plan", content)
+        self.assertIn('author: "Unassigned"', content)
+        self.assertIn('owner: "Unassigned"', content)
         self.assertIn("required_benchmark_scenarios: []", content)
         self.assertIn("verified_revision:", content)
         self.assertIn("verification_evidence: []", content)
@@ -844,7 +918,7 @@ relates_to:
             ).stdout.strip()
         )
         plan_text = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.6"', plan_text)
+        self.assertIn('schema_version: "2.7"', plan_text)
         self.assertIn('adr_refs: ["ADR-010", "ADR-011"]', plan_text)
         self.assertIn("architecture_decision_gate: satisfied", plan_text)
         self.assertIn("architecture_compliance: applicable", plan_text)
@@ -933,6 +1007,36 @@ design_refs: ["docs/outside.md"]
             invalid_design.stderr,
         )
 
+    def test_current_design_doc_metadata_ids_are_unique(self) -> None:
+        self.init()
+        design_root = self.repo / "docs" / "design-docs"
+        design_root.mkdir()
+        for name in ("one", "two"):
+            (design_root / f"{name}.md").write_text(
+                f"""---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: design-doc
+id: DD-001
+doc_type: design
+title: "Design {name}"
+status: current
+author: "Design Writer"
+owner: "Design Owner"
+created: 2026-08-04
+updated: 2026-08-04
+---
+
+# Design {name}
+""",
+                encoding="utf-8",
+            )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+
+        result = self.run_cli("validate", expected=1)
+
+        self.assertIn("duplicate Design Doc id DD-001", result.stderr)
+
     def test_declared_unknown_adr_schema_fails_closed(self) -> None:
         self.init()
         (self.repo / "docs" / "adr" / "adr-001_unknown.md").write_text(
@@ -951,7 +1055,10 @@ updated: 2026-07-28
         )
         self.run_cli("reindex")
         result = self.run_cli("validate", expected=1)
-        self.assertIn("ADR schema_version must be 1, 1.1 or 1.2", result.stderr)
+        self.assertIn(
+            "ADR schema_version must be 1, 1.1, 1.2 or 1.3",
+            result.stderr,
+        )
 
     def test_accepted_adr_can_supersede_an_accepted_adr(self) -> None:
         self.init()
@@ -1004,7 +1111,7 @@ updated: 2026-07-28
         )
         self.assertIn("ep-001_current-decision", current.stdout)
 
-    def test_schema_12_adr_seals_typed_inputs_and_decision_outcome(self) -> None:
+    def test_current_adr_seals_metadata_typed_inputs_and_outcome(self) -> None:
         self.init()
         research = self.new_research("sealed-inputs")
         self.conclude_research(research)
@@ -1035,13 +1142,18 @@ updated: 2026-07-28
         outcome_tamper = self.run_cli("validate", expected=1)
         self.assertIn("decided ADR payload changed", outcome_tamper.stderr)
 
+        second.write_text(accepted_text, encoding="utf-8")
+        self.replace_frontmatter(second, "author", '"Tampered Writer"')
+        metadata_tamper = self.run_cli("validate", expected=1)
+        self.assertIn("decided ADR payload changed", metadata_tamper.stderr)
+
     def test_schema_11_adr_remains_a_valid_ep_input(self) -> None:
         self.init()
         research = self.new_research("schema-11-compatible")
         self.conclude_research(research)
         adr = self.new_adr("schema-11-compatible")
         text = adr.read_text(encoding="utf-8").replace(
-            'schema_version: "1.2"',
+            'schema_version: "1.3"',
             'schema_version: "1.1"',
             1,
         )
@@ -1123,7 +1235,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v25-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.6"',
+            'schema_version: "2.7"',
             'schema_version: "2.5"',
             1,
         )
@@ -1169,7 +1281,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v24-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.6"',
+            'schema_version: "2.7"',
             'schema_version: "2.4"',
             1,
         )
@@ -1222,7 +1334,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("legacy-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.6"',
+            'schema_version: "2.7"',
             'schema_version: "2.1"',
             1,
         )
@@ -1265,7 +1377,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v22-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.6"',
+            'schema_version: "2.7"',
             'schema_version: "2.2"',
             1,
         )
@@ -1315,7 +1427,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v20-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.6"',
+            'schema_version: "2.7"',
             'schema_version: "2.0"',
             1,
         )
@@ -1546,7 +1658,7 @@ updated: 2026-07-28
             encoding="utf-8",
         )
         tampered = self.run_cli("validate", expected=1)
-        self.assertIn("archived v2.6 plan changed", tampered.stderr)
+        self.assertIn("archived v2.7 plan changed", tampered.stderr)
         plans_index = (self.repo / "docs" / "PLANS.md").read_text(
             encoding="utf-8"
         )
@@ -1885,7 +1997,9 @@ updated: 2026-07-28
         self.assertIn("BLK-001 | resolved", sealed)
         self.assertIn("Keep compatibility at the boundary", sealed)
         self.assertIn("status: sealed", sealed)
-        self.assertIn('schema_version: "1.1"', sealed)
+        self.assertIn('schema_version: "1.2"', sealed)
+        self.assertIn('metadata_schema: "1"', sealed)
+        self.assertIn("artifact_type: checkpoint", sealed)
         self.assertIn(
             'repository_revision: "test:workspace-revision"',
             sealed,
@@ -1996,14 +2110,20 @@ updated: 2026-07-28
             ).stdout
         )
         checkpoint = self.repo / payload["path"]
+        original = checkpoint.read_text(encoding="utf-8")
         checkpoint.write_text(
-            checkpoint.read_text(encoding="utf-8") + "\nTampered.\n",
+            original + "\nTampered.\n",
             encoding="utf-8",
         )
 
         result = self.run_cli("validate", expected=1)
 
         self.assertIn("sealed checkpoint payload changed", result.stderr)
+
+        checkpoint.write_text(original, encoding="utf-8")
+        self.replace_frontmatter(checkpoint, "author", '"Tampered Writer"')
+        metadata_result = self.run_cli("validate", expected=1)
+        self.assertIn("sealed checkpoint payload changed", metadata_result.stderr)
 
     def test_checkpoint_refuses_unresolved_template(self) -> None:
         self.init()

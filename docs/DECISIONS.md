@@ -18,6 +18,7 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 <!-- ADRCTL:ACTIVE:START -->
 | ID | Title | Status | Updated | Research | Superseded By | Path |
 |---|---|---|---|---|---|---|
+| ADR-014 | Require semantic metadata for governed engineering artifacts | proposed | 2026-08-04 | [] |  | [ADR](adr/adr-014_governed-artifact-metadata-contract.md) |
 <!-- ADRCTL:ACTIVE:END -->
 
 ## Decided

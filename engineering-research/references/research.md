@@ -29,12 +29,14 @@ downstream decision authority.
 
 ## Metadata and authority
 
-Schema 1.1 Research keeps canonical machine-readable metadata in
+Schema 1.2 Research keeps canonical machine-readable metadata in
 `RESEARCH.md` frontmatter and projects it into the visible `Research Metadata`
 table. Run `sync-research` after editing metadata by hand.
 
 | Field | Meaning |
 |---|---|
+| `metadata_schema` | Shared cross-artifact metadata contract; currently `"1"` |
+| `artifact_type`, `id`, `title` | Portable artifact classification and stable identity |
 | `research_type` | `technical`, `architecture`, `feasibility`, `comparative`, `incident`, `domain`, or `other` |
 | `owner` | Human or team accountable for scope and terminal lifecycle authorization |
 | `author` | Person, team, or agent that prepared the current Research |
@@ -46,6 +48,9 @@ table. Run `sync-research` after editing metadata by hand.
 
 Do not invent an owner, author, approval, date, or role. An unassigned Owner is
 valid while active but mechanically blocks conclusion and cancellation.
+`author` and `owner` are provenance and accountability; neither grants
+terminal authority. Only the explicit approval event writes `approved_by`,
+`approved_at`, and `approval_ref`.
 
 `approval_ref` records where explicit authorization can be audited, such as a
 task message, issue comment, review, meeting decision, or signed change
@@ -202,7 +207,7 @@ Use `sync-research` after membership changes. Resolve missing local references
 before review readiness. Absolute source paths are provenance warnings because
 other machines cannot reproduce them without an alternate source.
 Structured topics may remain incomplete while evidence is building. Before
-review readiness, every schema 2.2 identity and semantic role, `A-NNN`
+review readiness, every schema 2.3 identity and semantic role, `A-NNN`
 analysis section, `E-NNN` evidence mapping, `S-NNN` source, and
 analysis-linked falsifier must be complete. Legacy schema 1, schema 2, and
 schema 2.1 topics retain their original validation requirements.
@@ -251,7 +256,7 @@ conclude. When authorization is ambiguous, leave the Research active.
 
 `conclude-research` requires:
 
-- active schema 1.1 Research with `maturity: review_ready`;
+- active schema 1.1 or 1.2 Research with `maturity: review_ready`;
 - non-empty `owner`;
 - `--approved-by` and `--approval-ref` backed by explicit authorization;
 - valid review-ready Synthesis and corpus.

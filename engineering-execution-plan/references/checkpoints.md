@@ -85,7 +85,13 @@ python3 <skill-dir>/scripts/epctl.py --repo . checkpoint EP-023 \
 - 封存 Revision Notes。
 - 更新 `Current Snapshot`、`latest_checkpoint` 和索引更新时间。
 - 记录 `repository_revision`，说明历史对应的代码或工作区版本。
-- 为 checkpoint payload 写入 SHA-256；后续编辑会使 `validate` 失败。
+- 创建 schema 1.2 Checkpoint，继承父 EP 的 author/owner，并记录
+  `metadata_schema: "1"`、`artifact_type: checkpoint` 和 `generated_by`。
+- 为包含 frontmatter metadata 与正文的 canonical checkpoint payload 写入
+  SHA-256；后续修改 attribution、revision 或正文都会使 `validate` 失败。
+
+旧 schema 1/1.1 Checkpoint 按原 body-only digest 保持兼容，不为补 metadata
+改写已封存历史。
 
 ## 永远留在根文档的内容
 

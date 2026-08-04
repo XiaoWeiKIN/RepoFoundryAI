@@ -70,14 +70,19 @@ stateDiagram-v2
 
 只有 proposed ADR 可以执行 `decide-adr`。命令要求 `--decision-maker`；skill 还要求本轮对话存在用户或 Decision Owner 的明确授权。脚本记录授权主体，不能推断授权。
 
-accepted 和 rejected schema 1.1/1.2 ADR 的正文、Research/ADR/Design 输入、
+accepted 和 rejected schema 1.1/1.2/1.3 ADR 的正文、Research/ADR/Design 输入、
 `decision_maker` 与 `decided` 一起进入 SHA-256。决定后修改这些内容会使
 `validate` 失败。生命周期元数据可以增加 supersession 链，但决策内容保持不变。
 
 ## 可执行的规范约束
 
-新 ADR 使用 schema 1.2。`Decision Statement` 用一句话说明被接受或拒绝的完整
+新 ADR 使用 schema 1.3。`Decision Statement` 用一句话说明被接受或拒绝的完整
 决定；`Normative Constraints` 把它拆成下游可引用的稳定约束：
+
+Schema 1.3 还实现 Artifact Metadata Contract：`metadata_schema`、
+`artifact_type`、stable `id`、`title`、`status`、`author`、`owner`、`created`、
+`updated` 都进入决定 payload。`author`/`owner` 不能替代
+`decision_maker`；决定后修改 attribution 会触发 digest drift。
 
 | ID | Strength | Scope | Constraint | Confirmation |
 |---|---|---|---|---|
@@ -92,7 +97,7 @@ accepted 和 rejected schema 1.1/1.2 ADR 的正文、Research/ADR/Design 输入�
 ## 原子决定与有类型关系
 
 一份 ADR 只回答一个可独立接受、拒绝、修订或替代的问题。一个功能需要多个架构
-决定时，保留多份 ADR，并用 schema 1.2 的关系字段连接：
+决定时，保留多份 ADR，并用 schema 1.2/1.3 的关系字段连接：
 
 | 字段 | 语义 | 对旧 ADR 状态的影响 |
 |---|---|---|
@@ -128,7 +133,7 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-adr \
 ```
 
 `amends` 适用于旧决定总体仍成立、只有明确局部被修改的情况。若新旧约束不能同时
-成立，必须使用 supersession，不能用 `amends` 回避旧 ADR 失效。schema 1.2 不允许
+成立，必须使用 supersession，不能用 `amends` 回避旧 ADR 失效。schema 1.2/1.3 不允许
 只写 `amends: ["ADR-008"]` 而不说明约束；旧 ADR 没有结构化 constraint 时，应新建
 可审计的 replacement ADR，而不是猜测旧文档中的局部范围。
 
@@ -148,7 +153,7 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-adr \
 
 注册 root 后，验证器发现两类 ADR：
 
-- 严格 ADR：schema 1 / 1.1 / 1.2，具有稳定 ID、必需 section、显式 Decision Owner
+- 严格 ADR：schema 1 / 1.1 / 1.2 / 1.3，具有稳定 ID、必需 section、显式 Decision Owner
   和决定后 seal。
 - linked legacy ADR：`doc_type: adr`，或文件名包含 `ADR-NNN`，并具有可识别
   status。
@@ -163,9 +168,14 @@ Design Doc 是架构输入，不是决策授权。`doc_type: design` 的 `draft`
 文档不能作为输入。不要 hash 整个持续变化的 design-docs 目录；只引用本 EP
 需要的文件，最终完成由代码 revision、CI evidence 与 EP archive seal 证明。
 
+当前 Design Doc 使用 `metadata_schema: "1"`、`artifact_type: design-doc` 和在仓库
+内唯一的 `DD-NNN`，并携带 title/status、author/owner、created/updated。注册 corpus
+后 `validate` 会检查这些字段和 ID 冲突。缺少该层的既有 Design Doc 继续只读兼容
+并告警；当作者本来就在实质修订它时再迁移，不为补 metadata 改写 sealed ADR。
+
 ## Decision Gate、Compliance 与 Input Set
 
-EP v2.6 把两个过去容易混在一起的问题拆开：
+EP v2.6+ 把两个过去容易混在一起的问题拆开：
 
 | 问题 | 字段 | 允许状态 |
 |---|---|---|
@@ -182,7 +192,7 @@ Compliance applicable 时，输入集合由以下内容组成：
 - `adr_refs`：直接需要的 ADR 以及 `depends_on` / `amends` 传递闭包。
 - `design_refs`：EP 直接需要的 Design Docs，以及 ADR 声明的全部 Design Docs。
 - `architecture_entrypoint`：可选的架构索引或概览页。
-- `adr_constraint_refs`：所有 schema 1.2 ADR constraints 的精确集合。
+- `adr_constraint_refs`：所有 schema 1.2/1.3 ADR constraints 的精确集合。
 - `adr_evidence`：每份 sealed ADR 的 `ADR-NNN@sha256:<payload>` 摘要。
 
 缺少依赖闭包、漏掉命中约束的 current scoped amendment、出现重复 ADR ID、关系

@@ -58,7 +58,10 @@ docs/research/completed/r-NNN_slug/
 
 The manifest is a UTF-8 JSON object with:
 
-- `schema_version: "1"`;
+- `schema_version: "1"` or current `"1.1"`;
+- current manifests also carry `metadata_schema: "1"`,
+  `artifact_type: "research-manifest"`, `R-NNN-MANIFEST`, title,
+  author/owner, and created/updated provenance;
 - matching `research_id`;
 - `status: "sealed"`;
 - `mode: "managed"` or `"snapshot"`;
@@ -113,10 +116,11 @@ must interpret it before ADR or ExecPlan consumption. When the route is already
 accepted and the Run only verifies the final revision, the ExecPlan may consume
 the Benchmark contract directly without creating another Research.
 
-Schema 1.1 concluded Research additionally carries `owner`, `maturity:
+Schema 1.1/1.2 concluded Research additionally carries `owner`, `maturity:
 review_ready`, `approved_by`, `approved_at`, and `approval_ref`. Consumers
 require these fields so an Agent cannot turn mere decision readiness into a
-terminal Research state. Schema 1 remains readable only as a legacy contract.
+terminal Research state. Schema 1.2 also implements the shared artifact
+metadata contract. Schema 1 remains readable only as a legacy contract.
 
 ## Compatibility
 

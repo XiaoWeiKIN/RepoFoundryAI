@@ -449,9 +449,35 @@ Synthesis should retain the current contract.
         self.assertEqual(second["created"], [])
 
         research = self.new_research("managed")
+        research_text = research.read_text(encoding="utf-8")
+        for expected in (
+            'schema_version: "1.2"',
+            'metadata_schema: "1"',
+            "artifact_type: research",
+            "id: R-001",
+            'author: "Test Researcher"',
+            'owner: "Test Research Owner"',
+        ):
+            self.assertIn(expected, research_text)
+        synthesis_text = (research.parent / "SYNTHESIS.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("artifact_type: research-synthesis", synthesis_text)
+        self.assertIn("id: R-001-SYNTHESIS", synthesis_text)
+        round_text = next((research.parent / "rounds").glob("*.md")).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('schema_version: "1.1"', round_text)
+        self.assertIn("artifact_type: research-round", round_text)
         manifest = json.loads(
             (research.parent / "RESEARCH_MANIFEST.json").read_text(encoding="utf-8")
         )
+        self.assertEqual(manifest["schema_version"], "1.1")
+        self.assertEqual(manifest["metadata_schema"], "1")
+        self.assertEqual(manifest["artifact_type"], "research-manifest")
+        self.assertEqual(manifest["id"], "R-001-MANIFEST")
+        self.assertEqual(manifest["author"], "Test Researcher")
+        self.assertEqual(manifest["owner"], "Test Research Owner")
         self.assertEqual(manifest["mode"], "managed")
         self.assertEqual(
             [item for item in manifest["documents"] if item["role"] == "round"],
@@ -459,6 +485,21 @@ Synthesis should retain the current contract.
         )
         self.assertEqual(manifest["roots"][0]["base"], "package")
         self.assertEqual(manifest["roots"][0]["path"], "notes")
+
+    def test_current_research_metadata_contract_fails_closed(self) -> None:
+        research = self.new_research("metadata-contract")
+        research.write_text(
+            research.read_text(encoding="utf-8").replace(
+                'metadata_schema: "1"',
+                'metadata_schema: "9"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.run_cli("validate", expected=1)
+
+        self.assertIn("metadata_schema must be '1'", result.stderr)
 
     def test_managed_sync_and_drift_detection(self) -> None:
         research = self.new_research("managed-drift")
@@ -495,7 +536,12 @@ Synthesis should retain the current contract.
 
         self.assertEqual(topic.parent, research.parent / "notes")
         topic_text = topic.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.2"', topic_text)
+        self.assertIn('schema_version: "2.3"', topic_text)
+        self.assertIn('metadata_schema: "1"', topic_text)
+        self.assertIn("artifact_type: research-topic", topic_text)
+        self.assertIn("id: RT-001", topic_text)
+        self.assertIn('author: "Security Researcher"', topic_text)
+        self.assertIn('owner: "Test Research Owner"', topic_text)
         self.assertIn("doc_type: research-topic", topic_text)
         self.assertIn("parent_id: R-001", topic_text)
         self.assertIn("topic_id: RT-001", topic_text)

@@ -1,13 +1,18 @@
 ---
-schema_version: "2.2"
+schema_version: "2.3"
+metadata_schema: "1"
+artifact_type: research-topic
+id: RT-001
 doc_type: research-topic
 parent_id: R-002
 topic_id: RT-001
 round_id: RR-001
 title: "RepoFoundry AI commercial and delivery feasibility"
+status: active
 author: "Codex"
+owner: "XiaoWeiKIN"
 created: 2026-08-02
-updated: 2026-08-02
+updated: 2026-08-04
 ---
 
 # RT-001 · RepoFoundry AI commercial and delivery feasibility

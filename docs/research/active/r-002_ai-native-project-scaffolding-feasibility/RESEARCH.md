@@ -1,5 +1,7 @@
 ---
-schema_version: "1.1"
+schema_version: "1.2"
+metadata_schema: "1"
+artifact_type: research
 id: R-002
 title: "Assess RepoFoundry AI as an AI-native project scaffolding product"
 status: active
@@ -8,7 +10,7 @@ research_type: feasibility
 synthesis: SYNTHESIS.md
 manifest: RESEARCH_MANIFEST.json
 created: 2026-08-02
-updated: 2026-08-02
+updated: 2026-08-04
 owner: "XiaoWeiKIN"
 author: "Codex"
 current_round: RR-001
@@ -31,7 +33,7 @@ permission to conclude or archive the Research.
 | Field | Value |
 |---|---|
 | Date | 2026-08-02 |
-| Last Updated | 2026-08-02 |
+| Last Updated | 2026-08-04 |
 | Research Type | Feasibility |
 | Research Owner | XiaoWeiKIN |
 | Author | Codex |

@@ -103,7 +103,7 @@ TOPIC_V21_ROLES = (
     "sources",
     "revision-notes",
 )
-TOPIC_SCHEMA_VERSIONS = {"1", "2", "2.1", "2.2"}
+TOPIC_SCHEMA_VERSIONS = {"1", "2", "2.1", "2.2", "2.3"}
 SYNTHESIS_SECTIONS = (
     "Executive Conclusion",
     "Supported Findings",
@@ -115,8 +115,9 @@ SYNTHESIS_SECTIONS = (
     "Revision Notes",
 )
 RESEARCH_QUESTION_STATUSES = {"open", "answered", "deferred", "invalidated"}
-RESEARCH_SCHEMA_VERSIONS = {"1", "1.1"}
-SYNTHESIS_SCHEMA_VERSIONS = {"1", "1.1"}
+RESEARCH_SCHEMA_VERSIONS = {"1", "1.1", "1.2"}
+SYNTHESIS_SCHEMA_VERSIONS = {"1", "1.1", "1.2"}
+CURRENT_METADATA_SCHEMA = "1"
 RESEARCH_TYPES = {
     "technical",
     "architecture",
@@ -242,6 +243,60 @@ def md_cell(value: str) -> str:
 
 def display_value(value: str, fallback: str = "Unassigned") -> str:
     return md_cell(value) if value.strip() else fallback
+
+
+def metadata_actor(value: str) -> str:
+    return value.strip() or "Unassigned"
+
+
+def actor_is_assigned(value: str) -> bool:
+    return bool(value.strip()) and value.strip().casefold() != "unassigned"
+
+
+def sync_manifest_metadata(
+    manifest: dict[str, object],
+    research_data: dict[str, str],
+) -> None:
+    if manifest.get("schema_version") != "1.1":
+        return
+    manifest.update(
+        {
+            "title": f"{research_data.get('title', '')} — Research manifest",
+            "author": metadata_actor(research_data.get("author", "")),
+            "owner": metadata_actor(research_data.get("owner", "")),
+            "created": research_data.get("created", ""),
+            "updated": research_data.get("updated", ""),
+        }
+    )
+
+
+def validate_metadata_contract(
+    path: Path,
+    data: dict[str, object],
+    artifact_type: str,
+    expected_id: str,
+) -> list[str]:
+    errors: list[str] = []
+    if data.get("metadata_schema") != CURRENT_METADATA_SCHEMA:
+        errors.append(
+            f"{path}: metadata_schema must be {CURRENT_METADATA_SCHEMA!r}"
+        )
+    if data.get("artifact_type") != artifact_type:
+        errors.append(f"{path}: artifact_type must be {artifact_type!r}")
+    if data.get("id") != expected_id:
+        errors.append(f"{path}: metadata id must be {expected_id!r}")
+    for field in ("title", "status", "author", "owner", "created", "updated"):
+        value = data.get(field)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{path}: metadata field {field} must be non-empty")
+    for field in ("created", "updated"):
+        value = data.get(field)
+        if isinstance(value, str) and value.strip():
+            try:
+                dt.date.fromisoformat(value)
+            except ValueError:
+                errors.append(f"{path}: metadata field {field} must be an ISO date")
+    return errors
 
 
 def research_type_label(value: str) -> str:
@@ -647,7 +702,7 @@ def research_metadata_body(data: dict[str, str]) -> str:
 
 def sync_research_metadata(text: str) -> str:
     data, _, _ = parse_frontmatter(text)
-    if data.get("schema_version") != "1.1":
+    if data.get("schema_version") not in {"1.1", "1.2"}:
         return text
     return replace_section(text, "Research Metadata", research_metadata_body(data))
 
@@ -1152,6 +1207,7 @@ def refresh_manifest(
     manifest = load_manifest(path)
     if manifest.get("status") != "active":
         raise ResearchctlError("Only an active manifest can be refreshed")
+    sync_manifest_metadata(manifest, data)
     documents = discover_documents(repo, research_path.parent, manifest)
     manifest["documents"] = documents
     manifest["payload_sha256"] = ""
@@ -1280,6 +1336,8 @@ def new_research(
         manifest_file = directory / MANIFEST_NAME
         if directory.exists():
             raise ResearchctlError(f"Destination already exists: {directory}")
+        owner_value = metadata_actor(owner)
+        author_value = metadata_actor(author)
 
         root_specs: list[dict[str, object]] = []
         entrypoints: list[dict[str, str]] = []
@@ -1363,10 +1421,10 @@ def new_research(
             {
                 "ID": item_id,
                 "TITLE": yaml_string(title),
-                "OWNER": yaml_string(owner),
-                "OWNER_LABEL": display_value(owner),
-                "AUTHOR": yaml_string(author),
-                "AUTHOR_LABEL": display_value(author),
+                "OWNER": yaml_string(owner_value),
+                "OWNER_LABEL": display_value(owner_value),
+                "AUTHOR": yaml_string(author_value),
+                "AUTHOR_LABEL": display_value(author_value),
                 "RESEARCH_TYPE": research_type,
                 "RESEARCH_TYPE_LABEL": research_type_label(research_type),
                 "DATE": date_string(),
@@ -1377,8 +1435,11 @@ def new_research(
         synthesis_text = render_asset(
             "synthesis.md",
             {
+                "ID": f"{item_id}-SYNTHESIS",
                 "PARENT_ID": item_id,
                 "TITLE": yaml_string(f"{title} — Synthesis"),
+                "AUTHOR": yaml_string(author_value),
+                "OWNER": yaml_string(owner_value),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
             },
@@ -1390,7 +1451,8 @@ def new_research(
                 "PARENT_ID": item_id,
                 "TITLE": yaml_string(f"{title} — RR-001 Baseline investigation"),
                 "DATE": date_string(),
-                "AUTHOR": yaml_string(author),
+                "AUTHOR": yaml_string(author_value),
+                "OWNER": yaml_string(owner_value),
             },
         )
         manifest = json.loads(
@@ -1398,6 +1460,13 @@ def new_research(
                 "manifest.json",
                 {
                     "ID": item_id,
+                    "TITLE_JSON": json.dumps(
+                        f"{title} — Research manifest",
+                        ensure_ascii=False,
+                    ),
+                    "AUTHOR_JSON": json.dumps(author_value, ensure_ascii=False),
+                    "OWNER_JSON": json.dumps(owner_value, ensure_ascii=False),
+                    "DATE_JSON": json.dumps(date_string()),
                     "MODE": mode,
                     "ROOTS_JSON": json.dumps(
                         root_specs, ensure_ascii=False, indent=2
@@ -1993,8 +2062,8 @@ def validate_topic_document(
     if data.get("parent_id") != parent_id:
         errors.append(f"{path}: parent_id must be {parent_id}")
     raw_topic_id = data.get("topic_id", "")
-    if schema_version == "2.2" and not raw_topic_id:
-        errors.append(f"{path}: schema 2.2 topic requires topic_id")
+    if schema_version in {"2.2", "2.3"} and not raw_topic_id:
+        errors.append(f"{path}: schema {schema_version} topic requires topic_id")
     if raw_topic_id:
         match = TOPIC_ID_RE.fullmatch(raw_topic_id)
         if not match:
@@ -2025,12 +2094,22 @@ def validate_topic_document(
             errors.append(f"{path}: missing topic frontmatter field {field}")
     if not data.get("title"):
         errors.append(f"{path}: topic title must not be empty")
-    if not data.get("author"):
+    if not actor_is_assigned(data.get("author", "")):
         warnings.append(f"{path}: topic author is unassigned")
     if not SLUG_RE.fullmatch(path.stem):
         errors.append(f"{path}: topic filename must be lowercase kebab-case")
 
-    if schema_version in {"2.1", "2.2"}:
+    if schema_version == "2.3" and raw_topic_id:
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "research-topic",
+                raw_topic_id,
+            )
+        )
+
+    if schema_version in {"2.1", "2.2", "2.3"}:
         learning_errors, learning_warnings = (
             validate_learning_topic_document(
                 path,
@@ -2370,8 +2449,9 @@ def validate_round(
         data, _, _ = parse_frontmatter(text)
     except (OSError, ResearchctlError) as exc:
         return [f"{path}: {exc}"], {}
-    if data.get("schema_version") != "1":
-        errors.append(f"{path}: round schema_version must be 1")
+    round_schema = data.get("schema_version")
+    if round_schema not in {"1", "1.1"}:
+        errors.append(f"{path}: round schema_version must be 1 or 1.1")
     if not ROUND_ID_RE.fullmatch(data.get("id", "")):
         errors.append(f"{path}: invalid Research Round id {data.get('id', '')!r}")
     if data.get("parent_id") != parent_id:
@@ -2381,6 +2461,15 @@ def validate_round(
     for field in ("title", "created", "updated", "author"):
         if field not in data:
             errors.append(f"{path}: missing round frontmatter field {field}")
+    if round_schema == "1.1" and data.get("id"):
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "research-round",
+                data["id"],
+            )
+        )
     errors.extend(validate_sections(path, text, ROUND_SECTIONS))
     return errors, data
 
@@ -2415,7 +2504,7 @@ def validate_research_rounds(
                 errors.append(f"{path}: duplicate Research Round document {round_id}")
             document_statuses[round_id] = round_data.get("status", "")
     if not document_statuses:
-        errors.append(f"{path}: schema 1.1 Research requires at least one round")
+        errors.append(f"{path}: iterative Research requires at least one round")
     if set(row_statuses) != set(document_statuses):
         errors.append(
             f"{path}: Research Rounds table and rounds/ documents do not match"
@@ -2460,7 +2549,7 @@ def validate_synthesis(
     schema_version = data.get("schema_version")
     if schema_version not in SYNTHESIS_SCHEMA_VERSIONS:
         errors.append(
-            f"{path}: synthesis schema_version must be 1 or 1.1"
+            f"{path}: synthesis schema_version must be 1, 1.1 or 1.2"
         )
     if data.get("parent_id") != parent_id:
         errors.append(f"{path}: parent_id must be {parent_id}")
@@ -2468,18 +2557,27 @@ def validate_synthesis(
     status = data.get("status")
     allowed_statuses = (
         {"draft", "review_ready", "sealed"}
-        if schema_version == "1.1"
+        if schema_version in {"1.1", "1.2"}
         else {"draft", "sealed"}
     )
     if status not in allowed_statuses:
         errors.append(f"{path}: invalid synthesis status {status!r}")
-    if schema_version == "1.1":
+    if schema_version in {"1.1", "1.2"}:
         try:
             revision = int(data.get("revision", ""))
         except ValueError:
             revision = -1
         if revision < 0:
             errors.append(f"{path}: revision must be a non-negative integer")
+    if schema_version == "1.2":
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "research-synthesis",
+                f"{parent_id}-SYNTHESIS",
+            )
+        )
     required = bool(marker_names(text))
     if require_sealed and status != "sealed":
         errors.append(f"{path}: concluded Research requires sealed Synthesis")
@@ -2527,8 +2625,10 @@ def validate_synthesis_snapshots(
             )
         except ResearchctlError:
             continue
-        if snapshot_data.get("schema_version") != "1.1":
-            errors.append(f"{path}: review snapshot requires schema_version 1.1")
+        if snapshot_data.get("schema_version") not in {"1.1", "1.2"}:
+            errors.append(
+                f"{path}: review snapshot requires schema_version 1.1 or 1.2"
+            )
         if snapshot_data.get("status") != "review_ready":
             errors.append(f"{path}: review snapshot must be review_ready")
         if snapshot_data.get("revision") != str(number):
@@ -2562,8 +2662,11 @@ def validate_manifest(
         manifest = load_manifest(manifest_path(research_path))
     except ResearchctlError as exc:
         return [str(exc)], warnings, {}
-    if manifest.get("schema_version") != "1":
-        errors.append(f"{manifest_path(research_path)}: schema_version must be 1")
+    manifest_schema = manifest.get("schema_version")
+    if manifest_schema not in {"1", "1.1"}:
+        errors.append(
+            f"{manifest_path(research_path)}: schema_version must be 1 or 1.1"
+        )
     if manifest.get("research_id") != parent_id:
         errors.append(
             f"{manifest_path(research_path)}: research_id must be {parent_id}"
@@ -2574,6 +2677,15 @@ def validate_manifest(
         errors.append(f"{manifest_path(research_path)}: invalid status {status!r}")
     if mode not in {"managed", "linked", "snapshot"}:
         errors.append(f"{manifest_path(research_path)}: invalid mode {mode!r}")
+    if manifest_schema == "1.1":
+        errors.extend(
+            validate_metadata_contract(
+                manifest_path(research_path),
+                manifest,
+                "research-manifest",
+                f"{parent_id}-MANIFEST",
+            )
+        )
     documents = manifest.get("documents")
     if not isinstance(documents, list):
         errors.append(f"{manifest_path(research_path)}: documents must be an array")
@@ -2682,11 +2794,11 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
         errors.append(f"{path}: invalid Research id {research_id!r}")
     schema_version = data.get("schema_version")
     if schema_version not in RESEARCH_SCHEMA_VERSIONS:
-        errors.append(f"{path}: schema_version must be 1 or 1.1")
+        errors.append(f"{path}: schema_version must be 1, 1.1 or 1.2")
     for field in ("title", "created", "updated", "synthesis"):
         if not data.get(field):
             errors.append(f"{path}: missing frontmatter field {field}")
-    if schema_version == "1.1":
+    if schema_version in {"1.1", "1.2"}:
         for field in (
             "owner",
             "author",
@@ -2732,12 +2844,21 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
             )
             errors.extend(snapshot_errors)
             warnings.extend(snapshot_warnings)
-        if not data.get("owner"):
+        if not actor_is_assigned(data.get("owner", "")):
             warnings.append(
                 f"{path}: Research Owner is unassigned; conclusion is forbidden"
             )
-        if not data.get("author"):
+        if not actor_is_assigned(data.get("author", "")):
             warnings.append(f"{path}: Research author is unassigned")
+    if schema_version == "1.2" and research_id:
+        errors.extend(
+            validate_metadata_contract(
+                path,
+                data,
+                "research",
+                research_id,
+            )
+        )
     location = "completed" if "/completed/" in path.as_posix() else "active"
     status = data.get("status")
     allowed = {"active", "blocked"} if location == "active" else {
@@ -2751,7 +2872,7 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
             path,
             text,
             RESEARCH_SECTIONS
-            if schema_version == "1.1"
+            if schema_version in {"1.1", "1.2"}
             else RESEARCH_LEGACY_SECTIONS,
         )
     )
@@ -2787,7 +2908,7 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
     )
     errors.extend(synthesis_errors)
     warnings.extend(synthesis_warnings)
-    if schema_version == "1.1" and checked_synthesis_path.is_file():
+    if schema_version in {"1.1", "1.2"} and checked_synthesis_path.is_file():
         try:
             synthesis_data, _, _ = parse_frontmatter(
                 checked_synthesis_path.read_text(encoding="utf-8")
@@ -2872,7 +2993,7 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
             errors.append(f"{path}: concluded Research has open blockers")
         if marker_names(text):
             errors.append(f"{path}: concluded Research has required placeholders")
-        if schema_version == "1.1":
+        if schema_version in {"1.1", "1.2"}:
             if data.get("maturity") != "review_ready":
                 errors.append(
                     f"{path}: concluded Research must have review_ready maturity"
@@ -2882,7 +3003,7 @@ def validate_research(path: Path) -> tuple[list[str], list[str]]:
                     errors.append(
                         f"{path}: concluded Research requires {field}"
                     )
-    elif status == "cancelled" and schema_version == "1.1":
+    elif status == "cancelled" and schema_version in {"1.1", "1.2"}:
         for field in ("owner", "approved_by", "approved_at", "approval_ref"):
             if not data.get(field):
                 errors.append(f"{path}: cancelled Research requires {field}")
@@ -2925,9 +3046,9 @@ def require_iterative_research(
     text: str,
     data: dict[str, str],
 ) -> None:
-    if data.get("schema_version") != "1.1":
+    if data.get("schema_version") not in {"1.1", "1.2"}:
         raise ResearchctlError(
-            f"{path}: iterative commands require Research schema_version 1.1"
+            f"{path}: iterative commands require Research schema_version 1.1 or 1.2"
         )
     if data.get("status") not in {"active", "blocked"}:
         raise ResearchctlError(f"{path}: Research is not active")
@@ -3069,7 +3190,8 @@ def new_topic(
             research_path.parent,
             data["id"],
         )
-        topic_author = author.strip() or data.get("author", "")
+        topic_author = metadata_actor(author.strip() or data.get("author", ""))
+        topic_owner = metadata_actor(data.get("owner", ""))
         topic_text = render_asset(
             "topic.md",
             {
@@ -3078,6 +3200,7 @@ def new_topic(
                 "ROUND_ID": current_round,
                 "TITLE": yaml_string(title.strip()),
                 "AUTHOR": yaml_string(topic_author),
+                "OWNER": yaml_string(topic_owner),
                 "DATE": date_string(),
                 "TIMESTAMP": timestamp_string(),
                 "QUESTION_LIST": "\n".join(
@@ -3168,7 +3291,8 @@ def new_round(
         round_file = (
             research_path.parent / "rounds" / f"rr-{number:03d}_{slug}.md"
         )
-        round_author = author.strip() or data.get("author", "")
+        round_author = metadata_actor(author.strip() or data.get("author", ""))
+        round_owner = metadata_actor(data.get("owner", ""))
         round_text = render_asset(
             "round.md",
             {
@@ -3177,6 +3301,7 @@ def new_round(
                 "TITLE": yaml_string(title),
                 "DATE": date_string(),
                 "AUTHOR": yaml_string(round_author),
+                "OWNER": yaml_string(round_owner),
             },
         )
         research_candidate = append_round_row(
@@ -3734,13 +3859,13 @@ def archive_research(
         path = find_research(repo, research_id, "active")
         text = path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
-        if not data.get("owner", "").strip():
+        if not actor_is_assigned(data.get("owner", "")):
             raise ResearchctlError(
                 "Terminal Research transitions require an assigned owner"
             )
         if (
             outcome == "concluded"
-            and data.get("schema_version") == "1.1"
+            and data.get("schema_version") in {"1.1", "1.2"}
             and data.get("maturity") != "review_ready"
         ):
             raise ResearchctlError(
@@ -3751,7 +3876,7 @@ def archive_research(
         synthesis_data, _, _ = parse_frontmatter(synthesis_text)
         if (
             outcome == "concluded"
-            and data.get("schema_version") == "1.1"
+            and data.get("schema_version") in {"1.1", "1.2"}
             and synthesis_data.get("status") != "review_ready"
         ):
             raise ResearchctlError(
@@ -3787,7 +3912,7 @@ def archive_research(
                     "Research conclusion blocked by required placeholders"
                 )
             milestone_clause = ""
-            if data.get("schema_version") == "1.1":
+            if data.get("schema_version") in {"1.1", "1.2"}:
                 try:
                     synthesis_revision = int(
                         data.get("synthesis_revision", "0")
@@ -3843,6 +3968,8 @@ def archive_research(
             },
         )
         research_candidate = sync_research_metadata(research_candidate)
+        candidate_data, _, _ = parse_frontmatter(research_candidate)
+        sync_manifest_metadata(manifest, candidate_data)
         directory = path.parent
         destination = repo / "docs" / "research" / "completed" / directory.name
         if destination.exists():

@@ -1,5 +1,7 @@
 ---
-schema_version: "1.1"
+schema_version: "1.2"
+metadata_schema: "1"
+artifact_type: research
 id: {{ID}}
 title: "{{TITLE}}"
 status: active

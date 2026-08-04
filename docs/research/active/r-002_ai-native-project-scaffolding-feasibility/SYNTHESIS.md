@@ -1,11 +1,16 @@
 ---
-schema_version: "1.1"
+schema_version: "1.2"
+metadata_schema: "1"
+artifact_type: research-synthesis
+id: R-002-SYNTHESIS
 parent_id: R-002
 title: "Assess RepoFoundry AI as an AI-native project scaffolding product — Synthesis"
 status: draft
 revision: "0"
 created: 2026-08-02
-updated: 2026-08-02
+updated: 2026-08-04
+author: "Codex"
+owner: "XiaoWeiKIN"
 payload_sha256:
 ---
 

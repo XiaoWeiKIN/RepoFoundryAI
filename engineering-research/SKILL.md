@@ -124,7 +124,7 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
    `owner`、`author` 和 `research_type` 必须真实；未知就保留未分配，禁止杜撰。
 3. 用 Round 组织每次有界研究迭代；用 `new-topic` 创建关联 `RQ-NNN` 的
    structured topic，其他 managed 分析写到 `notes/`，existing corpus 用 linked
-   模式登记。新 Topic 使用 schema 2.2，并自动获得 Research 内唯一且不可复用的
+   模式登记。新 Topic 使用 schema 2.3，并自动获得 Research 内唯一且不可复用的
    `RT-NNN`：首屏给答案、置信度、适用边界和决策影响；正文先建立心智模型，
    再用连续分析帮助读者理解；证据索引放到 Handoff 之后供评审追溯。
 4. 保留 Topic 的 `RT-NNN`，改标题或移动文件时不得重编号。跨文档引用写成
@@ -152,6 +152,19 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
     上下文装载不读取历史快照。
 11. 只有用户或声明的 Research Owner 明确说出结束、定稿、归档或 conclude，
     才执行 `conclude-research` 并记录 `approved_by` 与可审计 `approval_ref`。
+
+## 制品元数据
+
+新制品使用统一 `metadata_schema: "1"`：Research `1.2`、Synthesis `1.2`、
+Round `1.1`、Topic `2.3`、Manifest `1.1`。它们都必须携带稳定 `artifact_type`、
+`id`、`title`、`status`、`author`、`owner`、`created` 和 `updated`。
+
+`author` 表示当前版本的实际写作者，`owner` 表示持续负责 Research 生命周期的
+人或角色；两者都不能替代 `approved_by`。未知 actor 写成 `Unassigned`，不要猜测。
+它允许 active 草稿存在，但不能绕过 terminal Owner gate。新 Topic 与 Round 继承
+Research Owner；显式 `--author` 优先，否则继承或诚实保留未分配。当前 metadata
+进入 Synthesis/Manifest 的封存边界；旧版 sealed package 保持只读，不仅为了补字段
+而改写。
 
 **禁止把“decision-ready”“问题已回答”“完成第一版”“继续”推断为结束授权。**
 Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保留已获得的

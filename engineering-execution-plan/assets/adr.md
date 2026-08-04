@@ -1,5 +1,7 @@
 ---
-schema_version: "1.2"
+schema_version: "1.3"
+metadata_schema: "1"
+artifact_type: adr
 id: {{ID}}
 title: "{{TITLE}}"
 status: proposed
@@ -15,6 +17,7 @@ decided:
 payload_sha256:
 created: {{DATE}}
 updated: {{DATE}}
+author: "{{AUTHOR}}"
 owner: "{{OWNER}}"
 ---
 

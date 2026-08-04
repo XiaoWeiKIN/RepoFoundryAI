@@ -1,8 +1,15 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: design-doc
+id: DD-002
 doc_type: design
 title: EngineeringWorkflow skill packaging
 status: current
 adr_refs: ["ADR-004", "ADR-005", "ADR-011", "ADR-012"]
+author: "Codex"
+owner: "RepoFoundry Maintainer"
+created: 2026-07-30
 updated: 2026-08-04
 ---
 

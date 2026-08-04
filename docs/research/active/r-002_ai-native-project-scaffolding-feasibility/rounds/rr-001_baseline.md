@@ -1,12 +1,15 @@
 ---
-schema_version: "1"
+schema_version: "1.1"
+metadata_schema: "1"
+artifact_type: research-round
 id: RR-001
 parent_id: R-002
 title: "Assess RepoFoundry AI as an AI-native project scaffolding product — RR-001 Baseline investigation"
 status: active
 created: 2026-08-02
-updated: 2026-08-02
+updated: 2026-08-04
 author: "Codex"
+owner: "XiaoWeiKIN"
 ---
 
 # Assess RepoFoundry AI as an AI-native project scaffolding product — RR-001 Baseline investigation

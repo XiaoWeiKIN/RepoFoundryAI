@@ -1,8 +1,12 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: task
 id: {{TASK_ID}}
 title: "{{TITLE}}"
 status: todo
 parent_id: {{PARENT_ID}}
+author: "{{AUTHOR}}"
 owner: "{{OWNER}}"
 depends_on: []
 blocked_by: []

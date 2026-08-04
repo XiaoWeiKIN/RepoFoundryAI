@@ -36,7 +36,8 @@ counterevidence, and link every material claim to auditable evidence.
 
 When the Skill creates a topic, it allocates a stable Research-scoped
 `RT-NNN`, links the document from the current Round, and refreshes the
-manifest. The resulting schema 2.2 document is learning-first: a brief for
+manifest. The resulting schema 2.3 document is learning-first and carries the
+common artifact metadata: a brief for
 quick decisions, a mental model and continuous `A-NNN` analysis for learning,
 then an `E-NNN` evidence index and `S-NNN` sources for review. Use a full
 cross-topic reference such as

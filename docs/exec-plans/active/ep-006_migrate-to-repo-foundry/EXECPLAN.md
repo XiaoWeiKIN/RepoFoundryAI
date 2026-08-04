@@ -1,5 +1,7 @@
 ---
 schema_version: "2.5"
+metadata_schema: "1"
+artifact_type: exec-plan
 id: EP-006
 title: "Migrate EngineeringWorkflow to RepoFoundry AI"
 status: active
@@ -17,7 +19,8 @@ verified_revision:
 verification_evidence: []
 archive_sha256:
 created: 2026-07-30
-updated: 2026-08-01
+updated: 2026-08-04
+author: "Codex"
 owner: "RepoFoundry Maintainer"
 ---
 

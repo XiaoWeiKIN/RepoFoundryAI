@@ -54,7 +54,9 @@
 | Revision Notes | 对当前事实的每次修订及原因 |
 
 使用 `assets/execplan.md` 作为唯一新建模板。新计划使用
-`schema_version: "2.6"`；v2.0–v2.5 只做兼容读取，不因普通编辑静默迁移。
+`schema_version: "2.7"`；v2.0–v2.6 只做兼容读取，不因普通编辑静默迁移。
+v2.7 同时实现 `metadata_schema: "1"`，要求 `artifact_type: exec-plan`、稳定
+ID、title/status、author/owner 与 created/updated。
 
 ## Research 与 Architecture Inputs
 
@@ -65,7 +67,7 @@
 - Architecture Compliance 为何 applicable/not_applicable；“不需要新决定”不能用来
   跳过既有架构。
 - 每份 accepted ADR 的 Decision Statement、负面后果、迁移义务和 Confirmation。
-- schema 1.2 的 `ADR-NNN#C-NNN` constraints，以及 sealed
+- schema 1.2/1.3 的 `ADR-NNN#C-NNN` constraints，以及 sealed
   `ADR-NNN@sha256:<payload>` evidence。
 - ADR 的 `depends_on` / `amends` 传递闭包，以及各关系为何属于本次实施输入。
 - 每份 Design Doc 提供的接口、数据流、迁移或运维细节；多文档集合优先给出
@@ -152,13 +154,13 @@ Scenario 必须恰好有一个有效 Run，且不能夹带未声明 Scenario 的
 accepted ADR 的约束属于当前事实。若 ADR 后续 superseded，active v2.2+
 ExecPlan 必须重新评估路线并更新引用、Inputs、Compliance Matrix、Plan 和
 Validation；验证器会拒绝 superseded ADR 继续作为 current input。completed 或
-cancelled v2.6 EP 保留当时的 ADR digest，作为历史证据继续验证。
+cancelled v2.6/2.7 EP 保留当时的 ADR digest，作为历史证据继续验证。
 
 EP v2.4+ 的 `adr_refs` 必须依赖闭合：每个引用 ADR 的 `depends_on` 和 `amends`
 传递目标都要显式出现在数组中。ADR 的 `design_refs` 也必须进入 EP 的
 `design_refs`。这样根计划能展示准确输入边界，验证器不需要隐式猜测。
 
-EP v2.6 还必须包含命中任一所引用 constraint 的 current scoped amendment；
+EP v2.6/2.7 还必须包含命中任一所引用 constraint 的 current scoped amendment；
 `adr_constraint_refs`、`adr_evidence` 和 Compliance Matrix 均按该输入集精确校验。
 
 ## Task 规则

@@ -30,7 +30,7 @@ flowchart LR
     C -->|"是"| I["Architecture Input Set<br/>ADRs + Design Docs + 入口"]
     C -->|"否，写明理由"| NA["Architecture Compliance<br/>not_applicable"]
     I --> M["Compliance Matrix<br/>constraint → implementation → verification"]
-    M --> EP["ExecPlan v2.6<br/>自包含计划 + 完成证明"]
+    M --> EP["ExecPlan v2.7<br/>自包含计划 + 完成证明"]
     NA --> EP
     G --> EP
     RG --> A
@@ -126,6 +126,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . register-architecture-root \
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
   --slug cache-topology --title "Choose cache topology" --research R-001 \
+  --author "Codex" --owner "Cache Platform Owner" \
   --depends-on ADR-004 --amends ADR-003 \
   --amends-constraint ADR-003#C-002 \
   --design docs/design-docs/cache-topology.md
@@ -136,6 +137,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   --slug implement-cache --title "Implement cache topology" \
+  --author "Codex" --owner "Cache Platform Owner" \
   --research R-001 --adr ADR-004 --adr ADR-005 \
   --design docs/design-docs/cache-topology.md \
   --architecture-entrypoint docs/design-docs/index.md \
@@ -173,7 +175,7 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
 
 1. 如果仍有会改变路线的未知，先使用 `engineering-research` 或其他兼容流程。
 2. 只让 `concluded` Research 满足 Gate；cancelled 或 active Research 都不能。
-3. schema 1.1 Research 还必须有 `owner`、`maturity: review_ready` 和完整
+3. schema 1.1/1.2 Research 还必须有 `owner`、`maturity: review_ready` 和完整
    `approved_by/approved_at/approval_ref`；decision-ready 本身不是结束授权。
 4. 验证 sealed `SYNTHESIS.md` 正文摘要。
 5. 如果控制页声明 `RESEARCH_MANIFEST.json`，还必须验证：
@@ -200,9 +202,9 @@ Agent 可以调研、比较并起草 `proposed` ADR。只有当前对话或明�
    Normative Constraints、Consequences、Confirmation 和 Revisit Triggers。
 3. 把真实授权主体传给 `--decision-maker`。
 
-新建 schema 1.2 ADR 必须给出一句可整体接受或拒绝的 `Decision Statement`，并把
+新建 schema 1.3 ADR 必须给出一句可整体接受或拒绝的 `Decision Statement`，并把
 长期约束写成稳定的 `C-NNN` 行：strength、scope、constraint、confirmation。
-下游使用 `ADR-NNN#C-NNN` 引用它们。accepted/rejected schema 1.1/1.2 ADR 的正文、
+下游使用 `ADR-NNN#C-NNN` 引用它们。accepted/rejected schema 1.1/1.2/1.3 ADR 的正文、
 Research/ADR/Design 输入和决策授权由 SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使用 `amends` 或执行
 `supersede-adr ADR-OLD --by ADR-NEW`；不要编辑旧决定。Superseded ADR 不能满足
 active ExecPlan 的 current architecture input。
@@ -210,7 +212,7 @@ active ExecPlan 的 current architecture input。
 一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
 
 - `depends_on` 表示必须同时成立的 accepted 前置决定。
-- `amends` 表示新决定只修订旧决定的一部分；schema 1.2 还必须用
+- `amends` 表示新决定只修订旧决定的一部分；schema 1.2/1.3 还必须用
   `amends_constraints` / `--amends-constraint ADR-NNN#C-NNN` 精确指出被改约束，
   两份 ADR 仍是当前决定。
 - `supersedes` 表示完整替代，旧 ADR 进入 superseded。
@@ -238,7 +240,7 @@ active ExecPlan 的 current architecture input。
 5. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
 6. 对每个需要性能、容量、可靠性或回归验收的独立维度，先完成一个稳定的
    Benchmark Scenario。不要等实现完成、看到结果后才补门禁。
-7. 运行 `new-ep` 创建 v2.6 目录和模板；对每个必需 Scenario 重复
+7. 运行 `new-ep` 创建 v2.7 目录和模板；对每个必需 Scenario 重复
    `--benchmark-scenario BS-NNN`。没有 Benchmark 门禁时保留空集合。
 8. 在 `Architecture Compliance Matrix` 中逐条映射所有 `ADR-NNN#C-NNN` 到实施
    位置和 test/lint/schema/observable evidence；Design Doc 只能解释，不能覆盖 ADR。
@@ -359,7 +361,7 @@ candidate 本身都不构成生成案例的触发条件。
 - `reindex` 从事实制品重建 Research、ADR、ExecPlan 和 Bugfix 投影。
 - CI 只调用仓库内唯一检查入口；GitHub、GitLab 或其他 CI 平台不得复制校验逻辑。
 - accepted ADR 的 Confirmation 应指向测试、lint、schema check 或明确人工验收。
-- v2.6 active EP 的 ADR 必须 current，`adr_constraint_refs` 必须精确覆盖结构化
+- v2.6/2.7 active EP 的 ADR 必须 current，`adr_constraint_refs` 必须精确覆盖结构化
   constraints，`adr_evidence` 必须匹配决定 seal，Compliance Matrix 必须逐条映射。
   completed/cancelled EP 保留当时摘要，即使 ADR 后来 superseded，也仍可作为历史证明。
 - completed v2.3+ EP 必须保存 `verified_revision` 和至少一个
@@ -368,6 +370,21 @@ candidate 本身都不构成生成案例的触发条件。
 - `benchmark:` evidence 会验证本地 sealed Manifest、精确文件清单、SHA-256、
   `passed` outcome、Scenario Gate 的一一覆盖和共同 final revision；普通
   `ci:` / `artifact:` 引用保持原语义。
+
+## 制品元数据
+
+新建 ADR、ExecPlan、Task、Checkpoint 和 Bugfix 使用统一
+`metadata_schema: "1"`，并携带稳定的 `artifact_type`、`id`、`title`、`status`、
+`author`、`owner`、`created` 和 `updated`。当前 artifact schema 分别是 ADR
+`1.3`、ExecPlan `2.7`、Task `1`、Checkpoint `1.2`、Bugfix `1`。
+
+`author` 是当前版本的实际写作者，`owner` 是持续负责者；两者不授予
+`decision_maker`、Research approval 或 Benchmark execution 权限。新建命令优先
+显式接收 `--author`/`--owner`，Task 与 Checkpoint 在边界明确时继承父 EP。
+未知 actor 使用 `Unassigned`，不得杜撰。accepted ADR、sealed Checkpoint 与归档
+ExecPlan 把 metadata 纳入 digest；旧版 sealed 制品按原 schema 保持只读兼容。
+当前 Design Doc 使用仓库内唯一的 `DD-NNN` 和相同 common metadata；注册后的
+corpus 由 `validate` 检查，legacy Design Doc 只读兼容并告警。
 
 ## 参考
 

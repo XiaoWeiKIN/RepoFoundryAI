@@ -68,6 +68,8 @@ class BenchctlTestCase(unittest.TestCase):
                 "Placement benchmark",
                 "--owner",
                 "Performance Owner",
+                "--author",
+                "Benchmark Author",
             ).stdout.strip()
         )
         self.complete_document(suite)
@@ -145,6 +147,13 @@ class BenchctlTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["schema_version"], "1.1")
+            self.assertEqual(manifest["metadata_schema"], "1")
+            self.assertEqual(manifest["artifact_type"], "benchmark-manifest")
+            self.assertEqual(manifest["id"], "BR-001-MANIFEST")
+            self.assertEqual(manifest["author"], "Benchmark Author")
+            self.assertEqual(manifest["owner"], "Performance Owner")
+            self.assertEqual(manifest["executed_by"], "Benchmark Operator")
             self.assertEqual(manifest["status"], "sealed")
             self.assertEqual(manifest["outcome"], "passed")
             self.assertEqual(manifest["run_id"], "BR-001")
@@ -169,6 +178,11 @@ class BenchctlTestCase(unittest.TestCase):
                 hashlib.sha256(b"\x00trace-native-format\xff").hexdigest(),
             )
             sealed_result = result.read_text(encoding="utf-8")
+            self.assertIn('schema_version: "1.1"', sealed_result)
+            self.assertIn('metadata_schema: "1"', sealed_result)
+            self.assertIn('artifact_type: benchmark-result', sealed_result)
+            self.assertIn('author: "Benchmark Author"', sealed_result)
+            self.assertIn('owner: "Performance Owner"', sealed_result)
             self.assertIn('status: "sealed"', sealed_result)
             self.assertIn('outcome: "passed"', sealed_result)
             evidence = self.run_cli(
@@ -185,6 +199,23 @@ class BenchctlTestCase(unittest.TestCase):
             status = self.run_cli(repository, "status").stdout
             self.assertIn("Runs: 1 (0 draft, 1 sealed)", status)
             self.assertIn("passed=1", status)
+
+    def test_current_benchmark_metadata_contract_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            suite, _ = self.create_scenario(repository)
+            suite.write_text(
+                suite.read_text(encoding="utf-8").replace(
+                    'author: "Benchmark Author"',
+                    'author: ""',
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_cli(repository, "validate", expected=1)
+
+            self.assertIn("metadata field author must be non-empty", result.stderr)
 
     def test_run_requires_predeclared_scenario_and_complete_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

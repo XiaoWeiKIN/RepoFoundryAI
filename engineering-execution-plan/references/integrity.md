@@ -22,6 +22,11 @@ flowchart LR
   completed EP。封存而不是追随 HEAD 重写；新方向通过 superseding ADR 和新
   ExecPlan 表达。
 
+当前 governed artifacts 还必须携带 Artifact Metadata Contract 的 stable ID、
+type、title/status、author/owner 和 created/updated。Raw/binary evidence 由 manifest
+携带等价 metadata 与 SHA-256。源代码、普通配置和生成索引不添加装饰性 author
+header；它们依赖 Git、CODEOWNERS、generator provenance 和 canonical source。
+
 ## Canonical check
 
 每个代码仓库只提供一个本地入口，例如 `make check`、`./scripts/check` 或
@@ -64,7 +69,8 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
 ```
 
 `verified_revision` 表示实际运行验收的版本，不必等于后续只移动/封存文档的提交。
-`archive_sha256` 封存归档后的 frontmatter 和正文，防止 revision/evidence 被
+`archive_sha256` 封存归档后的 frontmatter（包括 metadata）和正文，防止
+attribution、revision/evidence 被
 事后改写。CI 应在包含归档变更的最终 revision 上再次运行 canonical check。
 
 ## 平台适配

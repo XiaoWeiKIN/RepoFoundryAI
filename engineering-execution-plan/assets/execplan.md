@@ -1,5 +1,7 @@
 ---
-schema_version: "2.6"
+schema_version: "2.7"
+metadata_schema: "1"
+artifact_type: exec-plan
 id: {{ID}}
 title: "{{TITLE}}"
 status: active
@@ -22,6 +24,7 @@ verification_evidence: []
 archive_sha256:
 created: {{DATE}}
 updated: {{DATE}}
+author: "{{AUTHOR}}"
 owner: "{{OWNER}}"
 ---
 

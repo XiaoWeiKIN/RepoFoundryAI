@@ -1,11 +1,14 @@
 ---
 schema_version: "1"
+metadata_schema: "1"
+artifact_type: research
 id: {{ID}}
 title: "{{TITLE}}"
 status: active
 synthesis: SYNTHESIS.md
 created: {{DATE}}
 updated: {{DATE}}
+author: "{{AUTHOR}}"
 owner: "{{OWNER}}"
 ---
 

@@ -1,11 +1,18 @@
 ---
+schema_version: "1"
+metadata_schema: "1"
+artifact_type: case-study
+id: "{{ID}}"
 doc_type: case-study
+title: "{{TITLE}}"
 status: draft
 case_type: "{{CASE_TYPE}}"
 language: en
 audience: "{{AUDIENCE}}"
 created: {{DATE}}
+updated: {{DATE}}
 last_verified:
+author: "{{AUTHOR}}"
 owner: "{{OWNER}}"
 source_revision: "{{SOURCE_REVISION}}"
 translation_of:

@@ -87,6 +87,77 @@ class RepositoryContractTestCase(unittest.TestCase):
             raise AssertionError(f"section not found: {heading}")
         path.write_text(updated, encoding="utf-8")
 
+    def test_governed_templates_and_design_docs_expose_common_metadata(self) -> None:
+        template_profiles = {
+            "engineering-research/assets/research.md": "research",
+            "engineering-research/assets/synthesis.md": "research-synthesis",
+            "engineering-research/assets/round.md": "research-round",
+            "engineering-research/assets/topic.md": "research-topic",
+            "engineering-execution-plan/assets/research.md": "research",
+            "engineering-execution-plan/assets/synthesis.md": "research-synthesis",
+            "engineering-execution-plan/assets/adr.md": "adr",
+            "engineering-execution-plan/assets/execplan.md": "exec-plan",
+            "engineering-execution-plan/assets/task.md": "task",
+            "engineering-execution-plan/assets/checkpoint.md": "checkpoint",
+            "engineering-execution-plan/assets/bugfix.md": "bugfix",
+            "engineering-benchmark/assets/suite.md": "benchmark-suite",
+            "engineering-benchmark/assets/scenario.md": "benchmark-scenario",
+            "engineering-benchmark/assets/result.md": "benchmark-result",
+            "engineering-case-study/assets/case-study.en.md": "case-study",
+            "engineering-case-study/assets/case-study.zh-CN.md": "case-study",
+        }
+        common_fields = (
+            "metadata_schema",
+            "artifact_type",
+            "id",
+            "title",
+            "status",
+            "author",
+            "owner",
+            "created",
+            "updated",
+        )
+        for relative, artifact_type in template_profiles.items():
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            frontmatter = text.split("---", 2)[1]
+            for field in common_fields:
+                self.assertRegex(frontmatter, rf"(?m)^{field}:")
+            self.assertRegex(
+                frontmatter,
+                rf"(?m)^artifact_type:\s+{re.escape(artifact_type)}$",
+            )
+
+        manifest_asset = (
+            ROOT / "engineering-research/assets/manifest.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"metadata_schema": "1"', manifest_asset)
+        self.assertIn(
+            '"artifact_type": "research-manifest"',
+            manifest_asset,
+        )
+        for field in common_fields:
+            self.assertIn(f'"{field}":', manifest_asset)
+
+        design_ids: list[str] = []
+        for path in sorted((ROOT / "docs/design-docs").glob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            frontmatter = text.split("---", 2)[1]
+            for field in common_fields:
+                self.assertRegex(frontmatter, rf"(?m)^{field}:\s+\S")
+            self.assertRegex(
+                frontmatter,
+                r"(?m)^artifact_type:\s+design-doc$",
+            )
+            match = re.search(r"(?m)^id:\s+(DD-\d{3,})$", frontmatter)
+            self.assertIsNotNone(match, path)
+            design_ids.append(match.group(1))
+        self.assertEqual(len(design_ids), len(set(design_ids)))
+        self.assertTrue(
+            (ROOT / "docs/design-docs/artifact-metadata-contract.md").is_file()
+        )
+
     def test_cache_topology_example_is_an_executable_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
@@ -229,7 +300,8 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.6"', plan_text)
+            self.assertIn('schema_version: "2.7"', plan_text)
+            self.assertIn('metadata_schema: "1"', plan_text)
             self.assertIn("required_benchmark_scenarios: []", plan_text)
             self.assertIn("research_gate: satisfied", plan_text)
             self.assertIn(
@@ -683,7 +755,8 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.6"', plan_text)
+            self.assertIn('schema_version: "2.7"', plan_text)
+            self.assertIn('metadata_schema: "1"', plan_text)
             self.assertIn(
                 'required_benchmark_scenarios: ["BS-001", "BS-002"]',
                 plan_text,

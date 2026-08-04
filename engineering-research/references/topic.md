@@ -1,7 +1,8 @@
 # Learning-first structured topic documents
 
 A structured topic is one auditable explanation inside a Research corpus.
-Schema 2.2 gives each topic a stable `RT-NNN` identity and serves three readers
+Schema 2.3 gives each topic a stable `RT-NNN` identity, common artifact
+metadata, and serves three readers
 without forcing them through the same path:
 
 - a decision-maker can stop after the brief and implications;
@@ -34,7 +35,7 @@ flowchart LR
 
 ## Create a topic
 
-Create topics only in an in-progress schema 1.1 Research:
+Create topics only in an in-progress schema 1.1 or 1.2 Research:
 
 ```bash
 python3 <skill-dir>/scripts/researchctl.py --repo . new-topic R-001 \
@@ -49,7 +50,7 @@ The command:
 - verifies every referenced `RQ-NNN`;
 - allocates the next non-reusable `RT-NNN` within the parent Research;
 - binds the topic to the current `RR-NNN`;
-- creates a schema 2.2 topic at `notes/<slug>.md`;
+- creates a schema 2.3 topic at `notes/<slug>.md`;
 - links it from the current Round's `Evidence Added`;
 - refreshes the manifest and records `role: topic` plus `topic_id`;
 - rolls back the topic, Round, and manifest together on failure.
@@ -64,11 +65,20 @@ file path, author, or Round changes. The filename stays semantic; identity
 lives in frontmatter and the manifest:
 
 ```yaml
-schema_version: "2.2"
+schema_version: "2.3"
+metadata_schema: "1"
+artifact_type: research-topic
+id: RT-004
 doc_type: research-topic
 parent_id: R-001
 topic_id: RT-004
 round_id: RR-003
+title: "Stateless HTTP and MCP session model"
+status: active
+author: "Security Researcher"
+owner: "Platform Architecture Owner"
+created: 2026-08-04
+updated: 2026-08-04
 ```
 
 Display the identity at the start of the H1:
@@ -226,10 +236,11 @@ changes them together.
 
 ## Validation and compatibility
 
-`researchctl validate` enforces the schema 2.2 structural floor:
+`researchctl validate` enforces the schema 2.3 structural floor:
 
 - schema, parent Research, stable unique Topic ID, visible H1 identity, Round,
-  author field, and kebab-case filename;
+  common metadata, parent Research, stable identity, Round, and kebab-case
+  filename;
 - a real link from the declared Round's `Evidence Added`;
 - all semantic roles exactly once and in relative order;
 - at least one valid parent `RQ-NNN`;
@@ -246,7 +257,8 @@ duplicate IDs or references to unknown analysis/evidence remain errors.
 
 Existing schema 1 topics keep their original 14-section, `E-NNN`, and `F-NNN`
 contract. Existing schema 2 claim-card and schema 2.1 learning-first topics
-also remain valid without Topic IDs. New topics use schema 2.2. Migrate an
+also remain valid without Topic IDs. Schema 2.2 topics remain compatible; new
+topics use schema 2.3. Migrate an
 older topic only when an author is already revising it; assign IDs in the
 intended reading order, then keep them stable.
 

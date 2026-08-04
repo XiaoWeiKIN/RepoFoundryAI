@@ -114,7 +114,9 @@ Changing the reusable Scenario affects future Runs only.
 
 | Field | Requirement |
 |---|---|
-| `schema_version` | `"1"` |
+| `schema_version` | Current producer writes `"1.1"`; `"1"` remains legacy-compatible |
+| `metadata_schema` | Shared metadata contract `"1"` |
+| `artifact_type` | `benchmark-result` |
 | `id` | Run ID |
 | `suite_id` / `scenario_id` | Existing parent identities |
 | `status` | `draft` or `sealed` |
@@ -123,7 +125,8 @@ Changing the reusable Scenario affects future Runs only.
 | `harness_revision` | Immutable benchmark harness ref |
 | `supersedes` | Zero or more older sealed Run IDs |
 | `manifest` | `EVIDENCE_MANIFEST.json` |
-| timestamps and executor | Creation and sealing provenance |
+| `title`, `author`, `owner`, `created`, `updated` | Portable identity, authorship, accountability, and time provenance |
+| `executed_by`, `completed` | Explicit sealing executor and event time; never inferred from author/owner |
 
 The body separates:
 
@@ -148,13 +151,20 @@ URL alone is not sealed evidence.
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "1.1",
+  "metadata_schema": "1",
+  "artifact_type": "benchmark-manifest",
+  "id": "BR-001-MANIFEST",
   "run_id": "BR-001",
   "suite_id": "B-001",
   "scenario_id": "BS-001",
   "status": "sealed",
+  "title": "Candidate A at 10k spans/s — Evidence manifest",
+  "author": "Codex",
+  "owner": "Observability Performance Owner",
   "outcome": "passed",
   "created": "2026-07-30T00:00:00Z",
+  "updated": "2026-07-30T00:10:00Z",
   "sealed_at": "2026-07-30T00:10:00Z",
   "executed_by": "Benchmark Operator",
   "files": [
@@ -185,6 +195,13 @@ Validation recomputes the complete local inventory, every byte count and file
 digest, and the canonical payload digest. Adding an artifact after sealing is
 drift, even when existing files are unchanged.
 
+Suite and Scenario documents use the same metadata layer with artifact types
+`benchmark-suite` and `benchmark-scenario`. The Scenario snapshot copied into a
+Run preserves that metadata. `author` identifies who prepared the document;
+`owner` identifies the accountable Benchmark boundary; `executed_by` records
+the distinct run event authority. A current Manifest carries equivalent
+metadata because raw and binary evidence cannot reliably embed it.
+
 ## Immutability and supersession
 
 A sealed Run is append-only history. Do not edit it to fix prose, update a
@@ -212,7 +229,7 @@ A consumer resolves a Run by repository identity, then:
 6. never assumes the producer Skill or CLI is installed.
 
 Research may cite several Runs and decide what they mean together. ExecPlan
-v2.5 may predeclare several Scenario IDs as independent completion gates. Its
+v2.5+ may predeclare several Scenario IDs as independent completion gates. Its
 accepted Benchmark references must cover that exact Scenario set one-to-one;
 every Run must be `passed`, sealed, and have `subject_revision` equal to the
 single EP `verified_revision`. The EP does not aggregate unlike Scenarios into a

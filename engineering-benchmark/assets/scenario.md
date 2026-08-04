@@ -1,9 +1,13 @@
 ---
-schema_version: "1"
+schema_version: "1.1"
+metadata_schema: "1"
+artifact_type: benchmark-scenario
 id: {{ID_JSON}}
 suite_id: {{SUITE_ID_JSON}}
 title: {{TITLE_JSON}}
 status: "active"
+author: {{AUTHOR_JSON}}
+owner: {{OWNER_JSON}}
 created: {{DATE_JSON}}
 updated: {{DATE_JSON}}
 ---
