@@ -78,7 +78,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.0
+  upgrade --to 0.2.1
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -123,9 +123,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.0
+  upgrade --to 0.2.1
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.0 --apply
+  upgrade --to 0.2.1 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -145,13 +145,13 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --adapter codex --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  spec update --spec-version 1.2.0 --spec languages/go --apply
+  spec update --spec-version 1.3.0 --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 默认 Catalog 来自
 `https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`，默认固定版本为
-`1.2.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
+`1.3.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
 `refs/tags/vMAJOR.MINOR.PATCH`，解析器必须验证 tag 与 `catalog_version` 一致。
 首次初始化可用 `--spec-repository` 选择其他仓库；`--spec-ref` 只用于显式开发
 分支、tag 或 commit。manifest 保存 Git URL/ref。`sync` 使用已有 lock 的 commit；

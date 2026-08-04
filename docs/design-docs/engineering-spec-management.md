@@ -206,7 +206,7 @@ configuration:
   "catalog": {
     "kind": "git",
     "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
-    "ref": "refs/tags/v1.2.0"
+    "ref": "refs/tags/v1.3.0"
   },
   "specs": [
     "core/semantic-naming",
@@ -233,11 +233,11 @@ not begin with `-`. Production release refs use the exact canonical form
 {
   "kind": "git",
   "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
-  "ref": "refs/tags/v1.2.0"
+  "ref": "refs/tags/v1.3.0"
 }
 ```
 
-The default Catalog release is `1.2.0`. The option
+The default Catalog release is `1.3.0`. The option
 `--spec-version MAJOR.MINOR.PATCH` constructs the canonical release ref; the resolver rejects
 the source unless its `catalog_version` equals the requested version.
 `--spec-ref` remains an explicit development escape hatch for a branch, custom
@@ -414,7 +414,7 @@ Codex requires trust review for each exact non-managed Hook definition.
 - `--required-only` previews and removes only unchanged, previously locked
   optional managed copies.
 - Repeated Bootstrap and Spec sync operations are byte-idempotent.
-- The default absent-manifest plan uses `refs/tags/v1.2.0`, and exact release
+- The default absent-manifest plan uses `refs/tags/v1.3.0`, and exact release
   refs whose Catalog version differs fail before writes.
 - `spec sync` remains pinned after the tracked branch or tag moves; an explicit
   version/ref update adopts a new source and commit.

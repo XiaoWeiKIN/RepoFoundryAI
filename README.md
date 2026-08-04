@@ -230,7 +230,7 @@ portable project adapter without either host directory.
 Examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.1 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
@@ -249,12 +249,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.2.0`
+distribution upgrade, run this in each existing project and replace `0.2.1`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.2.0
-repofoundry --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . upgrade --to 0.2.1
+repofoundry --repo . upgrade --to 0.2.1 --apply
 repofoundry --repo . validate
 ```
 
@@ -353,13 +353,13 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.2.0
-repofoundry --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . upgrade --to 0.2.1
+repofoundry --repo . upgrade --to 0.2.1 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.2.0 --spec languages/go --apply
+  spec update --spec-version 1.3.0 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -373,12 +373,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.2.0` uses Harness schema `3`, Harness Core `1.1.0`, Codex
+RepoFoundry `0.2.1` uses Harness schema `3`, Harness Core `1.1.0`, Codex
 adapter `2.1.0`, Claude adapter `1.0.0`, Portable adapter `1.0.0`, and
 activation protocol `1`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.2.0 --apply`. Earlier schema `3` Core `1.0.0` and Codex `2.0.0`
+`upgrade --to 0.2.1 --apply`. Earlier schema `3` Core `1.0.0` and Codex `2.0.0`
 contracts also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
@@ -390,10 +390,11 @@ Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog. `sync` follows the locked commit; `update` explicitly resolves the
 selected release again. New repositories default to fixed Catalog version
-`1.2.0`, represented as `refs/tags/v1.2.0`; production upgrades name another
+`1.3.0`, represented as `refs/tags/v1.3.0`; production upgrades name another
 version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
 remains an explicit development-source escape hatch. `spec validate` is
-offline.
+offline. Installing RepoFoundry `0.2.1` or upgrading only the Harness does not
+rewrite an existing project Spec manifest, lock, index, or managed content.
 
 `spec plan` lists every Catalog entry and separates required, recommended,
 configured, and dependency-closed selected sets. Detection only recommends

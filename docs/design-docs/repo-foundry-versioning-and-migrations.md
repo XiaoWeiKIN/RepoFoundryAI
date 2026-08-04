@@ -21,32 +21,39 @@ RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and gene
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The current distribution is `0.2.0`. It writes Harness schema `3`, Core
+The current distribution is `0.2.1`. It writes Harness schema `3`, Core
 `1.1.0`, Codex adapter `2.1.0`, Claude adapter `1.0.0`, Portable adapter
 `1.0.0`, and activation protocol `1`. Engineering Specifications keep their
-independent Catalog version and lock lifecycle. Distribution `0.1.0`, schemas
-`1` and `2`, Core `1.0.0`, Codex adapter `2.0.0`, and Codex profile `1.0.0`
-remain migration inputs rather than the current model.
+independent Catalog version and lock lifecycle. Distributions `0.1.0` and
+`0.2.0`, schemas `1` and `2`, Core `1.0.0`, Codex adapter `2.0.0`, and Codex
+profile `1.0.0` remain migration inputs rather than the current model.
 
 ## Independent version planes
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.2.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| RepoFoundry distribution | `0.2.1` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
 | Harness Core | `1.1.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and activation behavior |
 | Codex adapter | `2.1.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
 | Claude adapter | `1.0.0` | `adapters[]`, adapter file records | Claude project Skills with CLI/advisory activation |
 | Portable adapter | `1.0.0` | `adapters[]`, adapter file records | CLI and advisory integration |
 | Activation protocol | `1` | Core executable and adapter capability output | Normalized event and decision semantics |
-| Engineering Specs Catalog | `1.2.0` by default | `specs.json`, `specs.lock.json` | Independently selected engineering guidance release |
+| Engineering Specs Catalog | `1.3.0` by default | `specs.json`, `specs.lock.json` | Independently selected engineering guidance release |
 
 No plane inherits another plane's version. A Spec update does not migrate the
 Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
 
+Release `0.2.1` changes the default Catalog used only when a project does not
+yet have `docs/.engineering/specs.json`: new projects start from
+EngineeringSpecifications `1.3.0`. Installing the distribution or upgrading a
+Harness from `0.2.0` to `0.2.1` MUST NOT rewrite an existing Spec manifest,
+lock, routing index, or managed Markdown. Existing projects adopt Catalog
+`1.3.0` only through an explicit, previewed `spec update`.
+
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.2.0"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.2.1"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
     U --> C["Harness Core 1.1.0"]
