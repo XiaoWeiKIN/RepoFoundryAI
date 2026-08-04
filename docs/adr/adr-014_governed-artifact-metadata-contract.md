@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: adr
 id: ADR-014
 title: "Require semantic metadata for governed engineering artifacts"
-status: proposed
+status: accepted
 research_refs: []
 depends_on: []
 amends: []
@@ -12,9 +12,9 @@ amends_constraints: []
 design_refs: ["docs/design-docs/artifact-metadata-contract.md"]
 supersedes: []
 superseded_by:
-decision_maker:
-decided:
-payload_sha256:
+decision_maker: "Repository Owner (explicitly accepted ADR-014 in the current Codex conversation on 2026-08-04)"
+decided: "2026-08-04T07:33:38Z"
+payload_sha256: bf56752a919cc0bc807ef703db9cb8e4192a1e1495597b954412db93a915b1e7
 created: 2026-08-04
 updated: 2026-08-04
 author: "Codex"
