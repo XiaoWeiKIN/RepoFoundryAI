@@ -31,13 +31,19 @@ flowchart LR
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 ```
 
 安装器选择最新稳定 GitHub Release，把 tag 固定到 commit，记录归档 SHA-256，
 验证完整暂存包后原子切换当前版本，并暴露 `repofoundry` CLI。默认只为检测到的
-Agent host 注册发现入口；`--host codex` 显式注册 Codex，`--host none` 只安装
-产品中立的 CLI 且不改动既有宿主注册。`--version MAJOR.MINOR.PATCH` 固定版本，重复安装同一版本为
-no-op，旧的不可变 release 和被替换的非托管宿主目录保留用于恢复。
+Agent host 注册发现入口；`--host codex` 显式注册 Codex，`--host claude` 在
+`$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai`（未设置时为
+`~/.claude/skills/repo-foundry-ai`）注册 Claude Code，
+`--host none` 只安装产品中立的 CLI 且不改动既有宿主注册。`--host auto` 会注册
+检测到的全部受支持宿主。`--version MAJOR.MINOR.PATCH` 固定版本，重复安装同一版本为
+no-op，旧的不可变 release 和被替换的非托管宿主目录保留用于恢复。Claude 宿主
+注册只提供根 Skill 发现；项目 Harness 在原生 Claude adapter 发布前仍使用
+`portable` adapter。
 
 发行包升级不扫描或修改项目仓库。安装新版工具后，目标项目仍必须单独执行
 `repofoundry --repo PATH upgrade --to VERSION` 预览 Harness migration，并在用户
