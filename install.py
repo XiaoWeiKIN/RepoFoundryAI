@@ -158,6 +158,11 @@ def default_codex_home() -> Path:
     return Path(configured).expanduser() if configured else Path.home() / ".codex"
 
 
+def default_claude_home() -> Path:
+    configured = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(configured).expanduser() if configured else Path.home() / ".claude"
+
+
 def normalized_path(path: Path) -> Path:
     return Path(os.path.abspath(os.fspath(path.expanduser())))
 
@@ -649,19 +654,39 @@ def symlink_resolves_to(path: Path, expected: Path) -> bool:
         return False
 
 
-def select_hosts(selection: str, codex_home: Path, explicit_home: bool) -> list[str]:
+def select_hosts(
+    selection: str,
+    codex_home: Path,
+    explicit_codex_home: bool,
+    claude_home: Path | None = None,
+    explicit_claude_home: bool = False,
+) -> list[str]:
     if selection == "none":
         return []
-    if selection == "codex":
-        return ["codex"]
-    if explicit_home or os.environ.get("CODEX_HOME") or codex_home.exists():
-        return ["codex"]
-    return []
+    if selection in ("codex", "claude"):
+        return [selection]
+
+    resolved_claude_home = claude_home or default_claude_home()
+    hosts: list[str] = []
+    if (
+        explicit_codex_home
+        or os.environ.get("CODEX_HOME")
+        or codex_home.exists()
+    ):
+        hosts.append("codex")
+    if (
+        explicit_claude_home
+        or os.environ.get("CLAUDE_CONFIG_DIR")
+        or resolved_claude_home.exists()
+    ):
+        hosts.append("claude")
+    return hosts
 
 
 def retained_host_integrations(
     previous: dict[str, Any] | None,
     current: Path,
+    excluded_hosts: set[str] | None = None,
 ) -> list[dict[str, str]]:
     if previous is None:
         return []
@@ -676,6 +701,8 @@ def retained_host_integrations(
         raw_path = record.get("path")
         if not isinstance(host, str) or not isinstance(raw_path, str):
             raise InstallError("install metadata host integration is invalid")
+        if excluded_hosts and host in excluded_hosts:
+            continue
         path = normalized_path(Path(raw_path))
         if symlink_resolves_to(path, current):
             retained.append(
@@ -720,10 +747,12 @@ def _install_package_locked(
     hosts: list[str],
     codex_home: Path,
     allow_downgrade: bool,
+    claude_home: Path | None = None,
 ) -> dict[str, Any]:
     prefix = normalized_path(prefix)
     bin_dir = normalized_path(bin_dir)
     codex_home = normalized_path(codex_home)
+    claude_home = normalized_path(claude_home or default_claude_home())
     releases = prefix / "releases"
     metadata_path = prefix / "install.json"
     current = prefix / "current"
@@ -799,22 +828,33 @@ def _install_package_locked(
             transaction.snapshot(launcher)
         atomic_write(launcher, launcher_bytes(current), 0o755)
 
-        if "codex" in hosts:
-            link = codex_home / "skills" / PRODUCT_ID
+        host_homes = {
+            "codex": codex_home,
+            "claude": claude_home,
+        }
+        selected_hosts: set[str] = set()
+        for host in hosts:
+            try:
+                host_home = host_homes[host]
+            except KeyError as exc:
+                raise InstallError(f"unsupported Agent host: {host}") from exc
+            link = host_home / "skills" / PRODUCT_ID
             desired = current
             if not symlink_resolves_to(link, desired):
                 if link.exists() or link.is_symlink():
-                    backup = backup_path(prefix, "codex-skill")
+                    backup = backup_path(prefix, f"{host}-skill")
                     transaction.move_to_backup(link, backup)
                     backups.append(str(backup))
                 else:
                     transaction.snapshot(link)
                 atomic_symlink(link, str(desired))
             selected_host_links.append(
-                {"host": "codex", "path": str(link), "target": str(desired)}
+                {"host": host, "path": str(link), "target": str(desired)}
             )
-        else:
-            selected_host_links.extend(retained_host_integrations(previous, current))
+            selected_hosts.add(host)
+        selected_host_links.extend(
+            retained_host_integrations(previous, current, selected_hosts)
+        )
 
         result = subprocess.run(
             [str(launcher), "--version"],
@@ -871,6 +911,7 @@ def install_package(
     hosts: list[str],
     codex_home: Path,
     allow_downgrade: bool,
+    claude_home: Path | None = None,
 ) -> dict[str, Any]:
     locked_prefix = normalized_path(prefix)
     locked_prefix.mkdir(parents=True, exist_ok=True)
@@ -887,6 +928,7 @@ def install_package(
                 hosts,
                 codex_home,
                 allow_downgrade,
+                claude_home,
             )
         finally:
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
@@ -910,14 +952,15 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--bin-dir", type=Path, default=default_bin_dir())
     result.add_argument(
         "--host",
-        choices=("auto", "codex", "none"),
+        choices=("auto", "codex", "claude", "none"),
         default="auto",
         help=(
-            "Agent host registration: auto detects, codex ensures the link, "
-            "and none leaves host registrations unchanged"
+            "Agent host registration: auto detects supported hosts, codex or "
+            "claude ensures that host link, and none leaves registrations unchanged"
         ),
     )
     result.add_argument("--codex-home", type=Path)
+    result.add_argument("--claude-home", type=Path)
     result.add_argument(
         "--source",
         type=Path,
@@ -970,7 +1013,15 @@ def main(arguments: list[str] | None = None) -> int:
         validate_install_locations(prefix, bin_dir, args.source)
         explicit_codex_home = args.codex_home is not None
         codex_home = normalized_path(args.codex_home or default_codex_home())
-        hosts = select_hosts(args.host, codex_home, explicit_codex_home)
+        explicit_claude_home = args.claude_home is not None
+        claude_home = normalized_path(args.claude_home or default_claude_home())
+        hosts = select_hosts(
+            args.host,
+            codex_home,
+            explicit_codex_home,
+            claude_home,
+            explicit_claude_home,
+        )
         scratch_parent = prefix.parent
         scratch_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(
@@ -989,6 +1040,7 @@ def main(arguments: list[str] | None = None) -> int:
                 hosts,
                 codex_home,
                 args.allow_downgrade,
+                claude_home,
             )
     except (InstallError, OSError, subprocess.SubprocessError) as exc:
         print(f"install: {exc}", file=sys.stderr)

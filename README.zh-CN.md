@@ -132,19 +132,33 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 
 安装器默认选择 GitHub 最新稳定 Release，把 tag 解析到不可变 commit，记录下载
 归档的 SHA-256，验证暂存包后再原子切换当前版本。默认安装到 XDG 用户数据目录，
-在用户本地 bin 目录暴露 `repofoundry`，并且只在检测到 Codex 时注册根 Skill。
-其他 Agent 可以直接使用同一 CLI 和 portable adapter，不需要 Codex 目录。重复执行
-当前版本会返回 no-op。
+在用户本地 bin 目录暴露 `repofoundry`，并为检测到的 Codex 与 Claude Code 注册根
+Skill。Claude Code 注册遵循其官方配置根目录：
+设置环境变量时使用 `$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai`，否则使用
+`~/.claude/skills/repo-foundry-ai`。其他 Agent 可以直接使用同一 CLI 和 portable
+adapter，不需要这两个宿主目录。重复执行当前版本会返回 no-op。
 
 在 `python3 -` 后传参即可固定版本或宿主策略：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-`--host none` 不新增宿主注册，也不会删除既有注册，适合只使用 CLI 或自行配置
-Agent host 的环境。
+`--host codex` 与 `--host claude` 会确保对应的个人 Skill 链接存在；如果目标位置
+已有非托管内容，安装器会先备份再替换。`--host auto` 注册检测到的全部受支持
+宿主；`--host none` 不新增宿主注册，也不会删除既有注册。Claude Code 配置根目录
+可通过 `CLAUDE_CONFIG_DIR` 或 `--claude-home` 覆盖。
+目录软链接发现要求 Claude Code 2.1.203 或更高版本。
+
+这项宿主注册只负责让 Claude Code 发现 `/repo-foundry-ai`，不把它描述成完整的
+Claude 项目 Harness adapter。在独立版本的 Claude adapter 发布前，项目继续使用
+portable adapter：
+
+```bash
+repofoundry --repo . bootstrap --adapter portable --apply
+```
 
 命令会报告当前 package home、CLI 路径、宿主链接和所有保留的备份。如果 bin
 目录尚未进入 `PATH`，安装器会输出需要加入的精确目录。安装后验证：

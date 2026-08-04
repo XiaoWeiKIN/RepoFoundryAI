@@ -366,7 +366,10 @@ class RepositoryContractTestCase(unittest.TestCase):
         installer = installer_path.read_text(encoding="utf-8")
         self.assertIn('DEFAULT_REPOSITORY = "XiaoWeiKIN/RepoFoundryAI"', installer)
         self.assertIn('"project_harnesses_modified": False', installer)
-        self.assertIn('choices=("auto", "codex", "none")', installer)
+        self.assertIn(
+            'choices=("auto", "codex", "claude", "none")',
+            installer,
+        )
         self.assertIn('"releases/latest"', installer)
         self.assertIn("resolve_tag_commit", installer)
         self.assertIn("archive_sha256", installer)
@@ -384,6 +387,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             "--bin-dir",
             "--host",
             "--codex-home",
+            "--claude-home",
             "--source",
             "--allow-downgrade",
             "--json",
@@ -395,7 +399,9 @@ class RepositoryContractTestCase(unittest.TestCase):
             "XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -"
         )
         for document in (ROOT / "README.md", ROOT / "README.zh-CN.md", ROOT / "SKILL.md"):
-            self.assertIn(command, document.read_text(encoding="utf-8"))
+            content = document.read_text(encoding="utf-8")
+            self.assertIn(command, content)
+            self.assertIn(f"{command} --host claude", content)
 
     def test_repofoundry_ai_brand_assets_are_valid(self) -> None:
         brand = ROOT / "assets" / "brand"

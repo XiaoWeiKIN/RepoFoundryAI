@@ -143,19 +143,35 @@ The installer selects the latest stable GitHub release, resolves its tag to an
 immutable commit, records the downloaded archive SHA-256, validates the staged
 package, and atomically activates it. By default it installs under the XDG user
 data directory, exposes `repofoundry` in the user-local bin directory, and
-registers the root Skill with Codex only when that host is detected. Other
-Agents can use the same CLI and portable adapter without a Codex directory.
-Repeating the command at the current release is a no-op.
+registers the root Skill with every detected Codex or Claude Code host. Claude
+Code registration follows its official configuration root: the Skill lives at
+`$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai` when that variable is set, and at
+`~/.claude/skills/repo-foundry-ai` otherwise. Other Agents can use the same CLI
+and portable adapter without either host directory. Repeating the command at
+the current release is a no-op.
 
 Choose an exact release or host policy by passing arguments after `python3 -`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-`--host none` leaves existing host registrations unchanged and creates none on
-a fresh install. It is useful for CLI-only or manually configured Agent hosts.
+`--host codex` and `--host claude` ensure the requested personal Skill link,
+backing up an existing non-managed path before replacing it. `--host auto`
+registers every detected supported host, while `--host none` leaves existing
+host registrations unchanged and creates none on a fresh install. Override the
+Claude Code configuration root with `CLAUDE_CONFIG_DIR` or `--claude-home`.
+Directory symlink discovery requires Claude Code 2.1.203 or later.
+
+This host registration makes `/repo-foundry-ai` discoverable in Claude Code;
+it does not claim a native Claude project Harness adapter. Use the portable
+adapter for repositories until a separately versioned Claude adapter ships:
+
+```bash
+repofoundry --repo . bootstrap --adapter portable --apply
+```
 
 The command reports the active package home, CLI path, host links, and every
 backup it preserves. If the bin directory is not already on `PATH`, it prints
