@@ -77,9 +77,11 @@ RepoFoundry 只创建已选择能力拥有的路径。完整使用后，目标�
 
 ```text
 target-repository/
-├── AGENTS.md
+├── AGENTS.md                         # 仅 Codex adapter
 ├── ARCHITECTURE.md
-├── .agents/skills/engineering-specs/ # 单个项目级任务 Router Skill
+├── .repo-foundry/engineering-specs/
+│   └── spec_router.py                # 共享激活引擎
+├── .agents/skills/engineering-specs/ # Codex adapter 入口
 │   ├── SKILL.md
 │   ├── agents/openai.yaml
 │   └── scripts/spec_router.py
@@ -102,7 +104,9 @@ target-repository/
     │   ├── harness.json
     │   ├── specs.json
     │   └── specs.lock.json
-    ├── agent-guides/managed/
+    ├── agent-guides/
+    │   ├── README.md                  # Portable adapter 入口
+    │   └── managed/
     ├── design-docs/
     ├── research/{active,completed}/
     ├── adr/
@@ -147,9 +151,9 @@ RepoFoundry 不要求安装到某个 Agent 的私有目录。只要保留这些 
 初始化仓库：
 
 ```text
-使用 $repo-foundry-ai 盘点当前仓库，预览 Codex Harness Bootstrap，并报告
-create、preserve 和 conflict。只有预览无冲突时才应用，随后验证 Harness
-和本地 Specs。
+使用 $repo-foundry-ai 盘点当前仓库，预览 Agent-neutral Harness Core 与合适的
+adapter，并报告 create、preserve 和 conflict。只有预览无冲突时才应用，随后
+验证 Harness 和本地 Specs。
 ```
 
 路由专业工作：
@@ -198,12 +202,14 @@ RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
 python3 "$FOUNDRYCTL" --version
-python3 "$FOUNDRYCTL" --repo . bootstrap --profile codex
+python3 "$FOUNDRYCTL" --repo . adapter list
+python3 "$FOUNDRYCTL" --repo . bootstrap --adapter portable
 python3 "$FOUNDRYCTL" --repo . \
-  bootstrap --profile codex --spec languages/go --apply
+  bootstrap --adapter codex --adapter portable --spec languages/go --apply
 python3 "$FOUNDRYCTL" --repo . validate --harness
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0
-python3 "$FOUNDRYCTL" --repo . upgrade --to 0.1.0 --apply
+python3 "$FOUNDRYCTL" --repo . validate --adapter codex
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0
+python3 "$FOUNDRYCTL" --repo . upgrade --to 0.2.0 --apply
 
 python3 "$FOUNDRYCTL" --repo . spec plan
 python3 "$FOUNDRYCTL" --repo . spec sync --apply
@@ -218,12 +224,13 @@ python3 "$EPCTL" --repo . status
 ```
 
 Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创建缺失路径，
-保留仓库已有文件。Codex profile 注册的 Agent instruction file 不得超过 100 个
-物理行。
+保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
+`AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.1.0` 引入 Harness schema `2` 和 Codex profile `1.0.0`；三者与
-Engineering Specs Catalog 各自独立演进。schema `1` 继续可读，但只有显式执行
-`upgrade --to 0.1.0 --apply` 才会迁移。versioned seed 只有在文件字节仍匹配记录的
+RepoFoundry `0.2.0` 引入 Harness schema `3`、Harness Core `1.0.0`、Codex
+adapter `2.0.0`、Portable adapter `1.0.0` 与激活协议 `1`；它们与 Engineering
+Specs Catalog 各自独立演进。schema `1` 和 `2` 继续可读，但只有显式执行
+`upgrade --to 0.2.0 --apply` 才会迁移。versioned seed 只有在文件字节仍匹配记录的
 installed SHA-256 时才自动替换；定制文件或来源未知文件保持原样，写后验证失败会
 回滚。完整契约见
 [版本与迁移设计](./docs/design-docs/repo-foundry-versioning-and-migrations.md)。
@@ -243,9 +250,9 @@ Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
 
 ## 为每个任务激活规范
 
-安装与任务激活是两个阶段。Bootstrap 只生成一个项目级
-`$engineering-specs` Router Skill，不会把每份 Spec 都变成 Skill。实现或评审前，
-Router 会：
+安装与任务激活是两个阶段。Bootstrap 只安装一个共享激活引擎，不会把每份 Spec
+都变成 Skill。Codex adapter 暴露 `$engineering-specs`，Portable adapter 通过显式
+CLI instruction 使用同一引擎。实现或评审前，引擎会：
 
 1. 用计划路径匹配 lock 中的 Catalog 作用域；
 2. 要求 Agent 读取候选 description 与 Applicability；
@@ -255,20 +262,22 @@ Router 会：
 
 ```mermaid
 flowchart LR
-    P["Prompt + 计划路径"] --> R["$engineering-specs Router"]
+    P["Prompt + 计划路径"] --> D["Agent adapter"]
+    D --> R["共享激活引擎"]
     L["锁定的本地 Specs"] --> R
     R --> A["Turn 激活回执"]
-    A --> G["受信任 Codex Hooks"]
-    G --> W["实现或评审"]
+    A --> W["实现或评审"]
     W --> H["变更路径 + 交接审计"]
 ```
 
-生成的 Codex Hooks 在 `UserPromptSubmit` 建立 Git 基线，把契约传给子 Agent，
+Core 只识别标准化的 `session_start`、`subagent_start`、`before_mutation`、`stop`。
+Codex adapter 翻译原生事件：生成的 Hooks 在 `UserPromptSubmit` 建立 Git 基线，把契约传给子 Agent，
 在激活前拒绝 Bash 或 `apply_patch` 写入，在首次写入前注入已激活的本地全文，并在
 `Stop` 审计实际变更路径。项目只有在仓库受信任、用户通过 Codex `/hooks` 审查
 精确命令后才运行这些 Hooks。Hooks 被禁用或不可用时，Skill 仍是人工契约，但不再
 具有机械写入门禁；Agent 必须在写入前运行 Router `begin`，并在完成前用包含五字段
-交接的 `audit --message` 检查路径。
+交接的 `audit --message` 检查路径。Portable 默认采用这条手动路径，并明确报告
+CLI/advisory enforcement，而不是机械门禁。
 
 ## 清晰边界保证系统可信
 
@@ -278,6 +287,8 @@ flowchart LR
 - Bootstrap 不覆盖仓库自有文档。
 - 规范正文保留在独立 EngineeringSpecifications 仓库。
 - RepoFoundry 只生成一个任务 Router，不为每份 Spec 创建一个 Skill。
+- Core 不包含任何 Agent 产品事件、工具 payload、信任模型或 instruction 格式；
+  这些翻译全部属于 adapter。
 - 项目 Hooks 是受信任 Codex 项目中的护栏，不是对其他 Agent 或禁用 Hook 环境的
   通用强制保证。
 - 只有用户明确要求分享时才创建 Case Study。
@@ -324,6 +335,7 @@ RepoFoundry AI：
 - [系统身份与 packaging](./docs/design-docs/repo-foundry-system.md)
 - [版本与 Harness 迁移](./docs/design-docs/repo-foundry-versioning-and-migrations.md)
 - [Engineering Spec 解析](./docs/design-docs/engineering-spec-management.md)
+- [Agent-neutral Harness 与 adapters](./docs/design-docs/agent-neutral-harness-adapters.md)
 
 专业能力：
 
@@ -343,4 +355,7 @@ RepoFoundry AI：
 - [ADR-007 — 采用 RepoFoundry](./docs/adr/adr-007_repo-foundry-identity.md)
 - [ADR-008 — 对外使用 RepoFoundry AI](./docs/adr/adr-008_repofoundry-ai-brand.md)
 - [ADR-009 — 根 Skill 名称与 RepoFoundry AI 对齐](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
+- [ADR-011 — 分离 Core 与 Agent adapters](./docs/adr/adr-011_agent-neutral-harness-adapters.md)
+- [ADR-012 — 分离 Spec 激活与 runtime adapters](./docs/adr/adr-012_agent-neutral-spec-activation.md)
 - [EP-006 — 迁移到 RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
+- [EP-010 — 实现 Agent-neutral adapters](./docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md)

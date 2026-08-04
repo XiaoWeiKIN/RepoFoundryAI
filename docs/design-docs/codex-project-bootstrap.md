@@ -2,11 +2,16 @@
 doc_type: design
 title: Codex project documentation bootstrap
 status: current
-adr_refs: ["ADR-002", "ADR-004", "ADR-005"]
-updated: 2026-07-30
+adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-011"]
+updated: 2026-08-04
 ---
 
 # Codex Project Documentation Bootstrap
+
+> Compatibility design: ADR-011 preserves this behavior as the `codex`
+> adapter while schema 3 moves shared documents and activation semantics into
+> the Agent-neutral Core. New implementation details live in
+> [Agent-neutral Harness and Engineering Spec adapters](agent-neutral-harness-adapters.md).
 
 Decision records:
 [ADR-002](../adr/adr-002_codex-project-documentation-bootstrap.md) and

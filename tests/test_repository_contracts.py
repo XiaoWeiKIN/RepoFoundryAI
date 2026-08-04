@@ -325,7 +325,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.1.0",
+            "0.2.0",
         )
         self.assertIn(
             "name: engineering-execution-plan",
@@ -420,7 +420,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
 
     def test_codex_agents_bootstrap_template_has_reserved_line_budget(self) -> None:
-        template = ROOT / "assets" / "harness-agents.md"
+        template = ROOT / "assets" / "adapters" / "codex" / "AGENTS.md"
         line_count = len(template.read_text(encoding="utf-8").splitlines())
 
         self.assertLessEqual(line_count, 80)
@@ -437,12 +437,64 @@ class RepositoryContractTestCase(unittest.TestCase):
             template.read_text(encoding="utf-8"),
         )
 
-        router = ROOT / "assets" / "engineering-specs-router"
+        router = (
+            ROOT
+            / "assets"
+            / "adapters"
+            / "codex"
+            / "engineering-specs"
+        )
         router_skill = (router / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("name: engineering-specs", router_skill)
         self.assertIn("task Applicability", router_skill)
         self.assertTrue((router / "agents" / "openai.yaml").is_file())
         self.assertTrue((router / "scripts" / "spec_router.py").is_file())
+
+    def test_core_and_adapter_assets_have_product_neutral_boundaries(self) -> None:
+        core = ROOT / "assets" / "core"
+        core_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(core.rglob("*"))
+            if path.is_file() and path.suffix in {".md", ".py", ".json"}
+        )
+        for product_token in (
+            "Codex",
+            "UserPromptSubmit",
+            "SubagentStart",
+            "PreToolUse",
+            "hookSpecificOutput",
+            "permissionDecision",
+            ".codex",
+            ".agents",
+            "openai",
+        ):
+            self.assertNotIn(product_token, core_text)
+
+        codex_adapter = (
+            ROOT
+            / "assets"
+            / "adapters"
+            / "codex"
+            / "engineering-specs"
+            / "scripts"
+            / "spec_router.py"
+        ).read_text(encoding="utf-8")
+        for event in (
+            "UserPromptSubmit",
+            "SubagentStart",
+            "PreToolUse",
+            "Stop",
+        ):
+            self.assertIn(event, codex_adapter)
+
+        spec_manager = (ROOT / "scripts" / "spec_manager.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("AGENTS.md", spec_manager)
+        self.assertNotIn(".codex/hooks.json", spec_manager)
+        self.assertTrue(
+            (ROOT / "assets/adapters/portable/agent-guide.md").is_file()
+        )
 
     def test_workflow_has_no_bundled_engineering_spec_content(self) -> None:
         self.assertFalse((ROOT / "engineering-specs").exists())

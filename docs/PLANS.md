@@ -31,4 +31,5 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | EP-007 | Pin Engineering Specification releases | completed | 2026-08-02 | [EXECPLAN](exec-plans/completed/ep-007_versioned-spec-releases/EXECPLAN.md) |
 | EP-008 | Let users explicitly select installed Engineering Specs | completed | 2026-08-02 | [EXECPLAN](exec-plans/completed/ep-008_explicit-spec-selection/EXECPLAN.md) |
 | EP-009 | Enforce Engineering Spec task activation | completed | 2026-08-03 | [EXECPLAN](exec-plans/completed/ep-009_enforce-spec-task-activation/EXECPLAN.md) |
+| EP-010 | Implement Agent-neutral Harness and Engineering Spec adapters | completed | 2026-08-04 | [EXECPLAN](exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->

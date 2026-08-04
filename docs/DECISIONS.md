@@ -33,4 +33,6 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 | ADR-008 | Use RepoFoundry AI as the external brand | accepted | 2026-07-30 | [] |  | [ADR](adr/adr-008_repofoundry-ai-brand.md) |
 | ADR-009 | Align the root Skill name with RepoFoundry AI | accepted | 2026-08-01 | [] |  | [ADR](adr/adr-009_align-repofoundry-ai-skill-name.md) |
 | ADR-010 | Use one project-local Engineering Specs Router with trusted Hook enforcement | accepted | 2026-08-03 | [] |  | [ADR](adr/adr-010_spec-task-activation-router.md) |
+| ADR-011 | Separate the RepoFoundry core from Agent product adapters | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-011_agent-neutral-harness-adapters.md) |
+| ADR-012 | Separate Engineering Spec activation from Agent runtime adapters | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-012_agent-neutral-spec-activation.md) |
 <!-- ADRCTL:COMPLETED:END -->

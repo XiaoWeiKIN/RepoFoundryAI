@@ -29,7 +29,6 @@ SPEC_MANIFEST = "docs/.engineering/specs.json"
 SPEC_LOCK = "docs/.engineering/specs.lock.json"
 MANAGED_ROOT = "docs/agent-guides/managed"
 MANAGED_INDEX = f"{MANAGED_ROOT}/index.md"
-AGENTS_ROUTE = MANAGED_INDEX
 
 SPEC_ID_RE = re.compile(
     r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?"
@@ -1733,21 +1732,6 @@ def plan_spec_state(
         selected,
         (item.path for item in deletes),
     )
-    agents = repo / "AGENTS.md"
-    if agents.is_file() and not agents.is_symlink():
-        try:
-            agents_text = agents.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            warnings.append(
-                f"SPEC_AGENTS_ROUTE_UNREADABLE: AGENTS.md: {exc}"
-            )
-        else:
-            if AGENTS_ROUTE not in agents_text:
-                warnings.append(
-                    f"SPEC_AGENTS_ROUTE_MISSING: AGENTS.md: add a short route "
-                    f"to {AGENTS_ROUTE}"
-                )
-
     return SpecPlan(
         operation=operation,
         catalog_id=catalog.catalog_id,
@@ -2023,20 +2007,6 @@ def validate_spec_state(
                     )
 
     warnings.extend(_stale_managed_warnings(repo, lock.specs))
-    agents = repo / "AGENTS.md"
-    if agents.is_file() and not agents.is_symlink():
-        try:
-            agents_text = agents.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            warnings.append(
-                f"SPEC_AGENTS_ROUTE_UNREADABLE: AGENTS.md: {exc}"
-            )
-        else:
-            if AGENTS_ROUTE not in agents_text:
-                warnings.append(
-                    f"SPEC_AGENTS_ROUTE_MISSING: AGENTS.md: add a short route "
-                    f"to {AGENTS_ROUTE}"
-                )
     return errors, warnings
 
 

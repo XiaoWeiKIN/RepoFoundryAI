@@ -12,7 +12,8 @@ When the project Hooks are unavailable, establish the baseline manually before
 the first step below:
 
 ```bash
-python3 .agents/skills/engineering-specs/scripts/spec_router.py begin \
+python3 .repo-foundry/engineering-specs/spec_router.py begin \
+  --adapter-id codex \
   --session-id <stable-local-session-id> --turn-id <stable-local-turn-id> \
   --prompt "<task summary>"
 ```
@@ -23,7 +24,7 @@ python3 .agents/skills/engineering-specs/scripts/spec_router.py begin \
 2. Run:
 
    ```bash
-   python3 .agents/skills/engineering-specs/scripts/spec_router.py \
+   python3 .repo-foundry/engineering-specs/spec_router.py \
      candidates --path <path> [--path <path> ...]
    ```
 
@@ -33,7 +34,8 @@ python3 .agents/skills/engineering-specs/scripts/spec_router.py begin \
 4. Record the applicable set before implementation or review:
 
    ```bash
-   python3 .agents/skills/engineering-specs/scripts/spec_router.py activate \
+   python3 .repo-foundry/engineering-specs/spec_router.py activate \
+     --adapter-id codex \
      --session-id <session-id> --turn-id <turn-id> \
      --path <path> [--path <path> ...] \
      --spec <id> [--spec <id> ...]
@@ -44,7 +46,8 @@ python3 .agents/skills/engineering-specs/scripts/spec_router.py begin \
 5. If no candidate is applicable, still record the decision:
 
    ```bash
-   python3 .agents/skills/engineering-specs/scripts/spec_router.py activate \
+   python3 .repo-foundry/engineering-specs/spec_router.py activate \
+     --adapter-id codex \
      --session-id <session-id> --turn-id <turn-id> \
      --path <path> [--path <path> ...] \
      --none --reason "<why no installed Spec governs this task>"
@@ -81,5 +84,5 @@ artifacts.
   paths; repair with RepoFoundry's previewed Spec workflow.
 - Project Hooks require repository trust and separate Hook review. When Hooks
   are unavailable, run `begin` before any write, follow this Skill manually,
-  and run `spec_router.py audit --message "<five-label handoff>"` before
-  completion.
+  and run the canonical `audit` command with `--adapter-id codex`, the active
+  session and turn IDs, and the five-label handoff before completion.

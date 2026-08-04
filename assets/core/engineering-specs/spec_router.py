@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Route a Codex task to version-locked local Engineering Specs."""
+"""Run RepoFoundry's product-neutral local Engineering Spec activation engine."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -18,7 +17,8 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
-ROUTER_VERSION = 1
+ROUTER_VERSION = 2
+PROTOCOL_VERSION = 1
 MANIFEST_PATH = "docs/.engineering/specs.json"
 LOCK_PATH = "docs/.engineering/specs.lock.json"
 INDEX_PATH = "docs/agent-guides/managed/index.md"
@@ -34,10 +34,7 @@ REQUIREMENT_RE = re.compile(
     r"^###\s+([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\s+[—-]\s+",
     re.MULTILINE,
 )
-PATCH_PATH_RE = re.compile(
-    r"^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$",
-    re.MULTILINE,
-)
+ADAPTER_ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 HANDOFF_LABELS = (
     "Activated specifications:",
     "Activated requirements:",
@@ -46,29 +43,10 @@ HANDOFF_LABELS = (
     "Compatibility or migration:",
 )
 DISALLOWED_BROAD_GLOBS = frozenset({"*", "**", "**/*"})
-READ_ONLY_COMMANDS = frozenset(
-    {
-        "basename",
-        "cut",
-        "dirname",
-        "du",
-        "file",
-        "git",
-        "grep",
-        "head",
-        "ls",
-        "pwd",
-        "readlink",
-        "rg",
-        "sed",
-        "stat",
-        "tail",
-        "test",
-        "type",
-        "wc",
-        "which",
-    }
+NORMALIZED_EVENTS = frozenset(
+    {"session_start", "subagent_start", "before_mutation", "stop"}
 )
+TOOL_CATEGORIES = frozenset({"read", "file_write", "command_write"})
 
 
 class RouterError(RuntimeError):
@@ -394,8 +372,15 @@ def _state_base(root: Path) -> Path:
     return Path(tempfile.gettempdir()) / "repo-foundry-spec-activation-v1" / digest
 
 
-def _state_path(root: Path, session_id: str, turn_id: str) -> Path:
-    digest = _sha256(f"{session_id}\x00{turn_id}".encode("utf-8"))
+def _state_path(
+    root: Path,
+    adapter_id: str,
+    session_id: str,
+    turn_id: str,
+) -> Path:
+    digest = _sha256(
+        f"{adapter_id}\x00{session_id}\x00{turn_id}".encode("utf-8")
+    )
     return _state_base(root) / f"{digest}.json"
 
 
@@ -414,8 +399,13 @@ def _atomic_json(path: Path, value: dict[str, object]) -> None:
             os.unlink(temporary)
 
 
-def _load_runtime(root: Path, session_id: str, turn_id: str) -> dict[str, object] | None:
-    path = _state_path(root, session_id, turn_id)
+def _load_runtime(
+    root: Path,
+    adapter_id: str,
+    session_id: str,
+    turn_id: str,
+) -> dict[str, object] | None:
+    path = _state_path(root, adapter_id, session_id, turn_id)
     if not path.exists():
         return None
     return _load_json(path, "ROUTER_RUNTIME_INVALID")
@@ -488,17 +478,22 @@ def _paths_changed_since(root: Path, baseline: object) -> tuple[str, ...]:
 
 
 def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object]:
+    adapter_id = payload.get("adapter_id")
     session_id = payload.get("session_id")
     turn_id = payload.get("turn_id")
+    if not isinstance(adapter_id, str) or not ADAPTER_ID_RE.fullmatch(adapter_id):
+        raise RouterError("ROUTER_EVENT_INVALID.adapter_id")
     if not isinstance(session_id, str) or not session_id:
-        raise RouterError("ROUTER_HOOK_INPUT_INVALID.session_id")
+        raise RouterError("ROUTER_EVENT_INVALID.session_id")
     if not isinstance(turn_id, str) or not turn_id:
-        raise RouterError("ROUTER_HOOK_INPUT_INVALID.turn_id")
-    existing = _load_runtime(root, session_id, turn_id)
+        raise RouterError("ROUTER_EVENT_INVALID.turn_id")
+    existing = _load_runtime(root, adapter_id, session_id, turn_id)
     if existing is not None:
         return existing
     value: dict[str, object] = {
         "version": ROUTER_VERSION,
+        "protocol_version": PROTOCOL_VERSION,
+        "adapter_id": adapter_id,
         "session_id": session_id,
         "turn_id": turn_id,
         "prompt_sha256": _sha256(str(payload.get("prompt", "")).encode("utf-8")),
@@ -506,7 +501,7 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
         "activation": None,
         "context_injected": False,
     }
-    _atomic_json(_state_path(root, session_id, turn_id), value)
+    _atomic_json(_state_path(root, adapter_id, session_id, turn_id), value)
     return value
 
 
@@ -552,6 +547,7 @@ def command_begin(args: argparse.Namespace) -> int:
     runtime = _initialize_turn(
         root,
         {
+            "adapter_id": args.adapter_id,
             "session_id": args.session_id,
             "turn_id": args.turn_id,
             "prompt": args.prompt or "",
@@ -560,6 +556,8 @@ def command_begin(args: argparse.Namespace) -> int:
     _json_output(
         {
             "router_version": ROUTER_VERSION,
+            "protocol_version": PROTOCOL_VERSION,
+            "adapter_id": runtime["adapter_id"],
             "session_id": runtime["session_id"],
             "turn_id": runtime["turn_id"],
             "initialized": True,
@@ -571,12 +569,16 @@ def command_begin(args: argparse.Namespace) -> int:
 
 def command_activate(args: argparse.Namespace) -> int:
     root = repository_root(args.repo)
-    runtime = _load_runtime(root, args.session_id, args.turn_id)
+    runtime = _load_runtime(
+        root,
+        args.adapter_id,
+        args.session_id,
+        args.turn_id,
+    )
     if runtime is None:
         raise RouterError(
-            "ROUTER_TURN_NOT_INITIALIZED: the UserPromptSubmit Hook did not "
-            "initialize this turn; when Hooks are unavailable, run begin "
-            "before any write"
+            "ROUTER_TURN_NOT_INITIALIZED: no lifecycle adapter initialized "
+            "this turn; run begin before any write"
         )
     state = load_state(root)
     paths = tuple(dict.fromkeys(_normalize_planned_path(root, value) for value in args.path))
@@ -616,9 +618,13 @@ def command_activate(args: argparse.Namespace) -> int:
     }
     runtime["activation"] = activation
     runtime["context_injected"] = False
-    _atomic_json(_state_path(root, args.session_id, args.turn_id), runtime)
+    _atomic_json(
+        _state_path(root, args.adapter_id, args.session_id, args.turn_id),
+        runtime,
+    )
     _json_output(
         {
+            "adapter_id": args.adapter_id,
             "session_id": args.session_id,
             "turn_id": args.turn_id,
             **activation,
@@ -630,7 +636,12 @@ def command_activate(args: argparse.Namespace) -> int:
 
 def command_status(args: argparse.Namespace) -> int:
     root = repository_root(args.repo)
-    runtime = _load_runtime(root, args.session_id, args.turn_id)
+    runtime = _load_runtime(
+        root,
+        args.adapter_id,
+        args.session_id,
+        args.turn_id,
+    )
     if runtime is None:
         raise RouterError("ROUTER_ACTIVATION_MISSING")
     _json_output(runtime)
@@ -685,7 +696,12 @@ def _audit(
 
 def command_audit(args: argparse.Namespace) -> int:
     root = repository_root(args.repo)
-    runtime = _load_runtime(root, args.session_id, args.turn_id)
+    runtime = _load_runtime(
+        root,
+        args.adapter_id,
+        args.session_id,
+        args.turn_id,
+    )
     if runtime is None:
         raise RouterError("ROUTER_ACTIVATION_MISSING")
     message = args.message
@@ -698,119 +714,37 @@ def command_audit(args: argparse.Namespace) -> int:
     return 0 if result["ok"] else 1
 
 
-def _router_command(root: Path, session_id: str, turn_id: str) -> str:
-    relative = ".agents/skills/engineering-specs/scripts/spec_router.py"
+def _router_command(adapter_id: str, session_id: str, turn_id: str) -> str:
+    relative = ".repo-foundry/engineering-specs/spec_router.py"
     return (
         f"python3 {relative} candidates --path <planned-path>\n"
-        f"python3 {relative} activate --session-id {session_id} "
-        f"--turn-id {turn_id} --path <planned-path> "
+        f"python3 {relative} activate --adapter-id {adapter_id} "
+        f"--session-id {session_id} --turn-id {turn_id} "
+        "--path <planned-path> "
         "(--spec <id> ... | --none --reason <reason>)"
     )
 
 
 def _route_context(root: Path, payload: dict[str, object]) -> str:
     runtime = _initialize_turn(root, payload)
+    adapter_id = str(runtime["adapter_id"])
     session_id = str(runtime["session_id"])
     turn_id = str(runtime["turn_id"])
-    index = _read_bytes(root / INDEX_PATH, "ROUTER_INDEX_INVALID", MAX_CONTEXT_BYTES).decode(
-        "utf-8", errors="strict"
-    )
+    index = _read_bytes(
+        root / INDEX_PATH,
+        "ROUTER_INDEX_INVALID",
+        MAX_CONTEXT_BYTES,
+    ).decode("utf-8", errors="strict")
     return (
-        "Engineering Specification routing is mandatory before implementation or review.\n"
-        "Use the repository Skill `$engineering-specs`; file scope creates candidates, "
-        "but Applicability and task intent decide activation. Record either applicable "
-        "Spec IDs or an explicit no-Spec reason before any write.\n\n"
-        f"Session ID: `{session_id}`\nTurn ID: `{turn_id}`\n\n"
-        f"Commands:\n{_router_command(root, session_id, turn_id)}\n\n"
+        "Engineering Specification routing is mandatory before implementation "
+        "or review. File scope creates candidates, but Applicability and task "
+        "intent decide activation. Record either applicable Spec IDs or an "
+        "explicit no-Spec reason before any write.\n\n"
+        f"Adapter ID: `{adapter_id}`\nSession ID: `{session_id}`\n"
+        f"Turn ID: `{turn_id}`\n\n"
+        f"Commands:\n{_router_command(adapter_id, session_id, turn_id)}\n\n"
         "Current locked routing index:\n\n" + index
     )
-
-
-def _extract_patch_paths(root: Path, command: str) -> tuple[str, ...]:
-    raw_paths = [left or right for left, right in PATCH_PATH_RE.findall(command)]
-    return tuple(
-        dict.fromkeys(
-            _normalize_planned_path(root, value.strip()) for value in raw_paths
-        )
-    )
-
-
-def _is_router_command(command: str) -> bool:
-    if any(token in command for token in (";", "&&", "||", "|", ">", "<", "`", "$(")):
-        return False
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        return False
-    return (
-        len(tokens) >= 3
-        and tokens[0] in {"python", "python3"}
-        and tokens[1].endswith(
-            ".agents/skills/engineering-specs/scripts/spec_router.py"
-        )
-        and tokens[2] in {"begin", "candidates", "activate", "status", "audit"}
-    )
-
-
-def _is_read_only_bash(command: str) -> bool:
-    stripped = command.strip()
-    if not stripped:
-        return True
-    if _is_router_command(stripped):
-        return True
-    dangerous_tokens = (
-        ">",
-        "| tee",
-        " -delete",
-        " -exec",
-        "git add",
-        "git commit",
-        "git push",
-        "git merge",
-        "git rebase",
-        "git tag",
-        "git switch",
-        "git checkout",
-        "git restore",
-        "git clean",
-        "git rm",
-        "git mv",
-        "sed -i",
-        "rg --pre",
-    )
-    lowered = stripped.lower()
-    if any(token in lowered for token in dangerous_tokens):
-        return False
-    try:
-        tokens = shlex.split(stripped)
-    except ValueError:
-        return False
-    if not tokens:
-        return True
-    first = tokens[0]
-    if first != "git":
-        if first == "sed" and any(token.startswith("-i") for token in tokens[1:]):
-            return False
-        if first == "rg" and any(
-            token == "--pre" or token.startswith("--pre=") for token in tokens[1:]
-        ):
-            return False
-        return first in READ_ONLY_COMMANDS
-    if len(tokens) < 2:
-        return False
-    if any(
-        token == "--output" or token.startswith("--output=")
-        for token in tokens[2:]
-    ):
-        return False
-    return tokens[1] in {
-        "diff",
-        "log",
-        "ls-files",
-        "rev-parse",
-        "show",
-        "status",
-    }
 
 
 def _context_for_activation(root: Path, activation: dict[str, object]) -> str:
@@ -847,118 +781,132 @@ def _context_for_activation(root: Path, activation: dict[str, object]) -> str:
 
 
 def _deny(reason: str, *, context: str | None = None) -> dict[str, object]:
-    output: dict[str, object] = {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "deny",
-        "permissionDecisionReason": reason,
-    }
+    output: dict[str, object] = {"decision": "deny", "reason": reason}
     if context is not None:
-        output["additionalContext"] = context
-    return {"hookSpecificOutput": output}
+        output["context"] = context
+    return output
 
 
-def _hook_pre_tool(root: Path, payload: dict[str, object]) -> dict[str, object]:
+def _event_identity(payload: dict[str, object]) -> tuple[str, str, str]:
+    adapter_id = payload.get("adapter_id")
     session_id = payload.get("session_id")
     turn_id = payload.get("turn_id")
-    tool_name = payload.get("tool_name")
-    tool_input = payload.get("tool_input")
-    if not isinstance(session_id, str) or not isinstance(turn_id, str):
-        return _deny("Engineering Spec gate cannot identify the active Codex turn.")
-    command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if not isinstance(command, str):
-        return _deny("Engineering Spec gate received an unsupported tool input shape.")
-    if tool_name == "Bash" and _is_read_only_bash(command):
-        return {}
-    runtime = _load_runtime(root, session_id, turn_id)
+    if not isinstance(adapter_id, str) or not ADAPTER_ID_RE.fullmatch(adapter_id):
+        raise RouterError("ROUTER_EVENT_INVALID.adapter_id")
+    if not isinstance(session_id, str) or not session_id:
+        raise RouterError("ROUTER_EVENT_INVALID.session_id")
+    if not isinstance(turn_id, str) or not turn_id:
+        raise RouterError("ROUTER_EVENT_INVALID.turn_id")
+    return adapter_id, session_id, turn_id
+
+
+def _before_mutation(
+    root: Path,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    adapter_id, session_id, turn_id = _event_identity(payload)
+    tool = payload.get("tool")
+    if not isinstance(tool, dict):
+        return _deny("Engineering Spec gate received an invalid normalized tool.")
+    category = tool.get("category")
+    if category not in TOOL_CATEGORIES:
+        return _deny("Engineering Spec gate received an unsupported tool category.")
+    if category == "read":
+        return {"decision": "allow"}
+    runtime = _load_runtime(root, adapter_id, session_id, turn_id)
     if runtime is None or not isinstance(runtime.get("activation"), dict):
         return _deny(
-            "Run $engineering-specs and record this turn's activation before editing.\n"
-            + _router_command(root, session_id, turn_id)
+            "Record this turn's Engineering Spec activation before editing.\n"
+            + _router_command(adapter_id, session_id, turn_id)
         )
     try:
         activation = _activation(runtime)
-        if tool_name == "apply_patch":
-            targets = _extract_patch_paths(root, command)
-            if not targets:
-                return _deny("Engineering Spec gate could not resolve apply_patch target paths.")
+        if category == "file_write":
+            raw_paths = tool.get("paths")
+            if not isinstance(raw_paths, list) or not raw_paths or any(
+                not isinstance(item, str) for item in raw_paths
+            ):
+                return _deny(
+                    "Engineering Spec gate could not resolve mutation target paths."
+                )
+            targets = tuple(
+                dict.fromkeys(_normalize_planned_path(root, item) for item in raw_paths)
+            )
             planned = tuple(str(item) for item in activation["planned_paths"])
             uncovered = tuple(path for path in targets if not _covered(path, planned))
             if uncovered:
                 return _deny(
-                    "Extend $engineering-specs activation before editing uncovered paths: "
+                    "Extend Engineering Spec activation before editing uncovered paths: "
                     + ", ".join(uncovered)
                 )
         if not bool(runtime.get("context_injected")):
             context = _context_for_activation(root, activation)
             runtime["context_injected"] = True
-            _atomic_json(_state_path(root, session_id, turn_id), runtime)
+            _atomic_json(
+                _state_path(root, adapter_id, session_id, turn_id),
+                runtime,
+            )
             return _deny(
                 "Activated Engineering Specs were injected. Re-evaluate and retry the edit.",
                 context=context,
             )
     except RouterError as exc:
         return _deny(str(exc))
-    return {}
+    return {"decision": "allow"}
 
 
-def _hook_stop(root: Path, payload: dict[str, object]) -> dict[str, object]:
-    session_id = payload.get("session_id")
-    turn_id = payload.get("turn_id")
-    if not isinstance(session_id, str) or not isinstance(turn_id, str):
-        return {"decision": "block", "reason": "Engineering Spec audit cannot identify this turn."}
-    runtime = _load_runtime(root, session_id, turn_id)
+def _stop(root: Path, payload: dict[str, object]) -> dict[str, object]:
+    adapter_id, session_id, turn_id = _event_identity(payload)
+    runtime = _load_runtime(root, adapter_id, session_id, turn_id)
     if runtime is None:
-        return {}
+        return {"decision": "allow"}
     changed = _paths_changed_since(root, runtime.get("baseline"))
     if not changed:
-        return {}
+        return {"decision": "allow"}
     if not isinstance(runtime.get("activation"), dict):
         return {
-            "decision": "block",
-            "reason": "Repository files changed without an Engineering Spec activation decision. Use $engineering-specs, then complete the handoff.",
+            "decision": "deny",
+            "reason": "Repository files changed without an Engineering Spec activation decision; activate and complete the required handoff.",
         }
-    message = payload.get("last_assistant_message")
+    message = payload.get("message")
     result = _audit(root, runtime, message if isinstance(message, str) else "")
     if not result["ok"]:
         return {
-            "decision": "block",
+            "decision": "deny",
             "reason": "Engineering Spec audit failed:\n- " + "\n- ".join(result["errors"]),
         }
-    return {}
+    return {"decision": "allow"}
 
 
-def command_hook(args: argparse.Namespace) -> int:
+def process_event(root: Path, payload: dict[str, object]) -> dict[str, object]:
+    if payload.get("protocol_version") != PROTOCOL_VERSION:
+        raise RouterError(
+            "ROUTER_PROTOCOL_UNSUPPORTED: expected protocol_version "
+            f"{PROTOCOL_VERSION}"
+        )
+    event = payload.get("event")
+    if event not in NORMALIZED_EVENTS:
+        raise RouterError(f"ROUTER_EVENT_UNSUPPORTED: {event!r}")
+    _event_identity(payload)
+    if event in {"session_start", "subagent_start"}:
+        return {"decision": "allow", "context": _route_context(root, payload)}
+    if event == "before_mutation":
+        return _before_mutation(root, payload)
+    return _stop(root, payload)
+
+
+def command_event(args: argparse.Namespace) -> int:
     raw = sys.stdin.buffer.read(MAX_JSON_BYTES + 1)
     if len(raw) > MAX_JSON_BYTES:
-        raise RouterError("ROUTER_HOOK_INPUT_TOO_LARGE")
+        raise RouterError("ROUTER_EVENT_TOO_LARGE")
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
-        raise RouterError(f"ROUTER_HOOK_INPUT_INVALID: {exc}") from exc
+        raise RouterError(f"ROUTER_EVENT_INVALID: {exc}") from exc
     if not isinstance(payload, dict):
-        raise RouterError("ROUTER_HOOK_INPUT_INVALID: expected object")
-    root = repository_root(payload.get("cwd", args.repo))
-    event = payload.get("hook_event_name")
-    if event in {"UserPromptSubmit", "SubagentStart"}:
-        context = _route_context(root, payload)
-        _json_output(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": event,
-                    "additionalContext": context,
-                }
-            }
-        )
-    elif event == "PreToolUse":
-        output = _hook_pre_tool(root, payload)
-        if output:
-            _json_output(output)
-    elif event == "Stop":
-        output = _hook_stop(root, payload)
-        if output:
-            _json_output(output)
-    else:
-        raise RouterError(f"ROUTER_HOOK_EVENT_UNSUPPORTED: {event!r}")
+        raise RouterError("ROUTER_EVENT_INVALID: expected object")
+    root = repository_root(args.repo)
+    _json_output(process_event(root, payload))
     return 0
 
 
@@ -971,6 +919,7 @@ def build_parser() -> argparse.ArgumentParser:
         "begin",
         help="Establish a manual turn baseline when lifecycle Hooks are unavailable",
     )
+    begin.add_argument("--adapter-id", required=True)
     begin.add_argument("--session-id", required=True)
     begin.add_argument("--turn-id", required=True)
     begin.add_argument("--prompt")
@@ -981,6 +930,7 @@ def build_parser() -> argparse.ArgumentParser:
     candidates.set_defaults(handler=command_candidates)
 
     activate = commands.add_parser("activate", help="Record this turn's activation decision")
+    activate.add_argument("--adapter-id", required=True)
     activate.add_argument("--session-id", required=True)
     activate.add_argument("--turn-id", required=True)
     activate.add_argument("--path", action="append", required=True)
@@ -990,11 +940,13 @@ def build_parser() -> argparse.ArgumentParser:
     activate.set_defaults(handler=command_activate)
 
     status = commands.add_parser("status", help="Show the current turn receipt")
+    status.add_argument("--adapter-id", required=True)
     status.add_argument("--session-id", required=True)
     status.add_argument("--turn-id", required=True)
     status.set_defaults(handler=command_status)
 
     audit = commands.add_parser("audit", help="Audit changed paths and optional handoff")
+    audit.add_argument("--adapter-id", required=True)
     audit.add_argument("--session-id", required=True)
     audit.add_argument("--turn-id", required=True)
     audit_message = audit.add_mutually_exclusive_group()
@@ -1002,14 +954,17 @@ def build_parser() -> argparse.ArgumentParser:
     audit_message.add_argument("--message-file")
     audit.set_defaults(handler=command_audit)
 
-    hook = commands.add_parser("hook", help="Handle a Codex lifecycle Hook event")
-    hook.set_defaults(handler=command_hook)
+    event = commands.add_parser(
+        "event",
+        help="Handle one normalized RepoFoundry activation event from stdin",
+    )
+    event.set_defaults(handler=command_event)
     return parser
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
     except RouterError as exc:
