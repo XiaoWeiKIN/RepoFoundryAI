@@ -174,6 +174,55 @@ def validate_skill_packages() -> None:
                     f"{directory / 'agents' / 'openai.yaml'}: missing {field}"
                 )
 
+    project_skill_assets = (
+        (
+            ROOT / "assets" / "core" / "repo-foundry-ai" / "SKILL.md",
+            "repo-foundry-ai",
+        ),
+        (
+            ROOT
+            / "assets"
+            / "adapters"
+            / "codex"
+            / "repo-foundry-ai"
+            / "SKILL.md",
+            "repo-foundry-ai",
+        ),
+        (
+            ROOT
+            / "assets"
+            / "adapters"
+            / "claude"
+            / "repo-foundry-ai"
+            / "SKILL.md",
+            "repo-foundry-ai",
+        ),
+        (
+            ROOT
+            / "assets"
+            / "adapters"
+            / "claude"
+            / "engineering-specs"
+            / "SKILL.md",
+            "engineering-specs",
+        ),
+    )
+    for path, expected_name in project_skill_assets:
+        metadata = skill_frontmatter(path)
+        if metadata.get("name") != expected_name:
+            raise CheckError(
+                f"{path.relative_to(ROOT)}: expected name {expected_name!r}"
+            )
+        if "description" not in metadata:
+            raise CheckError(
+                f"{path.relative_to(ROOT)}: missing description"
+            )
+        text = path.read_text(encoding="utf-8")
+        if any(value in text for value in ("~/", "/Users/", "/home/")):
+            raise CheckError(
+                f"{path.relative_to(ROOT)}: project Skill uses a home path"
+            )
+
     portable_sources = [
         ROOT / "README.md",
         ROOT / "README.zh-CN.md",
@@ -186,6 +235,7 @@ def validate_skill_packages() -> None:
             / "engineering-specs"
             / "SKILL.md"
         ),
+        *(path for path, _ in project_skill_assets),
         *sorted((ROOT / "references").glob("*.md")),
         ROOT / "engineering-execution-plan" / "SKILL.md",
         *sorted(

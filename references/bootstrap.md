@@ -14,9 +14,11 @@ flowchart LR
     P --> A["Adapter protocol"]
     C --> E["Shared activation engine"]
     A --> X["Codex adapter<br/>native Hooks"]
+    A --> D["Claude adapter<br/>native Skills + CLI"]
     A --> M["Portable adapter<br/>CLI + advisory"]
     S --> E
     E --> X
+    E --> D
     E --> M
 ```
 
@@ -38,13 +40,19 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --adapter portable
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --adapter codex --adapter portable \
+  bootstrap --adapter claude
+
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  bootstrap --all-adapters \
   --spec languages/go --apply
 ```
 
 adapter ID 不得重复，生成路径不得发生 ownership collision。现有 schema 3 Harness
 可以追加 adapter；删除 adapter 不在 `0.2.0` 范围内，因为删除定制配置需要独立的
 所有权和迁移决策。
+
+`--all-adapters` 确定性展开为 `codex`、`claude`、`portable`，不能与 `--profile`
+或显式 `--adapter` 组合。它不做本机宿主检测，因此不同维护者会生成相同项目状态。
 
 兼容期内：
 
@@ -76,13 +84,15 @@ docs/
 ├── SECURITY.md
 └── design-docs/index.md
 .repo-foundry/
-└── engineering-specs/spec_router.py
+├── engineering-specs/spec_router.py
+└── skills/repo-foundry-ai/SKILL.md
 ```
 
 Codex adapter 增加：
 
 ```text
 AGENTS.md
+.agents/skills/repo-foundry-ai/SKILL.md
 .agents/skills/engineering-specs/
 ├── SKILL.md
 ├── agents/openai.yaml
@@ -92,6 +102,23 @@ AGENTS.md
 
 `.agents/.../scripts/spec_router.py` 是薄翻译器，不包含第二份激活逻辑。它把 Codex
 Hook 输入翻译成 Core event，再把 Core decision 翻译回 Codex Hook 输出。
+
+Claude adapter 增加：
+
+```text
+.claude/skills/
+├── repo-foundry-ai/SKILL.md
+└── engineering-specs/SKILL.md
+```
+
+两个文件都是普通、仓库相对的项目 Skill。根入口读取 Core 中的 canonical Skill；
+Engineering Specs 入口以 `adapter_id: claude` 调用唯一的 Core Router。当前版本不
+创建 `CLAUDE.md` 或 Claude Hooks，enforcement 为 CLI/advisory。
+
+Claude Code 中个人同名 Skill 优先于项目同名 Skill。因此发行包的个人
+`repo-foundry-ai` 入口也必须在目标仓库存在 canonical Skill 时读取它；没有个人
+注册时，`.claude/skills/repo-foundry-ai/SKILL.md` 直接提供同一发现入口。两条路径
+最终都消费同一个仓库版本契约。
 
 Portable adapter 只增加：
 
@@ -106,18 +133,19 @@ enforcement 为 CLI/advisory，不声称原生拦截写入。
 
 adapter 能力由 `adapter list` 的结构化输出声明：
 
-| 能力 | Codex | Portable |
-|---|---|---|
-| instructions | file | file |
-| skills | file | none |
-| lifecycle events | 四类标准化事件 | none |
-| context injection | native | advisory |
-| mutation gate | native | cli |
-| completion audit | native | cli |
-| project trust | user review | none |
+| 能力 | Codex | Claude | Portable |
+|---|---|---|---|
+| instructions | file | none | file |
+| skills | file | native | none |
+| lifecycle events | 四类标准化事件 | none | none |
+| context injection | native | advisory | advisory |
+| mutation gate | native | cli | cli |
+| completion audit | native | cli | cli |
+| project trust | user review | user review | none |
 
 `native`、`cli`、`advisory` 是验证边界，不可互相冒充。Codex 的 native 声明只覆盖
-已注册 Hook 与受支持工具形状；Portable 的 CLI 检查不等于运行时沙箱。
+已注册 Hook 与受支持工具形状；Claude 的 native 只表示 Skill discovery；Claude
+与 Portable 的 CLI 检查都不等于运行时沙箱。
 
 ## Harness schema 3
 
@@ -132,13 +160,18 @@ adapter 能力由 `adapter list` 的结构化输出声明：
     "version": "0.2.0"
   },
   "core": {
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "enforcement": "native"
+    },
+    {
+      "id": "claude",
+      "version": "1.0.0",
+      "enforcement": "cli"
     },
     {
       "id": "portable",
@@ -181,6 +214,8 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 - 定制的 repository document：保留原字节并清除不可信模板 provenance；
 - schema 2 的 Codex profile 映射为 `codex@2.0.0` adapter；
 - 安装唯一的 Core activation engine，并在来源可证明时把旧 Router 改成薄 adapter；
+- schema 3 Core `1.0.0` 与 Codex `2.0.0` 保持可读；升级到 Core `1.1.0`、Codex
+  `2.1.0` 时补齐 canonical 与 Codex 项目 Skill，并记录组件 migration；
 - Spec manifest、lock、managed Markdown 与 Catalog 版本不参与 Harness migration；
 - 写入后 validation 失败：恢复全部触碰文件并清理本次创建的空目录；
 - 重复 apply：不再更新任何字节。
@@ -258,9 +293,12 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . validate --harness
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --adapter codex
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  validate --adapter claude
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --adapter portable
 ```
 
 Core 总是验证；未指定 `--adapter` 时验证全部已安装 adapter。指定 adapter 时，只在
-Core 之外验证所选 adapter，因此一个 Portable route 的问题不会伪装成 Codex route
-问题。Codex `AGENTS.md` 保持 100 个物理行硬上限，bundled template 不超过 80 行。
+Core 之外验证所选 adapter，因此一个 Claude 或 Portable route 的问题不会伪装成
+Codex route 问题。Codex `AGENTS.md` 保持 100 个物理行硬上限；项目 Skill 也由
+manifest 记录各自的物理行预算。

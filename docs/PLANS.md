@@ -33,4 +33,5 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | EP-009 | Enforce Engineering Spec task activation | completed | 2026-08-03 | [EXECPLAN](exec-plans/completed/ep-009_enforce-spec-task-activation/EXECPLAN.md) |
 | EP-010 | Implement Agent-neutral Harness and Engineering Spec adapters | completed | 2026-08-04 | [EXECPLAN](exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md) |
 | EP-011 | Add one-command RepoFoundry AI install and upgrade | completed | 2026-08-04 | [EXECPLAN](exec-plans/completed/ep-011_one-command-install-upgrade/EXECPLAN.md) |
+| EP-012 | Add project-scoped RepoFoundry AI Skill registration | completed | 2026-08-04 | [EXECPLAN](exec-plans/completed/ep-012_project-skill-registration/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->

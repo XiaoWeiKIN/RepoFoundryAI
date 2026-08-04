@@ -1,7 +1,7 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、选择一个或多个 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-execution-plan 初始化。
+  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、项目级 RepoFoundry Skill、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex、Claude Code 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、把 RepoFoundry Skills 注册到当前项目、选择一个或全部 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-execution-plan 初始化。
 ---
 
 # RepoFoundry AI
@@ -16,6 +16,7 @@ flowchart LR
     W -.->|"Git fetch + immutable lock"| S["EngineeringSpecifications<br/>Core + language guidance"]
     W --> A["Agent adapter protocol"]
     A --> X["Codex adapter<br/>native Hooks"]
+    A --> D["Claude adapter<br/>native Skills + CLI"]
     A --> P["Portable adapter<br/>CLI + advisory"]
     W --> T["Engineering Specs<br/>shared activation engine"]
     S --> T
@@ -41,9 +42,8 @@ Agent host 注册发现入口；`--host codex` 显式注册 Codex，`--host clau
 `~/.claude/skills/repo-foundry-ai`）注册 Claude Code，
 `--host none` 只安装产品中立的 CLI 且不改动既有宿主注册。`--host auto` 会注册
 检测到的全部受支持宿主。`--version MAJOR.MINOR.PATCH` 固定版本，重复安装同一版本为
-no-op，旧的不可变 release 和被替换的非托管宿主目录保留用于恢复。Claude 宿主
-注册只提供根 Skill 发现；项目 Harness 在原生 Claude adapter 发布前仍使用
-`portable` adapter。
+no-op，旧的不可变 release 和被替换的非托管宿主目录保留用于恢复。宿主注册只
+提供个人 Skill 发现；项目级 Skill 必须由目标仓库的 adapter bootstrap 注册。
 
 发行包升级不扫描或修改项目仓库。安装新版工具后，目标项目仍必须单独执行
 `repofoundry --repo PATH upgrade --to VERSION` 预览 Harness migration，并在用户
@@ -51,6 +51,12 @@ no-op，旧的不可变 release 和被替换的非托管宿主目录保留用于
 再用 `python3 install.py` 执行。
 
 ## 初始化项目
+
+先确认目标仓库根目录。如果
+`.repo-foundry/skills/repo-foundry-ai/SKILL.md` 已存在，必须完整读取并以它作为
+当前项目的 canonical RepoFoundry 工作流，再执行本 Skill 的产品安装或 CLI 路由。
+这也处理了某些 Agent host 中个人同名 Skill 优先于项目 Skill 的发现规则：个人
+入口负责发现，仓库文件负责保存当前项目版本的工程契约。
 
 使用确定性脚本。把 `<repo-foundry-ai-dir>` 解析为本 Skill 所在目录：
 
@@ -62,7 +68,10 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --adapter portable
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --adapter codex --adapter portable \
+  bootstrap --adapter claude
+
+python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
+  bootstrap --all-adapters \
   --spec languages/go --apply
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
@@ -85,11 +94,13 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
    [bootstrap.md](references/bootstrap.md)。
 
 Core 创建 `ARCHITECTURE.md`、文档索引、质量、可靠性、安全、Design Doc 入口、
-本地 Engineering Specs 与唯一的
-`.repo-foundry/engineering-specs/spec_router.py` 激活引擎。`codex` adapter 额外创建
-短 `AGENTS.md`、项目级 `$engineering-specs` Skill、薄事件翻译器和
-`.codex/hooks.json`；`portable` adapter 只创建产品中立的
-`docs/agent-guides/README.md`，通过 CLI 与 advisory instruction 使用同一引擎。
+规范工作流 `.repo-foundry/skills/repo-foundry-ai/SKILL.md`、本地 Engineering
+Specs 与唯一的 `.repo-foundry/engineering-specs/spec_router.py` 激活引擎。
+`codex` adapter 额外创建短 `AGENTS.md`、RepoFoundry 项目 Skill、项目级
+`$engineering-specs` Skill、薄事件翻译器和 `.codex/hooks.json`；`claude` adapter
+在 `.claude/skills/` 创建 RepoFoundry 与 Engineering Specs 两个项目 Skill，使用
+显式 CLI 激活，不宣称原生 Hook 门禁；`portable` adapter 只创建产品中立的
+`docs/agent-guides/README.md`。三个 adapter 共享同一个 Core 与 Router。
 Core Spec 必选；仓库证据只推荐可选 Spec，
 用户通过可重复 `--spec <id>` 显式选择安装。选择写入
 `docs/.engineering/specs.json`，精确版本与 SHA-256 写入
@@ -106,8 +117,9 @@ Core Spec 必选；仓库证据只推荐可选 Spec，
 
 先读取 `VERSION`，再检查目标仓库的 `docs/.engineering/harness.json`。RepoFoundry
 产品版本、Harness schema、Core 版本、各 adapter 版本、激活协议版本和
-Engineering Specs Catalog 版本是独立版本线；不要用 `spec update` 代替 Harness migration，也不要在 bootstrap 中
-静默迁移。
+Engineering Specs Catalog 版本是独立版本线；不要用 `spec update` 代替 Harness
+migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bootstrap
+可以在预览中明确列出并记录 Core/adapter 组件迁移。
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
@@ -152,10 +164,11 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ## 激活任务规范
 
 Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。Codex 中实现或
-评审前调用 `$engineering-specs`；Portable 流程运行同一引擎的
-`begin/candidates/activate`：先列出计划路径的候选，再读取每个候选的 Applicability，
-记录本 Turn 的适用 ID 或带理由的 `none`。激活会自动加入 `requires` 闭包；首次
-写入前，受信任 Hook 注入摘要已验证的本地全文，并要求 Agent 重新评估后重试。
+评审前调用 `$engineering-specs`；Claude 通过项目级 `$engineering-specs` Skill、
+Portable 通过 guide 运行同一引擎的 `begin/candidates/activate`：先列出计划路径的
+候选，再读取每个候选的 Applicability，记录本 Turn 的适用 ID 或带理由的 `none`。
+激活会自动加入 `requires` 闭包；Codex 的受信任 Hook 会在首次写入前注入摘要已
+验证的本地全文，Claude 与 Portable 则显式读取并执行 CLI 审计。
 
 Core 只识别 `session_start`、`subagent_start`、`before_mutation`、`stop` 四类标准化
 事件。Codex adapter 将 `UserPromptSubmit`、`SubagentStart`、`PreToolUse`、`Stop`

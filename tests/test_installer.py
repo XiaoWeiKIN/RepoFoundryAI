@@ -122,6 +122,25 @@ class InstallerTestCase(unittest.TestCase):
             self.assertEqual(second["backups"], [])
             self.assertEqual(releases_before, sorted((prefix / "releases").iterdir()))
 
+    def test_package_requires_every_project_skill_entrypoint(self) -> None:
+        required = (
+            "assets/core/repo-foundry-ai/SKILL.md",
+            "assets/adapters/codex/repo-foundry-ai/SKILL.md",
+            "assets/adapters/claude/repo-foundry-ai/SKILL.md",
+            "assets/adapters/claude/engineering-specs/SKILL.md",
+        )
+        for relative in required:
+            with self.subTest(relative=relative):
+                with tempfile.TemporaryDirectory() as temporary:
+                    source = Path(temporary) / "source"
+                    self.copy_source(source, "0.2.0")
+                    (source / relative).unlink()
+                    with self.assertRaisesRegex(
+                        installer.InstallError,
+                        "package entrypoint is missing or unsafe",
+                    ):
+                        installer.validate_package(source)
+
     def test_upgrade_switches_current_and_retains_old_release(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
