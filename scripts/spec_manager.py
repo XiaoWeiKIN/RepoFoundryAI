@@ -29,6 +29,7 @@ SPEC_MANIFEST = "docs/.engineering/specs.json"
 SPEC_LOCK = "docs/.engineering/specs.lock.json"
 MANAGED_ROOT = "docs/agent-guides/managed"
 MANAGED_INDEX = f"{MANAGED_ROOT}/index.md"
+MANAGED_REQUIREMENT_INDEX = f"{MANAGED_ROOT}/requirements.json"
 
 SPEC_ID_RE = re.compile(
     r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?"
@@ -40,12 +41,39 @@ RELEASE_REF_RE = re.compile(
 )
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+REQUIREMENT_HEADING_RE = re.compile(
+    r"^### ([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+-[0-9]{3}) [—-] (\S.*)$",
+    re.MULTILINE,
+)
+REQUIREMENT_ID_TOKEN_RE = re.compile(
+    r"`([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+-[0-9]{3})`"
+)
+REQUIREMENT_WILDCARD_TOKEN_RE = re.compile(
+    r"`([A-Z][A-Z0-9]*(?:-[A-Z0-9*]+)+)`"
+)
+H1_RE = re.compile(r"^# (\S.*)$", re.MULTILINE)
+H2_RE = re.compile(r"^## (\S.*)$", re.MULTILINE)
+VERIFICATION_ROW_RE = re.compile(
+    r"^\| `([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+-[0-9]{3})` \| \S.*\|$",
+    re.MULTILINE,
+)
 
 MAX_CATALOG_BYTES = 1024 * 1024
 MAX_SPEC_BYTES = 1024 * 1024
 MAX_SPEC_COUNT = 256
 MAX_TOTAL_SPEC_BYTES = 16 * 1024 * 1024
+MAX_REQUIREMENT_ACTIVATION_LENGTH = 180
+MAX_REQUIREMENT_BLOCK_BYTES = 8 * 1024
 GIT_TIMEOUT_SECONDS = 60
+REQUIREMENT_ACTIVATION_PREFIX = "**Activation:** "
+REQUIREMENT_DEPENDENCIES_PREFIX = "**Context dependencies:** "
+INTERPRETATION_FRAME_SECTIONS = (
+    "Purpose",
+    "Agent workflow",
+    "Terminology",
+    "Exceptions",
+    "Agent handoff",
+)
 
 EXCLUDED_DIRECTORY_NAMES = {
     ".git",
@@ -125,6 +153,17 @@ class ProjectSpec:
     path: str
     applies_to: tuple[str, ...]
     description: str
+
+
+@dataclass(frozen=True)
+class RequirementSource:
+    spec_id: str
+    version: str
+    path: str
+    sha256: str
+    requires: tuple[str, ...]
+    project_owned: bool
+    content: bytes
 
 
 @dataclass(frozen=True)
@@ -1122,6 +1161,61 @@ def _validate_project_specs(
             )
 
 
+def _requirement_sources(
+    repo: Path,
+    selected: tuple[CatalogSpec, ...],
+    managed_contents: dict[str, bytes],
+    project_specs: tuple[ProjectSpec, ...],
+) -> tuple[RequirementSource, ...]:
+    sources: list[RequirementSource] = []
+    for spec in selected:
+        content = managed_contents.get(spec.spec_id)
+        if content is None:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_SOURCE_MISSING: {spec.spec_id}"
+            )
+        sources.append(
+            RequirementSource(
+                spec_id=spec.spec_id,
+                version=spec.version,
+                path=_managed_path(spec.spec_id),
+                sha256=spec.sha256,
+                requires=spec.requires,
+                project_owned=False,
+                content=content,
+            )
+        )
+    for item in project_specs:
+        path = _reject_symlink_components(
+            repo,
+            item.path,
+            "SPEC_PROJECT_FILE_INVALID",
+        )
+        try:
+            content = path.read_bytes()
+        except OSError as exc:
+            raise SpecError(
+                f"SPEC_PROJECT_FILE_UNREADABLE: {item.path}: {exc}"
+            ) from exc
+        if len(content) > MAX_SPEC_BYTES:
+            raise SpecError(
+                f"SPEC_PROJECT_FILE_TOO_LARGE: {item.path}: "
+                f"exceeds {MAX_SPEC_BYTES} bytes"
+            )
+        sources.append(
+            RequirementSource(
+                spec_id=f"project:{item.path}",
+                version="project",
+                path=item.path,
+                sha256=_sha256_bytes(content),
+                requires=(),
+                project_owned=True,
+                content=content,
+            )
+        )
+    return tuple(sources)
+
+
 def _managed_path(spec_id: str) -> str:
     return f"{MANAGED_ROOT}/{spec_id}.md"
 
@@ -1406,6 +1500,408 @@ def render_index(
     return "\n".join(lines).encode("utf-8")
 
 
+def _utf8_offsets(text: str) -> list[int]:
+    offsets = [0]
+    total = 0
+    for character in text:
+        total += len(character.encode("utf-8"))
+        offsets.append(total)
+    return offsets
+
+
+def _source_range(
+    content: bytes,
+    start: int,
+    end: int,
+) -> dict[str, object]:
+    value = content[start:end]
+    return {
+        "start_byte": start,
+        "end_byte": end,
+        "sha256": _sha256_bytes(value),
+    }
+
+
+def _parse_requirement_metadata(
+    block_lines: list[str],
+    label: str,
+) -> tuple[str, tuple[str, ...], int]:
+    if len(block_lines) < 6 or block_lines[1] != "":
+        raise SpecError(
+            f"{label}: Activation must immediately follow the heading"
+        )
+    cursor = 2
+    if not block_lines[cursor].startswith(REQUIREMENT_ACTIVATION_PREFIX):
+        raise SpecError(f"{label}: missing Activation metadata")
+    activation_parts = [
+        block_lines[cursor][len(REQUIREMENT_ACTIVATION_PREFIX) :].strip()
+    ]
+    cursor += 1
+    while cursor < len(block_lines) and block_lines[cursor] != "":
+        activation_parts.append(block_lines[cursor].strip())
+        cursor += 1
+    activation = " ".join(part for part in activation_parts if part)
+    if not activation.startswith("Load when "):
+        raise SpecError(f"{label}: Activation must start with 'Load when '")
+    if len(activation) > MAX_REQUIREMENT_ACTIVATION_LENGTH:
+        raise SpecError(
+            f"{label}: Activation exceeds "
+            f"{MAX_REQUIREMENT_ACTIVATION_LENGTH} Unicode code points"
+        )
+    if cursor >= len(block_lines) or block_lines[cursor] != "":
+        raise SpecError(f"{label}: Activation must be one Markdown paragraph")
+    cursor += 1
+    if (
+        cursor >= len(block_lines)
+        or not block_lines[cursor].startswith(
+            REQUIREMENT_DEPENDENCIES_PREFIX
+        )
+    ):
+        raise SpecError(f"{label}: missing Context dependencies metadata")
+    dependency_parts = [
+        block_lines[cursor][len(REQUIREMENT_DEPENDENCIES_PREFIX) :].strip()
+    ]
+    cursor += 1
+    while cursor < len(block_lines) and block_lines[cursor] != "":
+        dependency_parts.append(block_lines[cursor].strip())
+        cursor += 1
+    dependency_text = " ".join(
+        part for part in dependency_parts if part
+    )
+    if dependency_text == "None":
+        dependencies: tuple[str, ...] = ()
+    else:
+        values = [item.strip() for item in dependency_text.split(",")]
+        dependencies = tuple(
+            match.group(1)
+            for item in values
+            if (match := REQUIREMENT_ID_TOKEN_RE.fullmatch(item)) is not None
+        )
+        if not values or len(dependencies) != len(values):
+            raise SpecError(
+                f"{label}: Context dependencies must be None or exact "
+                "backticked Requirement IDs"
+            )
+        if len(dependencies) != len(set(dependencies)):
+            raise SpecError(f"{label}: duplicate Context dependencies")
+    block = "\n".join(block_lines)
+    if block.count(REQUIREMENT_ACTIVATION_PREFIX) != 1:
+        raise SpecError(f"{label}: expected exactly one Activation marker")
+    if block.count(REQUIREMENT_DEPENDENCIES_PREFIX) != 1:
+        raise SpecError(
+            f"{label}: expected exactly one Context dependencies marker"
+        )
+    return activation, dependencies, cursor
+
+
+def _parse_requirement_source(source: RequirementSource) -> dict[str, object]:
+    if len(source.content) > MAX_SPEC_BYTES:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_SOURCE_TOO_LARGE: {source.path}"
+        )
+    if _sha256_bytes(source.content) != source.sha256:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_SOURCE_DRIFT: {source.path}"
+        )
+    try:
+        text = source.content.decode("utf-8")
+    except UnicodeError as exc:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_UTF8: {source.path}: {exc}"
+        ) from exc
+    offsets = _utf8_offsets(text)
+    h1_matches = list(H1_RE.finditer(text))
+    title = h1_matches[0].group(1) if len(h1_matches) == 1 else source.spec_id
+    section_matches = list(H2_RE.finditer(text))
+    sections: list[dict[str, object]] = []
+    section_chars: dict[str, tuple[int, int]] = {}
+    duplicate_sections: set[str] = set()
+    for index, match in enumerate(section_matches):
+        name = match.group(1)
+        start_char = match.start()
+        end_char = (
+            section_matches[index + 1].start()
+            if index + 1 < len(section_matches)
+            else len(text)
+        )
+        if name in section_chars:
+            duplicate_sections.add(name)
+        section_chars[name] = (start_char, end_char)
+        record = {
+            "name": name,
+            **_source_range(
+                source.content,
+                offsets[start_char],
+                offsets[end_char],
+            ),
+        }
+        sections.append(record)
+
+    requirements_range = section_chars.get("Requirements")
+    if requirements_range is None:
+        requirement_matches: list[re.Match[str]] = []
+    else:
+        requirement_matches = [
+            match
+            for match in REQUIREMENT_HEADING_RE.finditer(text)
+            if requirements_range[0] <= match.start() < requirements_range[1]
+        ]
+        requirement_text = text[
+            requirements_range[0] : requirements_range[1]
+        ]
+        if "### " in requirement_text and not requirement_matches:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_HEADING_INVALID: {source.path}"
+            )
+    if not requirement_matches:
+        return {
+            "id": source.spec_id,
+            "version": source.version,
+            "path": source.path,
+            "sha256": source.sha256,
+            "requires": list(source.requires),
+            "project_owned": source.project_owned,
+            "mode": "whole-spec",
+            "title": title,
+            "frame_sections": [],
+            "sections": [],
+            "requirements": [],
+        }
+
+    if len(h1_matches) != 1:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_TITLE_INVALID: {source.path}"
+        )
+    if duplicate_sections:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_SECTION_DUPLICATE: {source.path}: "
+            + ", ".join(sorted(duplicate_sections))
+        )
+    missing_frame = [
+        name for name in INTERPRETATION_FRAME_SECTIONS if name not in section_chars
+    ]
+    if missing_frame:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_FRAME_MISSING: {source.path}: "
+            + ", ".join(missing_frame)
+        )
+    verification_range = section_chars.get("Verification")
+    if verification_range is None:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_VERIFICATION_MISSING: {source.path}"
+        )
+    verification_matches = [
+        match
+        for match in VERIFICATION_ROW_RE.finditer(text)
+        if verification_range[0] <= match.start() < verification_range[1]
+    ]
+    verification_by_id: dict[str, list[re.Match[str]]] = {}
+    for match in verification_matches:
+        verification_by_id.setdefault(match.group(1), []).append(match)
+
+    requirements: list[dict[str, object]] = []
+    for index, match in enumerate(requirement_matches):
+        requirement_id = match.group(1)
+        start_char = match.start()
+        end_char = (
+            requirement_matches[index + 1].start()
+            if index + 1 < len(requirement_matches)
+            else requirements_range[1]
+        )
+        start_byte = offsets[start_char]
+        end_byte = offsets[end_char]
+        block_bytes = source.content[start_byte:end_byte]
+        if len(block_bytes) > MAX_REQUIREMENT_BLOCK_BYTES:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_BLOCK_TOO_LARGE: {source.path}: "
+                f"{requirement_id}: {len(block_bytes)}"
+            )
+        block_text = text[start_char:end_char]
+        activation, dependencies, metadata_end = _parse_requirement_metadata(
+            block_text.splitlines(),
+            f"SPEC_REQUIREMENT_INDEX_INVALID: {source.path}: {requirement_id}",
+        )
+        if requirement_id in dependencies:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_SELF_DEPENDENCY: {requirement_id}"
+            )
+        body = "\n".join(block_text.splitlines()[metadata_end:])
+        wildcard_tokens = sorted(
+            {
+                token
+                for token in REQUIREMENT_WILDCARD_TOKEN_RE.findall(body)
+                if "*" in token
+            }
+        )
+        if wildcard_tokens:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_WILDCARD: {requirement_id}: "
+                + ", ".join(wildcard_tokens)
+            )
+        references = set(REQUIREMENT_ID_TOKEN_RE.findall(body))
+        references.discard(requirement_id)
+        missing_context = sorted(references - set(dependencies))
+        if missing_context:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_CONTEXT_MISSING: {requirement_id}: "
+                + ", ".join(missing_context)
+            )
+        rows = verification_by_id.get(requirement_id, [])
+        if len(rows) != 1:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_VERIFICATION_COVERAGE: "
+                f"{source.path}: {requirement_id}"
+            )
+        row = rows[0]
+        verification_start = offsets[row.start()]
+        verification_end = offsets[row.end()]
+        requirements.append(
+            {
+                "id": requirement_id,
+                "title": match.group(2),
+                "activation": activation,
+                "context_dependencies": list(dependencies),
+                "block_bytes": len(block_bytes),
+                **_source_range(source.content, start_byte, end_byte),
+                "verification": _source_range(
+                    source.content,
+                    verification_start,
+                    verification_end,
+                ),
+                "_references": sorted(references),
+            }
+        )
+    unknown_verification = sorted(
+        set(verification_by_id)
+        - {str(item["id"]) for item in requirements}
+    )
+    if unknown_verification:
+        raise SpecError(
+            f"SPEC_REQUIREMENT_INDEX_VERIFICATION_UNKNOWN: {source.path}: "
+            + ", ".join(unknown_verification)
+        )
+    return {
+        "id": source.spec_id,
+        "version": source.version,
+        "path": source.path,
+        "sha256": source.sha256,
+        "requires": list(source.requires),
+        "project_owned": source.project_owned,
+        "mode": "requirements",
+        "title": title,
+        "frame_sections": list(INTERPRETATION_FRAME_SECTIONS),
+        "sections": sections,
+        "requirements": requirements,
+    }
+
+
+def _transitive_requires(
+    spec_id: str,
+    requires: dict[str, tuple[str, ...]],
+) -> set[str]:
+    result: set[str] = set()
+    pending = list(requires.get(spec_id, ()))
+    while pending:
+        current = pending.pop()
+        if current in result:
+            continue
+        result.add(current)
+        pending.extend(requires.get(current, ()))
+    return result
+
+
+def render_requirement_index(
+    catalog_id: str,
+    catalog_version: str,
+    catalog_digest: str,
+    resolved_revision: str,
+    sources: tuple[RequirementSource, ...],
+    owner: str = SPEC_OWNER,
+) -> bytes:
+    parsed = [_parse_requirement_source(source) for source in sources]
+    requirement_owner: dict[str, str] = {}
+    edges: dict[str, tuple[str, ...]] = {}
+    references: dict[str, tuple[str, ...]] = {}
+    spec_requires = {source.spec_id: source.requires for source in sources}
+    project_owned = {source.spec_id: source.project_owned for source in sources}
+    for spec in parsed:
+        for raw in spec["requirements"]:
+            requirement = _expect_object(raw, "SPEC_REQUIREMENT_INDEX")
+            requirement_id = str(requirement["id"])
+            if requirement_id in requirement_owner:
+                raise SpecError(
+                    f"SPEC_REQUIREMENT_INDEX_DUPLICATE_ID: {requirement_id}"
+                )
+            requirement_owner[requirement_id] = str(spec["id"])
+            edges[requirement_id] = tuple(
+                str(value) for value in requirement["context_dependencies"]
+            )
+            references[requirement_id] = tuple(
+                str(value) for value in requirement.pop("_references")
+            )
+    for requirement_id, dependencies in sorted(edges.items()):
+        unknown = sorted(set(dependencies) - set(requirement_owner))
+        if unknown:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_DEPENDENCY_UNKNOWN: "
+                f"{requirement_id}: " + ", ".join(unknown)
+            )
+        unknown_references = sorted(
+            set(references[requirement_id]) - set(requirement_owner)
+        )
+        if unknown_references:
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_REFERENCE_UNKNOWN: "
+                f"{requirement_id}: " + ", ".join(unknown_references)
+            )
+        owner_id = requirement_owner[requirement_id]
+        if not project_owned[owner_id]:
+            allowed = {owner_id, *_transitive_requires(owner_id, spec_requires)}
+            outside = sorted(
+                dependency
+                for dependency in dependencies
+                if requirement_owner[dependency] not in allowed
+            )
+            if outside:
+                raise SpecError(
+                    f"SPEC_REQUIREMENT_INDEX_DEPENDENCY_OUTSIDE_CLOSURE: "
+                    f"{requirement_id}: " + ", ".join(outside)
+                )
+    visiting: list[str] = []
+    visited: set[str] = set()
+
+    def visit(requirement_id: str) -> None:
+        if requirement_id in visiting:
+            start = visiting.index(requirement_id)
+            cycle = " -> ".join((*visiting[start:], requirement_id))
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_DEPENDENCY_CYCLE: {cycle}"
+            )
+        if requirement_id in visited:
+            return
+        visiting.append(requirement_id)
+        for dependency in edges[requirement_id]:
+            visit(dependency)
+        visiting.pop()
+        visited.add(requirement_id)
+
+    for requirement_id in sorted(edges):
+        visit(requirement_id)
+    return _json_bytes(
+        {
+            "schema_version": 1,
+            "owner": owner,
+            "catalog": {
+                "catalog_id": catalog_id,
+                "catalog_version": catalog_version,
+                "sha256": catalog_digest,
+                "resolved_revision": resolved_revision,
+            },
+            "specs": parsed,
+        }
+    )
+
+
 def _path_conflict(repo: Path, relative: str) -> str:
     try:
         path = _reject_symlink_components(
@@ -1607,6 +2103,10 @@ def plan_spec_state(
                 role="managed_spec",
             )
         )
+    managed_contents = {
+        spec.spec_id: catalog.contents[spec.source_path]
+        for spec in selected
+    }
     writes.append(
         PlannedWrite(
             path=MANAGED_INDEX,
@@ -1620,6 +2120,25 @@ def plan_spec_state(
                 manifest.owner,
             ),
             role="index",
+        )
+    )
+    writes.append(
+        PlannedWrite(
+            path=MANAGED_REQUIREMENT_INDEX,
+            content=render_requirement_index(
+                catalog.catalog_id,
+                catalog.catalog_version,
+                catalog.digest,
+                catalog.resolved_revision,
+                _requirement_sources(
+                    repo,
+                    selected,
+                    managed_contents,
+                    manifest.project_specs,
+                ),
+                manifest.owner,
+            ),
+            role="requirement_index",
         )
     )
 
@@ -1944,6 +2463,7 @@ def validate_spec_state(
             "SPEC_LOCK_SELECTION_EXTRA: " + ", ".join(stale_lock_ids)
         )
 
+    managed_contents: dict[str, bytes] = {}
     for spec in lock.specs:
         relative = _managed_path(spec.spec_id)
         reason = _path_conflict(repo, relative)
@@ -1958,7 +2478,8 @@ def validate_spec_state(
             )
             continue
         try:
-            actual = _sha256_file(path)
+            content = path.read_bytes()
+            actual = _sha256_bytes(content)
         except OSError as exc:
             errors.append(
                 f"SPEC_MANAGED_FILE_UNREADABLE: {relative}: {exc}"
@@ -1970,6 +2491,8 @@ def validate_spec_state(
                 f"lock {spec.sha256}; actual {actual}; "
                 "run foundryctl spec sync --apply after review"
             )
+            continue
+        managed_contents[spec.spec_id] = content
 
     expected_index = render_index(
         lock.catalog_id,
@@ -2005,6 +2528,59 @@ def validate_spec_state(
                         f"SPEC_INDEX_DRIFT: {MANAGED_INDEX}: "
                         "run foundryctl spec sync --apply after review"
                     )
+
+    if len(managed_contents) == len(lock.specs):
+        try:
+            expected_requirement_index = render_requirement_index(
+                lock.catalog_id,
+                lock.catalog_version,
+                lock.catalog_digest,
+                lock.resolved_revision,
+                _requirement_sources(
+                    repo,
+                    lock.specs,
+                    managed_contents,
+                    manifest.project_specs,
+                ),
+                manifest.owner,
+            )
+        except SpecError as exc:
+            errors.append(str(exc))
+        else:
+            requirement_index_reason = _path_conflict(
+                repo,
+                MANAGED_REQUIREMENT_INDEX,
+            )
+            if requirement_index_reason:
+                errors.append(
+                    f"SPEC_PATH_CONFLICT: {MANAGED_REQUIREMENT_INDEX}: "
+                    f"{requirement_index_reason}"
+                )
+            else:
+                requirement_index_path = repo / MANAGED_REQUIREMENT_INDEX
+                if not requirement_index_path.is_file():
+                    errors.append(
+                        f"SPEC_REQUIREMENT_INDEX_MISSING: "
+                        f"{MANAGED_REQUIREMENT_INDEX}: run foundryctl spec "
+                        "sync --apply"
+                    )
+                else:
+                    try:
+                        actual_requirement_index = (
+                            requirement_index_path.read_bytes()
+                        )
+                    except OSError as exc:
+                        errors.append(
+                            f"SPEC_REQUIREMENT_INDEX_UNREADABLE: "
+                            f"{MANAGED_REQUIREMENT_INDEX}: {exc}"
+                        )
+                    else:
+                        if actual_requirement_index != expected_requirement_index:
+                            errors.append(
+                                f"SPEC_REQUIREMENT_INDEX_DRIFT: "
+                                f"{MANAGED_REQUIREMENT_INDEX}: run "
+                                "foundryctl spec sync --apply after review"
+                            )
 
     warnings.extend(_stale_managed_warnings(repo, lock.specs))
     return errors, warnings

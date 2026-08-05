@@ -126,6 +126,8 @@ target-repository/
     ├── agent-guides/
     │   ├── README.md                  # Portable adapter entrypoint
     │   └── managed/
+    │       ├── index.md               # Spec routing index
+    │       └── requirements.json      # exact Requirement source index
     ├── design-docs/
     ├── research/{active,completed}/
     ├── adr/
@@ -230,7 +232,7 @@ portable project adapter without either host directory.
 Examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.1 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.3.0 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
@@ -249,12 +251,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.2.1`
+distribution upgrade, run this in each existing project and replace `0.3.0`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.2.1
-repofoundry --repo . upgrade --to 0.2.1 --apply
+repofoundry --repo . upgrade --to 0.3.0
+repofoundry --repo . upgrade --to 0.3.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -353,13 +355,13 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.2.1
-repofoundry --repo . upgrade --to 0.2.1 --apply
+repofoundry --repo . upgrade --to 0.3.0
+repofoundry --repo . upgrade --to 0.3.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.3.0 --spec languages/go --apply
+  spec update --spec-version 1.5.0 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -373,13 +375,13 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.2.1` uses Harness schema `3`, Harness Core `1.1.0`, Codex
-adapter `2.1.0`, Claude adapter `1.0.0`, Portable adapter `1.0.0`, and
-activation protocol `1`.
+RepoFoundry `0.3.0` uses Harness schema `3`, Harness Core `1.2.0`, Codex
+adapter `2.2.0`, Claude adapter `1.1.0`, Portable adapter `1.1.0`, and
+activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.2.1 --apply`. Earlier schema `3` Core `1.0.0` and Codex `2.0.0`
-contracts also stay readable; an upgrade, or a previewed bootstrap that adds
+`upgrade --to 0.3.0 --apply`. Earlier schema `3` Core and adapter contracts
+also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
 recorded installed SHA-256; customized or provenance-unknown files are
@@ -390,10 +392,10 @@ Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog. `sync` follows the locked commit; `update` explicitly resolves the
 selected release again. New repositories default to fixed Catalog version
-`1.3.0`, represented as `refs/tags/v1.3.0`; production upgrades name another
+`1.5.0`, represented as `refs/tags/v1.5.0`; production upgrades name another
 version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
 remains an explicit development-source escape hatch. `spec validate` is
-offline. Installing RepoFoundry `0.2.1` or upgrading only the Harness does not
+offline. Installing RepoFoundry `0.3.0` or upgrading only the Harness does not
 rewrite an existing project Spec manifest, lock, index, or managed content.
 
 `spec plan` lists every Catalog entry and separates required, recommended,
@@ -411,26 +413,42 @@ project `$engineering-specs` Skill, and Claude plus Portable use the same
 engine through explicit CLI steps. Before implementation or code review, the
 engine:
 
-1. matches planned paths to the locked Catalog scopes;
-2. asks the Agent to read candidate descriptions and Applicability;
-3. records applicable Spec IDs, including dependencies, or an explicit
-   reasoned `none` decision for the current turn;
-4. reads only digest-verified local documents; and
-5. reports activated requirements, verification, exceptions, and migration
-   effects at handoff.
+1. matches planned paths to locked Catalog scopes and decides Spec
+   Applicability;
+2. returns bounded, non-normative Requirement cards only for applicable Specs;
+3. records the smallest complete set of direct Requirement IDs, each with a
+   task-specific reason, or an explicit reasoned `none` decision;
+4. resolves the exact Requirement dependency closure and compiles a
+   digest-verified context capsule from local source bytes; and
+5. reports exact IDs, capsule digest and bytes, verification, exceptions, and
+   migration effects at handoff.
 
 ```mermaid
 flowchart LR
-    P["Prompt + planned paths"] --> D["Agent adapter"]
-    D --> R["shared activation engine"]
-    L["locked local Specs"] --> R
-    R --> A["turn activation receipt"]
-    A --> W["implementation or review"]
-    W --> H["changed-path + handoff audit"]
+    P["Prompt + planned paths"] --> S["Applicable Specs"]
+    S --> C["Bounded Requirement cards"]
+    C --> D["Direct Requirement IDs + reasons"]
+    D --> X["Exact dependency closure"]
+    L["Verified local source ranges"] --> K["Context capsule"]
+    X --> K
+    K --> W["Implementation or review"]
+    W --> H["Receipt + changed-path audit"]
 ```
 
+The normal card budget is 16 KiB and the exact capsule budget is 32 KiB.
+Capsules contain each selected Spec's mandatory interpretation frame, resolved
+Requirement blocks, and matching Verification rows. Normative text is never
+summarized or truncated to fit: overflow fails and asks the caller to narrow
+the choice, partition the task, or explicitly justify a larger reviewed budget
+with `--capsule-budget-reason`. Legacy documents without formal Requirement
+blocks remain usable only through reasoned whole-Spec mode.
+
 The Core understands only normalized `session_start`, `subagent_start`,
-`before_mutation`, and `stop` events. The Codex adapter translates its native
+`context_resume`, `before_mutation`, and `stop` events. Protocol-v2 receipts
+record direct and resolved Requirement IDs, reasons, source ranges, capsule
+mode/digest/bytes, and a context epoch. `rehydrate` advances the epoch and
+reconstructs the same verified capsule after compaction or context loss.
+The Codex adapter translates its native
 events: generated Hooks establish a Git baseline on `UserPromptSubmit`, pass
 the contract to subagents, deny Bash or `apply_patch` writes before activation,
 inject the activated local documents before the first write, and audit changed

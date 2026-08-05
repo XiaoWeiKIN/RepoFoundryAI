@@ -10,7 +10,7 @@ adr_refs: ["ADR-007", "ADR-008", "ADR-009", "ADR-011", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-07-31
-updated: 2026-08-04
+updated: 2026-08-05
 ---
 
 # RepoFoundry AI System Identity and Packaging
@@ -61,7 +61,7 @@ the engineering environment in which multiple workflows can operate.
 | Distribution installer | `install.py` |
 | Installed command | `repofoundry` |
 | Root CLI | `scripts/foundryctl.py` |
-| Distribution version source | `VERSION` (`0.2.1`) |
+| Distribution version source | `VERSION` (`0.3.0`) |
 | Installation variable used in examples | `REPO_FOUNDRY_HOME` |
 | New Harness and Spec manifest owner | `repo-foundry` |
 | Persistent target state directory | `docs/.engineering/` |

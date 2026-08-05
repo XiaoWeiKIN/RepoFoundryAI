@@ -119,6 +119,8 @@ target-repository/
     ├── agent-guides/
     │   ├── README.md                  # Portable adapter 入口
     │   └── managed/
+    │       ├── index.md               # Spec 路由索引
+    │       └── requirements.json      # Requirement 精确源码索引
     ├── design-docs/
     ├── research/{active,completed}/
     ├── adr/
@@ -214,7 +216,7 @@ adapter，不依赖这两个宿主目录。
 示例：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.1 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.3.0 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
@@ -232,11 +234,11 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.2.1` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.3.0` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.2.1
-repofoundry --repo . upgrade --to 0.2.1 --apply
+repofoundry --repo . upgrade --to 0.3.0
+repofoundry --repo . upgrade --to 0.3.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -329,13 +331,13 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.2.1
-repofoundry --repo . upgrade --to 0.2.1 --apply
+repofoundry --repo . upgrade --to 0.3.0
+repofoundry --repo . upgrade --to 0.3.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.3.0 --spec languages/go --apply
+  spec update --spec-version 1.5.0 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -348,11 +350,11 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.2.1` 使用 Harness schema `3`、Harness Core `1.1.0`、Codex
-adapter `2.1.0`、Claude adapter `1.0.0`、Portable adapter `1.0.0` 与激活协议
-`1`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.2.1 --apply` 才会迁移。较早的 schema `3`
-Core `1.0.0` 与 Codex `2.0.0` 契约也继续可读；显式 upgrade 或一次预览过的
+RepoFoundry `0.3.0` 使用 Harness schema `3`、Harness Core `1.2.0`、Codex
+adapter `2.2.0`、Claude adapter `1.1.0`、Portable adapter `1.1.0` 与激活协议
+`2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
+可读，但只有显式执行 `upgrade --to 0.3.0 --apply` 才会迁移。较早的 schema `3`
+Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
 原样，写后验证失败会回滚。完整契约见
@@ -361,11 +363,11 @@ adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned 
 Engineering Specs 来自独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发布版本。
-新仓库默认选择固定 Catalog `1.3.0`，manifest 记录
-`refs/tags/v1.3.0`。生产升级通过
+新仓库默认选择固定 Catalog `1.5.0`，manifest 记录
+`refs/tags/v1.5.0`。生产升级通过
 `spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
 `--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。安装 RepoFoundry
-`0.2.1` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
+`0.3.0` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
 托管正文。
 
 `spec plan` 会列出全部 Catalog 条目，并区分必选、推荐、项目直接配置和依赖闭包后的
@@ -380,23 +382,35 @@ Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
 发现项目级 `$engineering-specs` Skill，Claude 与 Portable 都通过显式 CLI 步骤
 使用同一引擎。实现或评审前，引擎会：
 
-1. 用计划路径匹配 lock 中的 Catalog 作用域；
-2. 要求 Agent 读取候选 description 与 Applicability；
-3. 为当前 Turn 记录适用 Spec ID 与依赖，或记录带理由的显式 `none`；
-4. 只读取摘要已验证的本地规范；
-5. 在交接时报告激活的 Requirement、验证、例外与迁移影响。
+1. 用计划路径匹配 lock 中的 Catalog 作用域，并判断 Spec Applicability；
+2. 只为适用 Spec 返回有大小上限、非规范性的 Requirement 卡片；
+3. 记录最小但完整的直接 Requirement ID 集合，每个 ID 都带任务理由；没有适用项时
+   记录带理由的显式 `none`；
+4. 计算精确 Requirement 依赖闭包，并从摘要已验证的本地源码字节编译上下文胶囊；
+5. 在交接时报告精确 ID、胶囊摘要与字节数、验证、例外和迁移影响。
 
 ```mermaid
 flowchart LR
-    P["Prompt + 计划路径"] --> D["Agent adapter"]
-    D --> R["共享激活引擎"]
-    L["锁定的本地 Specs"] --> R
-    R --> A["Turn 激活回执"]
-    A --> W["实现或评审"]
-    W --> H["变更路径 + 交接审计"]
+    P["Prompt + 计划路径"] --> S["适用 Specs"]
+    S --> C["有界 Requirement 卡片"]
+    C --> D["直接 Requirement ID + 理由"]
+    D --> X["精确依赖闭包"]
+    L["已验证的本地源码范围"] --> K["上下文胶囊"]
+    X --> K
+    K --> W["实现或评审"]
+    W --> H["回执 + 变更路径审计"]
 ```
 
-Core 只识别标准化的 `session_start`、`subagent_start`、`before_mutation`、`stop`。
+默认卡片预算为 16 KiB，精确胶囊预算为 32 KiB。胶囊包含每份所选 Spec 的强制
+解释框架、依赖闭包中的 Requirement 原文块和对应 Verification 行。规范文本绝不为
+适应预算而摘要或截断：超限会失败，调用方必须缩小选择、拆分任务，或通过
+`--capsule-budget-reason` 记录提高预算的评审理由。没有正式 Requirement 块的旧文档
+只能走带理由的整份 Spec 回退。
+
+Core 只识别标准化的 `session_start`、`subagent_start`、`context_resume`、
+`before_mutation`、`stop`。协议 v2 回执记录直接和闭包 Requirement ID、理由、源码
+范围、胶囊模式/摘要/字节数与上下文 epoch。发生 compaction 或上下文丢失后，
+`rehydrate` 会推进 epoch，并从本地源码重建同一个已验证胶囊。
 Codex adapter 翻译原生事件：生成的 Hooks 在 `UserPromptSubmit` 建立 Git 基线，把契约传给子 Agent，
 在激活前拒绝 Bash 或 `apply_patch` 写入，在首次写入前注入已激活的本地全文，并在
 `Stop` 审计实际变更路径。项目只有在仓库受信任、用户通过 Codex `/hooks` 审查

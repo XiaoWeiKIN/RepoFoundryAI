@@ -1,0 +1,48 @@
+{
+  "catalog_version": "1.5.0",
+  "protocol_version": 2,
+  "adapter_id": "portable",
+  "direct_requirements": [
+    "GO-FACTORY-ABSENCE-001"
+  ],
+  "resolved_requirements": [
+    "DATA-SHAPE-001",
+    "DATA-PARSE-001",
+    "DATA-ERROR-001",
+    "GO-ERROR-001",
+    "GO-FACTORY-ABSENCE-001"
+  ],
+  "dependency_edges": [
+    {
+      "from": "DATA-PARSE-001",
+      "to": "DATA-SHAPE-001"
+    },
+    {
+      "from": "DATA-ERROR-001",
+      "to": "DATA-PARSE-001"
+    },
+    {
+      "from": "GO-ERROR-001",
+      "to": "DATA-ERROR-001"
+    },
+    {
+      "from": "GO-FACTORY-ABSENCE-001",
+      "to": "GO-ERROR-001"
+    }
+  ],
+  "card_bytes": 1949,
+  "card_budget_bytes": 16384,
+  "capsule_mode": "requirements",
+  "capsule_sha256": "b18c79e2d29de8a8c217e39ee1488b2605add38920684262b20fdfa4b3ac23af",
+  "capsule_bytes": 16308,
+  "capsule_budget_bytes": 32768,
+  "below_prototype_16_kib_target": true,
+  "whole_spec_dependency_closure_bytes": 93194,
+  "context_byte_reduction_percent": 82.5,
+  "context_epoch_after_rehydrate": 2,
+  "unrelated_requirement": "GO-FACTORY-TEST-001",
+  "unrelated_requirement_absent": true,
+  "spec_validate": "passed",
+  "harness_validate": "passed",
+  "source": "isolated local Git fixture built from the EngineeringSpecifications 1.5.0 working tree"
+}

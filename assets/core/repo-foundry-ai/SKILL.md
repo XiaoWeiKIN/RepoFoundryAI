@@ -41,11 +41,15 @@ Before modifying a scoped path, use the canonical repository engine at
 `.repo-foundry/engineering-specs/spec_router.py`:
 
 1. Establish one stable adapter, session, and turn identity with `begin`.
-2. Inspect path-matched choices with `candidates --path <path>`.
-3. Record an explicit decision with `activate`, selecting the applicable Spec
-   IDs or `--none` with a reason.
-4. Keep the activated requirements in context while editing and reviewing.
-5. Run `audit` before completion so changed paths and the handoff are checked
+2. Inspect path-matched choices with `candidates --path <path>` and decide Spec
+   Applicability.
+3. Use `requirements` for bounded cards, then `activate` exact direct IDs with
+   one task-specific reason each; code resolves their context dependencies.
+4. Use reasoned whole-Spec fallback only for legacy/migration/audit work, or
+   `--none` with a reason when no Spec applies.
+5. Keep the exact digest-verified capsule in context; run `rehydrate` after a
+   context reset rather than summarizing normative text.
+6. Run `audit` before completion so changed paths and the handoff are checked
    against the recorded receipt.
 
 If the engine is absent, report that project Spec activation is unavailable;

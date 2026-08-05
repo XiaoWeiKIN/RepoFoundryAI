@@ -17,18 +17,25 @@ python3 .repo-foundry/engineering-specs/spec_router.py candidates \
   --path <planned-path> [--path <planned-path> ...]
 ```
 
-Read each candidate's `Applicability` section. Then record either the applicable
-IDs or a justified explicit-none decision before the first write:
+Read each candidate's `Applicability` section. Request bounded cards for the
+applicable Specs, then record exact direct Requirements with reasons before the
+first write:
 
 ```bash
+python3 .repo-foundry/engineering-specs/spec_router.py requirements \
+  --path <planned-path> --spec <applicable-spec-id>
 python3 .repo-foundry/engineering-specs/spec_router.py activate \
   --adapter-id portable --session-id <session-id> --turn-id <turn-id> \
-  --path <planned-path> [--spec <id> ...]
+  --path <planned-path> --spec <applicable-spec-id> \
+  --requirement <ID> --because "<ID>=<task-specific reason>"
 ```
 
 This adapter provides CLI checks and advisory instructions. It does not claim
-native lifecycle interception. Re-run activation if planned paths change, run
-each activated requirement's verification, then audit the final handoff:
+native lifecycle interception. Use explicit whole-Spec fallback only with a
+reason; a raised capsule budget also requires `--capsule-budget-reason`. Use
+`--none --reason` when nothing applies. Run `rehydrate` after a context reset,
+re-run activation if planned paths change, run each resolved
+Requirement's Verification row, then audit the final handoff:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py audit \

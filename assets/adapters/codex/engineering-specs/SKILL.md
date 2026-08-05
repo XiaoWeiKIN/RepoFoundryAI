@@ -1,6 +1,6 @@
 ---
 name: engineering-specs
-description: Route implementation and code-review tasks to the applicable version-locked Engineering Specifications in this repository. Use before editing, generating, refactoring, testing, or reviewing code, schemas, APIs, configuration, framework integration, database behavior, or test contracts. Determine candidates from planned paths, apply each candidate's task Applicability, record the activation decision, read the activated local documents, and report requirement-level verification. Do not use this Skill to install or upgrade Specifications.
+description: Route implementation and code-review tasks to exact Requirements from the version-locked Engineering Specifications in this repository. Use before editing, generating, refactoring, testing, or reviewing engineering contracts. Determine Spec candidates from planned paths, decide Applicability, inspect bounded Requirement cards, record direct IDs with reasons, apply the exact context capsule, and report verification. Do not use this Skill to install or upgrade Specifications.
 ---
 
 # Engineering Specs
@@ -31,19 +31,33 @@ python3 .repo-foundry/engineering-specs/spec_router.py begin \
 3. For every candidate, read its Catalog purpose and `Applicability` section.
    Inspect enough existing code and project documentation to decide whether the
    task intent activates it. A matching file scope alone is not activation.
-4. Record the applicable set before implementation or review:
+4. Request bounded cards only for applicable Specs:
+
+   ```bash
+   python3 .repo-foundry/engineering-specs/spec_router.py requirements \
+     --path <path> [--path <path> ...] \
+     --spec <applicable-id> [--spec <applicable-id> ...]
+   ```
+
+5. Record the smallest complete direct Requirement set before work:
 
    ```bash
    python3 .repo-foundry/engineering-specs/spec_router.py activate \
      --adapter-id codex \
      --session-id <session-id> --turn-id <turn-id> \
      --path <path> [--path <path> ...] \
-     --spec <id> [--spec <id> ...]
+     --spec <applicable-id> \
+     --requirement <ID> --because "<ID>=<task-specific reason>"
    ```
 
-   Use the session and turn values injected by the Codex Hook. Dependencies are
-   added automatically. Read every returned local document before editing.
-5. If no candidate is applicable, still record the decision:
+   Repeat all three selection flags when needed. Code adds exact Requirement
+   dependencies; Hooks inject the digest-verified capsule. A legacy Spec,
+   repository-wide audit, or migration may instead use `--whole-spec <id>
+   --whole-spec-reason <reason>`. Normative text is never summarized or
+   truncated to meet a budget. Raising the 32 KiB default also requires
+   `--capsule-budget-reason <reviewed reason>` and remains visible in the
+   receipt.
+6. If no candidate is applicable, still record the decision:
 
    ```bash
    python3 .repo-foundry/engineering-specs/spec_router.py activate \
@@ -53,7 +67,9 @@ python3 .repo-foundry/engineering-specs/spec_router.py begin \
      --none --reason "<why no installed Spec governs this task>"
    ```
 
-6. Rerun activation when the planned path set or applicable Spec set changes.
+7. Rerun activation when paths, applicable Specs, or direct Requirements
+   change. After compaction or a manual context resume, run `rehydrate` with
+   the active adapter/session/turn so the next epoch receives the same capsule.
 
 Project Specifications appear as `project:<repository-relative-path>` IDs.
 Prefer the narrower project rule only when it explicitly owns or overrides the
@@ -61,7 +77,7 @@ decision; do not silently discard compatible upstream requirements.
 
 ## Complete the handoff
 
-Run the verification entries required by every activated document. End the
+Run the Verification rows for every resolved Requirement. End the
 task with all five labels:
 
 ```text

@@ -48,7 +48,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 ```
 
 adapter ID 不得重复，生成路径不得发生 ownership collision。现有 schema 3 Harness
-可以追加 adapter；删除 adapter 不在 `0.2.1` 范围内，因为删除定制配置需要独立的
+可以追加 adapter；删除 adapter 不在 `0.3.0` 范围内，因为删除定制配置需要独立的
 所有权和迁移决策。
 
 `--all-adapters` 确定性展开为 `codex`、`claude`、`portable`，不能与 `--profile`
@@ -61,7 +61,7 @@ adapter ID 不得重复，生成路径不得发生 ownership collision。现有 
 - 同时传 `--profile` 与 `--adapter` 会失败；
 - 两者都省略时暂时默认 `codex`，并返回
   `HARNESS_ADAPTER_DEFAULT_DEPRECATED`；
-- schema 1/2 只读兼容，只有显式 `upgrade --to 0.2.1 --apply` 写 schema 3。
+- schema 1/2 只读兼容，只有显式 `upgrade --to 0.3.0 --apply` 写 schema 3。
 
 ## Core 与 adapter 的安装结构
 
@@ -77,6 +77,7 @@ docs/
 ├── agent-guides/
 │   └── managed/
 │       ├── index.md
+│       ├── requirements.json
 │       └── <locked-spec>.md
 ├── index.md
 ├── QUALITY_SCORE.md
@@ -126,7 +127,8 @@ Portable adapter 只增加：
 docs/agent-guides/README.md
 ```
 
-它通过 `begin`、`candidates`、`activate`、`status`、`audit` 显式使用共享引擎，
+它通过 `begin`、`candidates`、`requirements`、`activate`、`rehydrate`、`status`、
+`audit` 显式使用共享引擎，
 enforcement 为 CLI/advisory，不声称原生拦截写入。
 
 ## 能力与 enforcement
@@ -137,7 +139,7 @@ adapter 能力由 `adapter list` 的结构化输出声明：
 |---|---|---|---|
 | instructions | file | none | file |
 | skills | file | native | none |
-| lifecycle events | 四类标准化事件 | none | none |
+| lifecycle events | 五类标准化事件 | none | none |
 | context injection | native | advisory | advisory |
 | mutation gate | native | cli | cli |
 | completion audit | native | cli | cli |
@@ -157,25 +159,25 @@ adapter 能力由 `adapter list` 的结构化输出声明：
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.2.1"
+    "version": "0.3.0"
   },
   "core": {
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "enforcement": "native"
     },
     {
       "id": "claude",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "enforcement": "cli"
     },
     {
       "id": "portable",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "enforcement": "cli"
     }
   ],
@@ -197,13 +199,13 @@ protocol 与 Engineering Specifications Catalog 分别版本化。改变 Codex H
 
 ## 版本与 Harness 升级
 
-当前迁移目标为 `0.2.1`：
+当前迁移目标为 `0.3.0`：
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.1
+  upgrade --to 0.3.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.1 --apply
+  upgrade --to 0.3.0 --apply
 ```
 
 迁移默认只预览，并遵循以下证据规则：
@@ -214,8 +216,9 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 - 定制的 repository document：保留原字节并清除不可信模板 provenance；
 - schema 2 的 Codex profile 映射为 `codex@2.0.0` adapter；
 - 安装唯一的 Core activation engine，并在来源可证明时把旧 Router 改成薄 adapter；
-- schema 3 Core `1.0.0` 与 Codex `2.0.0` 保持可读；升级到 Core `1.1.0`、Codex
-  `2.1.0` 时补齐 canonical 与 Codex 项目 Skill，并记录组件 migration；
+- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.2.0`、Codex
+  `2.2.0`、Claude/Portable `1.1.0` 时按已记录 provenance 替换生成文件并记录
+  组件 migration；
 - Spec manifest、lock、managed Markdown 与 Catalog 版本不参与 Harness migration；
 - 写入后 validation 失败：恢复全部触碰文件并清理本次创建的空目录；
 - 重复 apply：不再更新任何字节。
@@ -236,48 +239,61 @@ SHA-256 写入 `specs.lock.json`，本地副本写入
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  spec update --spec-version 1.3.0 --spec languages/go --apply
+  spec update --spec-version 1.5.0 --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 `scripts/spec_manager.py` 只验证 Catalog、selection、lock、dependency、managed
-content 与 index。它不读取 `AGENTS.md`、`.codex/hooks.json` 或 OpenAI metadata。
+content、路由 index 与 `requirements.json`。它不读取 `AGENTS.md`、
+`.codex/hooks.json` 或 OpenAI metadata。
 `foundryctl spec validate` 在 schema 3 项目中另外验证共享 activation engine，但不
 验证任意 adapter route。
 
 ## 标准化任务激活
 
-Core activation protocol version 1 接受四类事件：
+Core activation protocol version 2 接受五类事件：
 
 ```text
 session_start
 subagent_start
+context_resume
 before_mutation
 stop
 ```
 
 event envelope 只包含 RepoFoundry 概念：protocol version、adapter ID、不透明的
 session/turn ID、可选 prompt/planned paths，以及中立 tool category。receipt 按
-repository、adapter、session、turn 隔离，因此多个 Agent 产品可以并发使用相同 ID
-而不覆盖状态。
+repository、adapter、session、turn 隔离；内部 `context_epoch` 在新上下文、子 Agent
+或 `rehydrate` 时递增，因此 compaction 后能重新注入同一份精确胶囊。
 
 ```mermaid
-sequenceDiagram
-    participant R as Agent runtime
-    participant A as Adapter
-    participant E as Activation Engine
-    participant L as Local lock and Specs
-    R->>A: product event
-    A->>E: normalized event
-    E->>L: verify lock, index, bytes
-    L-->>E: candidates and content
-    E-->>A: allow, deny, context, audit
-    A-->>R: product-specific result
+flowchart LR
+    P["计划路径"] --> S["Spec 候选 + Applicability"]
+    S --> C["有界 Requirement 卡片"]
+    C --> R["直接 ID + 任务理由"]
+    R --> D["精确依赖闭包"]
+    I["requirements.json<br/>源码范围 + SHA-256"] --> X["上下文胶囊"]
+    D --> X
+    X --> W["实现 / 评审 / rehydrate"]
 ```
 
-候选只由 path scope 产生；最终 activation 必须读取每个候选的 `Applicability` 并
-结合任务意图。依赖闭包、explicit-none、digest verification、changed-path audit 和
-五字段 handoff 对所有 adapter 完全相同。
+`requirements.json` 是从已锁定 Spec 原字节确定性生成的派生索引。它记录每个
+Requirement 的卡片、所属 Spec、精确 UTF-8 字节范围和摘要、上下文依赖、解释框架
+范围与 Verification 行范围，不复制规范正文。`spec validate` 会重新生成索引并做
+逐字节比较，同时再次核验每个范围与摘要。
+
+候选仍只由 path scope 产生；Agent 必须结合任务意图判断 Spec Applicability，再从
+16 KiB 卡片预算内选择最小但完整的直接 Requirement 集合。Core 计算闭包，并在
+32 KiB 默认预算内按固定顺序拼装：合成身份、强制解释框架、Requirement 原文块、
+对应 Verification 行与显式选取的支持章节。任何预算超限都失败，规范原文绝不摘要
+或截断；提高默认预算必须用 `--capsule-budget-reason` 记录评审理由。没有正式
+Requirement 的旧 Spec、迁移和全库审计可用带理由的 whole-Spec
+回退；旧项目缺少派生索引时，Router 也只提供兼容性 whole-Spec 模式，执行一次
+`spec sync --apply` 即生成新索引。
+
+协议 v2 receipt 记录适用 Spec、直接/闭包 Requirement ID、逐 ID 理由、源码范围、
+胶囊模式、SHA-256、字节数、预算和 epoch。依赖闭包、explicit-none、digest
+verification、changed-path audit 与五字段 handoff 对所有 adapter 完全相同。
 
 ## 非破坏性与验证
 
