@@ -424,7 +424,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.2.1",
+            "0.3.0",
         )
         self.assertIn(
             "name: engineering-execution-plan",
@@ -587,7 +587,10 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         router_skill = (router / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("name: engineering-specs", router_skill)
-        self.assertIn("task Applicability", router_skill)
+        self.assertIn("`Applicability` section", router_skill)
+        self.assertIn("bounded cards", router_skill)
+        self.assertIn("--requirement <ID>", router_skill)
+        self.assertIn("rehydrate", router_skill)
         self.assertTrue((router / "agents" / "openai.yaml").is_file())
         self.assertTrue((router / "scripts" / "spec_router.py").is_file())
 
@@ -694,7 +697,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
             foundryctl,
         )
-        self.assertIn('DEFAULT_SPEC_VERSION = "1.3.0"', foundryctl)
+        self.assertIn('DEFAULT_SPEC_VERSION = "1.5.0"', foundryctl)
         self.assertNotIn('DEFAULT_SPEC_REF = "main"', foundryctl)
         self.assertIn("--spec-version", foundryctl)
         self.assertIn('"upgrade"', foundryctl)

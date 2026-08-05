@@ -78,7 +78,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.1
+  upgrade --to 0.3.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -105,7 +105,8 @@ Core Spec 必选；仓库证据只推荐可选 Spec，
 用户通过可重复 `--spec <id>` 显式选择安装。选择写入
 `docs/.engineering/specs.json`，精确版本与 SHA-256 写入
 `specs.lock.json`；lock 同时记录解析后的完整 Git commit。所有 adapter 都从
-同一个 Router 按计划路径、任务意图和 `docs/agent-guides/managed/index.md` 激活规范。
+同一个 Router 按计划路径、任务意图、`docs/agent-guides/managed/index.md` 与
+`requirements.json` 激活精确 Requirement。
 项目规则通过 manifest 引用，工具不改写其内容。未知项目事实保留
 `BOOTSTRAP_TODO`，不得编造命令、Owner、架构、SLO 或安全控制。
 
@@ -123,9 +124,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.1
+  upgrade --to 0.3.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.1 --apply
+  upgrade --to 0.3.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -145,13 +146,13 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   bootstrap --adapter codex --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  spec update --spec-version 1.3.0 --spec languages/go --apply
+  spec update --spec-version 1.5.0 --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 默认 Catalog 来自
 `https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`，默认固定版本为
-`1.3.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
+`1.5.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
 `refs/tags/vMAJOR.MINOR.PATCH`，解析器必须验证 tag 与 `catalog_version` 一致。
 首次初始化可用 `--spec-repository` 选择其他仓库；`--spec-ref` 只用于显式开发
 分支、tag 或 commit。manifest 保存 Git URL/ref。`sync` 使用已有 lock 的 commit；
@@ -165,14 +166,18 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 
 Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。Codex 中实现或
 评审前调用 `$engineering-specs`；Claude 通过项目级 `$engineering-specs` Skill、
-Portable 通过 guide 运行同一引擎的 `begin/candidates/activate`：先列出计划路径的
-候选，再读取每个候选的 Applicability，记录本 Turn 的适用 ID 或带理由的 `none`。
-激活会自动加入 `requires` 闭包；Codex 的受信任 Hook 会在首次写入前注入摘要已
-验证的本地全文，Claude 与 Portable 则显式读取并执行 CLI 审计。
+Portable 通过 guide 运行同一引擎：`candidates` 判断 Spec Applicability，
+`requirements` 返回有界卡片，`activate` 记录带理由的直接 Requirement ID。Core
+计算精确依赖闭包，并从摘要已验证的源码范围编译解释框架、Requirement 块和对应
+Verification 行；16 KiB 卡片与 32 KiB 胶囊超限时失败，绝不摘要或截断规范原文。
+提高默认胶囊预算必须通过 `--capsule-budget-reason` 记录评审理由。
+旧文档、迁移或全库审计只能使用带理由的整份 Spec 回退；无适用项仍记录带理由的
+`none`。
 
-Core 只识别 `session_start`、`subagent_start`、`before_mutation`、`stop` 四类标准化
-事件。Codex adapter 将 `UserPromptSubmit`、`SubagentStart`、`PreToolUse`、`Stop`
-翻译到这些事件，并保持既有写入门禁与五字段交接审计。
+Core 只识别 `session_start`、`subagent_start`、`context_resume`、
+`before_mutation`、`stop` 五类标准化事件。协议 v2 回执记录直接/闭包 ID、理由、
+胶囊摘要/字节数和 context epoch；compaction 后用 `rehydrate` 精确重建。Codex
+adapter 将原生生命周期翻译到这些事件，并保持写入门禁与五字段交接审计。
 项目 Hooks 只有在仓库受信任且用户通过 Codex `/hooks` 审查精确命令后才生效；
 Hook 不可用时仍必须手动遵循 Router Skill 并运行其 `audit` 命令。
 

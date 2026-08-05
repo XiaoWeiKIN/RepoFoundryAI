@@ -10,7 +10,7 @@ adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-010", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-07-31
-updated: 2026-08-04
+updated: 2026-08-05
 ---
 
 # Engineering Spec Resolution and Project Materialization
@@ -152,6 +152,7 @@ docs/
 └── agent-guides/
     └── managed/
         ├── index.md
+        ├── requirements.json
         ├── core/
         │   ├── data-boundaries.md
         │   └── semantic-naming.md
@@ -206,7 +207,7 @@ configuration:
   "catalog": {
     "kind": "git",
     "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
-    "ref": "refs/tags/v1.3.0"
+    "ref": "refs/tags/v1.5.0"
   },
   "specs": [
     "core/semantic-naming",
@@ -233,11 +234,11 @@ not begin with `-`. Production release refs use the exact canonical form
 {
   "kind": "git",
   "url": "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
-  "ref": "refs/tags/v1.3.0"
+  "ref": "refs/tags/v1.5.0"
 }
 ```
 
-The default Catalog release is `1.3.0`. The option
+The default Catalog release is `1.5.0`. The option
 `--spec-version MAJOR.MINOR.PATCH` constructs the canonical release ref; the resolver rejects
 the source unless its `catalog_version` equals the requested version.
 `--spec-ref` remains an explicit development escape hatch for a branch, custom
@@ -276,6 +277,35 @@ must match the recorded digest. A published release tag must never move; the
 resolved commit and digests still protect consumers from unexpected movement.
 `spec sync` continues to resolve the locked commit. Changing the manifest
 source while retaining an old lock requires an explicit update.
+
+## Requirement Index Contract
+
+`docs/agent-guides/managed/requirements.json` is a deterministic, strict JSON
+projection of the exact locked and project-owned Spec bytes. It is routing
+metadata, not normative content. For each formal Requirement it records:
+
+- the stable Requirement ID, owning Spec, title, bounded Activation card, and
+  exact context-dependency IDs;
+- the source file digest plus the Requirement block's UTF-8 byte range, byte
+  count, and SHA-256;
+- mandatory interpretation-frame section ranges and all top-level section
+  ranges available for an explicit supporting-section request; and
+- the exact matching Verification table row range.
+
+Requirement IDs are globally unique. Every referenced dependency must exist,
+remain within the same Spec or a Catalog dependency, and form an acyclic graph.
+An indexed formal Requirement block may not exceed 8 KiB and its Activation
+card may not exceed 180 Unicode code points. Wildcard dependencies are invalid.
+Legacy documents with no formal Requirement blocks are indexed in
+`whole-spec` mode; a document cannot mix formal extraction with implicit
+whole-document activation.
+
+Index generation reparses only digest-verified local bytes and emits records
+in deterministic Spec/source order. Offline validation regenerates the entire
+file, compares exact JSON bytes, then verifies every recorded range and hash
+against its source. An older project without this derived index remains
+readable by the Router in whole-Spec compatibility mode, but `spec validate`
+asks the maintainer to run the previewed `spec sync --apply` upgrade.
 
 ## Git Resolution
 
@@ -343,37 +373,58 @@ The RepoFoundry `AGENTS.md` template contains one stable instruction:
 > Before implementation or review, invoke `$engineering-specs`; use
 > `docs/agent-guides/managed/index.md` only as its locked routing source.
 
-The generated index maps scope, description, version, and local path. It does
-not duplicate Spec content. The Router Skill takes planned repository-relative
-paths, returns conservative scope candidates, and requires the Agent to apply
-each candidate's description and Applicability section. Before work, it records
-either the applicable IDs or an explicit no-Spec reason. Dependencies enter the
-activated closure automatically.
+The Markdown index maps scope, description, version, and local path. The JSON
+Requirement index maps exact extraction ranges without duplicating normative
+text. The Router takes planned repository-relative paths, returns conservative
+scope candidates, and requires the Agent to apply each candidate's description
+and Applicability section. Only applicable Specs enter bounded Requirement-card
+discovery. Before work, the Agent records the smallest complete set of direct
+Requirement IDs with one task-specific reason per ID, or an explicit no-Spec
+reason. Code computes the exact Requirement dependency closure.
 
 ```mermaid
 flowchart LR
     P["Prompt + planned paths"] --> S["Scope candidates"]
-    I["Managed index"] --> S
-    S --> R["$engineering-specs<br/>Applicability decision"]
-    R --> E["Turn activation receipt"]
-    E --> H["PreToolUse<br/>write gate + local injection"]
+    I["Managed indexes"] --> S
+    S --> R["Spec Applicability"]
+    R --> C["Bounded Requirement cards"]
+    C --> D["Direct IDs + reasons"]
+    D --> E["Exact dependency closure"]
+    E --> X["Digest-verified capsule"]
+    X --> H["PreToolUse<br/>write gate + local injection"]
     H --> W["Implementation or review"]
     W --> A["Stop<br/>path + handoff audit"]
 ```
 
-`UserPromptSubmit` and `SubagentStart` Hooks inject the Router contract and the
-current local index as developer context. `PreToolUse` allows read-only
-discovery and Router commands, but denies mutation until the active turn has a
-valid receipt. It denies the first post-activation mutation once while
-injecting the activated local Markdown, so the Agent must re-evaluate and retry
-with the contract in context. `Stop` compares the prompt-time Git baseline with
-the current tree and requires coverage plus the five-field Agent handoff.
+Requirement cards have a 16 KiB default response budget. Exact capsules have a
+32 KiB default budget and contain, in deterministic source order, a synthetic
+identity, each selected Spec's mandatory interpretation frame, resolved
+Requirement blocks, matching Verification rows, and any explicitly selected
+supporting sections. The engine never summarizes or truncates normative text.
+Overflow reports direct/resolved IDs, Requirement and frame costs, then
+requires a narrower selection, task partition, or a reviewed larger budget
+recorded by `--capsule-budget-reason`. Legacy documents, migrations, and broad
+audits may use
+whole-Spec mode; it is not the normal path for formal Requirement documents.
 
-Receipts are keyed by repository, session, and turn under Git metadata or the
-platform temporary directory; they never become hidden project policy or
-normative evidence. Managed content is SHA-256 verified again before injection.
-No network access occurs during candidate, activation, Hook, status, or audit
-operations.
+`UserPromptSubmit` and `SubagentStart` Hooks inject the Router contract and the
+current bounded routing view as developer context. `PreToolUse` allows
+read-only discovery and Router commands, but denies mutation until the active
+turn has a valid protocol-v2 receipt. It denies the first post-activation
+mutation once while injecting the exact capsule, so the Agent must re-evaluate
+and retry with the contract in context. `Stop` compares the prompt-time Git
+baseline with the current tree and requires coverage plus the five-field Agent
+handoff.
+
+Receipts are keyed by repository, adapter, session, and turn under Git metadata
+or the platform temporary directory; they never become hidden project policy
+or normative evidence. A receipt records applicable and requested Specs,
+direct/resolved Requirement IDs and reasons, source ranges, whole-Spec fallback
+reason, capsule mode/digest/bytes/budget, and the context epoch. Compaction,
+context resume, and subagent startup advance the epoch; `rehydrate` recompiles
+and verifies the same capsule before reinjection. Managed content is SHA-256
+verified again before every injection. No network access occurs during card,
+candidate, activation, rehydration, Hook, status, or audit operations.
 
 Existing `AGENTS.md` and `.codex/hooks.json` files remain byte-preserved. A
 missing mandatory route or required Hook group is a Bootstrap conflict, not a
@@ -389,13 +440,13 @@ Codex requires trust review for each exact non-managed Hook definition.
 - Git failures report the URL/ref and remediation without exposing credential
   material.
 - Bootstrap stops before all writes when any Harness or Spec conflict exists.
-- Bootstrap never changes an existing manifest, lock, managed Spec, routing
-  index, project Spec, `AGENTS.md`, or Hook configuration.
+- Bootstrap never changes an existing manifest, lock, managed Spec, either
+  routing index, project Spec, `AGENTS.md`, or Hook configuration.
 - Generated Router Skill files must match the RepoFoundry release; drift is an
   error rather than an instruction-injection ambiguity.
 - Hook input, activation IDs, planned paths, runtime state, and Markdown are
   parsed as untrusted boundary data. Path traversal and symlinks fail closed.
-- Explicit applied Spec commands only write the manifest, lock, routing index,
+- Explicit applied Spec commands only write the manifest, lock, routing indexes,
   and files beneath `docs/agent-guides/managed/`.
 - Atomic writes and the existing Harness lock protect project state.
 - Explicit deselection removes only previously locked managed files whose
@@ -414,7 +465,7 @@ Codex requires trust review for each exact non-managed Hook definition.
 - `--required-only` previews and removes only unchanged, previously locked
   optional managed copies.
 - Repeated Bootstrap and Spec sync operations are byte-idempotent.
-- The default absent-manifest plan uses `refs/tags/v1.3.0`, and exact release
+- The default absent-manifest plan uses `refs/tags/v1.5.0`, and exact release
   refs whose Catalog version differs fail before writes.
 - `spec sync` remains pinned after the tracked branch or tag moves; an explicit
   version/ref update adopts a new source and commit.
@@ -424,7 +475,14 @@ Codex requires trust review for each exact non-managed Hook definition.
 - Fresh Bootstrap creates exactly one valid `engineering-specs` Skill and the
   four required Codex Hook groups.
 - Candidate routing uses file scopes without equating scope with activation;
-  explicit activation adds dependencies and explicit `none` requires a reason.
+  Requirement cards are bounded, direct IDs require reasons, exact dependency
+  closure is automatic, and explicit `none` requires a reason.
+- Exact capsules contain only required frames, resolved Requirement blocks,
+  matching Verification rows, and requested supporting sections; unrelated
+  Requirement text is absent and all included ranges retain source hashes.
+- Card or capsule overflow fails without truncation; legacy whole-Spec fallback
+  is explicit and reasoned, and context rehydration preserves the capsule digest
+  while advancing its epoch.
 - An unactivated edit, an undeclared target path, digest drift, and incomplete
   completion handoff are rejected in isolated Hook tests.
 - A custom Hook file is never overwritten and instead receives a deterministic

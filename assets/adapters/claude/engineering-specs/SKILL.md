@@ -19,16 +19,24 @@ python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   candidates --path <initial-scoped-path>
 ```
 
-Before mutation, record one decision for every applicable path scope:
+Decide Spec Applicability, request bounded cards, then record exact direct
+Requirements with one reason per ID:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
+  requirements --path <path> --spec <applicable-spec-id>
+python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   activate --adapter-id claude --session-id <session> --turn-id <turn> \
-  --path <path> --spec <spec-id> --reason <reason>
+  --path <path> --spec <applicable-spec-id> \
+  --requirement <ID> --because "<ID>=<task-specific reason>"
 ```
 
-Repeat `--spec` when multiple candidates apply. If none applies, use `--none`
-with a reason. Never infer explicit-none from an empty candidate list.
+Repeat the flags for multiple selections. Use `--whole-spec` plus
+`--whole-spec-reason` only for an indexed legacy fallback, migration, or broad
+audit. If none applies, use `--none` with a reason. After compaction, run
+`rehydrate` for the active identity. Never infer none from an empty candidate
+list and never summarize or truncate normative text to fit a budget. Raising
+the default capsule budget requires `--capsule-budget-reason`.
 
 Before completion, audit the receipt and handoff:
 
