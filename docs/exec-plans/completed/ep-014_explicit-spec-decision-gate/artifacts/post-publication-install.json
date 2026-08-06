@@ -1,0 +1,14 @@
+{
+  "release": "https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.3.1",
+  "tag": "v0.3.1",
+  "tag_object": "a049ce4209921a34a5e22afdcbf229613a4fd0f0",
+  "commit": "5440bb37604815a28782410f8c2e19a8c86e7e18",
+  "explicit_install": "success",
+  "latest_release": "v0.3.1",
+  "repeat_install_manifest": "unchanged",
+  "install_manifest_sha256": "c413e34cc17a213ba99578c3cc77247e1816775ae000f17773c66b94fa8670de",
+  "archive_sha256": "a1e1cd495f3a800a8f6f2f4f84d1c1ffc4a9cf332cf43ac2ba712f2ea50ec46b",
+  "package_sha256": "9767aa8e05a57091afa471351be26a6f2e61658eb2df83b8193d2cafe08239b2",
+  "launcher_version": "RepoFoundry AI 0.3.1",
+  "project_harness_changes": []
+}
