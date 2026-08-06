@@ -265,3 +265,60 @@ def update_go_spec(
     commit = commit_all(repository, "update Go specification")
     tag_release(repository, catalog_version)
     return commit
+
+
+def add_specialized_go_specs(
+    repository: Path,
+    *,
+    catalog_version: str = "0.2.0",
+) -> str:
+    contents = {
+        relative: (repository / relative).read_text(encoding="utf-8")
+        for relative in SPEC_CONTENTS
+    }
+    specialized = {
+        "specification/languages/go/functional-options.md": (
+            "# Go Functional Options\n\nSpecialized functional-option guidance.\n"
+        ),
+        "specification/languages/go/factory-delegation.md": (
+            "# Go Factory Delegation\n\nSpecialized factory guidance.\n"
+        ),
+    }
+    contents.update(specialized)
+    catalog = catalog_data(contents, catalog_version=catalog_version)
+    catalog["specs"].extend(
+        [
+            {
+                "applies_to": ["**/*.go"],
+                "description": "Go functional-option fixture",
+                "id": "languages/go/functional-options",
+                "path": "specification/languages/go/functional-options.md",
+                "required": False,
+                "requires": ["languages/go"],
+                "sha256": sha256(
+                    specialized[
+                        "specification/languages/go/functional-options.md"
+                    ].encode("utf-8")
+                ),
+                "version": catalog_version,
+            },
+            {
+                "applies_to": ["**/*.go"],
+                "description": "Go factory-delegation fixture",
+                "id": "languages/go/factory-delegation",
+                "path": "specification/languages/go/factory-delegation.md",
+                "required": False,
+                "requires": ["languages/go/functional-options"],
+                "sha256": sha256(
+                    specialized[
+                        "specification/languages/go/factory-delegation.md"
+                    ].encode("utf-8")
+                ),
+                "version": catalog_version,
+            },
+        ]
+    )
+    write_catalog(repository, contents=contents, catalog=catalog)
+    commit = commit_all(repository, "add specialized Go specifications")
+    tag_release(repository, catalog_version)
+    return commit

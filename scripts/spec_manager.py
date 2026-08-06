@@ -210,6 +210,10 @@ class SpecPlan:
     configured_spec_ids: tuple[str, ...]
     selected_spec_ids: tuple[str, ...]
     available_specs: tuple[CatalogSpec, ...]
+    selection_decision_status: str
+    selection_decision_reason: str
+    selection_candidate_ids: tuple[str, ...]
+    selection_resolution: str
     actions: tuple[dict[str, str], ...]
     warnings: tuple[str, ...]
     writes: tuple[PlannedWrite, ...]
@@ -2063,9 +2067,25 @@ def plan_spec_state(
     allow_replace: bool,
     update_source: dict[str, str] | None = None,
     requested_spec_ids: tuple[str, ...] | None = None,
+    keep_selection: bool = False,
 ) -> SpecPlan:
     if operation not in {"plan", "sync", "update"}:
         raise SpecError(f"SPEC_OPERATION_INVALID: {operation}")
+    if keep_selection and requested_spec_ids is not None:
+        raise SpecError(
+            "SPEC_SELECTION_DECISION_CONFLICT: keep-selection cannot be "
+            "combined with an explicit Spec selection"
+        )
+    manifest_path = repo / SPEC_MANIFEST
+    manifest_existed = manifest_path.is_file()
+    if keep_selection and not manifest_existed:
+        raise SpecError(
+            "SPEC_KEEP_SELECTION_REQUIRES_MANIFEST: --keep-selection "
+            "requires an existing Spec manifest"
+        )
+    previous_manifest = (
+        parse_manifest(manifest_path) if manifest_existed else None
+    )
     effective_operation = "sync" if operation == "plan" else operation
     manifest, catalog, detected, manifest_write, previous_lock = (
         _prepare_manifest(
@@ -2078,6 +2098,80 @@ def plan_spec_state(
     )
     _validate_project_specs(repo, manifest.project_specs)
     selected = resolve_selection(manifest, catalog)
+
+    catalog_changed = False
+    previous_selected_ids: set[str] = set()
+    if previous_manifest is not None:
+        if previous_lock is not None:
+            previous_selected_ids = {
+                spec.spec_id for spec in previous_lock.specs
+            }
+        else:
+            retained_optional_ids = tuple(
+                spec_id
+                for spec_id in previous_manifest.spec_ids
+                if spec_id in catalog.by_id
+                and not catalog.by_id[spec_id].required
+            )
+            previous_selection = SpecManifest(
+                catalog=dict(manifest.catalog),
+                spec_ids=configured_spec_ids(
+                    catalog,
+                    retained_optional_ids,
+                ),
+                project_specs=previous_manifest.project_specs,
+                owner=previous_manifest.owner,
+            )
+            previous_selected_ids = {
+                spec.spec_id
+                for spec in resolve_selection(previous_selection, catalog)
+            }
+        catalog_changed = previous_manifest.catalog != manifest.catalog
+        if previous_lock is None:
+            catalog_changed = catalog_changed or operation == "update"
+        else:
+            catalog_changed = catalog_changed or any(
+                (
+                    previous_lock.catalog_id != catalog.catalog_id,
+                    previous_lock.catalog_version != catalog.catalog_version,
+                    previous_lock.catalog_digest != catalog.digest,
+                    previous_lock.resolved_revision
+                    != catalog.resolved_revision,
+                )
+            )
+    selection_candidate_ids = tuple(
+        spec.spec_id
+        for spec in catalog.ordered_specs
+        if not spec.required and spec.spec_id not in previous_selected_ids
+    )
+    selection_review = bool(
+        operation == "update"
+        and manifest_existed
+        and catalog_changed
+        and selection_candidate_ids
+    )
+    if requested_spec_ids is not None:
+        selection_resolution = (
+            "required_only" if not requested_spec_ids else "explicit_specs"
+        )
+    elif keep_selection:
+        selection_resolution = "keep_selection"
+    elif selection_review:
+        selection_resolution = "unresolved"
+    else:
+        selection_resolution = "not_applicable"
+    selection_decision_status = (
+        "required"
+        if selection_review and selection_resolution == "unresolved"
+        else "resolved"
+        if selection_review
+        else "not_required"
+    )
+    selection_decision_reason = (
+        "catalog_changed_with_unconfigured_optional_specs"
+        if selection_review
+        else "no_catalog_selection_review"
+    )
 
     writes: list[PlannedWrite] = []
     if manifest_write is not None:
@@ -2262,6 +2356,10 @@ def plan_spec_state(
         configured_spec_ids=manifest.spec_ids,
         selected_spec_ids=tuple(spec.spec_id for spec in selected),
         available_specs=catalog.ordered_specs,
+        selection_decision_status=selection_decision_status,
+        selection_decision_reason=selection_decision_reason,
+        selection_candidate_ids=selection_candidate_ids,
+        selection_resolution=selection_resolution,
         actions=tuple(actions),
         warnings=tuple(warnings),
         writes=tuple(writes),
@@ -2299,6 +2397,14 @@ def apply_spec_plan(
     repo: Path,
     plan: SpecPlan,
 ) -> tuple[list[str], list[str], list[str]]:
+    if plan.selection_decision_status == "required":
+        candidates = ", ".join(plan.selection_candidate_ids)
+        raise SpecError(
+            "SPEC_SELECTION_DECISION_REQUIRED: Catalog update exposes "
+            f"unconfigured optional Specifications: {candidates}; review "
+            "the dry-run, then choose the complete --spec set, "
+            "--required-only, or --keep-selection"
+        )
     if plan.conflicts:
         details = "; ".join(
             f"{item.get('path')}: {item.get('reason')}"
@@ -2600,6 +2706,7 @@ def plan_payload(
     detected = set(plan.detected_spec_ids)
     configured = set(plan.configured_spec_ids)
     selected = set(plan.selected_spec_ids)
+    candidates = set(plan.selection_candidate_ids)
     return {
         "operation": plan.operation,
         "mode": mode,
@@ -2623,6 +2730,24 @@ def plan_payload(
         ],
         "configured_specs": list(plan.configured_spec_ids),
         "selected_specs": list(plan.selected_spec_ids),
+        "selection_decision": {
+            "status": plan.selection_decision_status,
+            "reason": plan.selection_decision_reason,
+            "resolution": plan.selection_resolution,
+            "candidates": [
+                {
+                    "id": spec.spec_id,
+                    "version": spec.version,
+                    "description": spec.description,
+                    "requires": list(spec.requires),
+                    "recommended": spec.spec_id in detected,
+                    "configured": spec.spec_id in configured,
+                    "selected": spec.spec_id in selected,
+                }
+                for spec in plan.available_specs
+                if spec.spec_id in candidates
+            ],
+        },
         "available_specs": [
             {
                 "id": spec.spec_id,

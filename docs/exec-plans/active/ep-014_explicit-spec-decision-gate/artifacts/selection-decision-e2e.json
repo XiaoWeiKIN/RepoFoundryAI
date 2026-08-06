@@ -1,0 +1,38 @@
+{
+  "catalog_transition": {
+    "from": "0.1.0",
+    "to": "0.2.0"
+  },
+  "command_contract": "tests.test_foundryctl.FoundryctlTestCase.test_catalog_update_requires_explicit_optional_spec_decision",
+  "result": "pass",
+  "unresolved_preview": {
+    "status": "required",
+    "reason": "catalog_changed_with_unconfigured_optional_specs",
+    "resolution": "unresolved",
+    "candidate_ids": [
+      "languages/typescript",
+      "languages/python",
+      "languages/go/functional-options",
+      "languages/go/factory-delegation"
+    ],
+    "specialized_dependencies": {
+      "languages/go/functional-options": [
+        "languages/go"
+      ],
+      "languages/go/factory-delegation": [
+        "languages/go/functional-options"
+      ]
+    }
+  },
+  "rejected_apply": {
+    "exit_code": 2,
+    "error": "SPEC_SELECTION_DECISION_REQUIRED",
+    "repository_snapshot": "byte-identical"
+  },
+  "explicit_resolutions": {
+    "keep_selection": "preview-and-apply-pass",
+    "explicit_specs": "preview-and-apply-pass-with-dependency-closure",
+    "required_only": "preview-and-apply-pass"
+  },
+  "mutual_exclusion": "--keep-selection plus --required-only rejected"
+}

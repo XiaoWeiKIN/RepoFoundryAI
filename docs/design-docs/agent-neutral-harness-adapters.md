@@ -10,7 +10,7 @@ adr_refs: ["ADR-011", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-04
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # Agent-neutral Harness and Engineering Spec Adapters
@@ -170,10 +170,10 @@ strict, ordered, and forward-failing:
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.3.0"
+    "version": "0.3.1"
   },
   "core": {
-    "version": "1.2.0"
+    "version": "1.2.1"
   },
   "adapters": [
     {
@@ -233,7 +233,7 @@ foundryctl adapter list
 foundryctl validate --harness
 foundryctl validate --adapter codex
 foundryctl validate --adapter claude
-foundryctl upgrade --to 0.3.0
+foundryctl upgrade --to 0.3.1
 ```
 
 Bootstrap remains preview-first and preflights the complete Core plus adapter
@@ -248,7 +248,7 @@ For one compatibility release:
 - omitting both flags retains the `codex` default and emits a structured
   deprecation warning;
 - manifests continue to read schemas `1` and `2` but only an explicit
-  `upgrade --to 0.3.0 --apply` writes schema `3`;
+  `upgrade --to 0.3.1 --apply` writes schema `3`;
 - `validate` reports an available migration without silently changing state.
 
 The compatibility alias is removed only by a later explicit release and
@@ -386,7 +386,9 @@ Schema `3` component upgrades remain readable by their declared versions.
 Core `1.0.0` omits the canonical project Skill, and Codex `2.0.0` omits its
 thin root Skill. Core `1.1.0` and Codex `2.1.0` add those Skills. The current
 Core `1.2.0`, Codex `2.2.0`, Claude `1.1.0`, and Portable `1.1.0` add
-Requirement-level routing instructions and protocol-v2 engine behavior. A
+Requirement-level routing instructions and protocol-v2 engine behavior. Core
+`1.2.1` additionally requires Agents to surface unresolved Catalog selection
+decisions and wait for the maintainer's explicit choice before apply. A
 previewed upgrade, or a bootstrap that adds an adapter, creates or replaces
 generated paths only when they are absent or still have provable template
 provenance and records the component migrations. Unknown or customized target

@@ -216,7 +216,7 @@ adapter，不依赖这两个宿主目录。
 示例：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.3.0 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.3.1 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
@@ -234,11 +234,11 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.3.0` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.3.1` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.3.0
-repofoundry --repo . upgrade --to 0.3.0 --apply
+repofoundry --repo . upgrade --to 0.3.1
+repofoundry --repo . upgrade --to 0.3.1 --apply
 repofoundry --repo . validate
 ```
 
@@ -331,8 +331,8 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.3.0
-repofoundry --repo . upgrade --to 0.3.0 --apply
+repofoundry --repo . upgrade --to 0.3.1
+repofoundry --repo . upgrade --to 0.3.1 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -350,10 +350,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.3.0` 使用 Harness schema `3`、Harness Core `1.2.0`、Codex
+RepoFoundry `0.3.1` 使用 Harness schema `3`、Harness Core `1.2.1`、Codex
 adapter `2.2.0`、Claude adapter `1.1.0`、Portable adapter `1.1.0` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.3.0 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.3.1 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
@@ -367,13 +367,16 @@ Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发�
 `refs/tags/v1.5.0`。生产升级通过
 `spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
 `--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。安装 RepoFoundry
-`0.3.0` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
+`0.3.1` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
 托管正文。
 
 `spec plan` 会列出全部 Catalog 条目，并区分必选、推荐、项目直接配置和依赖闭包后的
 最终集合。检测结果只推荐可选 ID；首次 Bootstrap 或 `spec update` 时重复传入
 `--spec ID`，即可设置完整的可选直接集合；`--required-only` 表示不选任何可选
-Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
+Spec。Catalog 更新出现尚未配置的可选 Spec 时，dry-run 会返回
+`selection_decision.status=required`，并列出每个 candidate 的 ID、描述与依赖；
+用户明确选择完整 `--spec` 集合、`--required-only` 或 `--keep-selection` 之前，
+apply 会保持失败关闭。必选 Spec 与传递依赖仍由解析器自动补齐。
 
 ## 为每个任务激活规范
 
