@@ -45,7 +45,7 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.2.0"
+CORE_HARNESS_VERSION = "1.2.1"
 CODEX_ADAPTER_VERSION = "2.2.0"
 CLAUDE_ADAPTER_VERSION = "1.1.0"
 PORTABLE_ADAPTER_VERSION = "1.1.0"
@@ -3138,6 +3138,7 @@ def manage_specs(
     initial_spec_source: dict[str, str],
     update_spec_source: dict[str, str] | None,
     requested_spec_ids: tuple[str, ...] | None,
+    keep_selection: bool = False,
 ) -> dict[str, object]:
     try:
         planned = specctl.plan_spec_state(
@@ -3147,6 +3148,7 @@ def manage_specs(
             allow_replace=True,
             update_source=update_spec_source,
             requested_spec_ids=requested_spec_ids,
+            keep_selection=keep_selection,
         )
     except specctl.SpecError as exc:
         raise FoundryctlError(str(exc)) from exc
@@ -3169,6 +3171,7 @@ def manage_specs(
                 allow_replace=True,
                 update_source=update_spec_source,
                 requested_spec_ids=requested_spec_ids,
+                keep_selection=keep_selection,
             )
         except specctl.SpecError as exc:
             raise FoundryctlError(str(exc)) from exc
@@ -4073,6 +4076,14 @@ def add_spec_selection_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Select no optional Specifications; required Specs remain",
     )
+    selection.add_argument(
+        "--keep-selection",
+        action="store_true",
+        help=(
+            "Explicitly acknowledge Catalog candidates and preserve the "
+            "current direct Spec selection"
+        ),
+    )
 
 
 def requested_spec_ids(args: argparse.Namespace) -> tuple[str, ...] | None:
@@ -4454,6 +4465,9 @@ def main(argv: list[str] | None = None) -> int:
                         initial_spec_source=initial_source,
                         update_spec_source=update_source,
                         requested_spec_ids=selection,
+                        keep_selection=bool(
+                            getattr(args, "keep_selection", False)
+                        ),
                     ),
                     ensure_ascii=False,
                     indent=2,

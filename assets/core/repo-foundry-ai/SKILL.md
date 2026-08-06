@@ -19,7 +19,11 @@ user-home installation path.
 3. Read `docs/index.md`, `ARCHITECTURE.md`, and the applicable design or
    governance indexes. Preserve repository-owned customizations.
 4. Preview every Harness or Specification mutation before passing `--apply`.
-   Resolve conflicts explicitly; never overwrite an unknown managed path.
+   Resolve conflicts explicitly; never overwrite an unknown managed path. If
+   a Specification update reports `selection_decision.status=required`, show
+   every candidate's ID, description, and dependencies, then ask the maintainer
+   to choose the complete `--spec` set, `--required-only`, or
+   `--keep-selection`. Do not apply or infer a selection before they answer.
 
 ## Route engineering work
 

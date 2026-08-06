@@ -10,7 +10,7 @@ adr_refs: ["ADR-011", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-03
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # RepoFoundry Versioning and Harness Migrations
@@ -21,8 +21,8 @@ RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and gene
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The current distribution is `0.3.0`. It writes Harness schema `3`, Core
-`1.2.0`, Codex adapter `2.2.0`, Claude adapter `1.1.0`, Portable adapter
+The current distribution is `0.3.1`. It writes Harness schema `3`, Core
+`1.2.1`, Codex adapter `2.2.0`, Claude adapter `1.1.0`, Portable adapter
 `1.1.0`, and activation protocol `2`. Engineering Specifications keep their
 independent Catalog version and lock lifecycle. Earlier distributions, schemas
 `1` and `2`, earlier schema-3 Core/adapters, and Codex profile `1.0.0` remain
@@ -32,9 +32,9 @@ migration inputs rather than the current model.
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.3.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| RepoFoundry distribution | `0.3.1` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
-| Harness Core | `1.2.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and activation behavior |
+| Harness Core | `1.2.1` | `core.version`, Core file records | Product-neutral repository, project Skill, and activation behavior |
 | Codex adapter | `2.2.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
 | Claude adapter | `1.1.0` | `adapters[]`, adapter file records | Claude project Skills with CLI/advisory activation |
 | Portable adapter | `1.1.0` | `adapters[]`, adapter file records | CLI and advisory integration |
@@ -43,6 +43,14 @@ migration inputs rather than the current model.
 
 No plane inherits another plane's version. A Spec update does not migrate the
 Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
+
+Release `0.3.1` adds a fail-closed selection decision to Catalog updates. When
+a changed Catalog exposes optional Specs outside the existing dependency-closed
+selection, dry-run emits their IDs, descriptions, dependencies, recommendation
+state, and configuration state. Apply is rejected until the caller explicitly
+provides the complete `--spec` set, `--required-only`, or `--keep-selection`.
+This changes Core Agent behavior, so Core advances to `1.2.1`; it does not
+change the Harness schema, adapter protocol, or locked Spec state by itself.
 
 Release `0.3.0` changes the default Catalog used only when a project does not
 yet have `docs/.engineering/specs.json`: new projects start from
@@ -54,10 +62,10 @@ the new derived Requirement index without selecting another Catalog.
 
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.3.0"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.3.1"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
-    U --> C["Harness Core 1.2.0"]
+    U --> C["Harness Core 1.2.1"]
     U --> A["Codex + Claude + Portable adapters"]
     C --> F["Core file provenance"]
     A --> F
@@ -201,7 +209,8 @@ The Core `1.0.0` to `1.1.0` migration adds
 migration adds `.agents/skills/repo-foundry-ai/SKILL.md`. Core `1.2.0` and Codex
 `2.2.0` adopt protocol-v2 exact Requirement activation; Claude and Portable
 `1.1.0` update their generated instructions to the same card/capsule and
-rehydration contract. All are generated, repository-relative regular files.
+rehydration contract. Core `1.2.1` adds the explicit Catalog-selection decision
+gate to the repository workflow Skill. All are generated, repository-relative regular files.
 The engine and instruction assets are replaced only when installed digests
 prove they are unmodified. A distribution/Harness upgrade preserves
 `requirements.json` with the locked Spec state; projects generate or refresh

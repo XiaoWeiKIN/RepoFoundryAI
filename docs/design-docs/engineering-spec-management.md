@@ -10,7 +10,7 @@ adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-010", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-07-31
-updated: 2026-08-05
+updated: 2026-08-06
 ---
 
 # Engineering Spec Resolution and Project Materialization
@@ -251,10 +251,34 @@ does not mutate `specs`. Once the manifest exists, selection and source are
 explicit project policy. `spec sync` reuses the existing locked commit and
 selection. `spec update --spec-version ...` replaces the manifest source with
 another release tag after preview; `spec update --spec-ref ...` explicitly
-selects a development source. Without selection arguments, update preserves
-the current IDs. Repeatable `--spec ID` replaces the optional direct set;
-`--required-only` selects no optional IDs. The resolver adds dependencies after
-direct selection.
+selects a development source. When the resolved Catalog changes and contains
+optional entries outside the prior dependency-closed selection, an update
+without selection arguments is unresolved and cannot apply. Repeatable
+`--spec ID` replaces the optional direct set; `--required-only` selects no
+optional IDs; `--keep-selection` explicitly retains the prior direct IDs. The
+resolver adds dependencies after direct selection.
+
+The dry-run payload includes a `selection_decision` object with `status`,
+`reason`, `resolution`, and ordered `candidates`. Each candidate exposes its
+ID, version, description, dependencies, recommendation state, prior
+configuration state, and resulting selection state. A changed Catalog with
+unconfigured optional entries reports `status: required` and
+`resolution: unresolved`. Apply fails with
+`SPEC_SELECTION_DECISION_REQUIRED` before writing any byte until exactly one
+explicit resolution is supplied. This deliberately treats all unconfigured
+optional entries as review candidates; repository detection affects only the
+`recommended` field and cannot hide a reusable architecture Spec.
+
+```mermaid
+flowchart LR
+    U["Catalog update preview"] --> C{"Changed Catalog has<br/>unconfigured optional Specs?"}
+    C -->|"no"| P["Normal preview/apply contract"]
+    C -->|"yes"| D["selection_decision: required"]
+    D --> X["Complete --spec set"]
+    D --> R["--required-only"]
+    D --> K["--keep-selection"]
+    D -.->|"no explicit choice"| B["Apply blocked before writes"]
+```
 
 Each project Spec path must remain inside the repository and identify a
 non-symlink regular Markdown file. Project Spec scopes and descriptions are
@@ -335,8 +359,8 @@ All mutating operations are preview-first:
 ```text
 foundryctl spec plan
 foundryctl spec sync [--dry-run | --apply]
-foundryctl spec update [--spec ID ... | --required-only] [--dry-run | --apply]
-foundryctl spec update --spec-version MAJOR.MINOR.PATCH [--spec ID ...] [--dry-run | --apply]
+foundryctl spec update [--spec ID ... | --required-only | --keep-selection] [--dry-run | --apply]
+foundryctl spec update --spec-version MAJOR.MINOR.PATCH [--spec ID ... | --required-only | --keep-selection] [--dry-run | --apply]
 foundryctl spec validate
 ```
 
@@ -347,10 +371,12 @@ foundryctl spec validate
 - `sync` materializes the explicitly selected Spec set from the locked commit;
   without a lock it resolves and creates one from the manifest ref.
 - `update --spec-version ...` changes the manifest to a reviewed immutable
-  release and refreshes the lock and selected content without changing direct
-  selection. `update --spec-ref ...` is the explicit development-source
-  equivalent. Repeated `--spec ID` values replace the complete optional direct
-  selection; `--required-only` removes every optional direct ID.
+  release and refreshes the lock and selected content. `update --spec-ref ...`
+  is the explicit development-source equivalent. Repeated `--spec ID` values
+  replace the complete optional direct selection; `--required-only` removes
+  every optional direct ID; `--keep-selection` explicitly preserves it. A
+  changed Catalog that exposes unconfigured optional entries requires one of
+  these explicit resolutions before apply.
 - `validate` performs no writes and verifies the manifest, lock, managed
   content, project Spec references, and routing index. It performs no network
   or Git operation and owns no adapter instruction route.
@@ -364,7 +390,10 @@ selection while reporting deterministic recommendations.
 Bootstrap apply may create missing files but does not replace an existing
 managed file with different bytes. An explicit `spec sync --apply` or
 `spec update --apply` may replace files inside the managed namespace after the
-preview reports the replacement.
+preview reports the replacement. An Agent consuming a required selection
+decision must present every candidate's ID, description, and dependencies to
+the user and wait for an explicit choice. It must not infer
+`--keep-selection` from an earlier manifest or from silence.
 
 ## Routing
 

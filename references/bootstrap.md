@@ -48,7 +48,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 ```
 
 adapter ID 不得重复，生成路径不得发生 ownership collision。现有 schema 3 Harness
-可以追加 adapter；删除 adapter 不在 `0.3.0` 范围内，因为删除定制配置需要独立的
+可以追加 adapter；删除 adapter 不在 `0.3.1` 范围内，因为删除定制配置需要独立的
 所有权和迁移决策。
 
 `--all-adapters` 确定性展开为 `codex`、`claude`、`portable`，不能与 `--profile`
@@ -61,7 +61,7 @@ adapter ID 不得重复，生成路径不得发生 ownership collision。现有 
 - 同时传 `--profile` 与 `--adapter` 会失败；
 - 两者都省略时暂时默认 `codex`，并返回
   `HARNESS_ADAPTER_DEFAULT_DEPRECATED`；
-- schema 1/2 只读兼容，只有显式 `upgrade --to 0.3.0 --apply` 写 schema 3。
+- schema 1/2 只读兼容，只有显式 `upgrade --to 0.3.1 --apply` 写 schema 3。
 
 ## Core 与 adapter 的安装结构
 
@@ -159,10 +159,10 @@ adapter 能力由 `adapter list` 的结构化输出声明：
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.3.0"
+    "version": "0.3.1"
   },
   "core": {
-    "version": "1.2.0"
+    "version": "1.2.1"
   },
   "adapters": [
     {
@@ -199,13 +199,13 @@ protocol 与 Engineering Specifications Catalog 分别版本化。改变 Codex H
 
 ## 版本与 Harness 升级
 
-当前迁移目标为 `0.3.0`：
+当前迁移目标为 `0.3.1`：
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.0
+  upgrade --to 0.3.1
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.0 --apply
+  upgrade --to 0.3.1 --apply
 ```
 
 迁移默认只预览，并遵循以下证据规则：
@@ -216,7 +216,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 - 定制的 repository document：保留原字节并清除不可信模板 provenance；
 - schema 2 的 Codex profile 映射为 `codex@2.0.0` adapter；
 - 安装唯一的 Core activation engine，并在来源可证明时把旧 Router 改成薄 adapter；
-- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.2.0`、Codex
+- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.2.1`、Codex
   `2.2.0`、Claude/Portable `1.1.0` 时按已记录 provenance 替换生成文件并记录
   组件 migration；
 - Spec manifest、lock、managed Markdown 与 Catalog 版本不参与 Harness migration；
@@ -242,6 +242,12 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec update --spec-version 1.5.0 --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
+
+Catalog 更新后，只要出现尚未配置的可选 Spec，dry-run 就会返回
+`selection_decision.status=required`，列出所有 candidate 的 ID、描述、依赖、推荐态
+与配置态。CLI 在用户通过完整 `--spec` 集合、`--required-only` 或
+`--keep-selection` 明确决策前拒绝 apply；Agent 必须展示候选并询问用户，不得自行
+推断“保持原选择”。
 
 `scripts/spec_manager.py` 只验证 Catalog、selection、lock、dependency、managed
 content、路由 index 与 `requirements.json`。它不读取 `AGENTS.md`、

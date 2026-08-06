@@ -1,0 +1,8 @@
+Command: python3 -B -m unittest tests.test_foundryctl tests.test_installer tests.test_repository_contracts
+Result: PASS
+Tests: 77
+Duration: 47.834s
+
+After extending the three resolution paths with apply assertions, the focused
+selection-decision test was rerun separately and passed in 2.924s. The later
+canonical check reran the same suites as part of 103 RepoFoundry tests.

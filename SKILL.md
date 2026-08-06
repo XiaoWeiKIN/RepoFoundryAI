@@ -78,7 +78,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.0
+  upgrade --to 0.3.1
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -124,9 +124,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.0
+  upgrade --to 0.3.1
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.0 --apply
+  upgrade --to 0.3.1 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -157,8 +157,13 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 首次初始化可用 `--spec-repository` 选择其他仓库；`--spec-ref` 只用于显式开发
 分支、tag 或 commit。manifest 保存 Git URL/ref。`sync` 使用已有 lock 的 commit；
 生产升级通过 `update --spec-version ...` 替换 source 并刷新已选内容，不会因检测
-结果改变选择；`update --spec ...` 预览并替换完整可选集合，`--required-only` 回到
-仅必选集合。依赖闭包自动补齐。`spec validate` 完全离线。Bootstrap
+结果改变选择。Catalog 发生变化且出现尚未配置的可选 Spec 时，dry-run 的
+`selection_decision.status` 为 `required`；必须向用户展示每个 candidate 的 ID、
+描述和依赖，并让用户明确选择完整 `--spec` 集合、`--required-only` 或
+`--keep-selection`。在用户作答前不得传 `--apply`，也不得替用户推断
+`--keep-selection`。`update --spec ...` 预览并替换完整可选集合，
+`--required-only` 回到仅必选集合；`--keep-selection` 明确保留既有直接选择。
+依赖闭包自动补齐。`spec validate` 完全离线。Bootstrap
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
 

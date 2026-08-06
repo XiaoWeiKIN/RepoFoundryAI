@@ -17,6 +17,7 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 |---|---|---|---|---|
 | EP-006 | Migrate EngineeringWorkflow to RepoFoundry AI | active | 2026-08-04 | [EXECPLAN](exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md) |
 | EP-013 | Implement Requirement-level Specification context activation | active | 2026-08-05 | [EXECPLAN](exec-plans/active/ep-013_requirement-context-activation/EXECPLAN.md) |
+| EP-014 | Require an explicit decision for new optional Specs | active | 2026-08-06 | [EXECPLAN](exec-plans/active/ep-014_explicit-spec-decision-gate/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed
