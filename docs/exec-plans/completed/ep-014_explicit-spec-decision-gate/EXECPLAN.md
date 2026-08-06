@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-014
 title: "Require an explicit decision for new optional Specs"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -19,9 +19,9 @@ architecture_decision_gate_reason: "This patch enforces the already accepted exp
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:5440bb37604815a28782410f8c2e19a8c86e7e18"
+verification_evidence: ["artifact:docs/exec-plans/completed/ep-014_explicit-spec-decision-gate/artifacts/exact-revision-check.txt", "artifact:docs/exec-plans/completed/ep-014_explicit-spec-decision-gate/artifacts/selection-decision-e2e.json", "artifact:docs/exec-plans/completed/ep-014_explicit-spec-decision-gate/artifacts/post-publication-install.json", "ci:https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/31073424506", "release:https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.3.1"]
+archive_sha256: 866ab52640b3c8fc5a5acc19aafb9d433eb1be0c7904dc627c29ca2412b4f4aa
 created: 2026-08-06
 updated: 2026-08-06
 author: "Codex"
@@ -55,12 +55,12 @@ unchanged. `--keep-selection`, `--required-only`, or the complete repeated
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 3 — deliver and publish `v0.3.1`.
-- Current state: Core and CLI enforce the explicit selection decision; Skills,
-  bilingual docs, migration coverage and evidence are updated. Focused tests,
-  the 103-test RepoFoundry suite, canonical integrity and EP validation pass.
-- Next action: commit, open the PR, verify CI, merge, tag and validate the public
-  installer against the merged release.
+- Current milestone: Milestone 3 — completed and ready to archive.
+- Current state: PR #28 merged at `5440bb3`; annotated tag and Latest Release
+  `v0.3.1` are public. Explicit and `latest` isolated installs resolve the same
+  commit and repeated installation is idempotent.
+- Next action: archive EP-014 with the verified release revision and retained
+  local, CI and post-publication evidence.
 - Open questions: none that change the route.
 
 ## Context and Orientation
@@ -263,9 +263,10 @@ then run `install.py --version 0.3.1 --host none --json` and repeat with
 - [x] Run `epctl validate`; expect zero errors, allowing only existing
   ready-to-archive warnings for unrelated active plans. Evidence:
   `artifacts/epctl-validate.txt`.
-- [ ] Verify the PR's Python 3.10, Python 3.14 and `ep-integrity` checks all
-  succeed before merge. Evidence: GitHub Actions URL in this plan.
-- [ ] Install the published `0.3.1` Release in an isolated prefix, repeat with
+- [x] Verify the PR's Python 3.10, Python 3.14 and `ep-integrity` checks all
+  succeed before merge. Evidence:
+  `https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/31073424506`.
+- [x] Install the published `0.3.1` Release in an isolated prefix, repeat with
   `latest`, and expect the exact merge commit, `unchanged` on repetition, CLI
   version `0.3.1`, and no project Harness changes. Evidence recorded in the
   Release and `artifacts/post-publication-install.json`.
@@ -307,7 +308,9 @@ alongside `0.3.1`, so users can activate the prior release if necessary.
 - [x] (2026-08-06T06:08:00Z) Updated root/project Skills, bilingual docs,
   design contracts, distribution `0.3.1`, Core `1.2.1`, and verified the
   provenance-safe `0.3.0` migration without changing locked Spec state.
-- [ ] Merge the reviewed PR and publish the verified release.
+- [x] (2026-08-06T05:16:00Z) Merged PR #28 after Python 3.10, Python 3.14 and
+  `ep-integrity` passed; published annotated `v0.3.1` and verified explicit and
+  `latest` installs against merge commit `5440bb3`.
 
 ## Surprises & Discoveries
 
@@ -335,10 +338,12 @@ alongside `0.3.1`, so users can activate the prior release if necessary.
 
 ## Outcomes & Retrospective
 
-Implementation and local verification are complete. The mechanical gate closes
-the authorization gap without changing the manifest, lock, adapter or
-activation-protocol schemas. Publication evidence and the final verified
-revision remain pending until the reviewed PR is merged.
+RepoFoundry now turns every source-changing Catalog update with unconfigured
+optional Specs into an explicit decision. The machine-readable payload gives
+all Agents the same bounded choices, and the Core apply gate prevents silent
+authorization. The change preserves manifest, lock, adapter and activation
+protocol schemas. PR #28, annotated `v0.3.1`, Latest Release and isolated
+installer verification all resolve to `5440bb3`.
 
 ### Knowledge promotion candidates
 
@@ -373,8 +378,12 @@ displayed candidates without changing the manifest's direct IDs.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-014_explicit-spec-decision-gate/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-014_explicit-spec-decision-gate/EXECPLAN.md`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
+- PR and CI: `https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/28`,
+  `https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/31073424506`
+- Release: `https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.3.1`
+- Post-publication install: `artifacts/post-publication-install.json`
 
 ## Revision Notes
 
@@ -385,3 +394,6 @@ displayed candidates without changing the manifest's direct IDs.
 - 2026-08-06T06:08:00Z — Recorded passing Core, migration, installer,
   repository-contract, canonical and EP validation evidence; advanced the plan
   to PR and release delivery.
+- 2026-08-06T05:16:00Z — PR #28 merged with all CI gates green; annotated
+  `v0.3.1` became Latest, explicit and `latest` Release installs passed, and
+  immutable archive/package digests were recorded.
