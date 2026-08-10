@@ -232,7 +232,7 @@ portable project adapter without either host directory.
 Examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.3.1 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.0 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
@@ -251,12 +251,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.3.1`
+distribution upgrade, run this in each existing project and replace `0.4.0`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.3.1
-repofoundry --repo . upgrade --to 0.3.1 --apply
+repofoundry --repo . upgrade --to 0.4.0
+repofoundry --repo . upgrade --to 0.4.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -355,8 +355,8 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.3.1
-repofoundry --repo . upgrade --to 0.3.1 --apply
+repofoundry --repo . upgrade --to 0.4.0
+repofoundry --repo . upgrade --to 0.4.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -375,12 +375,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.3.1` uses Harness schema `3`, Harness Core `1.2.1`, Codex
-adapter `2.2.0`, Claude adapter `1.1.0`, Portable adapter `1.1.0`, and
+RepoFoundry `0.4.0` uses Harness schema `3`, Harness Core `1.3.0`, Codex
+adapter `2.3.0`, Claude adapter `1.2.0`, Portable adapter `1.2.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.3.1 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.4.0 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
@@ -395,7 +395,7 @@ selected release again. New repositories default to fixed Catalog version
 `1.5.0`, represented as `refs/tags/v1.5.0`; production upgrades name another
 version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
 remains an explicit development-source escape hatch. `spec validate` is
-offline. Installing RepoFoundry `0.3.1` or upgrading only the Harness does not
+offline. Installing RepoFoundry `0.4.0` or upgrading only the Harness does not
 rewrite an existing project Spec manifest, lock, index, or managed content.
 
 `spec plan` lists every Catalog entry and separates required, recommended,
@@ -424,8 +424,8 @@ engine:
    task-specific reason, or an explicit reasoned `none` decision;
 4. resolves the exact Requirement dependency closure and compiles a
    digest-verified context capsule from local source bytes; and
-5. reports exact IDs, capsule digest and bytes, verification, exceptions, and
-   migration effects at handoff.
+5. reports exact IDs, published/effective enforcement levels, capsule digest
+   and bytes, verification, exceptions, and migration effects at handoff.
 
 ```mermaid
 flowchart LR
@@ -437,6 +437,7 @@ flowchart LR
     X --> K
     K --> W["Implementation or review"]
     W --> H["Receipt + changed-path audit"]
+    H --> E["Activation evidence export"]
 ```
 
 The normal card budget is 16 KiB and the exact capsule budget is 32 KiB.
@@ -450,8 +451,17 @@ blocks remain usable only through reasoned whole-Spec mode.
 The Core understands only normalized `session_start`, `subagent_start`,
 `context_resume`, `before_mutation`, and `stop` events. Protocol-v2 receipts
 record direct and resolved Requirement IDs, reasons, source ranges, capsule
-mode/digest/bytes, and a context epoch. `rehydrate` advances the epoch and
+mode/digest/bytes, published/effective enforcement levels, and a context epoch.
+`rehydrate` advances the epoch and
 reconstructs the same verified capsule after compaction or context loss.
+
+Requirement-index schema v2 carries each declared Automated enforcement level;
+schema v1 and older source blocks remain readable through an explicit legacy
+Advisory default. Run `spec_router.py evidence` with the active
+adapter/session/turn to export verified Catalog, Spec, Requirement-block,
+receipt, and level identities without normative source text. RepoFoundry's
+effective ceiling is Advisory, and the export explicitly reports that no
+finding lifecycle is supported.
 The Codex adapter translates its native
 events: generated Hooks establish a Git baseline on `UserPromptSubmit`, pass
 the contract to subagents, deny Bash or `apply_patch` writes before activation,

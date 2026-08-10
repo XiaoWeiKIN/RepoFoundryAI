@@ -1,0 +1,38 @@
+{
+  "capsule_sha256": "cc2c89e24e6559124d42ce372b54d3242b2d387f1f108fb104a3acee76468123",
+  "card_enforcement": {
+    "effective": "Advisory",
+    "published": "Advisory",
+    "source": "declared"
+  },
+  "catalog": {
+    "id": "io.github.xiaoweikin.engineering-specifications",
+    "revision": "4dfc11cac4aec786a721878ac7c85cc28116a2a4",
+    "sha256": "5d209bee008f32fbfbcf11fad8b3c7f01c854aeda9bac9e24050a380782b1e35",
+    "version": "1.6.0"
+  },
+  "evidence_enforcement": {
+    "effective": "Advisory",
+    "published": "Advisory",
+    "source": "declared"
+  },
+  "evidence_sha256": "0d8cd2535ecf820b99d222bd8c4821a3649e52127bc57b7076af53ffdc119d3b",
+  "finding_lifecycle_supported": false,
+  "index_enforcement": {
+    "published": "Advisory",
+    "source": "declared"
+  },
+  "receipt_enforcement": {
+    "effective": "Advisory",
+    "published": "Advisory",
+    "source": "declared"
+  },
+  "rehydrated_context_epoch": 2,
+  "requirement": "GO-FORMAT-001",
+  "requirement_block_sha256": "34c1720e4a266598c9dc49bd16ce1ef24269a8ccd9a65384e4aafb310010c93a",
+  "requirement_index_schema": 2,
+  "spec_validate": {
+    "errors": 0,
+    "warnings": 0
+  }
+}

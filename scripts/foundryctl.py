@@ -45,10 +45,10 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.2.1"
-CODEX_ADAPTER_VERSION = "2.2.0"
-CLAUDE_ADAPTER_VERSION = "1.1.0"
-PORTABLE_ADAPTER_VERSION = "1.1.0"
+CORE_HARNESS_VERSION = "1.3.0"
+CODEX_ADAPTER_VERSION = "2.3.0"
+CLAUDE_ADAPTER_VERSION = "1.2.0"
+PORTABLE_ADAPTER_VERSION = "1.2.0"
 ACTIVATION_PROTOCOL_VERSION = 2
 CODEX_AGENT_MAX_LINES = 100
 CODEX_AGENT_TEMPLATE_TARGET_LINES = 80
@@ -229,6 +229,8 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
         "mutation_gate": "native",
         "completion_audit": "native",
         "project_trust": "user_review",
+        "automated_enforcement_effective_maximum": "Advisory",
+        "finding_lifecycle": "unsupported",
     },
     "claude": {
         "instructions": "none",
@@ -238,6 +240,8 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
         "mutation_gate": "cli",
         "completion_audit": "cli",
         "project_trust": "user_review",
+        "automated_enforcement_effective_maximum": "Advisory",
+        "finding_lifecycle": "unsupported",
     },
     "portable": {
         "instructions": "file",
@@ -247,6 +251,8 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
         "mutation_gate": "cli",
         "completion_audit": "cli",
         "project_trust": "none",
+        "automated_enforcement_effective_maximum": "Advisory",
+        "finding_lifecycle": "unsupported",
     },
 }
 ADAPTER_DIRECTORIES = {

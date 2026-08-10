@@ -61,7 +61,7 @@ the engineering environment in which multiple workflows can operate.
 | Distribution installer | `install.py` |
 | Installed command | `repofoundry` |
 | Root CLI | `scripts/foundryctl.py` |
-| Distribution version source | `VERSION` (`0.3.1`) |
+| Distribution version source | `VERSION` (`0.4.0`) |
 | Installation variable used in examples | `REPO_FOUNDRY_HOME` |
 | New Harness and Spec manifest owner | `repo-foundry` |
 | Persistent target state directory | `docs/.engineering/` |

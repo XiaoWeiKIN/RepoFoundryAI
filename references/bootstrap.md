@@ -48,7 +48,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 ```
 
 adapter ID 不得重复，生成路径不得发生 ownership collision。现有 schema 3 Harness
-可以追加 adapter；删除 adapter 不在 `0.3.1` 范围内，因为删除定制配置需要独立的
+可以追加 adapter；删除 adapter 不在 `0.4.0` 范围内，因为删除定制配置需要独立的
 所有权和迁移决策。
 
 `--all-adapters` 确定性展开为 `codex`、`claude`、`portable`，不能与 `--profile`
@@ -61,7 +61,7 @@ adapter ID 不得重复，生成路径不得发生 ownership collision。现有 
 - 同时传 `--profile` 与 `--adapter` 会失败；
 - 两者都省略时暂时默认 `codex`，并返回
   `HARNESS_ADAPTER_DEFAULT_DEPRECATED`；
-- schema 1/2 只读兼容，只有显式 `upgrade --to 0.3.1 --apply` 写 schema 3。
+- schema 1/2 只读兼容，只有显式 `upgrade --to 0.4.0 --apply` 写 schema 3。
 
 ## Core 与 adapter 的安装结构
 
@@ -159,25 +159,25 @@ adapter 能力由 `adapter list` 的结构化输出声明：
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.3.1"
+    "version": "0.4.0"
   },
   "core": {
-    "version": "1.2.1"
+    "version": "1.3.0"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.2.0",
+      "version": "2.3.0",
       "enforcement": "native"
     },
     {
       "id": "claude",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "enforcement": "cli"
     },
     {
       "id": "portable",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "enforcement": "cli"
     }
   ],
@@ -199,13 +199,13 @@ protocol 与 Engineering Specifications Catalog 分别版本化。改变 Codex H
 
 ## 版本与 Harness 升级
 
-当前迁移目标为 `0.3.1`：
+当前迁移目标为 `0.4.0`：
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.1
+  upgrade --to 0.4.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.1 --apply
+  upgrade --to 0.4.0 --apply
 ```
 
 迁移默认只预览，并遵循以下证据规则：
@@ -216,8 +216,8 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 - 定制的 repository document：保留原字节并清除不可信模板 provenance；
 - schema 2 的 Codex profile 映射为 `codex@2.0.0` adapter；
 - 安装唯一的 Core activation engine，并在来源可证明时把旧 Router 改成薄 adapter；
-- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.2.1`、Codex
-  `2.2.0`、Claude/Portable `1.1.0` 时按已记录 provenance 替换生成文件并记录
+- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.3.0`、Codex
+  `2.3.0`、Claude/Portable `1.2.0` 时按已记录 provenance 替换生成文件并记录
   组件 migration；
 - Spec manifest、lock、managed Markdown 与 Catalog 版本不参与 Harness migration；
 - 写入后 validation 失败：恢复全部触碰文件并清理本次创建的空目录；
@@ -285,7 +285,9 @@ flowchart LR
 
 `requirements.json` 是从已锁定 Spec 原字节确定性生成的派生索引。它记录每个
 Requirement 的卡片、所属 Spec、精确 UTF-8 字节范围和摘要、上下文依赖、解释框架
-范围与 Verification 行范围，不复制规范正文。`spec validate` 会重新生成索引并做
+范围、Verification 行范围与发布自动执法等级，不复制规范正文。schema v2 还记录
+等级来自源码声明还是旧格式的 Advisory 默认值；Router 继续读取 schema v1。
+`spec validate` 会重新生成索引并做
 逐字节比较，同时再次核验每个范围与摘要。
 
 候选仍只由 path scope 产生；Agent 必须结合任务意图判断 Spec Applicability，再从
@@ -298,7 +300,10 @@ Requirement 的旧 Spec、迁移和全库审计可用带理由的 whole-Spec
 `spec sync --apply` 即生成新索引。
 
 协议 v2 receipt 记录适用 Spec、直接/闭包 Requirement ID、逐 ID 理由、源码范围、
-胶囊模式、SHA-256、字节数、预算和 epoch。依赖闭包、explicit-none、digest
+发布/有效自动执法等级、胶囊模式、SHA-256、字节数、预算和 epoch。`evidence`
+命令会再次复核 receipt 与源码范围，并导出不含规范原文的激活证据。RepoFoundry
+没有 finding 判定器，因此有效等级固定为 Advisory，导出明确标记 finding lifecycle
+未实现。依赖闭包、explicit-none、digest
 verification、changed-path audit 与五字段 handoff 对所有 adapter 完全相同。
 
 ## 非破坏性与验证

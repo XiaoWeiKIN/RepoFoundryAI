@@ -121,6 +121,7 @@ def _is_router_command(command: str) -> bool:
             "requirements",
             "activate",
             "status",
+            "evidence",
             "rehydrate",
             "audit",
         }
