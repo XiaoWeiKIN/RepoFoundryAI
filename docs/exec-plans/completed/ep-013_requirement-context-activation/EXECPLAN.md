@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-013
 title: "Implement Requirement-level Specification context activation"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -19,9 +19,9 @@ architecture_decision_gate_reason: "The approved ESP fixes requirement-level exa
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:fd2fe963f607ddad5747c96aacc603a50d37cbb9"
+verification_evidence: ["artifact:docs/exec-plans/completed/ep-013_requirement-context-activation/artifacts/requirement-context-e2e.json", "artifact:docs/exec-plans/completed/ep-013_requirement-context-activation/artifacts/enforcement-metadata-e2e.json", "artifact:docs/exec-plans/completed/ep-013_requirement-context-activation/artifacts/post-publication-install.json", "ci:https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/31399831082", "release:https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.4.0"]
+archive_sha256: 185cca5141f632d34961fa4987ac2a2431b89df9bb362a3484d727f65ab7761a
 created: 2026-08-05
 updated: 2026-08-10
 author: "Codex"
@@ -66,14 +66,12 @@ flowchart LR
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 4 complete; verified-revision archival pending.
-- Current state: Catalog 1.6 authoring checks, Requirement-index schema v2,
-  card and receipt propagation, Advisory-only activation evidence, legacy
-  compatibility, component migrations, and the real Catalog-to-consumer E2E
-  all pass. Both repositories remain intentionally uncommitted.
-- Next action: review and commit both working trees. Publish Catalog 1.6 before
-  selecting it as RepoFoundry's default, then archive this plan against a
-  verified RepoFoundry revision.
+- Current milestone: Milestone 4 and release delivery complete.
+- Current state: EngineeringSpecifications 1.6.0 and RepoFoundry 0.4.0 are
+  public. PR #30, final-main CI, the annotated tag, Latest Release, and explicit
+  plus `latest` installs all resolve to `fd2fe96`.
+- Next action: archive this plan against the verified release revision and
+  retained local, CI, release, and post-publication evidence.
 
 ## Context and Orientation
 
@@ -359,6 +357,9 @@ whole-Spec fallback instead of partial parsing.
   schema/receipt compatibility, published/effective propagation, Advisory-only
   evidence export, versioned Core/adapters, 81 focused tests, 110 full contract
   tests, both canonical checks, and the Catalog 1.6 E2E pass.
+- [x] (2026-08-10T14:50:00Z) Merged PR #30 after all final-main gates passed;
+  published annotated `v0.4.0` as Latest and verified explicit plus `latest`
+  isolated installs against release commit `fd2fe96`.
 
 ## Surprises & Discoveries
 
@@ -430,8 +431,8 @@ lifecycle evidence exist.
 The intentionally retained path is explicit whole-Spec compatibility for
 legacy documents and old `activate --spec` callers. It is observable in the
 receipt and does not weaken exact mode for formal Requirements. The plan stays
-active until these uncommitted changes have a verified revision suitable for
-`archive-ep`.
+auditable through PR #30, final-main CI run `31399831082`, annotated `v0.4.0`,
+the Latest Release, and the isolated post-publication install artifact.
 
 ### Knowledge promotion candidates
 
@@ -469,9 +470,10 @@ parsing, hashing, JSON, path, and atomic-file primitives remain sufficient.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-013_requirement-context-activation/EXECPLAN.md`
-- End-to-end evidence: `docs/exec-plans/active/ep-013_requirement-context-activation/artifacts/requirement-context-e2e.json`
-- Enforcement metadata E2E: `docs/exec-plans/active/ep-013_requirement-context-activation/artifacts/enforcement-metadata-e2e.json`
+- Plan: `docs/exec-plans/completed/ep-013_requirement-context-activation/EXECPLAN.md`
+- End-to-end evidence: `docs/exec-plans/completed/ep-013_requirement-context-activation/artifacts/requirement-context-e2e.json`
+- Enforcement metadata E2E: `docs/exec-plans/completed/ep-013_requirement-context-activation/artifacts/enforcement-metadata-e2e.json`
+- Post-publication install: `docs/exec-plans/completed/ep-013_requirement-context-activation/artifacts/post-publication-install.json`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
