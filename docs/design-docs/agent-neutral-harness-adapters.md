@@ -10,7 +10,7 @@ adr_refs: ["ADR-011", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-04
-updated: 2026-08-06
+updated: 2026-08-10
 ---
 
 # Agent-neutral Harness and Engineering Spec Adapters
@@ -81,11 +81,16 @@ context_injection   none | advisory | native
 mutation_gate       none | cli | native
 completion_audit    advisory | cli | native
 project_trust       none | user_review | administrative
+automated_enforcement_effective_maximum  Advisory
+finding_lifecycle   unsupported
 ```
 
-The effective enforcement level is observable state. Documentation and CLI
-output must not describe `cli` or `advisory` behavior as a native runtime
-guarantee.
+Adapter `enforcement` describes integration guarantees: CLI or native write
+gates and audits. Requirement Automated enforcement is separate. Every current
+adapter exposes the Core's Advisory effective ceiling and unsupported finding
+lifecycle, even when a trusted Codex Hook provides a native activation gate.
+Documentation and CLI output must not combine these dimensions or describe
+`cli` or `advisory` integration behavior as a native runtime guarantee.
 
 The current implementation ships three adapters:
 
@@ -170,25 +175,25 @@ strict, ordered, and forward-failing:
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.3.1"
+    "version": "0.4.0"
   },
   "core": {
-    "version": "1.2.1"
+    "version": "1.3.0"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.2.0",
+      "version": "2.3.0",
       "enforcement": "native"
     },
     {
       "id": "claude",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "enforcement": "cli"
     },
     {
       "id": "portable",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "enforcement": "cli"
     }
   ],
@@ -233,7 +238,7 @@ foundryctl adapter list
 foundryctl validate --harness
 foundryctl validate --adapter codex
 foundryctl validate --adapter claude
-foundryctl upgrade --to 0.3.1
+foundryctl upgrade --to 0.4.0
 ```
 
 Bootstrap remains preview-first and preflights the complete Core plus adapter
@@ -248,7 +253,7 @@ For one compatibility release:
 - omitting both flags retains the `codex` default and emits a structured
   deprecation warning;
 - manifests continue to read schemas `1` and `2` but only an explicit
-  `upgrade --to 0.3.1 --apply` writes schema `3`;
+  `upgrade --to 0.4.0 --apply` writes schema `3`;
 - `validate` reports an available migration without silently changing state.
 
 The compatibility alias is removed only by a later explicit release and
@@ -329,14 +334,15 @@ Runtime receipts are keyed by repository identity, adapter ID, session ID, and
 turn ID. Including the adapter prevents collisions when two coding-agent
 products work in the same repository concurrently. They record applicable and
 requested Specs, direct and resolved IDs, task reasons, exact source ranges,
-fallback mode and reason, capsule digest/bytes/budget, and `context_epoch`.
+published/effective Automated enforcement levels, fallback mode and reason,
+capsule digest/bytes/budget, and `context_epoch`.
 Receipts remain ephemeral operational state rather than project policy or
 normative evidence. `rehydrate` advances the epoch, recompiles from verified
 local bytes, and requires the same capsule digest before injection.
 
 When no native lifecycle integration exists, the Claude and portable adapters
 use the same Core operations through `begin`, `candidates`, `requirements`,
-`activate`, `rehydrate`, `status`, and `audit`. Claude exposes those
+`activate`, `rehydrate`, `status`, `evidence`, and `audit`. Claude exposes those
 instructions through a native
 project Skill; portable uses a neutral guide. Both provide auditable CLI
 behavior without claiming automatic write interception.
@@ -384,11 +390,14 @@ change as a side effect of this Harness migration.
 
 Schema `3` component upgrades remain readable by their declared versions.
 Core `1.0.0` omits the canonical project Skill, and Codex `2.0.0` omits its
-thin root Skill. Core `1.1.0` and Codex `2.1.0` add those Skills. The current
-Core `1.2.0`, Codex `2.2.0`, Claude `1.1.0`, and Portable `1.1.0` add
+thin root Skill. Core `1.1.0` and Codex `2.1.0` add those Skills. Core `1.2.0`,
+Codex `2.2.0`, Claude `1.1.0`, and Portable `1.1.0` add
 Requirement-level routing instructions and protocol-v2 engine behavior. Core
 `1.2.1` additionally requires Agents to surface unresolved Catalog selection
-decisions and wait for the maintainer's explicit choice before apply. A
+decisions and wait for the maintainer's explicit choice before apply. The
+current Core `1.3.0`, Codex `2.3.0`, Claude `1.2.0`, and Portable `1.2.0` add
+Automated enforcement metadata propagation plus Advisory-only activation
+evidence export without changing activation protocol v2. A
 previewed upgrade, or a bootstrap that adds an adapter, creates or replaces
 generated paths only when they are absent or still have provable template
 provenance and records the component migrations. Unknown or customized target
@@ -421,7 +430,8 @@ rewrite the Spec manifest, lock, managed Markdown, or Requirement index.
 - `assets/`: separate Core templates from `adapters/codex`,
   `adapters/claude`, and `adapters/portable` templates.
 - Activation Engine: own candidates, Requirement cards, exact dependency
-  closure and capsule compilation, local digest verification, context epochs,
+  closure and capsule compilation, local digest verification, published and
+  effective enforcement metadata, activation evidence, context epochs,
   normalized events, and audit.
 - Codex adapter: own Hook payload translation, tool-path extraction, Hook output
   translation, `AGENTS.md`, Skill metadata, and `.codex/hooks.json`.

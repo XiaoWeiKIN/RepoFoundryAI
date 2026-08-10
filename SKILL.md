@@ -78,7 +78,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.1
+  upgrade --to 0.4.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -107,6 +107,8 @@ Core Spec 必选；仓库证据只推荐可选 Spec，
 `specs.lock.json`；lock 同时记录解析后的完整 Git commit。所有 adapter 都从
 同一个 Router 按计划路径、任务意图、`docs/agent-guides/managed/index.md` 与
 `requirements.json` 激活精确 Requirement。
+Requirement 索引 schema v2、协议 v2 receipt 与 `evidence` 导出会传播发布等级；
+RepoFoundry 的有效自动执法上限固定为 Advisory，不得宣称 finding lifecycle。
 项目规则通过 manifest 引用，工具不改写其内容。未知项目事实保留
 `BOOTSTRAP_TODO`，不得编造命令、Owner、架构、SLO 或安全控制。
 
@@ -124,9 +126,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.1
+  upgrade --to 0.4.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.3.1 --apply
+  upgrade --to 0.4.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用

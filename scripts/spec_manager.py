@@ -21,6 +21,7 @@ from typing import Callable, Iterable
 CATALOG_SCHEMA_VERSION = 1
 SPEC_MANIFEST_VERSION = 1
 SPEC_LOCK_VERSION = 1
+REQUIREMENT_INDEX_SCHEMA_VERSION = 2
 SPEC_OWNER = "repo-foundry"
 LEGACY_SPEC_OWNERS = frozenset({"engineering-workflow"})
 SUPPORTED_SPEC_OWNERS = frozenset({SPEC_OWNER, *LEGACY_SPEC_OWNERS})
@@ -51,6 +52,10 @@ REQUIREMENT_ID_TOKEN_RE = re.compile(
 REQUIREMENT_WILDCARD_TOKEN_RE = re.compile(
     r"`([A-Z][A-Z0-9]*(?:-[A-Z0-9*]+)+)`"
 )
+BLOCKING_OBLIGATION_RE = re.compile(r"\*\*MUST(?: NOT)?\*\*")
+WARNING_OBLIGATION_RE = re.compile(
+    r"\*\*(?:MUST(?: NOT)?|SHOULD(?: NOT)?)\*\*"
+)
 H1_RE = re.compile(r"^# (\S.*)$", re.MULTILINE)
 H2_RE = re.compile(r"^## (\S.*)$", re.MULTILINE)
 VERIFICATION_ROW_RE = re.compile(
@@ -67,6 +72,14 @@ MAX_REQUIREMENT_BLOCK_BYTES = 8 * 1024
 GIT_TIMEOUT_SECONDS = 60
 REQUIREMENT_ACTIVATION_PREFIX = "**Activation:** "
 REQUIREMENT_DEPENDENCIES_PREFIX = "**Context dependencies:** "
+REQUIREMENT_AUTOMATED_ENFORCEMENT_MARKER = "**Automated enforcement:**"
+REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX = (
+    REQUIREMENT_AUTOMATED_ENFORCEMENT_MARKER + " "
+)
+AUTOMATED_ENFORCEMENT_LEVELS = frozenset(
+    {"Advisory", "Warning", "Blocking"}
+)
+LEGACY_AUTOMATED_ENFORCEMENT_LEVEL = "Advisory"
 INTERPRETATION_FRAME_SECTIONS = (
     "Purpose",
     "Agent workflow",
@@ -1529,7 +1542,7 @@ def _source_range(
 def _parse_requirement_metadata(
     block_lines: list[str],
     label: str,
-) -> tuple[str, tuple[str, ...], int]:
+) -> tuple[str, tuple[str, ...], str, str, int]:
     if len(block_lines) < 6 or block_lines[1] != "":
         raise SpecError(
             f"{label}: Activation must immediately follow the heading"
@@ -1588,6 +1601,45 @@ def _parse_requirement_metadata(
             )
         if len(dependencies) != len(set(dependencies)):
             raise SpecError(f"{label}: duplicate Context dependencies")
+    if cursor >= len(block_lines) or block_lines[cursor] != "":
+        raise SpecError(
+            f"{label}: Context dependencies must be one Markdown paragraph"
+        )
+    legacy_metadata_end = cursor
+    cursor += 1
+    if (
+        cursor < len(block_lines)
+        and block_lines[cursor].startswith(
+            REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX
+        )
+    ):
+        automated_enforcement = block_lines[cursor][
+            len(REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX) :
+        ].strip()
+        if automated_enforcement not in AUTOMATED_ENFORCEMENT_LEVELS:
+            allowed = ", ".join(sorted(AUTOMATED_ENFORCEMENT_LEVELS))
+            raise SpecError(
+                f"{label}: Automated enforcement must be one of: {allowed}"
+            )
+        if block_lines[cursor] != (
+            REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX
+            + automated_enforcement
+        ):
+            raise SpecError(
+                f"{label}: Automated enforcement must be one scalar line"
+            )
+        automated_enforcement_source = "declared"
+        cursor += 1
+        if cursor >= len(block_lines) or block_lines[cursor] != "":
+            raise SpecError(
+                f"{label}: Automated enforcement must be followed by one "
+                "blank line"
+            )
+        metadata_end = cursor
+    else:
+        automated_enforcement = LEGACY_AUTOMATED_ENFORCEMENT_LEVEL
+        automated_enforcement_source = "legacy_default"
+        metadata_end = legacy_metadata_end
     block = "\n".join(block_lines)
     if block.count(REQUIREMENT_ACTIVATION_PREFIX) != 1:
         raise SpecError(f"{label}: expected exactly one Activation marker")
@@ -1595,7 +1647,22 @@ def _parse_requirement_metadata(
         raise SpecError(
             f"{label}: expected exactly one Context dependencies marker"
         )
-    return activation, dependencies, cursor
+    marker_count = block.count(REQUIREMENT_AUTOMATED_ENFORCEMENT_MARKER)
+    expected_marker_count = (
+        1 if automated_enforcement_source == "declared" else 0
+    )
+    if marker_count != expected_marker_count:
+        raise SpecError(
+            f"{label}: Automated enforcement must immediately follow "
+            "Context dependencies as one scalar marker"
+        )
+    return (
+        activation,
+        dependencies,
+        automated_enforcement,
+        automated_enforcement_source,
+        metadata_end,
+    )
 
 
 def _parse_requirement_source(source: RequirementSource) -> dict[str, object]:
@@ -1721,7 +1788,13 @@ def _parse_requirement_source(source: RequirementSource) -> dict[str, object]:
                 f"{requirement_id}: {len(block_bytes)}"
             )
         block_text = text[start_char:end_char]
-        activation, dependencies, metadata_end = _parse_requirement_metadata(
+        (
+            activation,
+            dependencies,
+            automated_enforcement,
+            automated_enforcement_source,
+            metadata_end,
+        ) = _parse_requirement_metadata(
             block_text.splitlines(),
             f"SPEC_REQUIREMENT_INDEX_INVALID: {source.path}: {requirement_id}",
         )
@@ -1730,6 +1803,24 @@ def _parse_requirement_source(source: RequirementSource) -> dict[str, object]:
                 f"SPEC_REQUIREMENT_INDEX_SELF_DEPENDENCY: {requirement_id}"
             )
         body = "\n".join(block_text.splitlines()[metadata_end:])
+        if (
+            automated_enforcement == "Blocking"
+            and BLOCKING_OBLIGATION_RE.search(body) is None
+        ):
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_ENFORCEMENT_INELIGIBLE: "
+                f"{requirement_id}: Blocking requires a MUST or MUST NOT "
+                "obligation"
+            )
+        if (
+            automated_enforcement == "Warning"
+            and WARNING_OBLIGATION_RE.search(body) is None
+        ):
+            raise SpecError(
+                f"SPEC_REQUIREMENT_INDEX_ENFORCEMENT_INELIGIBLE: "
+                f"{requirement_id}: Warning requires a MUST, MUST NOT, "
+                "SHOULD, or SHOULD NOT obligation"
+            )
         wildcard_tokens = sorted(
             {
                 token
@@ -1765,6 +1856,10 @@ def _parse_requirement_source(source: RequirementSource) -> dict[str, object]:
                 "title": match.group(2),
                 "activation": activation,
                 "context_dependencies": list(dependencies),
+                "automated_enforcement": automated_enforcement,
+                "automated_enforcement_source": (
+                    automated_enforcement_source
+                ),
                 "block_bytes": len(block_bytes),
                 **_source_range(source.content, start_byte, end_byte),
                 "verification": _source_range(
@@ -1893,7 +1988,7 @@ def render_requirement_index(
         visit(requirement_id)
     return _json_bytes(
         {
-            "schema_version": 1,
+            "schema_version": REQUIREMENT_INDEX_SCHEMA_VERSION,
             "owner": owner,
             "catalog": {
                 "catalog_id": catalog_id,

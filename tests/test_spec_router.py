@@ -201,6 +201,16 @@ class SpecRouterTestCase(unittest.TestCase):
         )
         agents = (self.repo / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("$engineering-specs", agents)
+        requirement_index = json.loads(
+            (
+                self.repo
+                / "docs"
+                / "agent-guides"
+                / "managed"
+                / "requirements.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(requirement_index["schema_version"], 2)
         self.run_foundry("spec", "validate")
         self.run_foundry("validate", "--harness")
 
@@ -541,6 +551,26 @@ class SpecRouterTestCase(unittest.TestCase):
             [item["id"] for item in cards["cards"]],
             ["GO-NAME-001", "GO-TEST-001"],
         )
+        card_levels = {
+            card["id"]: card["automated_enforcement"]
+            for card in cards["cards"]
+        }
+        self.assertEqual(
+            card_levels["GO-NAME-001"],
+            {
+                "effective": "Advisory",
+                "published": "Advisory",
+                "source": "declared",
+            },
+        )
+        self.assertEqual(
+            card_levels["GO-TEST-001"],
+            {
+                "effective": "Advisory",
+                "published": "Warning",
+                "source": "declared",
+            },
+        )
         self.assertLessEqual(cards["card_bytes"], cards["card_budget_bytes"])
 
         activation = json.loads(
@@ -565,6 +595,16 @@ class SpecRouterTestCase(unittest.TestCase):
             ["GO-NAME-001"],
         )
         self.assertEqual(
+            activation["direct_requirements"][0][
+                "automated_enforcement"
+            ],
+            {
+                "effective": "Advisory",
+                "published": "Advisory",
+                "source": "declared",
+            },
+        )
+        self.assertEqual(
             [item["id"] for item in activation["resolved_requirements"]],
             ["SEM-NAME-001", "GO-NAME-001"],
         )
@@ -573,6 +613,14 @@ class SpecRouterTestCase(unittest.TestCase):
             [{"from": "GO-NAME-001", "to": "SEM-NAME-001"}],
         )
         for item in activation["resolved_requirements"]:
+            self.assertEqual(
+                item["automated_enforcement"]["published"],
+                "Advisory",
+            )
+            self.assertEqual(
+                item["automated_enforcement"]["effective"],
+                "Advisory",
+            )
             self.assertGreater(item["block"]["bytes"], 0)
             self.assertEqual(len(item["block"]["sha256"]), 64)
             self.assertGreater(item["verification"]["bytes"], 0)
@@ -709,6 +757,185 @@ class SpecRouterTestCase(unittest.TestCase):
         )
         self.assertIn("ROUTER_REQUIREMENT_INDEX_METADATA_DRIFT", result.stderr)
 
+    def test_enforcement_metadata_drift_fails_closed(self) -> None:
+        index_path = (
+            self.repo / "docs/agent-guides/managed/requirements.json"
+        )
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        go_spec = next(
+            item for item in index["specs"] if item["id"] == "languages/go"
+        )
+        go_spec["requirements"][0]["automated_enforcement"] = "Warning"
+        index_path.write_text(
+            json.dumps(index, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_router(
+            "requirements",
+            "--path",
+            "service/main.go",
+            "--spec",
+            "languages/go",
+            expected=2,
+        )
+        self.assertIn("ROUTER_REQUIREMENT_INDEX_METADATA_DRIFT", result.stderr)
+        self.assertIn("Automated enforcement", result.stderr)
+
+    def test_schema_v1_requirement_index_remains_readable(self) -> None:
+        index_path = (
+            self.repo / "docs/agent-guides/managed/requirements.json"
+        )
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        index["schema_version"] = 1
+        for spec in index["specs"]:
+            for requirement in spec["requirements"]:
+                requirement.pop("automated_enforcement")
+                requirement.pop("automated_enforcement_source")
+        index_path.write_text(
+            json.dumps(index, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        cards = json.loads(
+            self.run_router(
+                "requirements",
+                "--path",
+                "service/main.go",
+                "--spec",
+                "languages/go",
+            ).stdout
+        )
+        self.assertEqual(
+            cards["cards"][0]["automated_enforcement"],
+            {
+                "effective": "Advisory",
+                "published": "Advisory",
+                "source": "declared",
+            },
+        )
+
+    def test_evidence_export_is_verified_advisory_activation_context(
+        self,
+    ) -> None:
+        self.initialize_turn()
+        self.run_router(
+            "activate",
+            "--session-id",
+            "session-1",
+            "--turn-id",
+            "turn-1",
+            "--path",
+            "service/main.go",
+            "--spec",
+            "languages/go",
+            "--requirement",
+            "GO-TEST-001",
+            "--because",
+            "GO-TEST-001=review focused test evidence",
+        )
+        arguments = (
+            "evidence",
+            "--adapter-id",
+            "codex",
+            "--session-id",
+            "session-1",
+            "--turn-id",
+            "turn-1",
+        )
+        first = json.loads(self.run_router(*arguments).stdout)
+        second = json.loads(self.run_router(*arguments).stdout)
+
+        self.assertEqual(first, second)
+        self.assertEqual(first["schema_version"], 1)
+        self.assertEqual(
+            first["evidence_type"],
+            "repo-foundry/requirement-activation",
+        )
+        self.assertFalse(first["finding_lifecycle"]["supported"])
+        self.assertEqual(
+            first["finding_lifecycle"]["maximum_effective_level"],
+            "Advisory",
+        )
+        self.assertEqual(
+            [item["id"] for item in first["requirements"]],
+            ["GO-TEST-001"],
+        )
+        for requirement in first["requirements"]:
+            self.assertEqual(
+                requirement["automated_enforcement"]["published"],
+                "Warning",
+            )
+            self.assertEqual(
+                requirement["automated_enforcement"]["effective"],
+                "Advisory",
+            )
+            self.assertEqual(
+                len(requirement["requirement_block_sha256"]),
+                64,
+            )
+        serialized = json.dumps(first, ensure_ascii=False)
+        self.assertNotIn("Go changes **MUST**", serialized)
+        digest = first.pop("sha256")
+        canonical = json.dumps(
+            first,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), digest)
+
+    def test_legacy_protocol_v2_receipt_rehydrates_without_level_fields(
+        self,
+    ) -> None:
+        self.initialize_turn()
+        self.run_router(
+            "activate",
+            "--session-id",
+            "session-1",
+            "--turn-id",
+            "turn-1",
+            "--path",
+            "service/main.go",
+            "--spec",
+            "languages/go",
+            "--requirement",
+            "GO-NAME-001",
+            "--because",
+            "GO-NAME-001=rename public API",
+        )
+        state_paths = list(
+            (
+                self.repo
+                / ".git"
+                / "repo-foundry"
+                / "spec-activation-v2"
+            ).glob("*.json")
+        )
+        self.assertEqual(len(state_paths), 1)
+        runtime = json.loads(state_paths[0].read_text(encoding="utf-8"))
+        runtime["version"] = 3
+        for item in runtime["activation"]["direct_requirements"]:
+            item.pop("automated_enforcement")
+        for item in runtime["activation"]["resolved_requirements"]:
+            item.pop("automated_enforcement")
+        state_paths[0].write_text(
+            json.dumps(runtime, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        rehydrated = json.loads(
+            self.run_router(
+                "rehydrate",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+            ).stdout
+        )
+        self.assertEqual(rehydrated["decision"], "allow")
+        self.assertIn("### GO-NAME-001", rehydrated["context"])
+
     def test_rehydrate_starts_a_new_epoch_with_the_same_capsule(self) -> None:
         self.initialize_turn()
         activation = json.loads(
@@ -819,6 +1046,20 @@ class SpecRouterTestCase(unittest.TestCase):
             tool_input={"command": "git status --short"},
         )
         self.assertEqual(safe, {})
+
+        evidence = self.hook(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="tool-evidence",
+            tool_input={
+                "command": (
+                    "python3 .repo-foundry/engineering-specs/"
+                    "spec_router.py evidence --adapter-id codex "
+                    "--session-id session-1 --turn-id turn-1"
+                )
+            },
+        )
+        self.assertEqual(evidence, {})
 
         mutating = self.hook(
             "PreToolUse",

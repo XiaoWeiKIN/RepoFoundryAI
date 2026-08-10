@@ -10,7 +10,7 @@ adr_refs: ["ADR-002", "ADR-004", "ADR-005", "ADR-010", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-07-31
-updated: 2026-08-06
+updated: 2026-08-10
 ---
 
 # Engineering Spec Resolution and Project Materialization
@@ -310,6 +310,8 @@ metadata, not normative content. For each formal Requirement it records:
 
 - the stable Requirement ID, owning Spec, title, bounded Activation card, and
   exact context-dependency IDs;
+- the published Automated enforcement level plus whether the source declared
+  it or the consumer applied the legacy Advisory default;
 - the source file digest plus the Requirement block's UTF-8 byte range, byte
   count, and SHA-256;
 - mandatory interpretation-frame section ranges and all top-level section
@@ -323,6 +325,13 @@ card may not exceed 180 Unicode code points. Wildcard dependencies are invalid.
 Legacy documents with no formal Requirement blocks are indexed in
 `whole-spec` mode; a document cannot mix formal extraction with implicit
 whole-document activation.
+
+Requirement-index schema v2 adds Automated enforcement metadata without
+changing the Catalog, manifest, or lock schemas. The Router continues to read
+schema v1. When a pre-Catalog-1.6 Requirement has no marker, materialization
+records `Advisory` with origin `legacy_default`; a declared marker records
+origin `declared`. Unknown levels, misplaced or duplicate markers, ineligible
+Warning/Blocking obligations, and source/index disagreement fail closed.
 
 Index generation reparses only digest-verified local bytes and emits records
 in deterministic Spec/source order. Offline validation regenerates the entire
@@ -436,6 +445,13 @@ recorded by `--capsule-budget-reason`. Legacy documents, migrations, and broad
 audits may use
 whole-Spec mode; it is not the normal path for formal Requirement documents.
 
+Cards expose each published Automated enforcement ceiling and RepoFoundry's
+effective level. The effective level is always Advisory in this release:
+RepoFoundry verifies and routes source context but does not identify or
+adjudicate compliance findings. A future executor may consume a higher
+published ceiling only through its own approved policy and observation
+lifecycle.
+
 `UserPromptSubmit` and `SubagentStart` Hooks inject the Router contract and the
 current bounded routing view as developer context. `PreToolUse` allows
 read-only discovery and Router commands, but denies mutation until the active
@@ -449,11 +465,28 @@ Receipts are keyed by repository, adapter, session, and turn under Git metadata
 or the platform temporary directory; they never become hidden project policy
 or normative evidence. A receipt records applicable and requested Specs,
 direct/resolved Requirement IDs and reasons, source ranges, whole-Spec fallback
-reason, capsule mode/digest/bytes/budget, and the context epoch. Compaction,
+reason, published/effective enforcement levels, capsule mode/digest/bytes/
+budget, and the context epoch. Compaction,
 context resume, and subagent startup advance the epoch; `rehydrate` recompiles
 and verifies the same capsule before reinjection. Managed content is SHA-256
 verified again before every injection. No network access occurs during card,
-candidate, activation, rehydration, Hook, status, or audit operations.
+candidate, activation, evidence, rehydration, Hook, status, or audit operations.
+
+The `evidence` command revalidates the receipt and exact source ranges, then
+exports a deterministic JSON projection containing Catalog, Spec,
+Requirement-block, receipt, and enforcement identities. It excludes normative
+source text and states `finding_lifecycle.supported=false`. The export is an
+activation-evidence prototype; it cannot be counted as a detected, remediated,
+overridden, or false-positive finding.
+
+```mermaid
+flowchart LR
+    S["Locked Requirement block"] --> I["Index schema v2"]
+    I --> C["Card: published + effective"]
+    C --> R["Protocol-v2 receipt"]
+    R --> E["Activation evidence export"]
+    E -.->|"no finding adjudication"| A["Advisory effective ceiling"]
+```
 
 Existing `AGENTS.md` and `.codex/hooks.json` files remain byte-preserved. A
 missing mandatory route or required Hook group is a Bootstrap conflict, not a

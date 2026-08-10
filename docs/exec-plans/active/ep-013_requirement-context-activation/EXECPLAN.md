@@ -23,7 +23,7 @@ verified_revision:
 verification_evidence: []
 archive_sha256:
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-08-10
 author: "Codex"
 owner: "Unassigned"
 ---
@@ -44,6 +44,13 @@ Verification rows. A user can observe the change through Router requirement
 cards, protocol-v2 activation receipts, bounded capsule byte counts, and tests
 that prove unrelated Requirement text is absent.
 
+The 2026-08-10 extension carries each Requirement's published Automated
+enforcement ceiling through that same verified route. RepoFoundry exposes the
+level to consumers and exports replayable activation evidence, while keeping
+its own effective level at Advisory until a separately approved finding
+executor implements the observation lifecycle required for Warning or
+Blocking.
+
 ```mermaid
 flowchart LR
     T["Task and planned paths"] --> S["Applicable Specs"]
@@ -51,19 +58,22 @@ flowchart LR
     C --> R["Direct Requirement IDs"]
     R --> D["Exact dependency closure"]
     D --> X["Digest-verified context capsule"]
-    X --> W["Implementation or review"]
+    X --> E["Published enforcement metadata"]
+    E --> W["Implementation or review"]
+    E --> V["Activation evidence export"]
 ```
 
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 3 complete; verified-revision archival pending.
-- Current state: the Catalog 1.5 authoring contract, deterministic Requirement
-  index, protocol-v2 Router, exact capsules, epoch rehydration, adapter
-  migrations, bilingual documentation, and isolated end-to-end evidence are
-  implemented. The two repositories remain intentionally uncommitted.
-- Next action: review and commit both working trees, then archive this plan
-  against the verified RepoFoundry revision.
+- Current milestone: Milestone 4 complete; verified-revision archival pending.
+- Current state: Catalog 1.6 authoring checks, Requirement-index schema v2,
+  card and receipt propagation, Advisory-only activation evidence, legacy
+  compatibility, component migrations, and the real Catalog-to-consumer E2E
+  all pass. Both repositories remain intentionally uncommitted.
+- Next action: review and commit both working trees. Publish Catalog 1.6 before
+  selecting it as RepoFoundry's default, then archive this plan against a
+  verified RepoFoundry revision.
 
 ## Context and Orientation
 
@@ -90,12 +100,16 @@ capsule* is deterministic UTF-8 content assembled from verified local bytes.
 An *interpretation frame* contains the Spec metadata and shared sections needed
 to read a Requirement correctly. An *epoch* is a context-lifetime identifier
 that changes at a new turn, compaction resume, fork, or subagent start.
+An *Automated enforcement ceiling* is source-owned Requirement metadata. A
+published level describes the strongest generic consumer action permitted by
+the locked source; an effective level records what this consumer can safely do.
 
 ## Constraints and References
 
 | Source | Why it matters | When to read |
 |---|---|---|
 | EngineeringSpecifications approved ESP | Fixes metadata, graph, capsule, receipt, budget, and fallback semantics | Before changing either repository |
+| EngineeringSpecifications automated-enforcement ESP and lifecycle | Fixes Advisory/Warning/Blocking ownership, promotion evidence, safe lowering, and observation requirements | Before propagating enforcement metadata |
 | `docs/adr/adr-005_external-engineering-specifications.md` | Keeps normative content outside RepoFoundry | Before changing materialization |
 | `docs/adr/adr-010_spec-task-activation-router.md` | Preserves one Router, offline bytes, explicit activation, and fail-closed writes | Before changing Router behavior |
 | `docs/adr/adr-011_agent-neutral-harness-adapters.md` | Keeps Core and product adapters independently owned | Before changing generated assets |
@@ -141,6 +155,13 @@ it by naming mandatory headings and permitting only explicitly selected
 supporting sections. Tests, not a new decision record, will settle parser edge
 cases.
 
+The approved automated-enforcement ESP is also an extension inside the same
+boundary. EngineeringSpecifications owns the published scalar and promotion
+evidence. RepoFoundry may derive and verify that scalar, lower its effective
+action, and export activation evidence. It cannot claim finding accuracy,
+Warning disposition, or Blocking authority without an executor and durable
+finding lifecycle that this milestone deliberately does not invent.
+
 ## Architecture Compliance Matrix
 
 | ADR constraint or architecture input | Implementation or preservation | Verification |
@@ -151,7 +172,7 @@ cases.
 | ADR-005 | EngineeringSpecifications owns normative metadata; RepoFoundry consumes immutable local bytes and lock digests. | Both canonical checks plus tamper/drift tests pass with no bundled normative Spec copies. |
 | ADR-010 | Preserve one Router, offline activation, dependency closure, explicit none, path gate, and manual fallback while narrowing injection. | Router unit/integration tests cover candidates, cards, activation, first-write injection, none, status, and audit. |
 | ADR-011 | Add the capability in Core and keep adapter assets thin and independently versioned. | Repository contract tests and multi-adapter bootstrap/validation pass. |
-| ADR-012 | Use protocol v2 in the single Core engine; adapters only translate lifecycle events and outputs. | Core/manual/Codex parity tests produce identical direct/resolved IDs and capsule digest. |
+| ADR-012 | Use protocol v2 in the single Core engine; adapters only translate lifecycle events and outputs. Enforcement metadata and evidence projection remain Core-owned. | Core/manual/Codex parity tests produce identical IDs, levels, capsule digest, and evidence identity. |
 
 Every structured constraint from every referenced ADR must appear exactly once.
 For a legacy ADR without structured constraints, restate its applicable decision
@@ -191,6 +212,15 @@ Preserve whole-Spec fallback for legacy documents and existing explicit-none,
 path-coverage, mutation-gate, and audit semantics. Update thin adapter
 instructions, generated template versions/migrations, docs, and tests.
 
+Fourth, extend the derived index to schema v2 with the published Automated
+enforcement level and its declared-or-legacy origin. Keep schema-v1 indexes and
+pre-marker Specs readable by assigning the safe legacy default Advisory. Add
+published and effective levels to cards and protocol-v2 receipts, with
+RepoFoundry's effective level fixed at Advisory. Export a source-verified
+activation-evidence projection that contains no normative source text and
+explicitly disclaims finding-lifecycle support. Bump the affected Core,
+adapter, and distribution versions, then prove migration and replay behavior.
+
 Finally, run targeted suites while iterating, both canonical checks, and an
 isolated end-to-end fixture that materializes the changed Catalog into a
 bootstrapped project and proves unrelated Requirement text is not injected.
@@ -217,6 +247,14 @@ RepoFoundry tests pass.
 Codex, Claude, and portable instructions expose the same protocol truthfully;
 template versions and explicit migrations protect existing custom bytes. Both
 canonical checks and an isolated materialize/activate/audit flow pass.
+
+### Milestone 4: Enforcement metadata is visible without gaining authority
+
+Schema-v2 indexes, cards, receipts, rehydration, and evidence exports agree on
+published levels and exact source identity. Older schema-v1 indexes remain
+readable. Every RepoFoundry effective level is Advisory, and the export states
+that it is activation evidence rather than a finding observation. Focused,
+canonical, migration, and Catalog-1.6 end-to-end checks pass.
 
 ## Concrete Steps
 
@@ -250,6 +288,12 @@ canonical checks and an isolated materialize/activate/audit flow pass.
    matching SHA-256/byte counts, no unrelated sentinel Requirement, and no
    network access during Router commands.
 
+5. Materialize the local Catalog 1.6 working tree through the updated
+   RepoFoundry consumer, activate one exact Requirement, run the enforcement
+   evidence export, and rehydrate the receipt. Expect the index, card, receipt,
+   and export to report the same published level and source digests; expect the
+   effective level and finding capability to remain Advisory-only.
+
 ## Validation and Acceptance
 
 - [x] From EngineeringSpecifications, run `python3 -B scripts/check.py`; expect
@@ -265,6 +309,19 @@ canonical checks and an isolated materialize/activate/audit flow pass.
 - [x] Run the isolated end-to-end fixture; expect a protocol-v2 receipt with
   exact IDs, deterministic digest/bytes, bounded mode, and unrelated text
   absent. Evidence: `artifacts/requirement-context-e2e.json`.
+- [x] Render and validate requirement-index schema v2 while retaining a
+  schema-v1 compatibility test and the legacy Advisory default. Evidence:
+  focused materializer and Router tests pass.
+- [x] Prove cards, receipts, rehydration, and evidence export preserve the
+  published level while RepoFoundry reports Advisory as its effective ceiling.
+  Evidence: a fixture publishes `Warning` for `GO-TEST-001`; every effective
+  level remains Advisory, including the deterministic evidence export.
+- [x] Run the focused RepoFoundry suites, complete canonical check, and the
+  local Catalog 1.6 end-to-end fixture. Evidence: 81 focused tests passed in
+  46.748 seconds; the full check passed all stages and 110 RepoFoundry/
+  repository-contract tests; EngineeringSpecifications passed 26 tests and
+  release readiness; `artifacts/enforcement-metadata-e2e.json` records the
+  Catalog 1.6 result. The unrelated EP-006 archive-readiness warning remains.
 
 ### Required Benchmark Scenario Gates
 
@@ -298,6 +355,10 @@ whole-Spec fallback instead of partial parsing.
 - [x] (2026-08-05T09:51:00Z) Completed Milestone 3: 72 focused tests, 101 full
   RepoFoundry/repository-contract tests, both canonical checks, adapter/package
   validation, and isolated Catalog-to-capsule evidence pass.
+- [x] (2026-08-09T16:22:11Z) Completed Milestone 4: index schema v2, legacy
+  schema/receipt compatibility, published/effective propagation, Advisory-only
+  evidence export, versioned Core/adapters, 81 focused tests, 110 full contract
+  tests, both canonical checks, and the Catalog 1.6 E2E pass.
 
 ## Surprises & Discoveries
 
@@ -323,6 +384,20 @@ whole-Spec fallback instead of partial parsing.
 - 2026-08-05 — Preserve the old `activate --spec` spelling as a legacy
   whole-Spec alias so existing generated consumers remain readable, while all
   new instructions require exact IDs or an explicit reasoned fallback.
+- 2026-08-10 — Advance only the derived Requirement index to schema v2. The
+  Catalog and lock schemas do not change; the Router continues reading v1
+  indexes and treats an absent source marker as a visible legacy Advisory
+  default.
+- 2026-08-10 — Fix RepoFoundry's effective Automated enforcement level at
+  Advisory. The Core routes exact source context but produces no compliance
+  finding, so a higher published ceiling is evidence for another executor and
+  grants this consumer no additional authority.
+- 2026-08-10 — Export activation evidence as a RepoFoundry-local prototype,
+  excluding normative text and marking finding observations unsupported. A
+  portable finding-lifecycle schema remains future governance work.
+- 2026-08-10 — Prepare the compatible feature as distribution `0.4.0`, Core
+  `1.3.0`, Codex `2.3.0`, and Claude/Portable `1.2.0`. Keep activation protocol
+  v2 and the default Catalog at its published `1.5.0` release.
 
 ## Blockers
 
@@ -338,13 +413,19 @@ dependency Requirements and their interpretation frames, and excludes an
 unrelated factory-test Requirement. The capsule survives rehydration with the
 same SHA-256 while its context epoch advances.
 
-The central repository now rejects missing/oversized activation metadata,
+The first three milestones established that the central repository rejects
+missing/oversized activation metadata,
 unknown or wildcard edges, out-of-scope cross-Spec edges, cycles, and missing
 Verification coverage. RepoFoundry regenerates and byte-compares the derived
 index, verifies every range/hash at routing time, exposes bounded cards, and
 records source coordinates, dependency edges, reasons, budgets, and capsule
 identity in the receipt. Codex, Claude, and Portable remain thin consumers of
 one Core engine.
+
+Milestone 4 extends that verified path. Its outcome is intentionally
+narrow: consumers can see and export source-owned enforcement ceilings, while
+RepoFoundry continues to make only Advisory claims until finding-quality and
+lifecycle evidence exist.
 
 The intentionally retained path is explicit whole-Spec compatibility for
 legacy documents and old `activate --spec` callers. It is observable in the
@@ -361,18 +442,27 @@ active until these uncommitted changes have a verified revision suitable for
 No new third-party runtime dependency is allowed. Python standard-library
 parsing, hashing, JSON, path, and atomic-file primitives remain sufficient.
 
-- EngineeringSpecifications exposes two exact paragraphs immediately after
-  each `### Requirement <ID>: ...` heading: `**Activation:** Load when ...` and
-  `**Context dependencies:** None` or comma-separated backticked IDs.
+- EngineeringSpecifications Catalog 1.5 and older expose two exact paragraphs
+  immediately after each `### Requirement <ID>: ...` heading:
+  `**Activation:** Load when ...` and `**Context dependencies:** None` or
+  comma-separated backticked IDs.
+- Catalog 1.6 and newer add a third scalar paragraph immediately afterward:
+  `**Automated enforcement:** Advisory`, `Warning`, or `Blocking`.
 - The generated requirement index is strict versioned JSON and includes source
   Spec identity/version/digest, normalized activation text, exact dependency
-  IDs, UTF-8 byte offsets/lengths, block SHA-256, and Verification coordinates.
+  IDs, published enforcement and origin, UTF-8 byte offsets/lengths, block
+  SHA-256, and Verification coordinates. Schema v2 is current; schema v1 is a
+  read-compatible migration input.
 - The Core Router exposes `begin`, `candidates`, `requirements`, `activate`,
-  `status`, `rehydrate`, `audit`, and normalized-event operations without
-  placing product event names in Core.
+  `status`, `evidence`, `rehydrate`, `audit`, and normalized-event operations
+  without placing product event names in Core.
 - Receipt v2 records adapter/session/turn/context epoch, planned paths,
   applicable Specs, direct/resolved Requirement IDs with reasons and sources,
-  capsule mode/digest/bytes/budget, and injection/rehydration state.
+  published and effective enforcement levels, capsule mode/digest/bytes/budget,
+  and injection/rehydration state.
+- The enforcement evidence export is a source-verified activation projection.
+  It contains Catalog/Spec/Requirement identities, digests, levels, and receipt
+  identity but no normative source text or finding outcome.
 - Managed central Requirements may depend only on the same Spec or a transitive
   Catalog Spec dependency. Project Specs may use only locally resolvable exact
   IDs. All graphs are acyclic.
@@ -381,6 +471,7 @@ parsing, hashing, JSON, path, and atomic-file primitives remain sufficient.
 
 - Plan: `docs/exec-plans/active/ep-013_requirement-context-activation/EXECPLAN.md`
 - End-to-end evidence: `docs/exec-plans/active/ep-013_requirement-context-activation/artifacts/requirement-context-e2e.json`
+- Enforcement metadata E2E: `docs/exec-plans/active/ep-013_requirement-context-activation/artifacts/enforcement-metadata-e2e.json`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -394,3 +485,10 @@ parsing, hashing, JSON, path, and atomic-file primitives remain sufficient.
 - 2026-08-05T09:51:00Z — Final RepoFoundry canonical check passed; the plan
   remains active only because the implementation is not yet committed to a
   verified revision.
+- 2026-08-09T15:00:00Z — Reopened implementation with Milestone 4 to consume
+  the approved Catalog 1.6 Automated enforcement contract without claiming a
+  Warning or Blocking executor.
+- 2026-08-09T16:22:11Z — Completed Milestone 4 with schema-v2 propagation,
+  Advisory-only evidence, compatibility coverage, version migrations, both
+  canonical checks, and isolated Catalog 1.6 evidence; archival still requires
+  committed revisions.

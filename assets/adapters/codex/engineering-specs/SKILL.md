@@ -70,6 +70,17 @@ python3 .repo-foundry/engineering-specs/spec_router.py begin \
 7. Rerun activation when paths, applicable Specs, or direct Requirements
    change. After compaction or a manual context resume, run `rehydrate` with
    the active adapter/session/turn so the next epoch receives the same capsule.
+8. Before handoff, export the source-verified enforcement context:
+
+   ```bash
+   python3 .repo-foundry/engineering-specs/spec_router.py evidence \
+     --adapter-id codex \
+     --session-id <session-id> --turn-id <turn-id>
+   ```
+
+   Published levels are source-owned ceilings. RepoFoundry reports Advisory as
+   its effective level because this Router does not produce or adjudicate
+   compliance findings.
 
 Project Specifications appear as `project:<repository-relative-path>` IDs.
 Prefer the narrower project rule only when it explicitly owns or overrides the

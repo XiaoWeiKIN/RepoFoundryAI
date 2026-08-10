@@ -216,7 +216,7 @@ adapter，不依赖这两个宿主目录。
 示例：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.3.1 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.0 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
@@ -234,11 +234,11 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.3.1` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.4.0` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.3.1
-repofoundry --repo . upgrade --to 0.3.1 --apply
+repofoundry --repo . upgrade --to 0.4.0
+repofoundry --repo . upgrade --to 0.4.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -331,8 +331,8 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.3.1
-repofoundry --repo . upgrade --to 0.3.1 --apply
+repofoundry --repo . upgrade --to 0.4.0
+repofoundry --repo . upgrade --to 0.4.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -350,10 +350,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.3.1` 使用 Harness schema `3`、Harness Core `1.2.1`、Codex
-adapter `2.2.0`、Claude adapter `1.1.0`、Portable adapter `1.1.0` 与激活协议
+RepoFoundry `0.4.0` 使用 Harness schema `3`、Harness Core `1.3.0`、Codex
+adapter `2.3.0`、Claude adapter `1.2.0`、Portable adapter `1.2.0` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.3.1 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.4.0 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
@@ -367,7 +367,7 @@ Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发�
 `refs/tags/v1.5.0`。生产升级通过
 `spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
 `--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。安装 RepoFoundry
-`0.3.1` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
+`0.4.0` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
 托管正文。
 
 `spec plan` 会列出全部 Catalog 条目，并区分必选、推荐、项目直接配置和依赖闭包后的
@@ -412,8 +412,14 @@ flowchart LR
 
 Core 只识别标准化的 `session_start`、`subagent_start`、`context_resume`、
 `before_mutation`、`stop`。协议 v2 回执记录直接和闭包 Requirement ID、理由、源码
-范围、胶囊模式/摘要/字节数与上下文 epoch。发生 compaction 或上下文丢失后，
+范围、发布/有效自动执法等级、胶囊模式/摘要/字节数与上下文 epoch。发生 compaction 或上下文丢失后，
 `rehydrate` 会推进 epoch，并从本地源码重建同一个已验证胶囊。
+
+Requirement 索引 schema v2 携带源码声明的 Automated enforcement 等级；schema v1
+与旧格式 Requirement 通过显式的 legacy Advisory 默认值继续可读。使用当前
+adapter/session/turn 运行 `spec_router.py evidence`，可导出经过源码复核的 Catalog、
+Spec、Requirement 块、receipt 与等级身份，不包含规范原文。RepoFoundry 的有效上限
+固定为 Advisory，导出也明确声明尚不支持 finding lifecycle。
 Codex adapter 翻译原生事件：生成的 Hooks 在 `UserPromptSubmit` 建立 Git 基线，把契约传给子 Agent，
 在激活前拒绝 Bash 或 `apply_patch` 写入，在首次写入前注入已激活的本地全文，并在
 `Stop` 审计实际变更路径。项目只有在仓库受信任、用户通过 Codex `/hooks` 审查

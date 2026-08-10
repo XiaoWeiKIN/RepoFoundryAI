@@ -38,10 +38,16 @@ re-run activation if planned paths change, run each resolved
 Requirement's Verification row, then audit the final handoff:
 
 ```bash
+python3 .repo-foundry/engineering-specs/spec_router.py evidence \
+  --adapter-id portable --session-id <session-id> --turn-id <turn-id>
 python3 .repo-foundry/engineering-specs/spec_router.py audit \
   --adapter-id portable --session-id <session-id> --turn-id <turn-id> \
   --message-file <handoff-file>
 ```
+
+The evidence export preserves each source-owned published level but records
+Advisory as RepoFoundry's effective ceiling. This adapter does not claim a
+finding executor or Warning/Blocking lifecycle.
 
 The handoff must contain all five labels:
 

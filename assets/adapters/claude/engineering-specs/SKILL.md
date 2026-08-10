@@ -42,9 +42,14 @@ Before completion, audit the receipt and handoff:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
+  evidence --adapter-id claude --session-id <session> --turn-id <turn>
+python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   audit --adapter-id claude --session-id <session> --turn-id <turn> \
   --message-file <handoff-file>
 ```
+
+The evidence export carries source-owned published levels and an Advisory
+effective level. It is activation evidence, not a finding-lifecycle claim.
 
 The final response must contain `Activated specifications:`,
 `Activated requirements:`, `Verification:`, `Exceptions:`, and

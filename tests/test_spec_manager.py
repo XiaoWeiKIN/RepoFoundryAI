@@ -12,14 +12,92 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import spec_manager  # noqa: E402
 from tests.spec_git_fixture import (  # noqa: E402
+    SPEC_CONTENTS,
     commit_all,
     create_git_catalog,
     git,
+    sha256,
     write_catalog,
 )
 
 
 class SpecManagerBoundaryTestCase(unittest.TestCase):
+    @staticmethod
+    def requirement_source(content: str) -> spec_manager.RequirementSource:
+        encoded = content.encode("utf-8")
+        return spec_manager.RequirementSource(
+            spec_id="core/semantic-naming",
+            version="0.1.0",
+            path="specification/core/semantic-naming.md",
+            sha256=sha256(encoded),
+            requires=(),
+            project_owned=False,
+            content=encoded,
+        )
+
+    def test_requirement_index_v2_preserves_declared_enforcement(self) -> None:
+        content = SPEC_CONTENTS[
+            "specification/core/semantic-naming.md"
+        ]
+        payload = json.loads(
+            spec_manager.render_requirement_index(
+                "test.engineering-specifications",
+                "0.1.0",
+                "a" * 64,
+                "b" * 40,
+                (self.requirement_source(content),),
+            )
+        )
+
+        self.assertEqual(payload["schema_version"], 2)
+        requirement = payload["specs"][0]["requirements"][0]
+        self.assertEqual(requirement["automated_enforcement"], "Advisory")
+        self.assertEqual(
+            requirement["automated_enforcement_source"],
+            "declared",
+        )
+
+    def test_legacy_requirement_defaults_to_advisory(self) -> None:
+        content = SPEC_CONTENTS[
+            "specification/core/semantic-naming.md"
+        ].replace("**Automated enforcement:** Advisory\n\n", "")
+        payload = json.loads(
+            spec_manager.render_requirement_index(
+                "test.engineering-specifications",
+                "0.1.0",
+                "a" * 64,
+                "b" * 40,
+                (self.requirement_source(content),),
+            )
+        )
+
+        requirement = payload["specs"][0]["requirements"][0]
+        self.assertEqual(requirement["automated_enforcement"], "Advisory")
+        self.assertEqual(
+            requirement["automated_enforcement_source"],
+            "legacy_default",
+        )
+
+    def test_ineligible_blocking_requirement_is_rejected(self) -> None:
+        content = SPEC_CONTENTS[
+            "specification/core/semantic-naming.md"
+        ].replace(
+            "**Automated enforcement:** Advisory",
+            "**Automated enforcement:** Blocking",
+        ).replace("**MUST**", "**MAY**")
+
+        with self.assertRaisesRegex(
+            spec_manager.SpecError,
+            "SPEC_REQUIREMENT_INDEX_ENFORCEMENT_INELIGIBLE",
+        ):
+            spec_manager.render_requirement_index(
+                "test.engineering-specifications",
+                "0.1.0",
+                "a" * 64,
+                "b" * 40,
+                (self.requirement_source(content),),
+            )
+
     def test_release_ref_requires_exact_semver(self) -> None:
         self.assertEqual(
             spec_manager.release_ref("1.2.3"),

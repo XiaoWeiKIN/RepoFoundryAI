@@ -17,8 +17,10 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
-ROUTER_VERSION = 3
+ROUTER_VERSION = 4
 PROTOCOL_VERSION = 2
+REQUIREMENT_INDEX_SCHEMA_VERSION = 2
+ENFORCEMENT_EVIDENCE_SCHEMA_VERSION = 1
 MANIFEST_PATH = "docs/.engineering/specs.json"
 LOCK_PATH = "docs/.engineering/specs.lock.json"
 INDEX_PATH = "docs/agent-guides/managed/index.md"
@@ -45,6 +47,19 @@ REQUIREMENT_ID_TOKEN_RE = re.compile(
 )
 REQUIREMENT_ACTIVATION_PREFIX = "**Activation:** "
 REQUIREMENT_DEPENDENCIES_PREFIX = "**Context dependencies:** "
+REQUIREMENT_AUTOMATED_ENFORCEMENT_MARKER = "**Automated enforcement:**"
+REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX = (
+    REQUIREMENT_AUTOMATED_ENFORCEMENT_MARKER + " "
+)
+AUTOMATED_ENFORCEMENT_LEVELS = frozenset(
+    {"Advisory", "Warning", "Blocking"}
+)
+LEGACY_AUTOMATED_ENFORCEMENT_LEVEL = "Advisory"
+REPO_FOUNDRY_EFFECTIVE_AUTOMATED_ENFORCEMENT = "Advisory"
+BLOCKING_OBLIGATION_RE = re.compile(r"\*\*MUST(?: NOT)?\*\*")
+WARNING_OBLIGATION_RE = re.compile(
+    r"\*\*(?:MUST(?: NOT)?|SHOULD(?: NOT)?)\*\*"
+)
 ADAPTER_ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 HANDOFF_LABELS = (
     "Activated specifications:",
@@ -95,6 +110,8 @@ class RequirementRecord:
     title: str
     activation: str
     dependencies: tuple[str, ...]
+    automated_enforcement: str
+    automated_enforcement_source: str
     spec_id: str
     block_bytes: int
     block: SourceRange
@@ -278,7 +295,7 @@ def _source_range(
 def _routing_metadata_from_block(
     block_text: str,
     label: str,
-) -> tuple[str, tuple[str, ...]]:
+) -> tuple[str, tuple[str, ...], str, str]:
     lines = block_text.splitlines()
     if len(lines) < 6 or lines[1] != "":
         raise RouterError(f"{label}: routing metadata is not immediate")
@@ -320,7 +337,77 @@ def _routing_metadata_from_block(
         )
         if len(dependencies) != len(values):
             raise RouterError(f"{label}: Context dependencies are malformed")
-    return activation, dependencies
+    if cursor >= len(lines) or lines[cursor] != "":
+        raise RouterError(
+            f"{label}: Context dependencies must be one Markdown paragraph"
+        )
+    legacy_metadata_end = cursor
+    cursor += 1
+    if (
+        cursor < len(lines)
+        and lines[cursor].startswith(
+            REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX
+        )
+    ):
+        automated_enforcement = lines[cursor][
+            len(REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX) :
+        ].strip()
+        if automated_enforcement not in AUTOMATED_ENFORCEMENT_LEVELS:
+            raise RouterError(
+                f"{label}: Automated enforcement is unsupported"
+            )
+        if lines[cursor] != (
+            REQUIREMENT_AUTOMATED_ENFORCEMENT_PREFIX
+            + automated_enforcement
+        ):
+            raise RouterError(
+                f"{label}: Automated enforcement must be one scalar line"
+            )
+        automated_enforcement_source = "declared"
+        cursor += 1
+        if cursor >= len(lines) or lines[cursor] != "":
+            raise RouterError(
+                f"{label}: Automated enforcement must be followed by one "
+                "blank line"
+            )
+        metadata_end = cursor
+    else:
+        automated_enforcement = LEGACY_AUTOMATED_ENFORCEMENT_LEVEL
+        automated_enforcement_source = "legacy_default"
+        metadata_end = legacy_metadata_end
+    marker_count = block_text.count(
+        REQUIREMENT_AUTOMATED_ENFORCEMENT_MARKER
+    )
+    expected_marker_count = (
+        1 if automated_enforcement_source == "declared" else 0
+    )
+    if marker_count != expected_marker_count:
+        raise RouterError(
+            f"{label}: Automated enforcement must immediately follow "
+            "Context dependencies as one scalar marker"
+        )
+    body = "\n".join(lines[metadata_end:])
+    if (
+        automated_enforcement == "Blocking"
+        and BLOCKING_OBLIGATION_RE.search(body) is None
+    ):
+        raise RouterError(
+            f"{label}: Blocking requires a MUST or MUST NOT obligation"
+        )
+    if (
+        automated_enforcement == "Warning"
+        and WARNING_OBLIGATION_RE.search(body) is None
+    ):
+        raise RouterError(
+            f"{label}: Warning requires a MUST, MUST NOT, SHOULD, or "
+            "SHOULD NOT obligation"
+        )
+    return (
+        activation,
+        dependencies,
+        automated_enforcement,
+        automated_enforcement_source,
+    )
 
 
 def _legacy_requirement_index(
@@ -371,9 +458,11 @@ def _load_requirement_index(
         raise RouterError(
             "ROUTER_REQUIREMENT_INDEX_INVALID: unexpected top-level shape"
         )
-    if data.get("schema_version") != 1:
+    requirement_index_schema = data.get("schema_version")
+    if requirement_index_schema not in {1, REQUIREMENT_INDEX_SCHEMA_VERSION}:
         raise RouterError(
-            "ROUTER_REQUIREMENT_INDEX_UNSUPPORTED: expected schema_version 1"
+            "ROUTER_REQUIREMENT_INDEX_UNSUPPORTED: expected schema_version "
+            f"1 or {REQUIREMENT_INDEX_SCHEMA_VERSION}"
         )
     if not isinstance(data.get("owner"), str) or not data["owner"]:
         raise RouterError("ROUTER_REQUIREMENT_INDEX_INVALID.owner")
@@ -477,7 +566,7 @@ def _load_requirement_index(
             requirement_label = (
                 f"{label}.requirements[{requirement_index}]"
             )
-            if not isinstance(requirement_raw, dict) or set(requirement_raw) != {
+            expected_requirement_keys = {
                 "id",
                 "title",
                 "activation",
@@ -487,7 +576,18 @@ def _load_requirement_index(
                 "end_byte",
                 "sha256",
                 "verification",
-            }:
+            }
+            if requirement_index_schema == REQUIREMENT_INDEX_SCHEMA_VERSION:
+                expected_requirement_keys.update(
+                    {
+                        "automated_enforcement",
+                        "automated_enforcement_source",
+                    }
+                )
+            if (
+                not isinstance(requirement_raw, dict)
+                or set(requirement_raw) != expected_requirement_keys
+            ):
                 raise RouterError(f"{requirement_label}: unexpected shape")
             requirement_id = requirement_raw.get("id")
             if (
@@ -538,9 +638,12 @@ def _load_requirement_index(
                 or heading_match.group(1) != requirement_title
             ):
                 raise RouterError(f"{requirement_label}: title drift")
-            source_activation, source_dependencies = (
-                _routing_metadata_from_block(block_text, requirement_label)
-            )
+            (
+                source_activation,
+                source_dependencies,
+                source_automated_enforcement,
+                source_automated_enforcement_origin,
+            ) = _routing_metadata_from_block(block_text, requirement_label)
             if (
                 source_activation != activation
                 or source_dependencies != dependencies
@@ -548,6 +651,27 @@ def _load_requirement_index(
                 raise RouterError(
                     f"ROUTER_REQUIREMENT_INDEX_METADATA_DRIFT: "
                     f"{requirement_id}"
+                )
+            if requirement_index_schema == REQUIREMENT_INDEX_SCHEMA_VERSION:
+                automated_enforcement = requirement_raw.get(
+                    "automated_enforcement"
+                )
+                automated_enforcement_source = requirement_raw.get(
+                    "automated_enforcement_source"
+                )
+                if (
+                    automated_enforcement != source_automated_enforcement
+                    or automated_enforcement_source
+                    != source_automated_enforcement_origin
+                ):
+                    raise RouterError(
+                        "ROUTER_REQUIREMENT_INDEX_METADATA_DRIFT: "
+                        f"{requirement_id}: Automated enforcement"
+                    )
+            else:
+                automated_enforcement = source_automated_enforcement
+                automated_enforcement_source = (
+                    source_automated_enforcement_origin
                 )
             row_text = content[
                 verification.start_byte:verification.end_byte
@@ -559,6 +683,10 @@ def _load_requirement_index(
                 title=requirement_title,
                 activation=activation,
                 dependencies=dependencies,
+                automated_enforcement=automated_enforcement,
+                automated_enforcement_source=(
+                    automated_enforcement_source
+                ),
                 spec_id=spec_id,
                 block_bytes=block_bytes,
                 block=block,
@@ -1038,6 +1166,14 @@ def requirement_dependency_closure(
     return tuple(result)
 
 
+def _enforcement_payload(record: RequirementRecord) -> dict[str, str]:
+    return {
+        "published": record.automated_enforcement,
+        "effective": REPO_FOUNDRY_EFFECTIVE_AUTOMATED_ENFORCEMENT,
+        "source": record.automated_enforcement_source,
+    }
+
+
 def _card_payload(record: RequirementRecord) -> dict[str, object]:
     return {
         "id": record.requirement_id,
@@ -1045,6 +1181,7 @@ def _card_payload(record: RequirementRecord) -> dict[str, object]:
         "title": record.title,
         "activation": record.activation,
         "context_dependencies": list(record.dependencies),
+        "automated_enforcement": _enforcement_payload(record),
         "block_bytes": record.block_bytes,
     }
 
@@ -1061,10 +1198,13 @@ def _range_payload(source_range: SourceRange) -> dict[str, object]:
 def _resolved_payload(
     records: Iterable[RequirementRecord],
     direct_ids: Iterable[str],
+    *,
+    include_enforcement: bool = True,
 ) -> list[dict[str, object]]:
     direct = set(direct_ids)
-    return [
-        {
+    result: list[dict[str, object]] = []
+    for item in records:
+        payload: dict[str, object] = {
             "id": item.requirement_id,
             "spec_id": item.spec_id,
             "source": (
@@ -1076,8 +1216,29 @@ def _resolved_payload(
             "block": _range_payload(item.block),
             "verification": _range_payload(item.verification),
         }
-        for item in records
-    ]
+        if include_enforcement:
+            payload["automated_enforcement"] = _enforcement_payload(item)
+        result.append(payload)
+    return result
+
+
+def _direct_payload(
+    records: Iterable[RequirementRecord],
+    reasons: dict[str, str],
+    *,
+    include_enforcement: bool = True,
+) -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
+    for item in records:
+        payload: dict[str, object] = {
+            "id": item.requirement_id,
+            "reason": reasons[item.requirement_id],
+            "source": "agent",
+        }
+        if include_enforcement:
+            payload["automated_enforcement"] = _enforcement_payload(item)
+        result.append(payload)
+    return result
 
 
 def _dependency_edges(
@@ -1459,7 +1620,7 @@ def command_activate(args: argparse.Namespace) -> int:
         resolved: tuple[RequirementRecord, ...] = ()
         whole_ids: tuple[str, ...] = ()
         supporting: tuple[tuple[str, str], ...] = ()
-        direct_payload: list[dict[str, str]] = []
+        direct_payload: list[dict[str, object]] = []
         capsule = ""
         capsule_mode = "none"
     else:
@@ -1548,14 +1709,7 @@ def command_activate(args: argparse.Namespace) -> int:
                 state.requirement_index,
                 direct_ids,
             )
-            direct_payload = [
-                {
-                    "id": requirement_id,
-                    "reason": reasons[requirement_id],
-                    "source": "agent",
-                }
-                for requirement_id in direct_ids
-            ]
+            direct_payload = _direct_payload(direct_records, reasons)
         else:
             if reasons:
                 raise RouterError(
@@ -1678,6 +1832,100 @@ def command_status(args: argparse.Namespace) -> int:
     if runtime is None:
         raise RouterError("ROUTER_ACTIVATION_MISSING")
     _json_output(runtime)
+    return 0
+
+
+def command_evidence(args: argparse.Namespace) -> int:
+    root = repository_root(args.repo)
+    runtime = _load_runtime(
+        root,
+        args.adapter_id,
+        args.session_id,
+        args.turn_id,
+    )
+    if runtime is None:
+        raise RouterError("ROUTER_ACTIVATION_MISSING")
+    activation = _activation(runtime)
+    _context_for_activation(root, activation)
+    state = load_state(root)
+    raw_resolved = activation.get("resolved_requirements")
+    if not isinstance(raw_resolved, list):
+        raise RouterError("ROUTER_ACTIVATION_INVALID.resolved_requirements")
+    requirements: list[dict[str, object]] = []
+    for raw in raw_resolved:
+        if not isinstance(raw, dict) or not isinstance(raw.get("id"), str):
+            raise RouterError(
+                "ROUTER_ACTIVATION_INVALID.resolved_requirements"
+            )
+        record = state.requirement_index.by_requirement.get(str(raw["id"]))
+        if record is None:
+            raise RouterError(f"ROUTER_REQUIREMENT_UNKNOWN: {raw['id']}")
+        spec = state.requirement_index.by_spec[record.spec_id]
+        requirements.append(
+            {
+                "id": record.requirement_id,
+                "selection_source": raw.get("source"),
+                "spec": {
+                    "id": spec.spec_id,
+                    "version": spec.version,
+                    "path": spec.path,
+                    "sha256": spec.sha256,
+                },
+                "requirement_block_sha256": record.block.sha256,
+                "automated_enforcement": _enforcement_payload(record),
+            }
+        )
+    repository_head = _git(
+        root,
+        "rev-parse",
+        "HEAD",
+        check=False,
+    ).strip()
+    evidence: dict[str, object] = {
+        "schema_version": ENFORCEMENT_EVIDENCE_SCHEMA_VERSION,
+        "evidence_type": "repo-foundry/requirement-activation",
+        "catalog": {
+            "id": state.catalog_id,
+            "version": state.catalog_version,
+            "revision": state.revision,
+            "sha256": state.catalog_digest,
+        },
+        "consumer": {
+            "id": "repo-foundry",
+            "router_version": ROUTER_VERSION,
+            "repository_head": repository_head or None,
+            "worktree_clean": not bool(_changed_file_state(root)),
+        },
+        "receipt": {
+            "adapter_id": runtime["adapter_id"],
+            "session_id": runtime["session_id"],
+            "turn_id": runtime["turn_id"],
+            "context_epoch": activation.get("context_epoch"),
+            "decision": activation.get("decision"),
+            "planned_paths": activation.get("planned_paths"),
+            "capsule": activation.get("capsule"),
+        },
+        "requirements": requirements,
+        "whole_specs": activation.get("whole_specs"),
+        "finding_lifecycle": {
+            "supported": False,
+            "maximum_effective_level": (
+                REPO_FOUNDRY_EFFECTIVE_AUTOMATED_ENFORCEMENT
+            ),
+            "reason": (
+                "RepoFoundry exports verified activation context but does "
+                "not produce or adjudicate compliance findings."
+            ),
+        },
+    }
+    canonical = json.dumps(
+        evidence,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    evidence["sha256"] = _sha256(canonical)
+    _json_output(evidence)
     return 0
 
 
@@ -1829,8 +2077,13 @@ def _context_for_activation(root: Path, activation: dict[str, object]) -> str:
     raw_whole = activation.get("whole_specs")
     raw_sections = activation.get("supporting_sections")
     capsule_metadata = activation.get("capsule")
+    direct_base_keys = {"id", "reason", "source"}
     if not isinstance(raw_direct, list) or any(
         not isinstance(item, dict)
+        or frozenset(item) not in {
+            frozenset(direct_base_keys),
+            frozenset({*direct_base_keys, "automated_enforcement"}),
+        }
         or not isinstance(item.get("id"), str)
         or not isinstance(item.get("reason"), str)
         or not item["reason"].strip()
@@ -1838,11 +2091,35 @@ def _context_for_activation(root: Path, activation: dict[str, object]) -> str:
         for item in raw_direct
     ):
         raise RouterError("ROUTER_ACTIVATION_INVALID.direct_requirements")
+    resolved_base_keys = {
+        "id",
+        "spec_id",
+        "source",
+        "context_dependencies",
+        "block",
+        "verification",
+    }
     if not isinstance(raw_resolved, list) or any(
-        not isinstance(item, dict) or not isinstance(item.get("id"), str)
+        not isinstance(item, dict)
+        or frozenset(item) not in {
+            frozenset(resolved_base_keys),
+            frozenset(
+                {*resolved_base_keys, "automated_enforcement"}
+            ),
+        }
+        or not isinstance(item.get("id"), str)
         for item in raw_resolved
     ):
         raise RouterError("ROUTER_ACTIVATION_INVALID.resolved_requirements")
+    enforcement_flags = {
+        "automated_enforcement" in item
+        for item in (*raw_direct, *raw_resolved)
+    }
+    if len(enforcement_flags) > 1:
+        raise RouterError(
+            "ROUTER_ACTIVATION_INVALID: mixed enforcement receipt shapes"
+        )
+    include_enforcement = enforcement_flags != {False}
     if not isinstance(raw_edges, list) or any(
         not isinstance(item, dict)
         or not isinstance(item.get("from"), str)
@@ -1891,7 +2168,29 @@ def _context_for_activation(root: Path, activation: dict[str, object]) -> str:
         state.requirement_index,
         direct_ids,
     )
-    expected_resolved = _resolved_payload(resolved, direct_ids)
+    direct_records = tuple(
+        state.requirement_index.by_requirement[requirement_id]
+        for requirement_id in direct_ids
+    )
+    direct_reasons = {
+        str(item["id"]): str(item["reason"])
+        for item in raw_direct
+    }
+    expected_direct = _direct_payload(
+        direct_records,
+        direct_reasons,
+        include_enforcement=include_enforcement,
+    )
+    if raw_direct != expected_direct:
+        raise RouterError(
+            "ROUTER_ACTIVATION_REQUIREMENT_DRIFT: direct source metadata "
+            "changed"
+        )
+    expected_resolved = _resolved_payload(
+        resolved,
+        direct_ids,
+        include_enforcement=include_enforcement,
+    )
     if raw_resolved != expected_resolved:
         raise RouterError(
             "ROUTER_ACTIVATION_REQUIREMENT_DRIFT: resolved source metadata "
@@ -2136,6 +2435,15 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--session-id", required=True)
     status.add_argument("--turn-id", required=True)
     status.set_defaults(handler=command_status)
+
+    evidence = commands.add_parser(
+        "evidence",
+        help="Export verified Requirement activation evidence without source text",
+    )
+    evidence.add_argument("--adapter-id", required=True)
+    evidence.add_argument("--session-id", required=True)
+    evidence.add_argument("--turn-id", required=True)
+    evidence.set_defaults(handler=command_evidence)
 
     rehydrate = commands.add_parser(
         "rehydrate",
