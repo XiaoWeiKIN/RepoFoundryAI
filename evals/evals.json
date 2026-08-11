@@ -188,6 +188,26 @@
           "description": "激活失败恢复旧状态，非托管宿主路径先备份，旧版本 release 保留"
         }
       ]
+    },
+    {
+      "id": 9,
+      "prompt": "只解释 pkg/api/handler/spans/handler.go 里为什么要把 cmd 转成 SpansAggregateRequest；不要修改代码，也不是正式 code review。",
+      "expected_output": "把它作为轻量只读代码分析：只检查必要的调用链、类型定义、测试和相关 ADR 后直接解释。不得运行 Harness validation、不得启动 Engineering Spec receipt、不得创建 Research/ADR/ExecPlan/Task，也不得仅因此要求五字段证据交接。如果分析过程中发现潜在缺陷，也先报告事实，只有用户把范围升级为正式评审、诊断或修改时才进入相应 Harness 层级。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "keeps_read_only_explanation_lightweight",
+          "description": "普通代码解释和调用链追踪不自动启动完整 Harness"
+        },
+        {
+          "name": "avoids_governed_artifact_overhead",
+          "description": "只读解释不创建 Research、ADR、ExecPlan、Task 或 Spec activation receipt"
+        },
+        {
+          "name": "escalates_only_on_scope_change",
+          "description": "只有正式评审、诊断、Spec 合规判断或代码修改才升级到对应治理层级"
+        }
+      ]
     }
   ]
 }

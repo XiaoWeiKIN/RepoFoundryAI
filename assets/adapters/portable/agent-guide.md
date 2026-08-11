@@ -3,6 +3,17 @@
 This repository uses RepoFoundry's product-neutral engineering Harness. Read
 `ARCHITECTURE.md` and `docs/index.md` before changing established boundaries.
 
+## Activation depth
+
+Ordinary read-only code explanation, navigation, call-chain tracing, and
+existing-behavior summaries do not start the full Harness workflow. Read only
+the necessary code and repository documents; do not run Harness validation,
+activate Specifications, create governed artifacts, or require an evidence
+handoff solely for that analysis. Use the workflow below for implementation,
+formal code review, explicit Spec conformance, or repository mutation. A formal
+defect, security, or reliability diagnosis may consult repository contracts,
+but it escalates only when its requested scope requires review or change.
+
 ## Engineering Specifications
 
 Before implementation or code review, create a stable local session and turn

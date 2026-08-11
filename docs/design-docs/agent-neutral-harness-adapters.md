@@ -10,7 +10,7 @@ adr_refs: ["ADR-011", "ADR-012"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-04
-updated: 2026-08-10
+updated: 2026-08-11
 ---
 
 # Agent-neutral Harness and Engineering Spec Adapters
@@ -175,25 +175,25 @@ strict, ordered, and forward-failing:
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.4.0"
+    "version": "0.4.1"
   },
   "core": {
-    "version": "1.3.0"
+    "version": "1.3.1"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.3.0",
+      "version": "2.3.1",
       "enforcement": "native"
     },
     {
       "id": "claude",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "enforcement": "cli"
     },
     {
       "id": "portable",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "enforcement": "cli"
     }
   ],
@@ -238,7 +238,7 @@ foundryctl adapter list
 foundryctl validate --harness
 foundryctl validate --adapter codex
 foundryctl validate --adapter claude
-foundryctl upgrade --to 0.4.0
+foundryctl upgrade --to 0.4.1
 ```
 
 Bootstrap remains preview-first and preflights the complete Core plus adapter
@@ -253,11 +253,26 @@ For one compatibility release:
 - omitting both flags retains the `codex` default and emits a structured
   deprecation warning;
 - manifests continue to read schemas `1` and `2` but only an explicit
-  `upgrade --to 0.4.0 --apply` writes schema `3`;
+  `upgrade --to 0.4.1 --apply` writes schema `3`;
 - `validate` reports an available migration without silently changing state.
 
 The compatibility alias is removed only by a later explicit release and
 migration decision.
+
+## Activation depth is a Core decision
+
+All adapters preserve the same task-depth boundary. Ordinary read-only code
+explanation, navigation, call-chain tracing, and existing-behavior summaries
+read only the necessary code and repository documents. They do not start full
+Harness validation, create a Spec activation receipt, create governed
+artifacts, or require the five-label evidence handoff solely because repository
+code was inspected.
+
+Formal code review, explicit Spec-conformance evaluation, defect, security, or
+reliability diagnosis, and repository mutation enter the applicable governed
+layer. A read-only answer escalates only when the requested scope changes. The
+Core owns this classification; Codex and Claude Skill metadata narrow automatic
+discovery, while the Portable guide states the same rule explicitly.
 
 ## Engineering Specification activation protocol
 
@@ -394,10 +409,12 @@ thin root Skill. Core `1.1.0` and Codex `2.1.0` add those Skills. Core `1.2.0`,
 Codex `2.2.0`, Claude `1.1.0`, and Portable `1.1.0` add
 Requirement-level routing instructions and protocol-v2 engine behavior. Core
 `1.2.1` additionally requires Agents to surface unresolved Catalog selection
-decisions and wait for the maintainer's explicit choice before apply. The
-current Core `1.3.0`, Codex `2.3.0`, Claude `1.2.0`, and Portable `1.2.0` add
+decisions and wait for the maintainer's explicit choice before apply. Core
+`1.3.0`, Codex `2.3.0`, Claude `1.2.0`, and Portable `1.2.0` add
 Automated enforcement metadata propagation plus Advisory-only activation
-evidence export without changing activation protocol v2. A
+evidence export without changing activation protocol v2. The current Core
+`1.3.1`, Codex `2.3.1`, Claude `1.2.1`, and Portable `1.2.1` add the shared
+activation-depth boundary without changing protocol v2. A
 previewed upgrade, or a bootstrap that adds an adapter, creates or replaces
 generated paths only when they are absent or still have provable template
 provenance and records the component migrations. Unknown or customized target

@@ -251,7 +251,7 @@ class FoundryctlTestCase(unittest.TestCase):
             by_id["portable"]["capabilities"]["mutation_gate"],
             "cli",
         )
-        self.assertEqual(by_id["claude"]["version"], "1.2.0")
+        self.assertEqual(by_id["claude"]["version"], "1.2.1")
         self.assertEqual(by_id["claude"]["enforcement"], "cli")
         self.assertEqual(by_id["claude"]["capabilities"]["skills"], "native")
         self.assertEqual(
@@ -329,13 +329,13 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertEqual(
             manifest["adapters"],
-            [{"id": "claude", "version": "1.2.0", "enforcement": "cli"}],
+            [{"id": "claude", "version": "1.2.1", "enforcement": "cli"}],
         )
         self.assertEqual(
             manifest["instruction_files"],
             foundryctl.instruction_files_for_versions(
-                "1.3.0",
-                (("claude", "1.2.0"),),
+                "1.3.1",
+                (("claude", "1.2.1"),),
             ),
         )
         self.run_cli("validate", "--adapter", "claude")
@@ -563,21 +563,21 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 3)
         self.assertEqual(
             manifest["producer"],
-            {"name": "repo-foundry", "version": "0.4.0"},
+            {"name": "repo-foundry", "version": "0.4.1"},
         )
         self.assertEqual(
             manifest["core"],
-            {"version": "1.3.0"},
+            {"version": "1.3.1"},
         )
         self.assertEqual(
             manifest["adapters"],
-            [{"id": "codex", "version": "2.3.0", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.3.1", "enforcement": "native"}],
         )
         self.assertEqual(
             manifest["instruction_files"],
             foundryctl.instruction_files_for_versions(
-                "1.3.0",
-                (("codex", "2.3.0"),),
+                "1.3.1",
+                (("codex", "2.3.1"),),
             ),
         )
         self.assertEqual(
@@ -683,7 +683,7 @@ class FoundryctlTestCase(unittest.TestCase):
     def test_cli_reports_the_distribution_version(self) -> None:
         result = self.run_cli("--version")
 
-        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.4.0")
+        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.4.1")
 
     def test_legacy_schema_upgrade_is_preview_first_and_idempotent(
         self,
@@ -710,7 +710,7 @@ class FoundryctlTestCase(unittest.TestCase):
         validation = self.run_cli("validate", "--harness")
         self.assertIn("HARNESS_SCHEMA_UPGRADE_AVAILABLE", validation.stderr)
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.4.0").stdout
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
         )
 
         self.assertEqual(preview["mode"], "dry-run")
@@ -730,7 +730,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -744,7 +744,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(migrated["schema_version"], 3)
         self.assertEqual(
             migrated["adapters"],
-            [{"id": "codex", "version": "2.3.0", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.3.1", "enforcement": "native"}],
         )
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
@@ -761,7 +761,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -791,7 +791,7 @@ class FoundryctlTestCase(unittest.TestCase):
             (self.repo / relative).unlink()
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.4.0").stdout
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
         )
         self.assertEqual(
             {
@@ -811,7 +811,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -835,7 +835,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertIn("HARNESS_CORE_UPGRADE_AVAILABLE", validation.stderr)
         self.assertIn("HARNESS_ADAPTER_UPGRADE_AVAILABLE", validation.stderr)
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.4.0").stdout
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
         )
         self.assertEqual(
             {
@@ -854,7 +854,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -866,13 +866,13 @@ class FoundryctlTestCase(unittest.TestCase):
             },
         )
         migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(migrated["core"]["version"], "1.3.0")
-        self.assertEqual(migrated["adapters"][0]["version"], "2.3.0")
+        self.assertEqual(migrated["core"]["version"], "1.3.1")
+        self.assertEqual(migrated["adapters"][0]["version"], "2.3.1")
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
             [
-                "core-1.0.0-to-1.3.0",
-                "adapter-codex-2.0.0-to-2.3.0",
+                "core-1.0.0-to-1.3.1",
+                "adapter-codex-2.0.0-to-2.3.1",
             ],
         )
         self.run_cli("validate", "--harness")
@@ -905,8 +905,8 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(
             [item["id"] for item in manifest["applied_migrations"]],
             [
-                "core-1.0.0-to-1.3.0",
-                "adapter-codex-2.0.0-to-2.3.0",
+                "core-1.0.0-to-1.3.1",
+                "adapter-codex-2.0.0-to-2.3.1",
             ],
         )
         self.run_cli("validate", "--harness")
@@ -931,7 +931,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -984,11 +984,11 @@ class FoundryctlTestCase(unittest.TestCase):
         }
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.4.0").stdout
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
         )
 
         self.assertEqual(preview["from"]["distribution"], "0.3.0")
-        self.assertEqual(preview["to"]["distribution"], "0.4.0")
+        self.assertEqual(preview["to"]["distribution"], "0.4.1")
         self.assertEqual(
             [
                 item["action"]
@@ -1010,7 +1010,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -1020,10 +1020,10 @@ class FoundryctlTestCase(unittest.TestCase):
             applied["updated"],
             [foundryctl.HARNESS_MANIFEST],
         )
-        self.assertEqual(migrated["producer"]["version"], "0.4.0")
+        self.assertEqual(migrated["producer"]["version"], "0.4.1")
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
-            ["distribution-0.3.0-to-0.4.0"],
+            ["distribution-0.3.0-to-0.4.1"],
         )
         self.assertEqual(
             {
@@ -1034,6 +1034,114 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.run_cli("validate", "--harness")
         self.run_cli("spec", "validate")
+
+    def test_041_upgrade_installs_lightweight_analysis_routing(self) -> None:
+        self.run_cli("bootstrap", "--all-adapters", "--apply")
+        manifest_path = self.repo / foundryctl.HARNESS_MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["producer"]["version"] = "0.4.0"
+        manifest["core"]["version"] = "1.3.0"
+        old_adapter_versions = {
+            "codex": "2.3.0",
+            "claude": "1.2.0",
+            "portable": "1.2.0",
+        }
+        for adapter in manifest["adapters"]:
+            adapter["version"] = old_adapter_versions[adapter["id"]]
+
+        target_assets = {
+            foundryctl.CORE_PROJECT_SKILL_PATH: (
+                "core/repo-foundry-ai/SKILL.md",
+                "1.3.0",
+                "---\nname: repo-foundry-ai\ndescription: Old Core Skill.\n---\n",
+            ),
+            foundryctl.CODEX_PROJECT_SKILL_PATH: (
+                "adapters/codex/repo-foundry-ai/SKILL.md",
+                "2.3.0",
+                "---\nname: repo-foundry-ai\ndescription: Old Codex Skill.\n---\n",
+            ),
+            foundryctl.CLAUDE_PROJECT_SKILL_PATH: (
+                "adapters/claude/repo-foundry-ai/SKILL.md",
+                "1.2.0",
+                "---\nname: repo-foundry-ai\ndescription: Old Claude Skill.\n---\n",
+            ),
+            "docs/agent-guides/README.md": (
+                "adapters/portable/agent-guide.md",
+                "1.2.0",
+                "# Old Portable Guide\n",
+            ),
+        }
+        for relative, (_, _, old_text) in target_assets.items():
+            (self.repo / relative).write_text(old_text, encoding="utf-8")
+        for record in manifest["files"]:
+            if record["owner_kind"] == "core":
+                record["template_version"] = "1.3.0"
+            else:
+                record["template_version"] = old_adapter_versions[
+                    record["owner_id"]
+                ]
+            target = target_assets.get(record["path"])
+            if target is None:
+                continue
+            _, old_version, old_text = target
+            digest = foundryctl.sha256_text(old_text)
+            self.assertEqual(record["template_version"], old_version)
+            record["template_sha256"] = digest
+            record["installed_sha256"] = digest
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        preview = json.loads(
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
+        )
+        self.assertEqual(
+            {
+                item["path"]
+                for item in preview["actions"]
+                if item["action"] == "replace_file"
+            },
+            set(target_assets),
+        )
+        for relative, (_, _, old_text) in target_assets.items():
+            self.assertEqual(
+                (self.repo / relative).read_text(encoding="utf-8"),
+                old_text,
+            )
+
+        applied = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                "0.4.1",
+                "--apply",
+            ).stdout
+        )
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for relative, (asset, _, _) in target_assets.items():
+            self.assertIn(relative, applied["updated"])
+            self.assertEqual(
+                (self.repo / relative).read_text(encoding="utf-8"),
+                foundryctl.asset_text(asset),
+            )
+        self.assertEqual(migrated["producer"]["version"], "0.4.1")
+        self.assertEqual(migrated["core"]["version"], "1.3.1")
+        self.assertEqual(
+            [adapter["version"] for adapter in migrated["adapters"]],
+            ["2.3.1", "1.2.1", "1.2.1"],
+        )
+        self.assertEqual(
+            [item["id"] for item in migrated["applied_migrations"]],
+            [
+                "core-1.3.0-to-1.3.1",
+                "adapter-codex-2.3.0-to-2.3.1",
+                "adapter-claude-1.2.0-to-1.2.1",
+                "adapter-portable-1.2.0-to-1.2.1",
+                "distribution-0.4.0-to-0.4.1",
+            ],
+        )
+        self.run_cli("validate", "--harness")
 
     def test_030_core_upgrade_installs_the_selection_decision_gate(
         self,
@@ -1080,7 +1188,7 @@ class FoundryctlTestCase(unittest.TestCase):
         }
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.4.0").stdout
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
         )
         self.assertIn(
             foundryctl.CORE_PROJECT_SKILL_PATH,
@@ -1096,7 +1204,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -1107,13 +1215,13 @@ class FoundryctlTestCase(unittest.TestCase):
             skill_path.read_text(encoding="utf-8"),
             foundryctl.asset_text("core/repo-foundry-ai/SKILL.md"),
         )
-        self.assertEqual(migrated["producer"]["version"], "0.4.0")
-        self.assertEqual(migrated["core"]["version"], "1.3.0")
+        self.assertEqual(migrated["producer"]["version"], "0.4.1")
+        self.assertEqual(migrated["core"]["version"], "1.3.1")
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
             [
-                "core-1.2.0-to-1.3.0",
-                "distribution-0.3.0-to-0.4.0",
+                "core-1.2.0-to-1.3.1",
+                "distribution-0.3.0-to-0.4.1",
             ],
         )
         self.assertEqual(
@@ -1150,7 +1258,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -1192,7 +1300,7 @@ class FoundryctlTestCase(unittest.TestCase):
         )
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.4.0").stdout
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
         )
         self.assertIn(
             "ARCHITECTURE.md",
@@ -1205,7 +1313,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.4.0",
+                "0.4.1",
                 "--apply",
             ).stdout
         )
@@ -1261,7 +1369,7 @@ class FoundryctlTestCase(unittest.TestCase):
         before_file = adapter.read_bytes()
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.4.0").stdout
+            self.run_cli("upgrade", "--to", "0.4.1").stdout
         )
         self.assertIn(
             ".agents/skills/engineering-specs/scripts/spec_router.py",
@@ -1273,7 +1381,7 @@ class FoundryctlTestCase(unittest.TestCase):
         failed = self.run_cli(
             "upgrade",
             "--to",
-            "0.4.0",
+            "0.4.1",
             "--apply",
             expected=2,
         )
@@ -1297,7 +1405,7 @@ class FoundryctlTestCase(unittest.TestCase):
         schema_result = self.run_cli(
             "upgrade",
             "--to",
-            "0.4.0",
+            "0.4.1",
             expected=2,
         )
         self.assertIn("HARNESS_SCHEMA_TOO_NEW", schema_result.stderr)
@@ -1311,7 +1419,7 @@ class FoundryctlTestCase(unittest.TestCase):
         product_result = self.run_cli(
             "upgrade",
             "--to",
-            "0.4.0",
+            "0.4.1",
             expected=2,
         )
         self.assertIn("HARNESS_PRODUCER_TOO_NEW", product_result.stderr)
@@ -1408,7 +1516,7 @@ class FoundryctlTestCase(unittest.TestCase):
         result = self.run_cli(
             "upgrade",
             "--to",
-            "0.4.0",
+            "0.4.1",
             "--apply",
             expected=2,
         )
