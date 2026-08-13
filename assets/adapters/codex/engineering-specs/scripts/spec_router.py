@@ -118,6 +118,7 @@ def _is_router_command(command: str) -> bool:
         and tokens[2] in {
             "begin",
             "candidates",
+            "classify",
             "activate",
             "status",
             "audit",
@@ -315,7 +316,13 @@ def command_hook() -> int:
 def _delegate_to_core(arguments: list[str]) -> int:
     root = _repository_root(".")
     core = _load_core(root)
-    commands_requiring_identity = {"begin", "activate", "status", "audit"}
+    commands_requiring_identity = {
+        "begin",
+        "classify",
+        "activate",
+        "status",
+        "audit",
+    }
     command_index = next(
         (
             index

@@ -18,9 +18,9 @@ flowchart LR
   验证，不手抄哈希、字节数和派生状态。
 - 当前规范：架构边界、公开契约和用户行为。把重要约束编码为测试、lint、
   schema check 或可观察验收。
-- 历史制品：concluded Research、accepted/rejected ADR、Checkpoint 和
-  completed EP。封存而不是追随 HEAD 重写；新方向通过 superseding ADR 和新
-  ExecPlan 表达。
+- 历史制品：concluded Research、decided ADR、Checkpoint 和 completed EP。决定
+  payload 封存而不是追随 HEAD 重写；当前 effect 可由明确授权 preview/apply 为
+  under_review、retired 或 superseded，并通过新 ADR/ExecPlan 表达后续方向。
 
 当前 governed artifacts 还必须携带 Artifact Metadata Contract 的 stable ID、
 type、title/status、author/owner 和 created/updated。Raw/binary evidence 由 manifest
@@ -53,6 +53,11 @@ accepted ADR 的 `Confirmation` 必须列出持续确认方式。优先级依次
 “修改代码就必须修改文档”不是可靠规则，会诱导无意义改动。应检查具体不变量，
 并在架构敏感目录上配置 Code Owner。
 
+ADR effect change 不等于实现 rollback。`transition-adr` / `supersede-adr` 只更新
+ADR lifecycle 和派生索引；impact preview 列出 affected constraints、ADRs 和 active
+EPs。受影响 active EP 进入 `architecture_review_required`，在架构输入被修订或
+reaffirm 前不能 completed 归档。
+
 ## Revision 与完成证明
 
 Checkpoint 使用 `--revision` 记录它封存的 repository/workspace 版本。可以是
@@ -72,6 +77,13 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
 `archive_sha256` 封存归档后的 frontmatter（包括 metadata）和正文，防止
 attribution、revision/evidence 被
 事后改写。CI 应在包含归档变更的最终 revision 上再次运行 canonical check。
+
+completed/cancelled EP 中的 `adr_evidence` 同样属于 sealed 历史。当前 ADR payload
+与归档记录不同时，不得改 EP 或重算 archive seal。使用 preview-first 的
+`register-adr-revision` 把可验证旧 ADR 文档登记到
+`docs/.epctl/adr-revisions/ADR-NNN/sha256-<payload>.md`。Git blob 可以作为显式导入
+来源，但 registry 文件必须进入仓库；这样 clone、源码包和无 Git snapshot 都能
+执行同一个离线 canonical check。
 
 ## 平台适配
 

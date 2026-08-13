@@ -136,8 +136,9 @@ accepted 后，任何命中 ADR-004#C-002 的 active EP 都必须同时引用 am
 Compliance 的计划。
 ```
 
-引用 ADR-004 的 active ExecPlan 随后必须更新；superseded ADR 不能继续作为 active
-Architecture Compliance input。completed/cancelled EP 保留原 ADR digest，不改写历史。
+引用 ADR-004 的 active ExecPlan 随后显示 `architecture_review_required` 且不能
+completed 归档，直到完成输入与路线更新；superseded ADR 不能作为新 Architecture
+Compliance input。completed/cancelled EP 保留原 ADR digest，不改写历史。
 
 ## 普通修复不自动建记录
 

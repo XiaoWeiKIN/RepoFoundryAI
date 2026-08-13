@@ -5,6 +5,13 @@
   "documents": [
     {
       "base": "package",
+      "bytes": 988,
+      "path": "notes/README.md",
+      "role": "entrypoint",
+      "sha256": "587f78f15dddf6a3e9b66e8dac500744aa534557499b28559d37831baea993e2"
+    },
+    {
+      "base": "package",
       "bytes": 20523,
       "path": "notes/commercial-and-delivery-feasibility.md",
       "role": "topic",
@@ -19,7 +26,12 @@
       "sha256": "f9f97b0070ff34e9e0a76fc8b70af6984257f5077eb798a6d5463b627856cc93"
     }
   ],
-  "entrypoints": [],
+  "entrypoints": [
+    {
+      "base": "package",
+      "path": "notes/README.md"
+    }
+  ],
   "id": "R-002-MANIFEST",
   "metadata_schema": "1",
   "mode": "managed",

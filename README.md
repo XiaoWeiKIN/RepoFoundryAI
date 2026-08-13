@@ -63,6 +63,24 @@ the equivalent provenance in a content-addressed Manifest; source code and
 generated indexes continue to use Git, CODEOWNERS, and generator provenance.
 See the [Artifact Metadata Contract](./docs/design-docs/artifact-metadata-contract.md).
 
+## Governance escalates with risk
+
+Fresh Harnesses default to the `adaptive` profile. Existing Harnesses without a
+profile remain `strict` until an explicit preview/apply migration. Adaptive work
+uses three monotonic modes:
+
+```mermaid
+flowchart LR
+    E["Explore<br/>bounded reversible work"] -->|"production change"| B["Build<br/>concise contract + applicable Specs"]
+    B -->|"hard-risk trigger"| G["Governed<br/>full evidence + authority chain"]
+```
+
+Explore needs no persistent artifact or Spec receipt. Build keeps only intent,
+paths, acceptance, and compatibility. Public contracts, security, data,
+irreversible operations, reliability claims, releases, and durable decisions
+promote to Governed. Human authority, destructive/external actions, security,
+data integrity, and evidence integrity remain hard boundaries in every mode.
+
 ## Evidence moves forward without losing authority
 
 ```mermaid
@@ -298,11 +316,13 @@ repofoundry --repo . adapter list
 repofoundry --repo . bootstrap --adapter portable
 repofoundry --repo . bootstrap --adapter claude --apply
 repofoundry --repo . \
-  bootstrap --all-adapters --spec languages/go --apply
+  bootstrap --all-adapters --governance-profile adaptive \
+  --spec languages/go --apply
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
 repofoundry --repo . upgrade --to 0.2.0
+repofoundry --repo . upgrade --to 0.2.0 --governance-profile adaptive
 repofoundry --repo . upgrade --to 0.2.0 --apply
 
 repofoundry --repo . spec plan
@@ -312,18 +332,35 @@ repofoundry --repo . \
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
+python3 "$RESEARCHCTL" --repo . sync-research R-001
 python3 "$RESEARCHCTL" --repo . validate
 python3 "$EPCTL" --repo . validate
 python3 "$EPCTL" --repo . status
+python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
+  --from-file evidence/adr-018-historical.md
+python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
+  --from-file evidence/adr-018-historical.md --apply
 ```
+
+New and synchronized current Research packages expose `notes/README.md` as the
+manifest entrypoint for navigating large note corpora. Generated inventories are
+maintained deterministically; hand-curated reading maps are preserved.
+
+The last two commands recover a historical ADR payload referenced by a sealed
+completed or cancelled ExecPlan. Preview is the default. Apply stores the valid
+strict ADR document at a digest-addressed path under
+`docs/.epctl/adr-revisions/`; normal validation is offline and Git-independent.
+When the only recoverable source is a local Git blob, replace `--from-file`
+with `--from-git-blob <full-object-id>`. Active ExecPlans never use this
+fallback and must continue to match the current accepted ADR.
 
 Bootstrap, Harness upgrades, and Spec writes are preview-first. Bootstrap
 creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.2.0` uses Harness schema `3`, Harness Core `1.1.0`, Codex
-adapter `2.1.0`, Claude adapter `1.0.0`, Portable adapter `1.0.0`, and
+RepoFoundry `0.2.0` uses Harness schema `3`, Harness Core `1.2.0`, Codex
+adapter `2.2.0`, Claude adapter `1.1.0`, Portable adapter `1.1.0`, and
 activation protocol `1`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit

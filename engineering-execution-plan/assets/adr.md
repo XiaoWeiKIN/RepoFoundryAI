@@ -1,5 +1,5 @@
 ---
-schema_version: "1.3"
+schema_version: "1.4"
 metadata_schema: "1"
 artifact_type: adr
 id: {{ID}}
@@ -14,6 +14,10 @@ supersedes: []
 superseded_by:
 decision_maker:
 decided:
+decision_outcome:
+effect_changed_by:
+effect_changed:
+effect_reason:
 payload_sha256:
 created: {{DATE}}
 updated: {{DATE}}

@@ -24,6 +24,12 @@ flowchart LR
 Research 是“身份与生命周期 + 文档集合 + Synthesis”，不是某个固定文件名。
 控制包中的 `RESEARCH.md` 只维护目的、问题、当前路线、发现索引和下一步。
 
+风险自适应路由中，Explore 可以在线程内调查和做一次性实验，Build 可以补齐有界
+实现事实；两者不因任务复杂度自动创建 Research。只有进入 Governed 且存在会改变
+长期路线、公共边界、安全、数据、可靠性或不可逆操作的未知，或用户明确要求持久
+Research 时，才使用本 Skill。所有模式都保留真实来源与不确定性，不得用轻模式绕过
+已确认的硬边界。
+
 ## 判断边界
 
 以下情况使用一个 Research ID 和多篇文档：
@@ -54,13 +60,17 @@ docs/research/
 │   ├── RESEARCH_MANIFEST.json
 │   ├── SYNTHESIS.md
 │   ├── rounds/
-│   ├── notes/              # 结构化专题与其他 managed 分析
+│   ├── notes/
+│   │   └── README.md       # 必需的阅读入口；导航专题与其他 managed 分析
 │   ├── snapshots/
 │   └── artifacts/
 └── completed/
 ```
 
 - **managed corpus**：研究文档位于控制包内，通常写入 `notes/`。
+- **notes 导航**：当前 schema 的 active package 必须把 `notes/README.md` 登记为
+  manifest entrypoint。它只组织阅读路线；当前结论与下游交接仍以
+  `SYNTHESIS.md` 为准。
 - **linked corpus**：研究文档已存在于仓库其他位置；active 阶段只登记，不移动。
 - linked Research concluded 时，把声明的文档复制到
   `artifacts/research-snapshot/`，再封存 manifest 和 Synthesis。
@@ -116,6 +126,9 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
 
 `new-research` 可以重复提供 `--corpus-root`、`--entrypoint` 和 `--include`。
 绝对输入路径只有在解析后仍位于目标仓库内才接受；manifest 永远保存仓库相对路径。
+新建 Research 会生成 `notes/README.md`。`sync-research` 会为旧的 active
+schema 1 或 1.1 package 补齐缺失入口，并只更新带完整 `RCTL:NOTES` marker 的自动目录；
+没有 marker 的人工导航保持原字节不变，未链接文档仅报告 warning。
 
 ## 工作流程
 
@@ -135,7 +148,8 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
    每个关键主张保留可定位来源或可复现实验，并区分 Observation 与
    Interpretation。可复用或需要审计的实验使用 `engineering-benchmark`，在
    Research 中记录 `BR-NNN` 与 Manifest payload SHA-256。
-5. 每次新增、删除、移动研究文档后运行 `sync-research`。
+5. 每次新增、删除、移动研究文档后更新 `notes/README.md` 的阅读路线并运行
+   `sync-research`。工具生成的 README 会自动维护目录；人工 README 由作者维护。
 6. 修复 manifest drift、缺失本地引用和不可解释的冲突；绝对来源路径至少记录
    可移植替代或 provenance。
 7. 在 `SYNTHESIS.md` 直接回答研究目的，比较选项，保留负面证据、置信边界、
@@ -173,6 +187,8 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 ## 有界性与变更
 
 - 根控制页只服务当前接手，不复制全部专题内容。
+- `notes/README.md` 是 corpus 的阅读地图，不是第二份根控制页或 Synthesis；文档
+  变多时按问题、证据类型或阅读目标组织路线，而不把正文复制进索引。
 - 专题文档服务学习、决策和复核：Brief 负责导航，连续 Analysis 是正文，
   Evidence Index 是审计附录。不要用结论卡片取代推导过程；背景、方法和时间线
   仅在确实帮助理解时加入。
@@ -194,6 +210,7 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 
 - active Research 控制记录、Round 和 review-ready Synthesis revisions；
 - manifest 中 `role: topic` 的结构化专题文档；
+- active package 中作为 manifest entrypoint 的 `notes/README.md`；
 - concluded Research 控制记录；
 - sealed `RESEARCH_MANIFEST.json`；
 - sealed `SYNTHESIS.md`；

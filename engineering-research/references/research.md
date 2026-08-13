@@ -188,6 +188,18 @@ interface contracts. Keep an existing `index.md` when it already provides a
 useful reading route. Do not rename or flatten documents merely to satisfy a
 template.
 
+Every current active package has one package-local reading entrypoint at
+`notes/README.md`. It organizes routes by question, evidence type, lifecycle
+status, or reader goal; it does not duplicate note bodies. Keep the current
+recommendation in `SYNTHESIS.md` and the identity, questions, and rounds in
+`RESEARCH.md`.
+
+`new-research` creates a generated README whose `RCTL:NOTES` region lists every
+package-local note. `sync-research` refreshes only that region. Removing both
+markers transfers full ownership to the author: synchronization preserves the
+page byte-for-byte and reports unlinked notes as warnings. A partial, duplicate,
+or reversed marker pair is invalid because ownership would be ambiguous.
+
 For a new decision-relevant deep dive, prefer `new-topic` and follow
 `references/topic.md`. It creates an opt-in `doc_type: research-topic`
 document, allocates a stable Research-scoped `RT-NNN`, binds it to the current
@@ -203,9 +215,12 @@ Keep `RESEARCH.md` small:
 - concise findings and evidence routes;
 - contradictions, options, blockers, progress, and revision history.
 
-Use `sync-research` after membership changes. Resolve missing local references
-before review readiness. Absolute source paths are provenance warnings because
-other machines cannot reproduce them without an alternate source.
+Use `sync-research` after membership changes. It also explicitly migrates an
+active schema 1 or 1.1 package that predates the navigation rule by creating the
+missing README and registering it as a package entrypoint; it does not otherwise
+upgrade the manifest schema. Resolve missing local references before review
+readiness. Absolute source paths are provenance warnings because other machines
+cannot reproduce them without an alternate source.
 Structured topics may remain incomplete while evidence is building. Before
 review readiness, every schema 2.3 identity and semantic role, `A-NNN`
 analysis section, `E-NNN` evidence mapping, `S-NNN` source, and

@@ -1,0 +1,7 @@
+Command: python3 -B -m unittest tests.test_repository_contracts
+Result: PASS
+Observed: Ran 15 tests in 3.131s; OK.
+
+The contract suite covers mode terminology across Core, Codex, Claude, and
+Portable guidance; professional-Skill routing; product-neutral Core
+boundaries; generated line budgets; installation; and independent packaging.

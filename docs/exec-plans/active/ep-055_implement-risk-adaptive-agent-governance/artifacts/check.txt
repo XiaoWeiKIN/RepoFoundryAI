@@ -1,0 +1,11 @@
+Command: python3 -B scripts/check.py
+Result: PASS
+Observed: all integrity checks passed.
+
+The canonical run included 35 Engineering Research tests, 9 Engineering
+Benchmark tests, 50 Engineering Execution Plan tests, and 102 RepoFoundry,
+installer, repository-contract, Spec Manager, and Spec Router tests. Repository
+validation reported 0 errors. Its three warnings were archival-readiness
+notices for pre-existing EP-006/EP-057 and completed-but-unattested EP-055.
+Markdown links, generated projections, package metadata, portability, and Git
+whitespace checks passed.

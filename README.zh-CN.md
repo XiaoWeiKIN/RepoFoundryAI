@@ -58,6 +58,21 @@ created/updated。作者身份不等于 Research approval、ADR 决策权或 Ben
 生成索引继续使用 Git、CODEOWNERS 与 generator provenance。详见
 [Artifact Metadata Contract](./docs/design-docs/artifact-metadata-contract.md)。
 
+## 治理随风险升级，而不是预先限制每一步
+
+新 Harness 默认使用 `adaptive` profile；旧 Harness 未声明 profile 时继续按
+`strict` 运行，只有显式 preview/apply 才迁移。adaptive 使用三个单调升级的模式：
+
+```mermaid
+flowchart LR
+    E["Explore<br/>有界可逆探索"] -->|"生产修改"| B["Build<br/>精简契约 + 适用 Spec"]
+    B -->|"硬风险触发"| G["Governed<br/>完整证据与授权链"]
+```
+
+Explore 不要求持久制品或 Spec receipt；Build 只维护 intent、paths、acceptance 和
+compatibility；公共契约、安全、数据、不可逆操作、可靠性声明、发布或长期决定才进入
+Governed。人类授权、破坏性/外部写入、安全、数据与证据完整性在所有模式中始终是硬边界。
+
 ## 证据向前流动，授权边界保持清晰
 
 ```mermaid
@@ -271,11 +286,13 @@ repofoundry --repo . adapter list
 repofoundry --repo . bootstrap --adapter portable
 repofoundry --repo . bootstrap --adapter claude --apply
 repofoundry --repo . \
-  bootstrap --all-adapters --spec languages/go --apply
+  bootstrap --all-adapters --governance-profile adaptive \
+  --spec languages/go --apply
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
 repofoundry --repo . upgrade --to 0.2.0
+repofoundry --repo . upgrade --to 0.2.0 --governance-profile adaptive
 repofoundry --repo . upgrade --to 0.2.0 --apply
 
 repofoundry --repo . spec plan
@@ -285,17 +302,33 @@ repofoundry --repo . \
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
+python3 "$RESEARCHCTL" --repo . sync-research R-001
 python3 "$RESEARCHCTL" --repo . validate
 python3 "$EPCTL" --repo . validate
 python3 "$EPCTL" --repo . status
+python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
+  --from-file evidence/adr-018-historical.md
+python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
+  --from-file evidence/adr-018-historical.md --apply
 ```
+
+新建或同步后的当前 Research package 会把 `notes/README.md` 作为 manifest 阅读
+入口，解决专题文档增多后的导航问题。工具确定性维护自动目录，同时保留人工编排的
+阅读地图。
+
+最后两条命令用于恢复 sealed completed/cancelled ExecPlan 引用的历史 ADR payload。
+默认只预览；`--apply` 把有效 strict ADR 文档写入
+`docs/.epctl/adr-revisions/` 的 digest-addressed 路径，正常验证保持离线且不依赖
+Git。如果旧字节只存在于本地 Git blob，把 `--from-file` 换成
+`--from-git-blob <完整对象 ID>`。active ExecPlan 从不使用该回退，仍必须匹配当前
+accepted ADR。
 
 Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创建缺失路径，
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.2.0` 使用 Harness schema `3`、Harness Core `1.1.0`、Codex
-adapter `2.1.0`、Claude adapter `1.0.0`、Portable adapter `1.0.0` 与激活协议
+RepoFoundry `0.2.0` 使用 Harness schema `3`、Harness Core `1.2.0`、Codex
+adapter `2.2.0`、Claude adapter `1.1.0`、Portable adapter `1.1.0` 与激活协议
 `1`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
 可读，但只有显式执行 `upgrade --to 0.2.0 --apply` 才会迁移。较早的 schema `3`
 Core `1.0.0` 与 Codex `2.0.0` 契约也继续可读；显式 upgrade 或一次预览过的

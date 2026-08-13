@@ -142,7 +142,8 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --adapter codex --spec languages/go --apply
+  bootstrap --adapter codex --governance-profile adaptive \
+  --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec update --spec-version 1.2.0 --spec languages/go --apply
@@ -161,14 +162,30 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
 
+## 风险自适应治理
+
+schema 3 Harness 可记录 `governance.profile: adaptive|strict`。新仓库默认
+`adaptive`；缺少该字段的既有仓库按 `strict` 读取，只有显式 preview/apply
+`--governance-profile adaptive` 才迁移。strict 始终使用 Governed；adaptive 从
+Explore 开始，并只允许按 `Explore → Build → Governed` 单调升级：
+
+- Explore：有界、可逆的阅读、实验、本地编辑与测试，不要求持久制品或 Spec receipt。
+- Build：有界生产修改，维护简短 intent/path/acceptance/compatibility 契约并激活适用 Spec。
+- Governed：公共契约、安全、数据、不可逆操作、可靠性声明、发布或长期决定，按触发器使用 Research、ADR、ExecPlan 与 sealed Benchmark。
+
+所有模式都保持人类授权、破坏性/外部写入、安全、数据完整性、兼容性、locked/sealed
+证据与真实验证边界。不得用较低模式规避已确认边界，也不因“任务复杂”本身强制一张
+持久制品图。
+
 ## 激活任务规范
 
-Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。Codex 中实现或
-评审前调用 `$engineering-specs`；Claude 通过项目级 `$engineering-specs` Skill、
-Portable 通过 guide 运行同一引擎的 `begin/candidates/activate`：先列出计划路径的
-候选，再读取每个候选的 Applicability，记录本 Turn 的适用 ID 或带理由的 `none`。
-激活会自动加入 `requires` 闭包；Codex 的受信任 Hook 会在首次写入前注入摘要已
-验证的本地全文，Claude 与 Portable 则显式读取并执行 CLI 审计。
+Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。所有 adapter 先运行
+`begin` 取得 profile/mode；adaptive Explore 可直接进行有界可逆工作，跨越风险边界
+前用 `classify --mode build|governed --reason ...` 升级。Build/Governed 再执行
+`candidates/activate`：读取候选 Applicability，记录适用 ID 或带理由的 `none`。
+激活自动加入 `requires` 闭包；Codex Hook 在 Build/Governed 首次写入前注入已验证
+本地全文，Claude 与 Portable 显式读取并审计。Governed 保留既有五字段 handoff；
+Explore 使用普通结果、验证与剩余风险说明。
 
 Core 只识别 `session_start`、`subagent_start`、`before_mutation`、`stop` 四类标准化
 事件。Codex adapter 将 `UserPromptSubmit`、`SubagentStart`、`PreToolUse`、`Stop`

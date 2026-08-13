@@ -38,6 +38,10 @@ flowchart LR
 
 Benchmark 不全部进入 Research：
 
+Explore/Build 中普通测试、一次性 profiling 和不会被复用的本地测量不创建 Benchmark
+制品；当测量将支撑持久决策、容量/SLO 声明、回归门禁或跨会话复核时，任务升级到
+Governed 并使用本 Skill。模式变化不能用来事后降低已预声明的 Scenario 规则。
+
 | 目的 | 默认消费者 |
 |---|---|
 | 探索未知、比较路线、结果可能改变架构 | Engineering Research |

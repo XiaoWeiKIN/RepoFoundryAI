@@ -23,39 +23,43 @@ user-home installation path.
 
 ## Route engineering work
 
-- Use the repository's engineering research workflow when important facts,
-  alternatives, or feasibility remain uncertain.
-- Use sealed benchmark evidence when a decision depends on measured behavior.
-- Use the execution-plan workflow for multi-step implementation, keeping its
-  decisions, progress, validation evidence, and recovery notes current.
+- Read `governance.profile` from the Harness. Missing policy means strict
+  compatibility; strict stays Governed. Adaptive starts Explore.
+- Explore covers bounded reversible inspection, experiments, local edits, and
+  tests without persistent governance artifacts or a Spec receipt.
+- Promote to Build for bounded production work. Keep a concise intent, path,
+  acceptance, and compatibility contract; activate applicable Specs.
+- Promote to Governed for public contracts, security, data, irreversible
+  operations, reliability claims, release, or durable decisions. Use Research,
+  ADR, ExecPlan, and sealed Benchmark only when their trigger applies.
 - Use the case-study workflow only after implementation evidence exists.
-- Follow any applicable external Engineering Specifications locked under
-  `docs/.engineering/`.
+
+Authority, destructive or external actions, security, data integrity, locked
+content, sealed evidence, and honest verification remain hard in every mode.
 
 When those professional workflows are available as separate Skills, invoke
 them instead of reproducing their lifecycle rules here.
 
-## Activate Engineering Specifications
+## Classify and activate Engineering Specifications
 
 Before modifying a scoped path, use the canonical repository engine at
 `.repo-foundry/engineering-specs/spec_router.py`:
 
 1. Establish one stable adapter, session, and turn identity with `begin`.
-2. Inspect path-matched choices with `candidates --path <path>`.
-3. Record an explicit decision with `activate`, selecting the applicable Spec
-   IDs or `--none` with a reason.
-4. Keep the activated requirements in context while editing and reviewing.
-5. Run `audit` before completion so changed paths and the handoff are checked
-   against the recorded receipt.
+2. Continue bounded Explore work, or use `classify --mode build|governed
+   --reason <risk>` before crossing that boundary. Mode decreases are invalid.
+3. In Build or Governed, inspect candidates and record applicable IDs or
+   `--none` with a reason before mutation.
+4. Keep activated requirements in context and run `audit` before completion.
 
 If the engine is absent, report that project Spec activation is unavailable;
 do not silently claim that no Specification applies.
 
 ## Complete with evidence
 
-Run validation proportional to risk, including focused tests and the
-repository's canonical check when present. Report the result using these
-labels so the activation decision remains auditable:
+Run validation proportional to risk. Explore reports outcome, verification,
+and unresolved risk in normal prose. Build and Governed use these labels so an
+activation decision remains auditable:
 
 - `Activated specifications:`
 - `Activated requirements:`

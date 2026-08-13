@@ -17,8 +17,9 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
-ROUTER_VERSION = 2
+ROUTER_VERSION = 3
 PROTOCOL_VERSION = 1
+HARNESS_PATH = "docs/.engineering/harness.json"
 MANIFEST_PATH = "docs/.engineering/specs.json"
 LOCK_PATH = "docs/.engineering/specs.lock.json"
 INDEX_PATH = "docs/agent-guides/managed/index.md"
@@ -47,6 +48,12 @@ NORMALIZED_EVENTS = frozenset(
     {"session_start", "subagent_start", "before_mutation", "stop"}
 )
 TOOL_CATEGORIES = frozenset({"read", "file_write", "command_write"})
+GOVERNANCE_PROFILES = frozenset({"adaptive", "strict"})
+GOVERNANCE_MODES = ("explore", "build", "governed")
+GOVERNANCE_MODE_RANK = {
+    mode: index for index, mode in enumerate(GOVERNANCE_MODES)
+}
+GOVERNANCE_POLICY_SCHEMA = 1
 
 
 class RouterError(RuntimeError):
@@ -103,6 +110,73 @@ def _load_json(path: Path, label: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise RouterError(f"{label}: {path}: expected an object")
     return value
+
+
+def _governance_profile(root: Path) -> str:
+    harness = _load_json(root / HARNESS_PATH, "ROUTER_HARNESS_INVALID")
+    governance = harness.get("governance")
+    if governance is None:
+        return "strict"
+    if not isinstance(governance, dict) or set(governance) != {
+        "policy_schema",
+        "profile",
+    }:
+        raise RouterError("ROUTER_HARNESS_INVALID.governance")
+    if governance.get("policy_schema") != GOVERNANCE_POLICY_SCHEMA:
+        raise RouterError(
+            "ROUTER_GOVERNANCE_POLICY_UNSUPPORTED: expected policy_schema "
+            f"{GOVERNANCE_POLICY_SCHEMA}"
+        )
+    profile = governance.get("profile")
+    if profile not in GOVERNANCE_PROFILES:
+        raise RouterError(
+            f"ROUTER_GOVERNANCE_PROFILE_UNSUPPORTED: {profile!r}"
+        )
+    return str(profile)
+
+
+def _initial_governance(profile: str) -> tuple[str, list[dict[str, str]]]:
+    if profile == "strict":
+        return "governed", [
+            {
+                "mode": "governed",
+                "reason": "repository strict profile requires Governed mode",
+            }
+        ]
+    return "explore", [
+        {
+            "mode": "explore",
+            "reason": "repository adaptive profile starts in Explore mode",
+        }
+    ]
+
+
+def _governance(runtime: dict[str, object]) -> tuple[str, str, list[dict[str, str]]]:
+    profile = runtime.get("governance_profile")
+    mode = runtime.get("governance_mode")
+    reasons = runtime.get("governance_reasons")
+    if profile not in GOVERNANCE_PROFILES:
+        raise RouterError("ROUTER_RUNTIME_INVALID.governance_profile")
+    if mode not in GOVERNANCE_MODE_RANK:
+        raise RouterError("ROUTER_RUNTIME_INVALID.governance_mode")
+    if not isinstance(reasons, list) or not reasons:
+        raise RouterError("ROUTER_RUNTIME_INVALID.governance_reasons")
+    normalized: list[dict[str, str]] = []
+    for item in reasons:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"mode", "reason"}
+            or item.get("mode") not in GOVERNANCE_MODE_RANK
+            or not isinstance(item.get("reason"), str)
+            or not str(item["reason"]).strip()
+        ):
+            raise RouterError("ROUTER_RUNTIME_INVALID.governance_reasons entry")
+        normalized.append(
+            {"mode": str(item["mode"]), "reason": str(item["reason"])}
+        )
+    if profile == "strict" and mode != "governed":
+        raise RouterError("ROUTER_RUNTIME_INVALID.strict mode must be governed")
+    return str(profile), str(mode), normalized
 
 
 def _git(root: Path, *arguments: str, check: bool = True) -> str:
@@ -490,6 +564,10 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
     existing = _load_runtime(root, adapter_id, session_id, turn_id)
     if existing is not None:
         return existing
+    governance_profile = _governance_profile(root)
+    governance_mode, governance_reasons = _initial_governance(
+        governance_profile
+    )
     value: dict[str, object] = {
         "version": ROUTER_VERSION,
         "protocol_version": PROTOCOL_VERSION,
@@ -498,6 +576,9 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
         "turn_id": turn_id,
         "prompt_sha256": _sha256(str(payload.get("prompt", "")).encode("utf-8")),
         "baseline": _baseline(root),
+        "governance_profile": governance_profile,
+        "governance_mode": governance_mode,
+        "governance_reasons": governance_reasons,
         "activation": None,
         "context_injected": False,
     }
@@ -560,8 +641,74 @@ def command_begin(args: argparse.Namespace) -> int:
             "adapter_id": runtime["adapter_id"],
             "session_id": runtime["session_id"],
             "turn_id": runtime["turn_id"],
+            "governance_profile": runtime["governance_profile"],
+            "governance_mode": runtime["governance_mode"],
+            "governance_reasons": runtime["governance_reasons"],
             "initialized": True,
-            "next": "Run candidates, decide Applicability, then activate before any write.",
+            "next": (
+                "Explore bounded reversible work, or run classify to promote "
+                "before crossing a Build or Governed trigger. Build and "
+                "Governed require Spec activation before mutation."
+            ),
+        }
+    )
+    return 0
+
+
+def command_classify(args: argparse.Namespace) -> int:
+    root = repository_root(args.repo)
+    runtime = _load_runtime(
+        root,
+        args.adapter_id,
+        args.session_id,
+        args.turn_id,
+    )
+    if runtime is None:
+        raise RouterError(
+            "ROUTER_TURN_NOT_INITIALIZED: run begin before classification"
+        )
+    profile, current_mode, reasons = _governance(runtime)
+    target_mode = args.mode
+    if target_mode not in GOVERNANCE_MODE_RANK:
+        raise RouterError(
+            f"ROUTER_GOVERNANCE_MODE_UNSUPPORTED: {target_mode!r}"
+        )
+    reason = args.reason.strip() if isinstance(args.reason, str) else ""
+    if not reason:
+        raise RouterError("ROUTER_GOVERNANCE_REASON_REQUIRED")
+    if profile == "strict" and target_mode != "governed":
+        raise RouterError(
+            "ROUTER_GOVERNANCE_DOWNGRADE_DENIED: strict profile remains governed"
+        )
+    if GOVERNANCE_MODE_RANK[target_mode] < GOVERNANCE_MODE_RANK[current_mode]:
+        raise RouterError(
+            "ROUTER_GOVERNANCE_DOWNGRADE_DENIED: mode promotion is monotonic "
+            f"within a turn ({current_mode} -> {target_mode})"
+        )
+    receipt = {"mode": target_mode, "reason": reason}
+    if target_mode != current_mode or reasons[-1] != receipt:
+        reasons.append(receipt)
+    runtime["governance_mode"] = target_mode
+    runtime["governance_reasons"] = reasons
+    _atomic_json(
+        _state_path(root, args.adapter_id, args.session_id, args.turn_id),
+        runtime,
+    )
+    _json_output(
+        {
+            "adapter_id": args.adapter_id,
+            "session_id": args.session_id,
+            "turn_id": args.turn_id,
+            "governance_profile": profile,
+            "governance_mode": target_mode,
+            "governance_reasons": reasons,
+            "promoted": target_mode != current_mode,
+            "next": (
+                "Build and Governed modes require an activation decision "
+                "covering planned mutation paths."
+                if target_mode != "explore"
+                else "Continue bounded reversible Explore work."
+            ),
         }
     )
     return 0
@@ -673,6 +820,19 @@ def _audit(
     runtime: dict[str, object],
     message: str | None,
 ) -> dict[str, object]:
+    profile, mode, reasons = _governance(runtime)
+    if mode == "explore" and not isinstance(runtime.get("activation"), dict):
+        changed = _paths_changed_since(root, runtime.get("baseline"))
+        return {
+            "ok": True,
+            "governance_profile": profile,
+            "governance_mode": mode,
+            "governance_reasons": reasons,
+            "changed_paths": list(changed),
+            "uncovered_paths": [],
+            "missing_handoff_labels": [],
+            "errors": [],
+        }
     activation = _activation(runtime)
     changed = _paths_changed_since(root, runtime.get("baseline"))
     planned = tuple(str(item) for item in activation["planned_paths"])
@@ -687,6 +847,9 @@ def _audit(
         errors.append("ROUTER_HANDOFF_INCOMPLETE: " + ", ".join(missing_labels))
     return {
         "ok": not errors,
+        "governance_profile": profile,
+        "governance_mode": mode,
+        "governance_reasons": reasons,
         "changed_paths": list(changed),
         "uncovered_paths": list(uncovered),
         "missing_handoff_labels": list(missing_labels),
@@ -717,6 +880,9 @@ def command_audit(args: argparse.Namespace) -> int:
 def _router_command(adapter_id: str, session_id: str, turn_id: str) -> str:
     relative = ".repo-foundry/engineering-specs/spec_router.py"
     return (
+        f"python3 {relative} classify --adapter-id {adapter_id} "
+        f"--session-id {session_id} --turn-id {turn_id} "
+        "--mode <explore|build|governed> --reason <risk-reason>\n"
         f"python3 {relative} candidates --path <planned-path>\n"
         f"python3 {relative} activate --adapter-id {adapter_id} "
         f"--session-id {session_id} --turn-id {turn_id} "
@@ -730,16 +896,34 @@ def _route_context(root: Path, payload: dict[str, object]) -> str:
     adapter_id = str(runtime["adapter_id"])
     session_id = str(runtime["session_id"])
     turn_id = str(runtime["turn_id"])
+    profile, mode, reasons = _governance(runtime)
     index = _read_bytes(
         root / INDEX_PATH,
         "ROUTER_INDEX_INVALID",
         MAX_CONTEXT_BYTES,
     ).decode("utf-8", errors="strict")
+    if mode == "explore":
+        governance_context = (
+            "Adaptive Explore mode is active. Bounded reversible inspection, "
+            "experiments, local edits, and tests may proceed without a Spec "
+            "activation receipt. Promote to Build for bounded production work "
+            "and Governed for public contracts, security, data, irreversible "
+            "operations, reliability claims, release, or durable decisions. "
+            "Authority, destructive/external-action, security, data-integrity, "
+            "and evidence-integrity boundaries remain mandatory."
+        )
+    else:
+        governance_context = (
+            f"{mode.title()} mode is active. Record applicable Specs or a "
+            "justified no-Spec decision before mutation; Governed work also "
+            "retains its full evidence and authority gates."
+        )
     return (
-        "Engineering Specification routing is mandatory before implementation "
-        "or review. File scope creates candidates, but Applicability and task "
-        "intent decide activation. Record either applicable Spec IDs or an "
-        "explicit no-Spec reason before any write.\n\n"
+        governance_context
+        + " File scope creates candidates, while Applicability and task intent "
+        "decide activation.\n\n"
+        f"Governance profile: `{profile}`\nGovernance mode: `{mode}`\n"
+        f"Governance reasons: `{json.dumps(reasons, ensure_ascii=False)}`\n\n"
         f"Adapter ID: `{adapter_id}`\nSession ID: `{session_id}`\n"
         f"Turn ID: `{turn_id}`\n\n"
         f"Commands:\n{_router_command(adapter_id, session_id, turn_id)}\n\n"
@@ -814,6 +998,13 @@ def _before_mutation(
     if category == "read":
         return {"decision": "allow"}
     runtime = _load_runtime(root, adapter_id, session_id, turn_id)
+    if runtime is not None:
+        try:
+            _, mode, _ = _governance(runtime)
+        except RouterError as exc:
+            return _deny(str(exc))
+        if mode == "explore":
+            return {"decision": "allow"}
     if runtime is None or not isinstance(runtime.get("activation"), dict):
         return _deny(
             "Record this turn's Engineering Spec activation before editing.\n"
@@ -862,6 +1053,12 @@ def _stop(root: Path, payload: dict[str, object]) -> dict[str, object]:
         return {"decision": "allow"}
     changed = _paths_changed_since(root, runtime.get("baseline"))
     if not changed:
+        return {"decision": "allow"}
+    try:
+        _, mode, _ = _governance(runtime)
+    except RouterError as exc:
+        return {"decision": "deny", "reason": str(exc)}
+    if mode == "explore" and not isinstance(runtime.get("activation"), dict):
         return {"decision": "allow"}
     if not isinstance(runtime.get("activation"), dict):
         return {
@@ -928,6 +1125,17 @@ def build_parser() -> argparse.ArgumentParser:
     candidates = commands.add_parser("candidates", help="List scope-matched task candidates")
     candidates.add_argument("--path", action="append", required=True)
     candidates.set_defaults(handler=command_candidates)
+
+    classify = commands.add_parser(
+        "classify",
+        help="Record or promote this turn's risk-adaptive governance mode",
+    )
+    classify.add_argument("--adapter-id", required=True)
+    classify.add_argument("--session-id", required=True)
+    classify.add_argument("--turn-id", required=True)
+    classify.add_argument("--mode", choices=GOVERNANCE_MODES, required=True)
+    classify.add_argument("--reason", required=True)
+    classify.set_defaults(handler=command_classify)
 
     activate = commands.add_parser("activate", help="Record this turn's activation decision")
     activate.add_argument("--adapter-id", required=True)

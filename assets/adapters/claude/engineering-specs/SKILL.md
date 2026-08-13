@@ -19,7 +19,17 @@ python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   candidates --path <initial-scoped-path>
 ```
 
-Before mutation, record one decision for every applicable path scope:
+The `begin` result reports adaptive/strict profile and Explore/Build/Governed
+mode. Adaptive Explore permits bounded reversible local work without a receipt.
+Promote before bounded production or governed-risk work:
+
+```bash
+python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
+  classify --adapter-id claude --session-id <session> --turn-id <turn> \
+  --mode <build|governed> --reason <risk-reason>
+```
+
+Build and Governed record one decision for every applicable path scope:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
@@ -30,7 +40,7 @@ python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
 Repeat `--spec` when multiple candidates apply. If none applies, use `--none`
 with a reason. Never infer explicit-none from an empty candidate list.
 
-Before completion, audit the receipt and handoff:
+Before Build/Governed completion, audit the receipt and handoff:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
@@ -38,7 +48,9 @@ python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   --message-file <handoff-file>
 ```
 
-The final response must contain `Activated specifications:`,
+Explore reports outcome, verification, and unresolved risk in ordinary prose.
+Build/Governed responses contain `Activated specifications:`,
 `Activated requirements:`, `Verification:`, `Exceptions:`, and
 `Compatibility or migration:`. Report a missing Router as an exception rather
-than claiming that no Specification applies.
+than claiming that no Specification applies. Never use Explore to bypass
+authority, destructive/external action, security, data, or integrity boundaries.

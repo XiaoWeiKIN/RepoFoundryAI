@@ -139,6 +139,7 @@ class FoundryctlTestCase(unittest.TestCase):
     def write_pre_project_skill_schema3_manifest(self) -> Path:
         path = self.repo / foundryctl.HARNESS_MANIFEST
         payload = json.loads(path.read_text(encoding="utf-8"))
+        payload.pop("governance", None)
         payload["core"]["version"] = "1.0.0"
         for adapter in payload["adapters"]:
             if adapter["id"] == "codex":
@@ -215,11 +216,96 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(explicit, payload)
         self.assertEqual(list(self.repo.iterdir()), [])
 
+    def test_governance_profile_is_adaptive_for_fresh_and_previewed_for_changes(
+        self,
+    ) -> None:
+        preview = json.loads(
+            self.run_cli("bootstrap", "--adapter", "codex").stdout
+        )
+        self.assertEqual(preview["governance_profile"], "adaptive")
+
+        self.run_cli(
+            "bootstrap",
+            "--adapter",
+            "codex",
+            "--governance-profile",
+            "strict",
+            "--apply",
+        )
+        manifest_path = self.repo / foundryctl.HARNESS_MANIFEST
+        strict_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            strict_manifest["governance"],
+            {"policy_schema": 1, "profile": "strict"},
+        )
+
+        migrate_preview = json.loads(
+            self.run_cli(
+                "bootstrap",
+                "--adapter",
+                "codex",
+                "--governance-profile",
+                "adaptive",
+            ).stdout
+        )
+        self.assertEqual(migrate_preview["mode"], "dry-run")
+        self.assertEqual(migrate_preview["governance_profile"], "adaptive")
+        self.assertEqual(
+            json.loads(manifest_path.read_text(encoding="utf-8"))["governance"],
+            {"policy_schema": 1, "profile": "strict"},
+        )
+
+        applied = json.loads(
+            self.run_cli(
+                "bootstrap",
+                "--adapter",
+                "codex",
+                "--governance-profile",
+                "adaptive",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(applied["governance_profile"], "adaptive")
+        adaptive_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            adaptive_manifest["governance"],
+            {"policy_schema": 1, "profile": "adaptive"},
+        )
+        self.assertIn(
+            "governance-strict-to-adaptive",
+            [item["id"] for item in adaptive_manifest["applied_migrations"]],
+        )
+
+    def test_invalid_governance_manifest_fails_closed(self) -> None:
+        self.run_cli("bootstrap", "--adapter", "codex", "--apply")
+        manifest_path = self.repo / foundryctl.HARNESS_MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["governance"]["profile"] = "unbounded"
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_cli("validate", "--harness", expected=1)
+        self.assertIn(
+            "HARNESS_GOVERNANCE_PROFILE_UNSUPPORTED",
+            result.stderr,
+        )
+
     def test_adapter_list_declares_capabilities_and_enforcement(self) -> None:
         payload = json.loads(self.run_cli("adapter", "list").stdout)
 
         self.assertEqual(payload["schema_version"], 3)
         self.assertEqual(payload["activation_protocol_version"], 1)
+        self.assertEqual(
+            payload["governance"],
+            {
+                "policy_schema": 1,
+                "fresh_default": "adaptive",
+                "profiles": ["adaptive", "strict"],
+                "modes": ["explore", "build", "governed"],
+            },
+        )
         self.assertEqual(
             [item["id"] for item in payload["adapters"]],
             ["codex", "claude", "portable"],
@@ -240,7 +326,7 @@ class FoundryctlTestCase(unittest.TestCase):
             by_id["portable"]["capabilities"]["mutation_gate"],
             "cli",
         )
-        self.assertEqual(by_id["claude"]["version"], "1.0.0")
+        self.assertEqual(by_id["claude"]["version"], "1.1.0")
         self.assertEqual(by_id["claude"]["enforcement"], "cli")
         self.assertEqual(by_id["claude"]["capabilities"]["skills"], "native")
         self.assertEqual(
@@ -318,13 +404,17 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertEqual(
             manifest["adapters"],
-            [{"id": "claude", "version": "1.0.0", "enforcement": "cli"}],
+            [{"id": "claude", "version": "1.1.0", "enforcement": "cli"}],
+        )
+        self.assertEqual(
+            manifest["governance"],
+            {"policy_schema": 1, "profile": "adaptive"},
         )
         self.assertEqual(
             manifest["instruction_files"],
             foundryctl.instruction_files_for_versions(
-                "1.1.0",
-                (("claude", "1.0.0"),),
+                "1.2.0",
+                (("claude", "1.1.0"),),
             ),
         )
         self.run_cli("validate", "--adapter", "claude")
@@ -556,17 +646,21 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertEqual(
             manifest["core"],
-            {"version": "1.1.0"},
+            {"version": "1.2.0"},
         )
         self.assertEqual(
             manifest["adapters"],
-            [{"id": "codex", "version": "2.1.0", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.2.0", "enforcement": "native"}],
+        )
+        self.assertEqual(
+            manifest["governance"],
+            {"policy_schema": 1, "profile": "adaptive"},
         )
         self.assertEqual(
             manifest["instruction_files"],
             foundryctl.instruction_files_for_versions(
-                "1.1.0",
-                (("codex", "2.1.0"),),
+                "1.2.0",
+                (("codex", "2.2.0"),),
             ),
         )
         self.assertEqual(
@@ -733,7 +827,11 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(migrated["schema_version"], 3)
         self.assertEqual(
             migrated["adapters"],
-            [{"id": "codex", "version": "2.1.0", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.2.0", "enforcement": "native"}],
+        )
+        self.assertEqual(
+            migrated["governance"],
+            {"policy_schema": 1, "profile": "strict"},
         )
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
@@ -855,13 +953,17 @@ class FoundryctlTestCase(unittest.TestCase):
             },
         )
         migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(migrated["core"]["version"], "1.1.0")
-        self.assertEqual(migrated["adapters"][0]["version"], "2.1.0")
+        self.assertEqual(migrated["core"]["version"], "1.2.0")
+        self.assertEqual(migrated["adapters"][0]["version"], "2.2.0")
+        self.assertEqual(
+            migrated["governance"],
+            {"policy_schema": 1, "profile": "strict"},
+        )
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
             [
-                "core-1.0.0-to-1.1.0",
-                "adapter-codex-2.0.0-to-2.1.0",
+                "core-1.0.0-to-1.2.0",
+                "adapter-codex-2.0.0-to-2.2.0",
             ],
         )
         self.run_cli("validate", "--harness")
@@ -894,8 +996,8 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(
             [item["id"] for item in manifest["applied_migrations"]],
             [
-                "core-1.0.0-to-1.1.0",
-                "adapter-codex-2.0.0-to-2.1.0",
+                "core-1.0.0-to-1.2.0",
+                "adapter-codex-2.0.0-to-2.2.0",
             ],
         )
         self.run_cli("validate", "--harness")

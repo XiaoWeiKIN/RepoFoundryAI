@@ -3,11 +3,9 @@
 This repository uses RepoFoundry's product-neutral engineering Harness. Read
 `ARCHITECTURE.md` and `docs/index.md` before changing established boundaries.
 
-## Engineering Specifications
+## Governance and Engineering Specifications
 
-Before implementation or code review, create a stable local session and turn
-identifier, list the repository-relative paths you may change, and run the
-shared activation engine:
+Create a stable local session and turn identifier and run the shared engine:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py begin \
@@ -17,8 +15,19 @@ python3 .repo-foundry/engineering-specs/spec_router.py candidates \
   --path <planned-path> [--path <planned-path> ...]
 ```
 
-Read each candidate's `Applicability` section. Then record either the applicable
-IDs or a justified explicit-none decision before the first write:
+`begin` reports the repository profile and mode. Adaptive Explore permits
+bounded reversible work without a receipt. Promote to Build for bounded
+production work or Governed for public contracts, security, data, irreversible
+operations, reliability claims, releases, or durable decisions:
+
+```bash
+python3 .repo-foundry/engineering-specs/spec_router.py classify \
+  --adapter-id portable --session-id <session-id> --turn-id <turn-id> \
+  --mode <build|governed> --reason <risk-reason>
+```
+
+In Build/Governed, read candidate Applicability and record applicable IDs or a
+justified explicit-none decision before the first mutation:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py activate \
@@ -36,7 +45,8 @@ python3 .repo-foundry/engineering-specs/spec_router.py audit \
   --message-file <handoff-file>
 ```
 
-The handoff must contain all five labels:
+Explore may use normal prose for outcome, verification, and unresolved risk.
+Build/Governed handoff contains all five labels:
 
 ```text
 Activated specifications: <IDs and versions | none>

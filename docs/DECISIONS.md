@@ -1,7 +1,8 @@
 # Architecture Decisions
 
 This file is the repository entry point and rebuildable index for ADRs. ADR
-paths remain stable across proposed, accepted, rejected and superseded states.
+paths remain stable across proposed, accepted, rejected, under-review, retired,
+and superseded states.
 
 ## Protocol
 
@@ -9,8 +10,8 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 - Agents may author proposed ADRs.
 - Accept or reject an ADR only after explicit user or Decision Owner
   authorization.
-- Accepted and rejected bodies are sealed. New evidence creates a superseding
-  ADR.
+- Decided bodies are sealed. New evidence may trigger an authorized review,
+  retirement, or superseding ADR without rewriting decision history.
 - The managed table is a projection. Rebuild it with `epctl reindex`.
 
 ## Proposed
@@ -36,4 +37,6 @@ paths remain stable across proposed, accepted, rejected and superseded states.
 | ADR-011 | Separate the RepoFoundry core from Agent product adapters | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-011_agent-neutral-harness-adapters.md) |
 | ADR-012 | Separate Engineering Spec activation from Agent runtime adapters | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-012_agent-neutral-spec-activation.md) |
 | ADR-014 | Require semantic metadata for governed engineering artifacts | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-014_governed-artifact-metadata-contract.md) |
+| ADR-015 | Adopt risk-adaptive Agent governance modes | accepted | 2026-08-13 | [] |  | [ADR](adr/adr-015_risk-adaptive-agent-governance.md) |
+| ADR-016 | Separate ADR history from current decision effect | accepted | 2026-08-13 | [] |  | [ADR](adr/adr-016_reversible-decision-effect.md) |
 <!-- ADRCTL:COMPLETED:END -->

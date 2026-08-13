@@ -6,11 +6,11 @@ id: DD-006
 doc_type: design
 title: RepoFoundry versioning and Harness migrations
 status: current
-adr_refs: ["ADR-011", "ADR-012"]
+adr_refs: ["ADR-011", "ADR-012", "ADR-015"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-03
-updated: 2026-08-04
+updated: 2026-08-13
 ---
 
 # RepoFoundry Versioning and Harness Migrations
@@ -22,8 +22,9 @@ files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
 The current distribution is `0.2.0`. It writes Harness schema `3`, Core
-`1.1.0`, Codex adapter `2.1.0`, Claude adapter `1.0.0`, Portable adapter
-`1.0.0`, and activation protocol `1`. Engineering Specifications keep their
+`1.2.0`, Codex adapter `2.2.0`, Claude adapter `1.1.0`, Portable adapter
+`1.1.0`, governance policy schema `1`, and activation protocol `1`.
+Engineering Specifications keep their
 independent Catalog version and lock lifecycle. Distribution `0.1.0`, schemas
 `1` and `2`, Core `1.0.0`, Codex adapter `2.0.0`, and Codex profile `1.0.0`
 remain migration inputs rather than the current model.
@@ -34,10 +35,11 @@ remain migration inputs rather than the current model.
 |---|---:|---|---|
 | RepoFoundry distribution | `0.2.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
-| Harness Core | `1.1.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and activation behavior |
-| Codex adapter | `2.1.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
-| Claude adapter | `1.0.0` | `adapters[]`, adapter file records | Claude project Skills with CLI/advisory activation |
-| Portable adapter | `1.0.0` | `adapters[]`, adapter file records | CLI and advisory integration |
+| Harness Core | `1.2.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and mode-aware activation behavior |
+| Codex adapter | `2.2.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
+| Claude adapter | `1.1.0` | `adapters[]`, adapter file records | Claude project Skills with CLI/advisory classification and activation |
+| Portable adapter | `1.1.0` | `adapters[]`, adapter file records | CLI and advisory classification and activation |
+| Governance policy | `1` | optional `governance` object in schema `3` | Repository profile; missing means strict compatibility |
 | Activation protocol | `1` | Core executable and adapter capability output | Normalized event and decision semantics |
 | Engineering Specs Catalog | `1.2.0` by default | `specs.json`, `specs.lock.json` | Independently selected engineering guidance release |
 
@@ -49,7 +51,7 @@ flowchart LR
     D["RepoFoundry distribution<br/>VERSION 0.2.0"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
-    U --> C["Harness Core 1.1.0"]
+    U --> C["Harness Core 1.2.0"]
     U --> A["Codex + Claude + Portable adapters"]
     C --> F["Core file provenance"]
     A --> F
@@ -122,6 +124,8 @@ The reader is deliberately asymmetric:
 - schema `2` is accepted as the versioned Codex-profile migration input;
 - schema `3` is accepted when its producer, Core, adapters, templates, and
   migration records are not newer than the installed distribution;
+- a schema `3` manifest without `governance` remains valid and resolves to
+  `strict`; fresh manifests write policy schema `1` with profile `adaptive`;
 - an unknown future schema, producer, Core, adapter, template, or migration version
   fails closed;
 - schema `1` or `2` migration requires the explicit `upgrade` command;
@@ -140,8 +144,10 @@ hashes so a future release cannot mistake it for an overwrite-safe seed.
 
 ## Preview-first migration
 
-`foundryctl upgrade --to VERSION` computes a plan and writes nothing.
-`--apply` acquires the Harness lock, recomputes the same plan, refuses any
+`foundryctl upgrade --to VERSION` computes a plan and writes nothing. An
+explicit `--governance-profile adaptive|strict` participates in the same plan;
+omitting it preserves the existing effective profile. `--apply` acquires the
+Harness lock, recomputes the same plan, refuses any
 changed preflight, applies atomic file replacements, writes the manifest, and
 runs Harness validation. A post-write validation failure restores every file
 touched by the migration.
@@ -191,6 +197,28 @@ remote migration code is outside the CLI trust boundary.
 The Core `1.0.0` to `1.1.0` migration adds
 `.repo-foundry/skills/repo-foundry-ai/SKILL.md`. The Codex `2.0.0` to `2.1.0`
 migration adds `.agents/skills/repo-foundry-ai/SKILL.md`. Both are generated,
-repository-relative regular files. Claude `1.0.0` is a new adapter rather than
-a migration of personal host registration; it owns only its two
-`.claude/skills/` entrypoints.
+repository-relative regular files. Core `1.2.0`, Codex `2.2.0`, Claude
+`1.1.0`, and Portable `1.1.0` add the shared risk-adaptive governance contract
+and mode-aware guidance. Existing schema-3 manifests without governance move
+forward as `strict`; selecting `adaptive` is a separate explicit migration.
+Claude `1.0.0` was introduced as a new adapter rather than a migration of
+personal host registration; it owns only its two `.claude/skills/`
+entrypoints.
+
+## Professional artifact compatibility is not a Harness migration
+
+The independently installable professional Skills may add optional evidence
+needed to keep their own historical contracts verifiable. For example, an
+archived ExecPlan can retain an ADR payload digest whose exact document revision
+is no longer the current ADR file. `engineering-execution-plan` stores an
+explicitly imported revision under
+`docs/.epctl/adr-revisions/ADR-NNN/sha256-<payload>.md` and resolves it only for
+completed or cancelled plans.
+
+This operation follows the same safety principles—preview first, immutable
+target, conflict rejection, atomic apply and offline validation—but it does not
+change `docs/.engineering/harness.json`, Core or adapter versions. Git can be an
+explicit one-time source for a recovered blob; it is never a validation-time
+dependency. A distribution containing this CLI behavior still bumps `VERSION`
+because the shipped professional Skill changed, while Harness component planes
+remain unchanged.

@@ -1,0 +1,35 @@
+EP-057 Datafox compatibility evidence
+Date: 2026-08-06
+
+Historical registration:
+  ADR ID: ADR-018
+  source Git blob: e3fa598bb8999b81c5ed777c74c517239cd565e0
+  payload SHA-256: 57f3a0be4e202cd1a530666378a6bd61d83feec2b9b484bfb21b2abf2e681220
+  document SHA-256: 6771327deff258d523acaf4b888c670cdc88e2dc0e02f16652e942da49ce21f3
+  bytes: 8328
+  target: docs/.epctl/adr-revisions/ADR-018/sha256-57f3a0be4e202cd1a530666378a6bd61d83feec2b9b484bfb21b2abf2e681220.md
+
+Preservation:
+  - completed EP-051 unchanged
+  - completed EP-052 unchanged
+  - current ADR-018 unchanged
+  - sealed BR-019 and BR-020 unchanged
+
+Datafox results after registration and EP-053 archive:
+  - installed epctl validation: 0 errors / 96 pre-existing warnings
+  - EP-053 status: completed
+  - verified revision: snapshot:9f4ad70547995a0487db7baafd2c0e7386c738f95fae4e0810e981460a1dfcfc
+  - archive SHA-256: 420d2e684011fe8df8181a9b6874b8cacf51eab6f4e9157d7bebef0082d8435f
+  - Benchmark evidence: BR-019 and BR-020 passed sealed Runs
+  - Engineering Spec Router audit: ok=true, errors=[], uncovered_paths=[]
+
+Local distribution/Harness:
+  - active RepoFoundry: 0.3.1, package c78e013be81757ae609db60ccd28758c05475fe4c8a186f60fb6c68706c3f304
+  - active release ID: 0.3.1-c78e013be817
+  - host registrations: Codex and Claude
+  - Datafox Harness producer: 0.3.1
+  - Harness Core: 1.2.0
+  - Codex adapter: 2.2.0
+  - Harness validation: 0 errors / 6 bootstrap warnings
+
+Outcome: PASS

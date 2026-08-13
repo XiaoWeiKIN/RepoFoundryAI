@@ -60,29 +60,39 @@ stateDiagram-v2
     [*] --> proposed
     proposed --> accepted
     proposed --> rejected
+    accepted --> under_review
+    under_review --> accepted
+    accepted --> retired
+    under_review --> retired
     accepted --> superseded
+    under_review --> superseded
 ```
 
 - `proposed`：可由 Agent 起草和修订。
 - `accepted`：明确 Decision Owner 批准，成为当前架构约束。
 - `rejected`：明确 Decision Owner 拒绝，保留原因。
-- `superseded`：被新的 accepted ADR 替代。
+- `under_review`：历史决定仍为 accepted，但暂停作为新工作的当前约束。
+- `retired`：明确撤销当前效力且没有 replacement；不暗示代码已自动回滚。
+- `superseded`：被新的 accepted、current ADR 替代。
 
 只有 proposed ADR 可以执行 `decide-adr`。命令要求 `--decision-maker`；skill 还要求本轮对话存在用户或 Decision Owner 的明确授权。脚本记录授权主体，不能推断授权。
 
-accepted 和 rejected schema 1.1/1.2/1.3 ADR 的正文、Research/ADR/Design 输入、
+accepted 和 rejected schema 1.1/1.2/1.3/1.4 ADR 的正文、Research/ADR/Design 输入、
 `decision_maker` 与 `decided` 一起进入 SHA-256。决定后修改这些内容会使
-`validate` 失败。生命周期元数据可以增加 supersession 链，但决策内容保持不变。
+`validate` 失败。schema 1.4 还把不可变 `decision_outcome` 与可变 effect status
+分离；`status`、`effect_changed_*`、`effect_reason` 和 replacement 链不进入决定
+摘要。旧 schema 的 effect transition 也保持原摘要不变。
 
 ## 可执行的规范约束
 
-新 ADR 使用 schema 1.3。`Decision Statement` 用一句话说明被接受或拒绝的完整
+新 ADR 使用 schema 1.4。`Decision Statement` 用一句话说明被接受或拒绝的完整
 决定；`Normative Constraints` 把它拆成下游可引用的稳定约束：
 
-Schema 1.3 还实现 Artifact Metadata Contract：`metadata_schema`、
+Schema 1.4 还实现 Artifact Metadata Contract：`metadata_schema`、
 `artifact_type`、stable `id`、`title`、`status`、`author`、`owner`、`created`、
-`updated` 都进入决定 payload。`author`/`owner` 不能替代
-`decision_maker`；决定后修改 attribution 会触发 digest drift。
+`updated` 均存在；其中 stable identity、`author`、`owner`、`created` 进入决定
+payload，而 `status` / `updated` 属于 effect lifecycle。`author`/`owner` 不能替代
+`decision_maker`；决定后修改被封存的 attribution 会触发 digest drift。
 
 | ID | Strength | Scope | Constraint | Confirmation |
 |---|---|---|---|---|
@@ -97,7 +107,7 @@ Schema 1.3 还实现 Artifact Metadata Contract：`metadata_schema`、
 ## 原子决定与有类型关系
 
 一份 ADR 只回答一个可独立接受、拒绝、修订或替代的问题。一个功能需要多个架构
-决定时，保留多份 ADR，并用 schema 1.2/1.3 的关系字段连接：
+决定时，保留多份 ADR，并用 schema 1.2+ 的关系字段连接：
 
 | 字段 | 语义 | 对旧 ADR 状态的影响 |
 |---|---|---|
@@ -144,16 +154,41 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . new-adr \
 1. 创建新的 proposed ADR，引用新 Research。
 2. 完整说明旧决定为何不再满足 Decision Drivers。
 3. 获得明确授权并接受新 ADR。
-4. 运行 `supersede-adr ADR-OLD --by ADR-NEW`。
+4. 预览影响，再用同一命令增加 `--apply`：
+
+```bash
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  supersede-adr ADR-OLD --by ADR-NEW \
+  --decision-maker "<explicit authority>" \
+  --reason "<why the old effect must stop>"
+```
 5. 更新受影响的 active ExecPlan。
 
-新 ADR 必须为 accepted。旧 ADR 变为 superseded 并填写 `superseded_by`；新 ADR 的 `supersedes` 增加旧 ID。active ExecPlan 引用 superseded ADR 时验证失败，直到引用和执行约束同步更新。
+新 ADR 必须为 accepted 且递归 current。旧 ADR 变为 superseded 并填写
+`superseded_by`；新 ADR 的 `supersedes` 增加旧 ID。受影响的 active ExecPlan 保持
+结构有效，但暴露 `architecture_review_required` 并禁止 completed 归档，直到引用、
+路线和执行约束同步更新；cancelled 仍可用于明确终止工作。
+
+## Review、reaffirm 与 retirement
+
+发现已落实的 ADR 不合理时，不编辑或删除历史正文。先预览：
+
+```bash
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  transition-adr ADR-OLD --to under_review \
+  --decision-maker "<explicit authority>" --reason "<new evidence>"
+```
+
+确认影响集合后增加 `--apply`。Review 会暂停该 ADR 以及递归依赖/修订它的 ADR 作为
+新 Architecture Input；不会回滚代码，也不会改写受影响 EP。调查后可由明确权限以
+`--to accepted` reaffirm，或以 `--to retired` 永久撤销效力。`retired` 和
+`superseded` 为终态；重用旧方向必须创建新 ADR。
 
 ## 既有 ADR 与 Design Doc corpus
 
 注册 root 后，验证器发现两类 ADR：
 
-- 严格 ADR：schema 1 / 1.1 / 1.2 / 1.3，具有稳定 ID、必需 section、显式 Decision Owner
+- 严格 ADR：schema 1 / 1.1 / 1.2 / 1.3 / 1.4，具有稳定 ID、必需 section、显式 Decision Owner
   和决定后 seal。
 - linked legacy ADR：`doc_type: adr`，或文件名包含 `ADR-NNN`，并具有可识别
   status。
@@ -185,14 +220,15 @@ EP v2.6+ 把两个过去容易混在一起的问题拆开：
 Decision Gate 为 `satisfied` 时必须引用 accepted ADR；为 `not_required` 时必须记录
 理由，但仍可引用适用的既有 ADR。Compliance 为 `applicable` 时必须有 ADR、Design
 Doc 或架构入口；为 `not_applicable` 时必须无 architecture inputs 并记录理由。
-proposed、rejected 和 superseded ADR 都不能作为 active EP 的 current input。
+proposed、rejected、under_review、retired 和 superseded ADR 都不能作为新 EP 的
+current input。accepted ADR 还要求 `depends_on` / `amends` 的传递闭包全部 current。
 
 Compliance applicable 时，输入集合由以下内容组成：
 
 - `adr_refs`：直接需要的 ADR 以及 `depends_on` / `amends` 传递闭包。
 - `design_refs`：EP 直接需要的 Design Docs，以及 ADR 声明的全部 Design Docs。
 - `architecture_entrypoint`：可选的架构索引或概览页。
-- `adr_constraint_refs`：所有 schema 1.2/1.3 ADR constraints 的精确集合。
+- `adr_constraint_refs`：所有 schema 1.2+ ADR constraints 的精确集合。
 - `adr_evidence`：每份 sealed ADR 的 `ADR-NNN@sha256:<payload>` 摘要。
 
 缺少依赖闭包、漏掉命中约束的 current scoped amendment、出现重复 ADR ID、关系
@@ -208,8 +244,53 @@ flowchart LR
     S["ADR-007@sha256:..."] -.->|"pins decision payload"| M
 ```
 
-active EP 必须跟随 current accepted ADR。completed/cancelled EP 则保存完成或取消时的
-ADR digest；决定后来 superseded 不会抹掉历史计划的证据，也不要求改写归档正文。
+active EP 必须跟随 current accepted ADR。若其既有输入后来 non-current，验证输出
+review warning 而不是让仓库失效，status 暴露完成 blocker。completed/cancelled EP
+保存完成或取消时的 ADR digest；决定后来改变 effect 不会抹掉历史证据，也不要求
+改写归档正文。
+
+## 历史 ADR payload revision
+
+如果仓库迁移、格式清理或早期工具行为使同一个 ADR ID 留下多个真实 payload
+revision，completed/cancelled EP 继续引用它完成时记录的 digest。不要修改 archived
+EP、重新计算 `archive_sha256`，也不要在当前 ADR 与旧 digest 之间来回改写。
+
+先从 repository-relative 文件预览导入：
+
+```bash
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  register-adr-revision ADR-018 \
+  --from-file evidence/adr-018-historical.md
+```
+
+确认 ID、payload digest、document digest、字节数和目标路径后，再重复命令并增加
+`--apply`。若旧字节只存在于本地 Git object database，可以显式使用
+`--from-git-blob <full-40-or-64-hex-object-id>`；这只是一次性 source adapter，
+不会让 `validate` 依赖 Git。
+
+应用后，严格 ADR 文档位于：
+
+```text
+docs/.epctl/adr-revisions/ADR-NNN/sha256-<payload>.md
+```
+
+该路径按 ADR ID 和 payload digest 唯一寻址。重复导入相同字节是 no-op；相同路径
+出现不同字节、文件名与 payload 不一致、source ID 不一致、非 decided ADR、symlink
+或篡改都会失败。正常验证流程如下：
+
+```mermaid
+flowchart LR
+    E["completed/cancelled EP adr_evidence"] --> C{"匹配当前 ADR payload？"}
+    C -->|"是"| P["通过当前 ADR 验证"]
+    C -->|"否"| H["读取 repository-owned historical revision"]
+    H --> V{"ID、状态、payload、文件名和内容均有效？"}
+    V -->|"是"| P
+    V -->|"否或缺失"| F["fail closed"]
+```
+
+历史 resolver 使用选中 revision 的 Research、ADR 关系、Design references 和
+constraint rows 验证归档计划。active EP 从不回退到历史 registry；它仍必须匹配
+当前 accepted ADR 和 current scoped amendments。
 
 ExecPlan 必须在 `Research and Architecture Inputs` 中复述：
 

@@ -6,7 +6,10 @@ description: |
 
 # Engineering Execution Plan
 
-把复杂工程工作组织成可追溯、可恢复、可机械验证的仓库制品。默认工作流是：
+把需要 Governed 模式的复杂工程工作组织成可追溯、可恢复、可机械验证的仓库制品。
+Explore 的可逆探索和 Build 的有界实现默认使用线程内契约，不因“看起来复杂”自动
+创建持久制品。只有公共契约、安全、数据、不可逆迁移、可靠性声明、发布、长期决定
+或跨会话恢复等触发器才升级到 Governed。默认工作流是：
 
 项目级 Harness 初始化属于 `repo-foundry-ai`；本 skill 的 `init` 只创建
 ADR、ExecPlan、Bugfix 等执行治理制品。
@@ -52,18 +55,20 @@ Benchmark Skill。
 
 | 情况 | 制品 |
 |---|---|
-| 小型、上下文明确、一次会话可完成 | 线程内轻量计划 |
+| Explore：调查、实验、prototype、局部可逆修改 | 无持久制品；线程内记录结果与风险 |
+| Build：有界生产修改，无 Governed 触发器 | 线程内 intent/path/acceptance/compatibility 契约 |
 | 用户明确要求记录的局部既有行为缺陷 | Bugfix |
 | 需要可复现测量、性能/容量对比或回归证据 | 切换到 `engineering-benchmark` |
 | 关键事实不清、需要比较方案或实验 | 切换到 `engineering-research` |
 | 存在影响长期边界且逆转成本较高的选择 | ADR |
 | 跨模块、多里程碑、需跨会话恢复或已有决策待实施 | ExecPlan |
 
-复杂功能默认先取得 concluded Research，尤其是涉及公共契约、安全、可靠性、
-数据、迁移、第三方选型、prototype，或 Benchmark 会改变架构路线时。新的可复现
-测量使用 `engineering-benchmark`；跨来源解释和 Synthesis 使用
-`engineering-research`。以下情况可直接进入 ExecPlan，但必须记录具体的
-Research Gate 跳过理由：
+进入 Governed 且仍有会改变路线的未知时，默认先取得 concluded Research，尤其是
+涉及公共契约、安全、可靠性、数据、不可逆迁移、第三方选型，或 Benchmark 会改变
+架构路线时。prototype 本身属于 Explore，不自动触发 Research。新的可复现测量使用
+`engineering-benchmark`；跨来源解释和 Synthesis 使用 `engineering-research`。
+只有已经创建 ExecPlan 后，未提供 Research 才在计划内记录具体 Gate 理由；
+Explore/Build 不为“没有触发 Research”创建跳过制品。
 
 - 当前 accepted ADR 和代码事实已覆盖所需输入。
 - 权威标准或用户已经固定实现方向。
@@ -83,7 +88,10 @@ Bugfix 一旦需要 Research、ADR、任务拆分、公共契约变更或持续�
 docs/
 ├── .epctl/
 │   ├── state.json
-│   └── config.json          # 可选：注册既有 architecture roots
+│   ├── config.json          # 可选：注册既有 architecture roots
+│   └── adr-revisions/       # 可选：completed/cancelled EP 的历史 ADR payload
+│       └── ADR-NNN/
+│           └── sha256-<payload>.md
 ├── RESEARCH.md
 ├── DECISIONS.md
 ├── PLANS.md
@@ -132,8 +140,16 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
   --design docs/design-docs/cache-topology.md
 python3 <skill-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
   --outcome accepted --decision-maker "<explicit authority>"
+python3 <skill-dir>/scripts/epctl.py --repo . transition-adr ADR-001 \
+  --to under_review --decision-maker "<explicit authority>" \
+  --reason "<new evidence>"
 python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
-  --by ADR-002
+  --by ADR-002 --decision-maker "<explicit authority>" \
+  --reason "<replacement rationale>"
+python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
+  --from-file evidence/adr-001-historical.md
+python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
+  --from-file evidence/adr-001-historical.md --apply
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   --slug implement-cache --title "Implement cache topology" \
@@ -167,6 +183,10 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
 - 用脚本分配 ADR/EP 等本 skill 拥有的 ID、复制 assets、迁移状态、封存
   payload、重建索引和验证引用。不要手工猜编号。
 - `.epctl/state.json` 保存编号高水位。故障可以造成跳号，不能复用旧 ID。
+- completed/cancelled EP 引用的旧 ADR payload 不再等于当前 ADR 时，先用
+  `register-adr-revision` 预览，再以 `--apply` 写入 digest-addressed 的不可变
+  repository evidence。也可以显式使用 `--from-git-blob <full-object-id>` 恢复
+  Git blob；正常 `validate` 只读仓库文件，不依赖 Git。
 - `validate --fix-index` 只修复派生索引，不改事实制品。
 - 脚本不可用时按 `assets/` 模板执行，并扫描文件系统、索引和高水位后取最大 ID +1。
 - 不要求目标仓库使用 Git。
@@ -202,17 +222,20 @@ Agent 可以调研、比较并起草 `proposed` ADR。只有当前对话或明�
    Normative Constraints、Consequences、Confirmation 和 Revisit Triggers。
 3. 把真实授权主体传给 `--decision-maker`。
 
-新建 schema 1.3 ADR 必须给出一句可整体接受或拒绝的 `Decision Statement`，并把
+新建 schema 1.4 ADR 必须给出一句可整体接受或拒绝的 `Decision Statement`，并把
 长期约束写成稳定的 `C-NNN` 行：strength、scope、constraint、confirmation。
-下游使用 `ADR-NNN#C-NNN` 引用它们。accepted/rejected schema 1.1/1.2/1.3 ADR 的正文、
+下游使用 `ADR-NNN#C-NNN` 引用它们。accepted/rejected schema 1.1–1.4 ADR 的正文、
 Research/ADR/Design 输入和决策授权由 SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使用 `amends` 或执行
-`supersede-adr ADR-OLD --by ADR-NEW`；不要编辑旧决定。Superseded ADR 不能满足
-active ExecPlan 的 current architecture input。
+preview-first 的 `supersede-adr`；若仅需暂停调查，则 preview/apply
+`transition-adr --to under_review`，之后明确 reaffirm 或 retire。每次 effect change
+都要求授权主体和原因。不要编辑旧决定，也不要把状态变化当作自动代码回滚。
+non-current ADR 不能满足新 ExecPlan；受影响的既有 active EP 显示
+`architecture_review_required` 并禁止 completed 归档。
 
 一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
 
 - `depends_on` 表示必须同时成立的 accepted 前置决定。
-- `amends` 表示新决定只修订旧决定的一部分；schema 1.2/1.3 还必须用
+- `amends` 表示新决定只修订旧决定的一部分；schema 1.2+ 还必须用
   `amends_constraints` / `--amends-constraint ADR-NNN#C-NNN` 精确指出被改约束，
   两份 ADR 仍是当前决定。
 - `supersedes` 表示完整替代，旧 ADR 进入 superseded。
@@ -363,7 +386,8 @@ candidate 本身都不构成生成案例的触发条件。
 - accepted ADR 的 Confirmation 应指向测试、lint、schema check 或明确人工验收。
 - v2.6/2.7 active EP 的 ADR 必须 current，`adr_constraint_refs` 必须精确覆盖结构化
   constraints，`adr_evidence` 必须匹配决定 seal，Compliance Matrix 必须逐条映射。
-  completed/cancelled EP 保留当时摘要，即使 ADR 后来 superseded，也仍可作为历史证明。
+  completed/cancelled EP 保留当时摘要；若当前 ADR 已是另一个 payload revision，
+  验证器从 `.epctl/adr-revisions/` 解析原摘要，绝不要求改写 sealed EP。
 - completed v2.3+ EP 必须保存 `verified_revision` 和至少一个
   `verification_evidence`，归档正文由 `archive_sha256` 封存；Checkpoint 必须
   保存 `repository_revision`。

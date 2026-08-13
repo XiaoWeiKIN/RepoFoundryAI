@@ -1,0 +1,31 @@
+EP-057 repository and release verification
+Date: 2026-08-06
+
+Actual 0.3.1 release source:
+  /Users/wangxiaowei1/.cache/repofoundry-ai/source-v0.3.1
+
+Command:
+  python3 -B scripts/check.py
+
+Canonical result:
+  - Engineering Research: 32/32 passed
+  - Engineering Benchmark: 9/9 passed
+  - Engineering Execution Plan: 50/50 passed
+  - RepoFoundry installer, Harness, Spec and repository contracts: 101/101 passed
+  - Research repository validation: 0 errors
+  - Execution Plan repository validation: 0 errors, 2 ready-to-archive warnings
+  - index projections rebuilt and verified
+  - final line: all integrity checks passed
+
+Development checkout cross-check:
+  - Research: 32/32 passed
+  - Benchmark: 9/9 passed
+  - Execution Plan: 50/50 passed
+  - direct release/installer/Spec suite: 96/96 passed in 286.496s
+  - one wrapper run timed out at its fixed 180-second subprocess limit during
+    the last suite; it emitted no assertion failure, and the direct suite above
+    completed successfully. The shipped 0.3.1 source completed the canonical
+    wrapper normally.
+
+Outcome: PASS for the installed 0.3.1 release and all source test suites; one
+non-shipping checkout wrapper timeout is retained as an explicit observation.
