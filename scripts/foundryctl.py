@@ -36,7 +36,7 @@ EXECUTION_PLAN_CTL = (
 DEFAULT_SPEC_REPOSITORY = (
     "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git"
 )
-DEFAULT_SPEC_VERSION = "1.2.0"
+DEFAULT_SPEC_VERSION = "1.5.0"
 
 LEGACY_HARNESS_SCHEMA_VERSION = 1
 PROFILE_HARNESS_SCHEMA_VERSION = 2
@@ -45,11 +45,11 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.2.0"
-CODEX_ADAPTER_VERSION = "2.2.0"
-CLAUDE_ADAPTER_VERSION = "1.1.0"
-PORTABLE_ADAPTER_VERSION = "1.1.0"
-ACTIVATION_PROTOCOL_VERSION = 1
+CORE_HARNESS_VERSION = "1.4.0"
+CODEX_ADAPTER_VERSION = "2.4.0"
+CLAUDE_ADAPTER_VERSION = "1.3.0"
+PORTABLE_ADAPTER_VERSION = "1.3.0"
+ACTIVATION_PROTOCOL_VERSION = 2
 GOVERNANCE_POLICY_SCHEMA = 1
 GOVERNANCE_PROFILES = ("adaptive", "strict")
 DEFAULT_GOVERNANCE_PROFILE = "adaptive"
@@ -233,6 +233,8 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
         "mutation_gate": "native",
         "completion_audit": "native",
         "project_trust": "user_review",
+        "automated_enforcement_effective_maximum": "Advisory",
+        "finding_lifecycle": "unsupported",
     },
     "claude": {
         "instructions": "none",
@@ -242,6 +244,8 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
         "mutation_gate": "cli",
         "completion_audit": "cli",
         "project_trust": "user_review",
+        "automated_enforcement_effective_maximum": "Advisory",
+        "finding_lifecycle": "unsupported",
     },
     "portable": {
         "instructions": "file",
@@ -251,6 +255,8 @@ ADAPTER_CAPABILITIES: dict[str, dict[str, object]] = {
         "mutation_gate": "cli",
         "completion_audit": "cli",
         "project_trust": "none",
+        "automated_enforcement_effective_maximum": "Advisory",
+        "finding_lifecycle": "unsupported",
     },
 }
 ADAPTER_DIRECTORIES = {
@@ -3229,6 +3235,7 @@ def manage_specs(
     initial_spec_source: dict[str, str],
     update_spec_source: dict[str, str] | None,
     requested_spec_ids: tuple[str, ...] | None,
+    keep_selection: bool = False,
 ) -> dict[str, object]:
     try:
         planned = specctl.plan_spec_state(
@@ -3238,6 +3245,7 @@ def manage_specs(
             allow_replace=True,
             update_source=update_spec_source,
             requested_spec_ids=requested_spec_ids,
+            keep_selection=keep_selection,
         )
     except specctl.SpecError as exc:
         raise FoundryctlError(str(exc)) from exc
@@ -3260,6 +3268,7 @@ def manage_specs(
                 allow_replace=True,
                 update_source=update_spec_source,
                 requested_spec_ids=requested_spec_ids,
+                keep_selection=keep_selection,
             )
         except specctl.SpecError as exc:
             raise FoundryctlError(str(exc)) from exc
@@ -4197,6 +4206,14 @@ def add_spec_selection_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Select no optional Specifications; required Specs remain",
     )
+    selection.add_argument(
+        "--keep-selection",
+        action="store_true",
+        help=(
+            "Explicitly acknowledge Catalog candidates and preserve the "
+            "current direct Spec selection"
+        ),
+    )
 
 
 def requested_spec_ids(args: argparse.Namespace) -> tuple[str, ...] | None:
@@ -4597,6 +4614,9 @@ def main(argv: list[str] | None = None) -> int:
                         initial_spec_source=initial_source,
                         update_spec_source=update_source,
                         requested_spec_ids=selection,
+                        keep_selection=bool(
+                            getattr(args, "keep_selection", False)
+                        ),
                     ),
                     ensure_ascii=False,
                     indent=2,

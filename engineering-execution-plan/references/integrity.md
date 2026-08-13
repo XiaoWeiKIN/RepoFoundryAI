@@ -27,6 +27,11 @@ type、title/status、author/owner 和 created/updated。Raw/binary evidence 由
 携带等价 metadata 与 SHA-256。源代码、普通配置和生成索引不添加装饰性 author
 header；它们依赖 Git、CODEOWNERS、generator provenance 和 canonical source。
 
+当前 governed artifacts 还必须携带 Artifact Metadata Contract 的 stable ID、
+type、title/status、author/owner 和 created/updated。Raw/binary evidence 由 manifest
+携带等价 metadata 与 SHA-256。源代码、普通配置和生成索引不添加装饰性 author
+header；它们依赖 Git、CODEOWNERS、generator provenance 和 canonical source。
+
 ## Canonical check
 
 每个代码仓库只提供一个本地入口，例如 `make check`、`./scripts/check` 或

@@ -866,7 +866,6 @@ class EpctlTestCase(unittest.TestCase):
         )
         self.assertIn("status: cancelled", cancelled.read_text(encoding="utf-8"))
         self.run_cli("validate")
-
     def test_adr_review_transition_preserves_history_and_pauses_active_work(
         self,
     ) -> None:

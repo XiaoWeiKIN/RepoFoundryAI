@@ -8,10 +8,59 @@ from pathlib import Path
 
 SPEC_CONTENTS = {
     "specification/core/semantic-naming.md": (
-        "# Semantic Naming\n\nUse stable semantic names.\n"
+        "# Semantic Naming\n\n"
+        "## Purpose\n\nUse stable semantic names.\n\n"
+        "## Applicability\n\nLoad for shared public names.\n\n"
+        "## Agent workflow\n\n1. Inspect public call sites.\n\n"
+        "## Terminology\n\nA public name is caller-visible.\n\n"
+        "## Requirements\n\n"
+        "### SEM-NAME-001 — Names expose observable behavior\n\n"
+        "**Activation:** Load when changing a shared or public name.\n\n"
+        "**Context dependencies:** None\n\n"
+        "**Automated enforcement:** Advisory\n\n"
+        "Public names **MUST** expose observable behavior.\n\n"
+        "**Rationale (non-normative):** Prevent semantic drift.\n\n"
+        "**Enforcement (review):** Review call sites.\n\n"
+        "**Evidence:** Reviewed public API.\n\n"
+        "## Exceptions\n\nNone.\n\n"
+        "## Verification\n\n"
+        "| Requirement | Minimum verification |\n"
+        "| --- | --- |\n"
+        "| `SEM-NAME-001` | Public API review |\n\n"
+        "## Agent handoff\n\nReport the activated Requirement.\n\n"
+        "## Compatibility and migration\n\nPreserve published names.\n"
     ),
     "specification/languages/go.md": (
-        "# Go Implementation\n\nParse boundary data before core logic.\n"
+        "# Go Implementation\n\n"
+        "## Purpose\n\nKeep Go APIs clear and verifiable.\n\n"
+        "## Applicability\n\nLoad for hand-written Go changes.\n\n"
+        "## Agent workflow\n\n1. Inspect Go call sites.\n\n"
+        "## Terminology\n\nAn exported API is caller-visible.\n\n"
+        "## Requirements\n\n"
+        "### GO-NAME-001 — Go names preserve shared semantics\n\n"
+        "**Activation:** Load when changing a Go package or API name.\n\n"
+        "**Context dependencies:** `SEM-NAME-001`\n\n"
+        "**Automated enforcement:** Advisory\n\n"
+        "Go names **MUST** preserve `SEM-NAME-001`.\n\n"
+        "**Rationale (non-normative):** Keep language and shared meaning aligned.\n\n"
+        "**Enforcement (review):** Review declarations and call sites.\n\n"
+        "**Evidence:** Reviewed Go API.\n\n"
+        "### GO-TEST-001 — Go changes have focused evidence\n\n"
+        "**Activation:** Load when adding or reviewing Go tests.\n\n"
+        "**Context dependencies:** None\n\n"
+        "**Automated enforcement:** Warning\n\n"
+        "Go changes **MUST** have focused verification.\n\n"
+        "**Rationale (non-normative):** Catch contract regressions.\n\n"
+        "**Enforcement (mechanical):** Run focused tests.\n\n"
+        "**Evidence:** Focused test output with UNRELATED-TEST-SENTINEL.\n\n"
+        "## Exceptions\n\nNone.\n\n"
+        "## Verification\n\n"
+        "| Requirement | Minimum verification |\n"
+        "| --- | --- |\n"
+        "| `GO-NAME-001` | Go API review |\n"
+        "| `GO-TEST-001` | Focused Go tests |\n\n"
+        "## Agent handoff\n\nReport exact Requirement IDs.\n\n"
+        "## Compatibility and migration\n\nPreserve exported Go APIs.\n"
     ),
     "specification/languages/typescript.md": (
         "# TypeScript Implementation\n\nTreat external values as unknown.\n"
@@ -217,5 +266,62 @@ def update_go_spec(
         catalog_version=catalog_version,
     )
     commit = commit_all(repository, "update Go specification")
+    tag_release(repository, catalog_version)
+    return commit
+
+
+def add_specialized_go_specs(
+    repository: Path,
+    *,
+    catalog_version: str = "0.2.0",
+) -> str:
+    contents = {
+        relative: (repository / relative).read_text(encoding="utf-8")
+        for relative in SPEC_CONTENTS
+    }
+    specialized = {
+        "specification/languages/go/functional-options.md": (
+            "# Go Functional Options\n\nSpecialized functional-option guidance.\n"
+        ),
+        "specification/languages/go/factory-delegation.md": (
+            "# Go Factory Delegation\n\nSpecialized factory guidance.\n"
+        ),
+    }
+    contents.update(specialized)
+    catalog = catalog_data(contents, catalog_version=catalog_version)
+    catalog["specs"].extend(
+        [
+            {
+                "applies_to": ["**/*.go"],
+                "description": "Go functional-option fixture",
+                "id": "languages/go/functional-options",
+                "path": "specification/languages/go/functional-options.md",
+                "required": False,
+                "requires": ["languages/go"],
+                "sha256": sha256(
+                    specialized[
+                        "specification/languages/go/functional-options.md"
+                    ].encode("utf-8")
+                ),
+                "version": catalog_version,
+            },
+            {
+                "applies_to": ["**/*.go"],
+                "description": "Go factory-delegation fixture",
+                "id": "languages/go/factory-delegation",
+                "path": "specification/languages/go/factory-delegation.md",
+                "required": False,
+                "requires": ["languages/go/functional-options"],
+                "sha256": sha256(
+                    specialized[
+                        "specification/languages/go/factory-delegation.md"
+                    ].encode("utf-8")
+                ),
+                "version": catalog_version,
+            },
+        ]
+    )
+    write_catalog(repository, contents=contents, catalog=catalog)
+    commit = commit_all(repository, "add specialized Go specifications")
     tag_release(repository, catalog_version)
     return commit

@@ -144,6 +144,8 @@ target-repository/
     ├── agent-guides/
     │   ├── README.md                  # Portable adapter entrypoint
     │   └── managed/
+    │       ├── index.md               # Spec routing index
+    │       └── requirements.json      # exact Requirement source index
     ├── design-docs/
     ├── research/{active,completed}/
     ├── adr/
@@ -160,76 +162,133 @@ Bootstrap never invents repository facts. Unknown commands, owners,
 architecture, SLOs, and security controls remain explicit `BOOTSTRAP_TODO`
 markers for maintainers to resolve.
 
-## Install or upgrade with one command
+## Install once, enable each repository explicitly
 
-The one-command installer currently supports macOS and Linux and requires
-Python 3.10+ plus `curl`. Run the same command for a first install or an
-upgrade:
+RepoFoundry has two independent scopes. The **distribution installation** puts
+the CLI and optional personal Skill entrypoints in your user environment. The
+**repository Bootstrap** writes a versioned Harness and project Skills only to
+the repository you select. Installing or upgrading the distribution never
+scans or changes project repositories.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+```mermaid
+flowchart LR
+    I["Install or upgrade<br/>user scope"] --> P["Preview Bootstrap<br/>repository scope"]
+    P --> A["Apply explicitly"]
+    A --> V["Validate Harness"]
 ```
 
-The installer selects the latest stable GitHub release, resolves its tag to an
-immutable commit, records the downloaded archive SHA-256, validates the staged
-package, and atomically activates it. By default it installs under the XDG user
-data directory, exposes `repofoundry` in the user-local bin directory, and
-registers the root Skill with every detected Codex or Claude Code host. Claude
-Code registration follows its official configuration root: the Skill lives at
-`$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai` when that variable is set, and at
-`~/.claude/skills/repo-foundry-ai` otherwise. Other Agents can use the same CLI
-and portable adapter without either host directory. Repeating the command at
-the current release is a no-op.
+### Fast path: install and enable every bundled adapter
 
-Choose an exact release or host policy by passing arguments after `python3 -`:
+The installer supports macOS and Linux and requires Python 3.10+ plus `curl`.
+
+1. Install the latest stable release. Run the same command later to upgrade:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+   ```
+
+2. From the target repository, preview the Agent-neutral Core and every bundled
+   project adapter:
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters
+   ```
+
+3. Review the `create`, `preserve`, and `conflict` actions. Apply only a
+   conflict-free plan, then validate the result:
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters --apply
+   repofoundry --repo . validate
+   ```
+
+`--all-adapters` always expands to `codex`, `claude`, and `portable` in a
+deterministic order. The result does not depend on which Agent products are
+installed on the machine.
+
+### Enable only the adapter you need
+
+Use the same preview-then-apply flow with one or more explicit adapters:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
+# Claude Code only: preview, then apply
+repofoundry --repo . bootstrap --adapter claude
+repofoundry --repo . bootstrap --adapter claude --apply
+
+# Codex and the product-neutral guide
+repofoundry --repo . bootstrap --adapter codex --adapter portable
+repofoundry --repo . bootstrap --adapter codex --adapter portable --apply
+```
+
+| Adapter | Project-owned entrypoint |
+|---|---|
+| `codex` | `AGENTS.md`, `.agents/skills/`, and reviewed `.codex/` guards |
+| `claude` | Native project Skills under `.claude/skills/` |
+| `portable` | Product-neutral guidance under `docs/agent-guides/` |
+
+All adapters share the canonical workflow at
+`.repo-foundry/skills/repo-foundry-ai/SKILL.md` and the Core Spec Router. The
+Claude adapter creates regular project files; it never links the repository to
+a home directory. Claude Code gives a personal Skill precedence over a project
+Skill with the same name, so the personal entrypoint delegates to the canonical
+project workflow when that file exists.
+
+### `--host` controls personal discovery, not project compatibility
+
+You do not need to pass `--host` for normal installation. Its default value is
+`auto`, which registers the personal RepoFoundry Skill with every detected
+Codex or Claude Code installation. Other Agents can still use the CLI and the
+portable project adapter without either host directory.
+
+| Installer option | Personal Skill behavior |
+|---|---|
+| `--host auto` | Register every detected supported host; this is the default |
+| `--host codex` | Ensure the Codex personal Skill link exists |
+| `--host claude` | Ensure the Claude Code personal Skill link exists |
+| `--host none` | Leave existing registrations unchanged and create none |
+
+Examples:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.1 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-`--host codex` and `--host claude` ensure the requested personal Skill link,
-backing up an existing non-managed path before replacing it. `--host auto`
-registers every detected supported host, while `--host none` leaves existing
-host registrations unchanged and creates none on a fresh install. Override the
-Claude Code configuration root with `CLAUDE_CONFIG_DIR` or `--claude-home`.
-Directory symlink discovery requires Claude Code 2.1.203 or later.
+The installer backs up an existing non-managed target before replacing it.
+Claude Code uses `$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai` when
+`CLAUDE_CONFIG_DIR` is set and `~/.claude/skills/repo-foundry-ai` otherwise;
+`--claude-home` overrides both. Directory symlink discovery requires Claude
+Code 2.1.203 or later.
 
-Host registration makes `/repo-foundry-ai` discoverable from the personal
-installation. Project registration is a separate, repository-owned operation.
-Install Claude Skills in the current project, or every bundled adapter in
-deterministic order, with:
+### Upgrade the distribution, then migrate repositories explicitly
+
+Rerunning the one-line installer atomically activates the latest stable release
+and is a no-op when that release is already active. It resolves the release tag
+to an immutable commit, records the archive SHA-256, and validates the staged
+package before activation.
+
+Repository migration remains a separate, preview-first operation. After a
+distribution upgrade, run this in each existing project and replace `0.5.0`
+with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . bootstrap --adapter claude --apply
-repofoundry --repo . bootstrap --all-adapters --apply
+repofoundry --repo . upgrade --to 0.5.0
+repofoundry --repo . upgrade --to 0.5.0 --apply
+repofoundry --repo . validate
 ```
 
-The Claude adapter creates regular files under `.claude/skills/`; it does not
-link to a home directory. It provides native Skill discovery and uses the
-shared project Router with explicit CLI activation and audit. It does not
-claim Claude lifecycle Hooks or a mechanical mutation gate. `--all-adapters`
-always expands to `codex`, `claude`, and `portable`; it never depends on which
-hosts happen to be installed on the current machine.
-
-Claude Code gives a personal Skill precedence over a project Skill with the
-same name. RepoFoundry keeps the public `/repo-foundry-ai` name at both scopes:
-the installed personal entrypoint must read the repository's canonical
-`.repo-foundry/skills/repo-foundry-ai/SKILL.md` when present. A clone without a
-personal registration discovers the thin project entrypoint directly.
-
-The command reports the active package home, CLI path, host links, and every
-backup it preserves. If the bin directory is not already on `PATH`, it prints
-the exact directory to add. Verify the result with:
+Check the active installation and available adapters at any time:
 
 ```bash
 repofoundry --version
 repofoundry --repo . adapter list
 ```
 
-For environments that prohibit piping downloaded code directly to an
-interpreter, download and inspect the installer first:
+### Inspect first or install from a checkout
+
+If your environment prohibits piping downloaded code to an interpreter,
+download and inspect the installer before running it:
 
 ```bash
 curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
@@ -237,13 +296,7 @@ less /tmp/repofoundry-install.py
 python3 /tmp/repofoundry-install.py
 ```
 
-Distribution upgrade and repository migration are deliberately separate. The
-installer never scans or changes project repositories. After installing a new
-RepoFoundry release, preview and explicitly apply any Harness migration in each
-project with `repofoundry --repo PATH upgrade --to VERSION` and then the same
-command plus `--apply`.
-
-Maintainers can still install an explicit checkout without network access:
+Maintainers can install an explicit checkout without downloading a release:
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
@@ -321,14 +374,14 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.2.0
-repofoundry --repo . upgrade --to 0.2.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . upgrade --to 0.5.0
+repofoundry --repo . upgrade --to 0.5.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.5.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.2.0 --spec languages/go --apply
+  spec update --spec-version 1.5.0 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -359,33 +412,46 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.2.0` uses Harness schema `3`, Harness Core `1.2.0`, Codex
-adapter `2.2.0`, Claude adapter `1.1.0`, Portable adapter `1.1.0`, and
-activation protocol `1`.
+RepoFoundry `0.5.0` uses Harness schema `3`, Harness Core `1.4.0`, Codex
+adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
+activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.2.0 --apply`. Earlier schema `3` Core `1.0.0` and Codex `2.0.0`
-contracts also stay readable; an upgrade, or a previewed bootstrap that adds
+`upgrade --to 0.5.0 --apply`. Earlier schema `3` Core and adapter contracts
+also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
 recorded installed SHA-256; customized or provenance-unknown files are
 preserved, and post-write validation failure rolls the migration back. See the
 [versioning and migration design](./docs/design-docs/repo-foundry-versioning-and-migrations.md).
 
+The project workflow now chooses activation depth before doing governance work.
+Ordinary read-only code explanation, navigation, call-chain tracing, and
+existing-behavior summaries read only the necessary code and documentation;
+they do not run full Harness validation, activate Specifications, create
+governed artifacts, or require an evidence handoff. Formal reviews, explicit
+Spec-conformance work, diagnoses, and repository mutations still escalate to
+the applicable Harness layer.
+
 Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog. `sync` follows the locked commit; `update` explicitly resolves the
 selected release again. New repositories default to fixed Catalog version
-`1.2.0`, represented as `refs/tags/v1.2.0`; production upgrades name another
+`1.5.0`, represented as `refs/tags/v1.5.0`; production upgrades name another
 version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
 remains an explicit development-source escape hatch. `spec validate` is
-offline.
+offline. Installing RepoFoundry `0.4.1` or upgrading only the Harness does not
+rewrite an existing project Spec manifest, lock, index, or managed content.
 
 `spec plan` lists every Catalog entry and separates required, recommended,
 configured, and dependency-closed selected sets. Detection only recommends
 optional IDs. Repeat `--spec ID` during initial Bootstrap or `spec update` to
 set the complete optional direct selection; use `--required-only` to select no
-optional Specs. Required Specs and transitive dependencies remain automatic.
+optional Specs. When a Catalog update exposes unconfigured optional Specs,
+dry-run returns `selection_decision.status=required` with every candidate's ID,
+description, and dependencies. Apply then stays blocked until the user chooses
+a complete `--spec` set, `--required-only`, or `--keep-selection`. Required
+Specs and transitive dependencies remain automatic.
 
 ## Activate Specifications for each task
 
@@ -396,26 +462,52 @@ project `$engineering-specs` Skill, and Claude plus Portable use the same
 engine through explicit CLI steps. Before implementation or code review, the
 engine:
 
-1. matches planned paths to the locked Catalog scopes;
-2. asks the Agent to read candidate descriptions and Applicability;
-3. records applicable Spec IDs, including dependencies, or an explicit
-   reasoned `none` decision for the current turn;
-4. reads only digest-verified local documents; and
-5. reports activated requirements, verification, exceptions, and migration
-   effects at handoff.
+1. matches planned paths to locked Catalog scopes and decides Spec
+   Applicability;
+2. returns bounded, non-normative Requirement cards only for applicable Specs;
+3. records the smallest complete set of direct Requirement IDs, each with a
+   task-specific reason, or an explicit reasoned `none` decision;
+4. resolves the exact Requirement dependency closure and compiles a
+   digest-verified context capsule from local source bytes; and
+5. reports exact IDs, published/effective enforcement levels, capsule digest
+   and bytes, verification, exceptions, and migration effects at handoff.
 
 ```mermaid
 flowchart LR
-    P["Prompt + planned paths"] --> D["Agent adapter"]
-    D --> R["shared activation engine"]
-    L["locked local Specs"] --> R
-    R --> A["turn activation receipt"]
-    A --> W["implementation or review"]
-    W --> H["changed-path + handoff audit"]
+    P["Prompt + planned paths"] --> S["Applicable Specs"]
+    S --> C["Bounded Requirement cards"]
+    C --> D["Direct Requirement IDs + reasons"]
+    D --> X["Exact dependency closure"]
+    L["Verified local source ranges"] --> K["Context capsule"]
+    X --> K
+    K --> W["Implementation or review"]
+    W --> H["Receipt + changed-path audit"]
+    H --> E["Activation evidence export"]
 ```
 
+The normal card budget is 16 KiB and the exact capsule budget is 32 KiB.
+Capsules contain each selected Spec's mandatory interpretation frame, resolved
+Requirement blocks, and matching Verification rows. Normative text is never
+summarized or truncated to fit: overflow fails and asks the caller to narrow
+the choice, partition the task, or explicitly justify a larger reviewed budget
+with `--capsule-budget-reason`. Legacy documents without formal Requirement
+blocks remain usable only through reasoned whole-Spec mode.
+
 The Core understands only normalized `session_start`, `subagent_start`,
-`before_mutation`, and `stop` events. The Codex adapter translates its native
+`context_resume`, `before_mutation`, and `stop` events. Protocol-v2 receipts
+record direct and resolved Requirement IDs, reasons, source ranges, capsule
+mode/digest/bytes, published/effective enforcement levels, and a context epoch.
+`rehydrate` advances the epoch and
+reconstructs the same verified capsule after compaction or context loss.
+
+Requirement-index schema v2 carries each declared Automated enforcement level;
+schema v1 and older source blocks remain readable through an explicit legacy
+Advisory default. Run `spec_router.py evidence` with the active
+adapter/session/turn to export verified Catalog, Spec, Requirement-block,
+receipt, and level identities without normative source text. RepoFoundry's
+effective ceiling is Advisory, and the export explicitly reports that no
+finding lifecycle is supported.
+The Codex adapter translates its native
 events: generated Hooks establish a Git baseline on `UserPromptSubmit`, pass
 the contract to subagents, deny Bash or `apply_patch` writes before activation,
 inject the activated local documents before the first write, and audit changed

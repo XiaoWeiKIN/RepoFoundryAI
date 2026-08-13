@@ -3,6 +3,17 @@
 This repository uses RepoFoundry's product-neutral engineering Harness. Read
 `ARCHITECTURE.md` and `docs/index.md` before changing established boundaries.
 
+## Activation depth
+
+Ordinary read-only code explanation, navigation, call-chain tracing, and
+existing-behavior summaries do not start the full Harness workflow. Read only
+the necessary code and repository documents; do not run Harness validation,
+activate Specifications, create governed artifacts, or require an evidence
+handoff solely for that analysis. Use the workflow below for implementation,
+formal code review, explicit Spec conformance, or repository mutation. A formal
+defect, security, or reliability diagnosis may consult repository contracts,
+but it escalates only when its requested scope requires review or change.
+
 ## Governance and Engineering Specifications
 
 Create a stable local session and turn identifier and run the shared engine:
@@ -26,26 +37,38 @@ python3 .repo-foundry/engineering-specs/spec_router.py classify \
   --mode <build|governed> --reason <risk-reason>
 ```
 
-In Build/Governed, read candidate Applicability and record applicable IDs or a
-justified explicit-none decision before the first mutation:
+In Build/Governed, read each candidate's `Applicability` section, request bounded
+cards for applicable Specs, then record exact direct Requirements with reasons
+or a justified explicit-none decision before the first mutation:
 
 ```bash
+python3 .repo-foundry/engineering-specs/spec_router.py requirements \
+  --path <planned-path> --spec <applicable-spec-id>
 python3 .repo-foundry/engineering-specs/spec_router.py activate \
   --adapter-id portable --session-id <session-id> --turn-id <turn-id> \
-  --path <planned-path> [--spec <id> ...]
+  --path <planned-path> --spec <applicable-spec-id> \
+  --requirement <ID> --because "<ID>=<task-specific reason>"
 ```
 
 This adapter provides CLI checks and advisory instructions. It does not claim
-native lifecycle interception. Re-run activation if planned paths change, run
-each activated requirement's verification, then audit the final handoff:
+native lifecycle interception. Use explicit whole-Spec fallback only with a
+reason; a raised capsule budget also requires `--capsule-budget-reason`. Use
+`--none --reason` when nothing applies. Run `rehydrate` after a context reset,
+re-run activation if planned paths change, run each resolved
+Requirement's Verification row, then audit the final handoff:
 
 ```bash
+python3 .repo-foundry/engineering-specs/spec_router.py evidence \
+  --adapter-id portable --session-id <session-id> --turn-id <turn-id>
 python3 .repo-foundry/engineering-specs/spec_router.py audit \
   --adapter-id portable --session-id <session-id> --turn-id <turn-id> \
   --message-file <handoff-file>
 ```
 
 Explore may use normal prose for outcome, verification, and unresolved risk.
+The evidence export preserves each source-owned published level but records
+Advisory as RepoFoundry's effective ceiling. This adapter does not claim a
+finding executor or Warning/Blocking lifecycle.
 Build/Governed handoff contains all five labels:
 
 ```text

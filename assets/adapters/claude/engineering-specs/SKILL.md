@@ -29,26 +29,38 @@ python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   --mode <build|governed> --reason <risk-reason>
 ```
 
-Build and Governed record one decision for every applicable path scope:
+Build and Governed decide Spec Applicability, request bounded cards, then record
+exact direct Requirements with one reason per ID for every applicable path scope:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
+  requirements --path <path> --spec <applicable-spec-id>
+python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   activate --adapter-id claude --session-id <session> --turn-id <turn> \
-  --path <path> --spec <spec-id> --reason <reason>
+  --path <path> --spec <applicable-spec-id> \
+  --requirement <ID> --because "<ID>=<task-specific reason>"
 ```
 
-Repeat `--spec` when multiple candidates apply. If none applies, use `--none`
-with a reason. Never infer explicit-none from an empty candidate list.
+Repeat the flags for multiple selections. Use `--whole-spec` plus
+`--whole-spec-reason` only for an indexed legacy fallback, migration, or broad
+audit. If none applies, use `--none` with a reason. After compaction, run
+`rehydrate` for the active identity. Never infer none from an empty candidate
+list and never summarize or truncate normative text to fit a budget. Raising
+the default capsule budget requires `--capsule-budget-reason`.
 
 Before Build/Governed completion, audit the receipt and handoff:
 
 ```bash
+python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
+  evidence --adapter-id claude --session-id <session> --turn-id <turn>
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   audit --adapter-id claude --session-id <session> --turn-id <turn> \
   --message-file <handoff-file>
 ```
 
 Explore reports outcome, verification, and unresolved risk in ordinary prose.
+The evidence export carries source-owned published levels and an Advisory
+effective level. It is activation evidence, not a finding-lifecycle claim.
 Build/Governed responses contain `Activated specifications:`,
 `Activated requirements:`, `Verification:`, `Exceptions:`, and
 `Compatibility or migration:`. Report a missing Router as an exception rather

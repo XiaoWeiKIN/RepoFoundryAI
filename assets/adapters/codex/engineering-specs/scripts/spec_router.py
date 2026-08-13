@@ -119,8 +119,11 @@ def _is_router_command(command: str) -> bool:
             "begin",
             "candidates",
             "classify",
+            "requirements",
             "activate",
             "status",
+            "evidence",
+            "rehydrate",
             "audit",
         }
     )
@@ -321,13 +324,15 @@ def _delegate_to_core(arguments: list[str]) -> int:
         "classify",
         "activate",
         "status",
+        "rehydrate",
         "audit",
     }
     command_index = next(
         (
             index
             for index, value in enumerate(arguments)
-            if value in commands_requiring_identity or value in {"candidates", "event"}
+            if value in commands_requiring_identity
+            or value in {"candidates", "requirements", "event"}
         ),
         None,
     )

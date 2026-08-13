@@ -424,7 +424,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.2.0",
+            "0.5.0",
         )
         self.assertIn(
             "name: engineering-execution-plan",
@@ -591,6 +591,9 @@ class RepositoryContractTestCase(unittest.TestCase):
         self.assertIn("## Classify the task", router_skill)
         for mode in ("Explore", "Build", "Governed"):
             self.assertIn(mode, router_skill)
+        self.assertIn("bounded cards", router_skill)
+        self.assertIn("--requirement <ID>", router_skill)
+        self.assertIn("rehydrate", router_skill)
         self.assertTrue((router / "agents" / "openai.yaml").is_file())
         self.assertTrue((router / "scripts" / "spec_router.py").is_file())
 
@@ -724,6 +727,21 @@ class RepositoryContractTestCase(unittest.TestCase):
         canonical_path = ".repo-foundry/skills/repo-foundry-ai/SKILL.md"
         self.assertIn(canonical_path, assets["codex"][0].read_text(encoding="utf-8"))
         self.assertIn(canonical_path, assets["claude"][0].read_text(encoding="utf-8"))
+        for label in ("core", "codex", "claude"):
+            project_skill = assets[label][0].read_text(encoding="utf-8")
+            self.assertIn(
+                "Do not auto-trigger for ordinary read-only code explanation",
+                project_skill,
+                label,
+            )
+        core_skill = assets["core"][0].read_text(encoding="utf-8")
+        self.assertIn("do not start the full Harness workflow", core_skill)
+        self.assertIn("formal code review", core_skill)
+        self.assertIn("repository mutation", core_skill)
+        portable_guide = (
+            ROOT / "assets/adapters/portable/agent-guide.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("do not start the full Harness workflow", portable_guide)
         claude_specs = assets["claude-specs"][0].read_text(encoding="utf-8")
         self.assertIn(
             ".repo-foundry/engineering-specs/spec_router.py",
@@ -743,7 +761,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
             foundryctl,
         )
-        self.assertIn('DEFAULT_SPEC_VERSION = "1.2.0"', foundryctl)
+        self.assertIn('DEFAULT_SPEC_VERSION = "1.5.0"', foundryctl)
         self.assertNotIn('DEFAULT_SPEC_REF = "main"', foundryctl)
         self.assertIn("--spec-version", foundryctl)
         self.assertIn('"upgrade"', foundryctl)

@@ -1,0 +1,36 @@
+{
+  "ci": {
+    "conclusion": "success",
+    "jobs": {
+      "Python 3.10": "success",
+      "Python 3.14": "success",
+      "ep-integrity": "success"
+    },
+    "run_id": 31399831082,
+    "url": "https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/31399831082"
+  },
+  "install": {
+    "archive_sha256": "c30238acd99f9ca2a201af0e7302649167af626544187d15700549354975d74d",
+    "cli_version": "RepoFoundry AI 0.4.0",
+    "commit": "fd2fe963f607ddad5747c96aacc603a50d37cbb9",
+    "explicit_action": "installed",
+    "host_integrations": [],
+    "isolated_prefix": true,
+    "latest_action": "unchanged",
+    "package_sha256": "315624b88bcc92a7d28a0b38dfa1ff88b83fa8b08f398bbe6fb8a50ef59c3c75",
+    "project_harnesses_modified": false,
+    "repository": "XiaoWeiKIN/RepoFoundryAI",
+    "source_kind": "github-release",
+    "tag": "v0.4.0",
+    "version": "0.4.0"
+  },
+  "release": {
+    "annotated_tag_object": "346225726eb5e9c7e35c580d3097772c46f25301",
+    "commit": "fd2fe963f607ddad5747c96aacc603a50d37cbb9",
+    "draft": false,
+    "latest": true,
+    "prerelease": false,
+    "tag": "v0.4.0",
+    "url": "https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.4.0"
+  }
+}

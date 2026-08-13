@@ -1,6 +1,6 @@
 ---
 name: engineering-specs
-description: Classify Agent work as Explore, Build, or Governed and route Build/Governed implementation and review tasks to applicable version-locked Engineering Specifications. Do not use this Skill to install or upgrade Specifications.
+description: Classify Agent work as Explore, Build, or Governed and route Build/Governed implementation and review tasks to exact Requirements from applicable version-locked Engineering Specifications. Determine Spec candidates from planned paths, decide Applicability, inspect bounded Requirement cards, record direct IDs with reasons, apply the exact context capsule, and report verification. Do not use this Skill to install or upgrade Specifications.
 ---
 
 # Engineering Specs
@@ -49,19 +49,33 @@ evidence boundaries apply in every mode.
 3. For every candidate, read its Catalog purpose and `Applicability` section.
    Inspect enough existing code and project documentation to decide whether the
    task intent activates it. A matching file scope alone is not activation.
-4. Record the applicable set before implementation or review:
+4. Request bounded cards only for applicable Specs:
+
+   ```bash
+   python3 .repo-foundry/engineering-specs/spec_router.py requirements \
+     --path <path> [--path <path> ...] \
+     --spec <applicable-id> [--spec <applicable-id> ...]
+   ```
+
+5. Record the smallest complete direct Requirement set before work:
 
    ```bash
    python3 .repo-foundry/engineering-specs/spec_router.py activate \
      --adapter-id codex \
      --session-id <session-id> --turn-id <turn-id> \
      --path <path> [--path <path> ...] \
-     --spec <id> [--spec <id> ...]
+     --spec <applicable-id> \
+     --requirement <ID> --because "<ID>=<task-specific reason>"
    ```
 
-   Use the session and turn values injected by the Codex Hook. Dependencies are
-   added automatically. Read every returned local document before editing.
-5. If no candidate is applicable, still record the decision:
+   Repeat all three selection flags when needed. Code adds exact Requirement
+   dependencies; Hooks inject the digest-verified capsule. A legacy Spec,
+   repository-wide audit, or migration may instead use `--whole-spec <id>
+   --whole-spec-reason <reason>`. Normative text is never summarized or
+   truncated to meet a budget. Raising the 32 KiB default also requires
+   `--capsule-budget-reason <reviewed reason>` and remains visible in the
+   receipt.
+6. If no candidate is applicable, still record the decision:
 
    ```bash
    python3 .repo-foundry/engineering-specs/spec_router.py activate \
@@ -71,7 +85,20 @@ evidence boundaries apply in every mode.
      --none --reason "<why no installed Spec governs this task>"
    ```
 
-6. Rerun activation when the planned path set or applicable Spec set changes.
+7. Rerun activation when paths, applicable Specs, or direct Requirements
+   change. After compaction or a manual context resume, run `rehydrate` with
+   the active adapter/session/turn so the next epoch receives the same capsule.
+8. Before handoff, export the source-verified enforcement context:
+
+   ```bash
+   python3 .repo-foundry/engineering-specs/spec_router.py evidence \
+     --adapter-id codex \
+     --session-id <session-id> --turn-id <turn-id>
+   ```
+
+   Published levels are source-owned ceilings. RepoFoundry reports Advisory as
+   its effective level because this Router does not produce or adjudicate
+   compliance findings.
 
 Project Specifications appear as `project:<repository-relative-path>` IDs.
 Prefer the narrower project rule only when it explicitly owns or overrides the
@@ -80,7 +107,8 @@ decision; do not silently discard compatible upstream requirements.
 ## Complete the handoff
 
 Explore may report outcome, verification, and unresolved risk in normal prose.
-For Build and Governed, run required verification and end with all five labels:
+For Build and Governed, run the Verification rows for every resolved Requirement
+and end the task with all five labels:
 
 ```text
 Activated specifications: <IDs and versions | none>

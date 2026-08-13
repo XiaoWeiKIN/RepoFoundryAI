@@ -88,13 +88,13 @@ class InstallerTestCase(unittest.TestCase):
                 ).stdout
             )
             self.assertEqual(first["action"], "installed")
-            self.assertEqual(first["version"], "0.2.0")
+            self.assertEqual(first["version"], "0.5.0")
             self.assertFalse(first["project_harnesses_modified"])
             self.assertEqual(first["host_integrations"], [])
             self.assertTrue((prefix / "current").is_symlink())
             self.assertEqual(
                 (prefix / "current" / "VERSION").read_text(encoding="utf-8").strip(),
-                "0.2.0",
+                "0.5.0",
             )
             launcher = bin_dir / "repofoundry"
             self.assertTrue(launcher.is_file())
@@ -106,7 +106,7 @@ class InstallerTestCase(unittest.TestCase):
                 timeout=30,
                 check=True,
             )
-            self.assertEqual(version.stdout.strip(), "RepoFoundry AI 0.2.0")
+            self.assertEqual(version.stdout.strip(), "RepoFoundry AI 0.5.0")
             releases_before = sorted((prefix / "releases").iterdir())
 
             second = json.loads(
@@ -467,7 +467,7 @@ class InstallerTestCase(unittest.TestCase):
             bin_dir = root / "bin"
             source = installer.PackageSource(
                 root=ROOT,
-                version="0.2.0",
+                version="0.5.0",
                 provenance={"kind": "local", "path": str(ROOT)},
             )
             original_run = installer.subprocess.run

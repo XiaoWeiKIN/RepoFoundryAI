@@ -1,0 +1,7 @@
+Command: python3 engineering-execution-plan/scripts/epctl.py --repo . validate
+Result: PASS
+Errors: 0
+Warnings: 2
+
+Both warnings are pre-existing archive-readiness notices for unrelated active
+plans EP-006 and EP-013.

@@ -134,6 +134,8 @@ target-repository/
     ├── agent-guides/
     │   ├── README.md                  # Portable adapter 入口
     │   └── managed/
+    │       ├── index.md               # Spec 路由索引
+    │       └── requirements.json      # Requirement 精确源码索引
     ├── design-docs/
     ├── research/{active,completed}/
     ├── adr/
@@ -148,64 +150,123 @@ RepoFoundry AI 记录证据，但不接管项目自己的测量实现。
 Bootstrap 不会编造仓库事实。未知命令、Owner、架构、SLO 和安全控制会保留为
 `BOOTSTRAP_TODO`，等待维护者确认。
 
-## 一条命令安装或升级
+## 一次安装，逐仓库启用
 
-一键安装器当前支持 macOS 和 Linux，需要 Python 3.10+ 与 `curl`。首次安装和
-后续升级使用同一条命令：
+RepoFoundry 包含两个相互独立的作用域。**发行包安装**把 CLI 和可选的个人 Skill
+入口放进用户环境；**仓库 Bootstrap**只向明确指定的仓库写入版本化 Harness 与
+项目 Skills。安装或升级发行包不会扫描、修改任何项目仓库。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+```mermaid
+flowchart LR
+    I["安装或升级<br/>用户作用域"] --> P["预览 Bootstrap<br/>仓库作用域"]
+    P --> A["明确应用"]
+    A --> V["验证 Harness"]
 ```
 
-安装器默认选择 GitHub 最新稳定 Release，把 tag 解析到不可变 commit，记录下载
-归档的 SHA-256，验证暂存包后再原子切换当前版本。默认安装到 XDG 用户数据目录，
-在用户本地 bin 目录暴露 `repofoundry`，并为检测到的 Codex 与 Claude Code 注册根
-Skill。Claude Code 注册遵循其官方配置根目录：
-设置环境变量时使用 `$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai`，否则使用
-`~/.claude/skills/repo-foundry-ai`。其他 Agent 可以直接使用同一 CLI 和 portable
-adapter，不需要这两个宿主目录。重复执行当前版本会返回 no-op。
+### 快速开始：安装并启用全部 adapter
 
-在 `python3 -` 后传参即可固定版本或宿主策略：
+安装器支持 macOS 和 Linux，需要 Python 3.10+ 与 `curl`。
+
+1. 安装最新稳定版。以后升级仍运行同一条命令：
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+   ```
+
+2. 进入目标仓库，预览 Agent-neutral Core 与全部项目 adapter：
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters
+   ```
+
+3. 检查输出中的 `create`、`preserve` 和 `conflict`。确认计划无冲突后再应用，
+   随后验证 Harness：
+
+   ```bash
+   repofoundry --repo . bootstrap --all-adapters --apply
+   repofoundry --repo . validate
+   ```
+
+`--all-adapters` 始终按确定顺序展开为 `codex`、`claude` 和 `portable`。结果不受
+当前机器安装了哪些 Agent 产品影响。
+
+### 只启用需要的 adapter
+
+指定一个或多个 adapter 时，仍然先预览，再加 `--apply` 应用：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.2.0 --host codex
+# 只启用 Claude Code：先预览，再应用
+repofoundry --repo . bootstrap --adapter claude
+repofoundry --repo . bootstrap --adapter claude --apply
+
+# 同时启用 Codex 与产品无关的 portable 指南
+repofoundry --repo . bootstrap --adapter codex --adapter portable
+repofoundry --repo . bootstrap --adapter codex --adapter portable --apply
+```
+
+| Adapter | 仓库持有的入口 |
+|---|---|
+| `codex` | `AGENTS.md`、`.agents/skills/` 与经过评审的 `.codex/` guards |
+| `claude` | `.claude/skills/` 下的原生项目 Skills |
+| `portable` | `docs/agent-guides/` 下的产品无关指南 |
+
+所有 adapter 共享 `.repo-foundry/skills/repo-foundry-ai/SKILL.md` 中的 canonical
+workflow 和 Core Spec Router。Claude adapter 创建普通项目文件，不会把仓库链接到
+用户 home。Claude Code 对同名 Skill 采用个人级优先规则；项目 canonical workflow
+存在时，个人入口会转交给该项目文件。
+
+### `--host` 只控制个人入口
+
+常规安装无需传入 `--host`。默认值 `auto` 会为检测到的 Codex 和 Claude Code
+注册个人 RepoFoundry Skill。其他 Agent 仍可直接使用 CLI 与 portable 项目
+adapter，不依赖这两个宿主目录。
+
+| 安装参数 | 个人 Skill 行为 |
+|---|---|
+| `--host auto` | 注册检测到的全部受支持宿主；这是默认值 |
+| `--host codex` | 确保 Codex 个人 Skill 链接存在 |
+| `--host claude` | 确保 Claude Code 个人 Skill 链接存在 |
+| `--host none` | 保留已有注册，不创建新注册 |
+
+示例：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.1 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
 
-`--host codex` 与 `--host claude` 会确保对应的个人 Skill 链接存在；如果目标位置
-已有非托管内容，安装器会先备份再替换。`--host auto` 注册检测到的全部受支持
-宿主；`--host none` 不新增宿主注册，也不会删除既有注册。Claude Code 配置根目录
-可通过 `CLAUDE_CONFIG_DIR` 或 `--claude-home` 覆盖。
+目标位置存在非托管内容时，安装器会先备份再替换。Claude Code 在设置
+`CLAUDE_CONFIG_DIR` 时使用
+`$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai`，否则使用
+`~/.claude/skills/repo-foundry-ai`；`--claude-home` 可以覆盖这两个位置。
 目录软链接发现要求 Claude Code 2.1.203 或更高版本。
 
-宿主注册只负责让个人安装中的 `/repo-foundry-ai` 可发现；项目注册是另一个由仓库
-持有的操作。为当前项目安装 Claude Skills，或按确定顺序安装全部 adapter：
+### 先升级发行包，再逐仓库迁移
+
+重新运行一键安装命令会原子切换到最新稳定版；当前稳定版已经激活时返回 no-op。
+安装器把 Release tag 解析为不可变 commit，记录归档 SHA-256，并在激活前验证
+暂存包。
+
+项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
+需要迁移到其他版本时，把 `0.5.0` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . bootstrap --adapter claude --apply
-repofoundry --repo . bootstrap --all-adapters --apply
+repofoundry --repo . upgrade --to 0.5.0
+repofoundry --repo . upgrade --to 0.5.0 --apply
+repofoundry --repo . validate
 ```
 
-Claude adapter 在 `.claude/skills/` 下创建普通文件，不链接用户 home。它提供原生
-Skill discovery，通过共享项目 Router 显式执行 CLI 激活与审计，但不宣称 Claude
-生命周期 Hooks 或机械写入门禁。`--all-adapters` 总是展开为 `codex`、`claude`、
-`portable`，不会因当前机器安装了哪些宿主而变化。
-
-Claude Code 对同名 Skill 采用个人级优先于项目级的规则。RepoFoundry 在两个 scope
-都保留 `/repo-foundry-ai` 品牌入口：已安装的个人入口发现项目 canonical 文件时，
-必须读取 `.repo-foundry/skills/repo-foundry-ai/SKILL.md`；没有个人注册的 clone 则
-直接发现薄项目入口。
-
-命令会报告当前 package home、CLI 路径、宿主链接和所有保留的备份。如果 bin
-目录尚未进入 `PATH`，安装器会输出需要加入的精确目录。安装后验证：
+随时可以检查当前安装和可用 adapter：
 
 ```bash
 repofoundry --version
 repofoundry --repo . adapter list
 ```
 
-如果环境禁止把下载内容直接交给解释器，可以先下载审查再执行：
+### 先审查安装器，或从 checkout 安装
+
+如果环境禁止把下载内容直接交给解释器，可以先下载并审查：
 
 ```bash
 curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
@@ -213,12 +274,7 @@ less /tmp/repofoundry-install.py
 python3 /tmp/repofoundry-install.py
 ```
 
-发行包升级与项目迁移严格分离。安装器不会扫描或修改任何项目仓库。安装新版
-RepoFoundry 后，仍需在每个项目中先执行
-`repofoundry --repo PATH upgrade --to VERSION` 预览，再加 `--apply` 明确应用
-Harness 迁移。
-
-维护者也可以从显式 checkout 离线安装：
+维护者也可以从显式 checkout 安装，无需下载 Release：
 
 ```bash
 git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
@@ -291,14 +347,14 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.2.0
-repofoundry --repo . upgrade --to 0.2.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.2.0 --apply
+repofoundry --repo . upgrade --to 0.5.0
+repofoundry --repo . upgrade --to 0.5.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.5.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.2.0 --spec languages/go --apply
+  spec update --spec-version 1.5.0 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -327,28 +383,38 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.2.0` 使用 Harness schema `3`、Harness Core `1.2.0`、Codex
-adapter `2.2.0`、Claude adapter `1.1.0`、Portable adapter `1.1.0` 与激活协议
-`1`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.2.0 --apply` 才会迁移。较早的 schema `3`
-Core `1.0.0` 与 Codex `2.0.0` 契约也继续可读；显式 upgrade 或一次预览过的
+RepoFoundry `0.5.0` 使用 Harness schema `3`、Harness Core `1.4.0`、Codex
+adapter `2.4.0`、Claude adapter `1.3.0`、Portable adapter `1.3.0` 与激活协议
+`2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
+可读，但只有显式执行 `upgrade --to 0.5.0 --apply` 才会迁移。较早的 schema `3`
+Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
 原样，写后验证失败会回滚。完整契约见
 [版本与迁移设计](./docs/design-docs/repo-foundry-versioning-and-migrations.md)。
 
+项目工作流现在会先判断激活深度。普通的只读代码解释、导航、调用链追踪和既有行为
+总结，只读取回答所需的代码与文档；不会运行完整 Harness validation、激活 Spec、创建
+治理制品或强制五字段证据交接。正式评审、显式 Spec 合规判断、缺陷诊断和仓库修改，
+仍会升级到对应的 Harness 层级。
+
 Engineering Specs 来自独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发布版本。
-新仓库默认选择固定 Catalog `1.2.0`，manifest 记录
-`refs/tags/v1.2.0`。生产升级通过
+新仓库默认选择固定 Catalog `1.5.0`，manifest 记录
+`refs/tags/v1.5.0`。生产升级通过
 `spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
-`--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。
+`--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。安装 RepoFoundry
+`0.4.1` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
+托管正文。
 
 `spec plan` 会列出全部 Catalog 条目，并区分必选、推荐、项目直接配置和依赖闭包后的
 最终集合。检测结果只推荐可选 ID；首次 Bootstrap 或 `spec update` 时重复传入
 `--spec ID`，即可设置完整的可选直接集合；`--required-only` 表示不选任何可选
-Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
+Spec。Catalog 更新出现尚未配置的可选 Spec 时，dry-run 会返回
+`selection_decision.status=required`，并列出每个 candidate 的 ID、描述与依赖；
+用户明确选择完整 `--spec` 集合、`--required-only` 或 `--keep-selection` 之前，
+apply 会保持失败关闭。必选 Spec 与传递依赖仍由解析器自动补齐。
 
 ## 为每个任务激活规范
 
@@ -357,23 +423,41 @@ Spec。必选 Spec 与传递依赖仍由解析器自动补齐。
 发现项目级 `$engineering-specs` Skill，Claude 与 Portable 都通过显式 CLI 步骤
 使用同一引擎。实现或评审前，引擎会：
 
-1. 用计划路径匹配 lock 中的 Catalog 作用域；
-2. 要求 Agent 读取候选 description 与 Applicability；
-3. 为当前 Turn 记录适用 Spec ID 与依赖，或记录带理由的显式 `none`；
-4. 只读取摘要已验证的本地规范；
-5. 在交接时报告激活的 Requirement、验证、例外与迁移影响。
+1. 用计划路径匹配 lock 中的 Catalog 作用域，并判断 Spec Applicability；
+2. 只为适用 Spec 返回有大小上限、非规范性的 Requirement 卡片；
+3. 记录最小但完整的直接 Requirement ID 集合，每个 ID 都带任务理由；没有适用项时
+   记录带理由的显式 `none`；
+4. 计算精确 Requirement 依赖闭包，并从摘要已验证的本地源码字节编译上下文胶囊；
+5. 在交接时报告精确 ID、胶囊摘要与字节数、验证、例外和迁移影响。
 
 ```mermaid
 flowchart LR
-    P["Prompt + 计划路径"] --> D["Agent adapter"]
-    D --> R["共享激活引擎"]
-    L["锁定的本地 Specs"] --> R
-    R --> A["Turn 激活回执"]
-    A --> W["实现或评审"]
-    W --> H["变更路径 + 交接审计"]
+    P["Prompt + 计划路径"] --> S["适用 Specs"]
+    S --> C["有界 Requirement 卡片"]
+    C --> D["直接 Requirement ID + 理由"]
+    D --> X["精确依赖闭包"]
+    L["已验证的本地源码范围"] --> K["上下文胶囊"]
+    X --> K
+    K --> W["实现或评审"]
+    W --> H["回执 + 变更路径审计"]
 ```
 
-Core 只识别标准化的 `session_start`、`subagent_start`、`before_mutation`、`stop`。
+默认卡片预算为 16 KiB，精确胶囊预算为 32 KiB。胶囊包含每份所选 Spec 的强制
+解释框架、依赖闭包中的 Requirement 原文块和对应 Verification 行。规范文本绝不为
+适应预算而摘要或截断：超限会失败，调用方必须缩小选择、拆分任务，或通过
+`--capsule-budget-reason` 记录提高预算的评审理由。没有正式 Requirement 块的旧文档
+只能走带理由的整份 Spec 回退。
+
+Core 只识别标准化的 `session_start`、`subagent_start`、`context_resume`、
+`before_mutation`、`stop`。协议 v2 回执记录直接和闭包 Requirement ID、理由、源码
+范围、发布/有效自动执法等级、胶囊模式/摘要/字节数与上下文 epoch。发生 compaction 或上下文丢失后，
+`rehydrate` 会推进 epoch，并从本地源码重建同一个已验证胶囊。
+
+Requirement 索引 schema v2 携带源码声明的 Automated enforcement 等级；schema v1
+与旧格式 Requirement 通过显式的 legacy Advisory 默认值继续可读。使用当前
+adapter/session/turn 运行 `spec_router.py evidence`，可导出经过源码复核的 Catalog、
+Spec、Requirement 块、receipt 与等级身份，不包含规范原文。RepoFoundry 的有效上限
+固定为 Advisory，导出也明确声明尚不支持 finding lifecycle。
 Codex adapter 翻译原生事件：生成的 Hooks 在 `UserPromptSubmit` 建立 Git 基线，把契约传给子 Agent，
 在激活前拒绝 Bash 或 `apply_patch` 写入，在首次写入前注入已激活的本地全文，并在
 `Stop` 审计实际变更路径。项目只有在仓库受信任、用户通过 Codex `/hooks` 审查

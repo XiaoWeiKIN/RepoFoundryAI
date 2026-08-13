@@ -78,7 +78,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.0
+  upgrade --to 0.5.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -105,7 +105,10 @@ Core Spec 必选；仓库证据只推荐可选 Spec，
 用户通过可重复 `--spec <id>` 显式选择安装。选择写入
 `docs/.engineering/specs.json`，精确版本与 SHA-256 写入
 `specs.lock.json`；lock 同时记录解析后的完整 Git commit。所有 adapter 都从
-同一个 Router 按计划路径、任务意图和 `docs/agent-guides/managed/index.md` 激活规范。
+同一个 Router 按计划路径、任务意图、`docs/agent-guides/managed/index.md` 与
+`requirements.json` 激活精确 Requirement。
+Requirement 索引 schema v2、协议 v2 receipt 与 `evidence` 导出会传播发布等级；
+RepoFoundry 的有效自动执法上限固定为 Advisory，不得宣称 finding lifecycle。
 项目规则通过 manifest 引用，工具不改写其内容。未知项目事实保留
 `BOOTSTRAP_TODO`，不得编造命令、Owner、架构、SLO 或安全控制。
 
@@ -123,9 +126,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.0
+  upgrade --to 0.5.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.2.0 --apply
+  upgrade --to 0.5.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -146,19 +149,24 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  spec update --spec-version 1.2.0 --spec languages/go --apply
+  spec update --spec-version 1.5.0 --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 默认 Catalog 来自
 `https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`，默认固定版本为
-`1.2.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
+`1.5.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
 `refs/tags/vMAJOR.MINOR.PATCH`，解析器必须验证 tag 与 `catalog_version` 一致。
 首次初始化可用 `--spec-repository` 选择其他仓库；`--spec-ref` 只用于显式开发
 分支、tag 或 commit。manifest 保存 Git URL/ref。`sync` 使用已有 lock 的 commit；
 生产升级通过 `update --spec-version ...` 替换 source 并刷新已选内容，不会因检测
-结果改变选择；`update --spec ...` 预览并替换完整可选集合，`--required-only` 回到
-仅必选集合。依赖闭包自动补齐。`spec validate` 完全离线。Bootstrap
+结果改变选择。Catalog 发生变化且出现尚未配置的可选 Spec 时，dry-run 的
+`selection_decision.status` 为 `required`；必须向用户展示每个 candidate 的 ID、
+描述和依赖，并让用户明确选择完整 `--spec` 集合、`--required-only` 或
+`--keep-selection`。在用户作答前不得传 `--apply`，也不得替用户推断
+`--keep-selection`。`update --spec ...` 预览并替换完整可选集合，
+`--required-only` 回到仅必选集合；`--keep-selection` 明确保留既有直接选择。
+依赖闭包自动补齐。`spec validate` 完全离线。Bootstrap
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
 
@@ -182,14 +190,22 @@ Explore 开始，并只允许按 `Explore → Build → Governed` 单调升级�
 Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。所有 adapter 先运行
 `begin` 取得 profile/mode；adaptive Explore 可直接进行有界可逆工作，跨越风险边界
 前用 `classify --mode build|governed --reason ...` 升级。Build/Governed 再执行
-`candidates/activate`：读取候选 Applicability，记录适用 ID 或带理由的 `none`。
-激活自动加入 `requires` 闭包；Codex Hook 在 Build/Governed 首次写入前注入已验证
-本地全文，Claude 与 Portable 显式读取并审计。Governed 保留既有五字段 handoff；
-Explore 使用普通结果、验证与剩余风险说明。
+`candidates/requirements/activate`：读取候选 Applicability，
+`requirements` 返回有界卡片，`activate` 记录带理由的直接 Requirement ID。Core
+计算精确依赖闭包，并从摘要已验证的源码范围编译解释框架、Requirement 块和对应
+Verification 行；16 KiB 卡片与 32 KiB 胶囊超限时失败，绝不摘要或截断规范原文。
+提高默认胶囊预算必须通过 `--capsule-budget-reason` 记录评审理由。
+旧文档、迁移或全库审计只能使用带理由的整份 Spec 回退；无适用项仍记录带理由的
+`none`。
 
-Core 只识别 `session_start`、`subagent_start`、`before_mutation`、`stop` 四类标准化
-事件。Codex adapter 将 `UserPromptSubmit`、`SubagentStart`、`PreToolUse`、`Stop`
-翻译到这些事件，并保持既有写入门禁与五字段交接审计。
+Codex Hook 在 Build/Governed 首次写入前注入已验证本地全文，Claude 与 Portable
+显式读取并审计。Governed 保留五字段 handoff；Explore 使用普通结果、验证与剩余
+风险说明。
+
+Core 只识别 `session_start`、`subagent_start`、`context_resume`、
+`before_mutation`、`stop` 五类标准化事件。协议 v2 回执记录直接/闭包 ID、理由、
+胶囊摘要/字节数和 context epoch；compaction 后用 `rehydrate` 精确重建。Codex
+adapter 将原生生命周期翻译到这些事件，并保持写入门禁与五字段交接审计。
 项目 Hooks 只有在仓库受信任且用户通过 Codex `/hooks` 审查精确命令后才生效；
 Hook 不可用时仍必须手动遵循 Router Skill 并运行其 `audit` 命令。
 
