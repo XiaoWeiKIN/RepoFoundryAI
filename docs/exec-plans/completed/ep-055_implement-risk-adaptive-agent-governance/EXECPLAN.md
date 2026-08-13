@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-055
 title: "Implement risk-adaptive Agent governance"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
@@ -19,9 +19,9 @@ architecture_decision_gate_reason: ""
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:6bb9c1af47c8042eea7cf2824c8c918b9049782a"
+verification_evidence: ["python3 -B scripts/check.py (exit 0; 35 Research, 9 Benchmark, 53 ExecPlan, 117 integration tests)"]
+archive_sha256: 70dc3e6b5188e292441456bb9a5c8267ab32ec7bb8ee3a9a8a14037cc387a5d3
 created: 2026-08-13
 updated: 2026-08-13
 author: "Codex"
@@ -247,7 +247,7 @@ All commands run from `/Users/wangxiaowei1/x-otel/EngineeringPlan`.
    `python3 -B -m unittest engineering-benchmark/tests/test_benchctl.py` using
    their supported discovery invocation; expect exit 0.
 6. Run `python3 -B scripts/check.py`; expect exit 0 and preserve the complete
-   transcript in `docs/exec-plans/active/ep-055_implement-risk-adaptive-agent-governance/artifacts/`.
+   transcript in `docs/exec-plans/completed/ep-055_implement-risk-adaptive-agent-governance/artifacts/`.
 
 ## Validation and Acceptance
 
@@ -380,7 +380,7 @@ not be archived against an invented attestation.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-055_implement-risk-adaptive-agent-governance/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-055_implement-risk-adaptive-agent-governance/EXECPLAN.md`
 - Harness tests: `artifacts/foundryctl-tests.txt`
 - Router tests: `artifacts/spec-router-tests.txt`
 - Repository contracts: `artifacts/repository-contracts.txt`

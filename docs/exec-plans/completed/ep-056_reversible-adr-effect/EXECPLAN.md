@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-056
 title: "Implement reversible ADR effect lifecycle"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -19,9 +19,9 @@ architecture_decision_gate_reason: ""
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:6bb9c1af47c8042eea7cf2824c8c918b9049782a"
+verification_evidence: ["python3 -B scripts/check.py (exit 0; 35 Research, 9 Benchmark, 53 ExecPlan, 117 integration tests)"]
+archive_sha256: f6440c99df41841f3ff34b34817b016c136a8fbc386a6196b6f9f2298170dc90
 created: 2026-08-13
 updated: 2026-08-13
 author: "Codex"
@@ -344,7 +344,7 @@ warnings for EP-006, EP-057, and EP-055; there are no errors.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-056_reversible-adr-effect/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-056_reversible-adr-effect/EXECPLAN.md`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes

@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-057
 title: "Support historical ADR revision evidence"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -19,11 +19,11 @@ architecture_decision_gate_reason: "The existing Engineering Execution Plan cont
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:6bb9c1af47c8042eea7cf2824c8c918b9049782a"
+verification_evidence: ["python3 -B scripts/check.py (exit 0; 35 Research, 9 Benchmark, 53 ExecPlan, 117 integration tests)"]
+archive_sha256: 157518259b1767404b9a0a586049e04bdd8059f8f8f039117b4e5e5b33ae00f8
 created: 2026-08-06
-updated: 2026-08-06
+updated: 2026-08-13
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 ---
@@ -355,10 +355,10 @@ Agent adapter or Git dependency is added to normal validation.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-057_historical-adr-revision-evidence/EXECPLAN.md`
-- Focused test evidence: `docs/exec-plans/active/ep-057_historical-adr-revision-evidence/artifacts/focused-tests.txt`
-- Repository/release check evidence: `docs/exec-plans/active/ep-057_historical-adr-revision-evidence/artifacts/repository-check.txt`
-- Datafox compatibility evidence: `docs/exec-plans/active/ep-057_historical-adr-revision-evidence/artifacts/datafox-compatibility.txt`
+- Plan: `docs/exec-plans/completed/ep-057_historical-adr-revision-evidence/EXECPLAN.md`
+- Focused test evidence: `docs/exec-plans/completed/ep-057_historical-adr-revision-evidence/artifacts/focused-tests.txt`
+- Repository/release check evidence: `docs/exec-plans/completed/ep-057_historical-adr-revision-evidence/artifacts/repository-check.txt`
+- Datafox compatibility evidence: `docs/exec-plans/completed/ep-057_historical-adr-revision-evidence/artifacts/datafox-compatibility.txt`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
