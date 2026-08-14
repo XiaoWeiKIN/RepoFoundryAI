@@ -6,11 +6,11 @@ id: DD-007
 doc_type: design
 title: Agent-neutral Harness and Engineering Spec adapters
 status: current
-adr_refs: ["ADR-011", "ADR-012"]
+adr_refs: ["ADR-011", "ADR-012", "ADR-015"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-04
-updated: 2026-08-10
+updated: 2026-08-13
 ---
 
 # Agent-neutral Harness and Engineering Spec Adapters
@@ -175,28 +175,32 @@ strict, ordered, and forward-failing:
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "core": {
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.3.0",
+      "version": "2.4.0",
       "enforcement": "native"
     },
     {
       "id": "claude",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "enforcement": "cli"
     },
     {
       "id": "portable",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "enforcement": "cli"
     }
   ],
+  "governance": {
+    "policy_schema": 1,
+    "profile": "adaptive"
+  },
   "components": [
     "engineering-execution-plan"
   ],
@@ -206,7 +210,9 @@ strict, ordered, and forward-failing:
 }
 ```
 
-`instruction_files` and `files` retain the existing path, line-budget,
+`governance` is optional only for backward compatibility: a missing object in
+an older schema-3 Harness resolves to `strict`; fresh Harnesses write
+`adaptive`. `instruction_files` and `files` retain the existing path, line-budget,
 template identity, template version, template SHA-256, and installed SHA-256
 semantics. File records additionally identify `owner_kind: core|adapter` and,
 for adapter files, `owner_id`.
@@ -223,7 +229,9 @@ The following version planes remain independent:
 Changing Codex Hook bytes bumps only the RepoFoundry distribution and Codex
 adapter. Changing normative guidance bumps only the Engineering Specifications
 Catalog. Changing normalized activation semantics bumps the Activation
-protocol and every incompatible adapter implementation.
+protocol and every incompatible adapter implementation. Adding
+backward-compatible Router operations or receipt fields bumps the owning Core
+and adapters without changing protocol `1`.
 
 ## CLI contract
 
@@ -234,11 +242,13 @@ foundryctl bootstrap --adapter portable
 foundryctl bootstrap --adapter codex
 foundryctl bootstrap --adapter claude
 foundryctl bootstrap --all-adapters
+foundryctl bootstrap --adapter codex --governance-profile adaptive
 foundryctl adapter list
 foundryctl validate --harness
 foundryctl validate --adapter codex
 foundryctl validate --adapter claude
-foundryctl upgrade --to 0.4.0
+foundryctl upgrade --to 0.5.0
+foundryctl upgrade --to 0.5.0 --governance-profile adaptive
 ```
 
 Bootstrap remains preview-first and preflights the complete Core plus adapter
@@ -253,18 +263,35 @@ For one compatibility release:
 - omitting both flags retains the `codex` default and emits a structured
   deprecation warning;
 - manifests continue to read schemas `1` and `2` but only an explicit
-  `upgrade --to 0.4.0 --apply` writes schema `3`;
+  `upgrade --to 0.5.0 --apply` writes schema `3`;
 - `validate` reports an available migration without silently changing state.
 
 The compatibility alias is removed only by a later explicit release and
 migration decision.
 
+## Activation depth is a Core decision
+
+All adapters preserve the same task-depth boundary. Ordinary read-only code
+explanation, navigation, call-chain tracing, and existing-behavior summaries
+read only the necessary code and repository documents. They do not start full
+Harness validation, create a Spec activation receipt, create governed
+artifacts, or require the five-label evidence handoff solely because repository
+code was inspected.
+
+Formal code review, explicit Spec-conformance evaluation, defect, security, or
+reliability diagnosis, and repository mutation enter the applicable governed
+layer. A read-only answer escalates only when the requested scope changes. The
+Core owns this classification; Codex and Claude Skill metadata narrow automatic
+discovery, while the Portable guide states the same rule explicitly.
+
 ## Engineering Specification activation protocol
 
-Protocol v2 keeps candidate, Applicability, explicit-none, digest, and
-five-label handoff semantics behind one runtime-neutral Activation Engine. It
-narrows task context from applicable Specs to exact Requirements before any
-normative text is injected.
+The runtime-neutral Activation Engine owns repository profile, turn mode,
+monotonic promotion, candidate selection, Applicability, exact Requirement
+cards and capsule compilation, explicit-none, digest verification, context
+epochs, and audit. Protocol-v2 candidate and receipt semantics apply to Build
+and Governed modes. Explore remains receipt-free for bounded, reversible work;
+Governed preserves the strict five-label handoff.
 
 ```mermaid
 sequenceDiagram
@@ -273,9 +300,10 @@ sequenceDiagram
     participant E as Activation Engine
     participant L as Local lock and Specs
 
-    R->>D: product lifecycle event
-    D->>E: normalized event
-    E->>L: verify lock, indexes, exact ranges
+    R->>D: lifecycle event or explicit classify
+    D->>E: normalized event or mode request
+    E->>E: resolve profile, mode, reasons
+    E->>L: verify lock, indexes, exact ranges when required
     L-->>E: candidates, cards, source bytes
     E->>E: Requirement closure + capsule
     E-->>D: allow, deny, exact context, audit result
@@ -330,20 +358,18 @@ those inputs to `session_start`, `subagent_start`, `context_resume`,
 `before_mutation`, and `stop`, then translates the Core decision back to the
 Codex Hook output shape.
 
-Runtime receipts are keyed by repository identity, adapter ID, session ID, and
-turn ID. Including the adapter prevents collisions when two coding-agent
-products work in the same repository concurrently. They record applicable and
-requested Specs, direct and resolved IDs, task reasons, exact source ranges,
-published/effective Automated enforcement levels, fallback mode and reason,
-capsule digest/bytes/budget, and `context_epoch`.
-Receipts remain ephemeral operational state rather than project policy or
-normative evidence. `rehydrate` advances the epoch, recompiles from verified
-local bytes, and requires the same capsule digest before injection.
+Runtime state is keyed by repository identity, adapter ID, session ID, and turn
+ID. It records `governance_profile`, `governance_mode`, classification reasons,
+applicable and requested Specs, direct and resolved IDs, exact source ranges,
+enforcement metadata, capsule digest/bytes/budget, and `context_epoch`.
+Including the adapter prevents collisions when two Agent products work in the
+same repository concurrently. Receipts remain ephemeral operational state;
+`rehydrate` advances the epoch and recompiles the same digest-verified capsule.
 
 When no native lifecycle integration exists, the Claude and portable adapters
-use the same Core operations through `begin`, `candidates`, `requirements`,
-`activate`, `rehydrate`, `status`, `evidence`, and `audit`. Claude exposes those
-instructions through a native
+use the same Core operations through `begin`, `classify`, `candidates`,
+`requirements`, `activate`, `rehydrate`, `status`, `evidence`, and `audit`.
+Claude exposes those instructions through a native
 project Skill; portable uses a neutral guide. Both provide auditable CLI
 behavior without claiming automatic write interception.
 
@@ -390,19 +416,13 @@ change as a side effect of this Harness migration.
 
 Schema `3` component upgrades remain readable by their declared versions.
 Core `1.0.0` omits the canonical project Skill, and Codex `2.0.0` omits its
-thin root Skill. Core `1.1.0` and Codex `2.1.0` add those Skills. Core `1.2.0`,
-Codex `2.2.0`, Claude `1.1.0`, and Portable `1.1.0` add
-Requirement-level routing instructions and protocol-v2 engine behavior. Core
-`1.2.1` additionally requires Agents to surface unresolved Catalog selection
-decisions and wait for the maintainer's explicit choice before apply. The
-current Core `1.3.0`, Codex `2.3.0`, Claude `1.2.0`, and Portable `1.2.0` add
-Automated enforcement metadata propagation plus Advisory-only activation
-evidence export without changing activation protocol v2. A
-previewed upgrade, or a bootstrap that adds an adapter, creates or replaces
-generated paths only when they are absent or still have provable template
-provenance and records the component migrations. Unknown or customized target
-bytes remain conflicts. Harness migration does not select a new Catalog or
-rewrite the Spec manifest, lock, managed Markdown, or Requirement index.
+thin root Skill. Core `1.1.0` and Codex `2.1.0` add those routes. Core `1.2.x`
+and Codex `2.2.x` add protocol-v2 exact Requirement activation; Core `1.3.x`
+and Codex `2.3.x` add enforcement metadata and the activation-depth boundary.
+Core `1.4.0`, Codex `2.4.0`, Claude `1.3.0`, and Portable `1.3.0` add
+risk-adaptive governance while preserving protocol v2. A previewed upgrade or
+adapter bootstrap replaces generated content only with proven template
+provenance; unknown or customized target bytes remain conflicts.
 
 ## Safety and ownership
 
@@ -429,10 +449,10 @@ rewrite the Spec manifest, lock, managed Markdown, or Requirement index.
   provider-neutral Spec state validation.
 - `assets/`: separate Core templates from `adapters/codex`,
   `adapters/claude`, and `adapters/portable` templates.
-- Activation Engine: own candidates, Requirement cards, exact dependency
-  closure and capsule compilation, local digest verification, published and
-  effective enforcement metadata, activation evidence, context epochs,
-  normalized events, and audit.
+- Activation Engine: own profile/mode state, reasoned monotonic classification,
+  candidates, Applicability receipt, Requirement cards, exact dependency
+  closure and capsule compilation, local digest verification, enforcement
+  evidence, context epochs, normalized events, and audit.
 - Codex adapter: own Hook payload translation, tool-path extraction, Hook output
   translation, `AGENTS.md`, Skill metadata, and `.codex/hooks.json`.
 - Claude adapter: own project Skill discovery entrypoints and truthful
@@ -453,6 +473,10 @@ rewrite the Spec manifest, lock, managed Markdown, or Requirement index.
 - The same candidate paths and activation choice produce the same direct and
   resolved Requirement IDs, capsule digest/bytes, epoch semantics, and audit
   result through Codex and manual entrypoints.
+- Fresh Harnesses start adaptive Explore, legacy manifests remain strict, and
+  only an explicit preview/apply changes an existing profile.
+- Explore permits bounded reversible work without a receipt; Build and
+  Governed retain activation coverage, and mode decreases fail.
 - Core Spec validation succeeds without an Agent adapter installed.
 - Adapter validation fails only for the selected adapter's contract.
 - Schema `1` and `2` remain readable; future schema, Core, adapter, protocol,

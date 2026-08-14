@@ -118,6 +118,7 @@ def _is_router_command(command: str) -> bool:
         and tokens[2] in {
             "begin",
             "candidates",
+            "classify",
             "requirements",
             "activate",
             "status",
@@ -320,6 +321,7 @@ def _delegate_to_core(arguments: list[str]) -> int:
     core = _load_core(root)
     commands_requiring_identity = {
         "begin",
+        "classify",
         "activate",
         "status",
         "rehydrate",

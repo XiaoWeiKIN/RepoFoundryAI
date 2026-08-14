@@ -159,6 +159,68 @@ class EpctlTestCase(unittest.TestCase):
         path.write_text(updated, encoding="utf-8")
 
     @staticmethod
+    def reseal_adr(path: Path) -> str:
+        text = path.read_text(encoding="utf-8")
+
+        def scalar(field: str) -> str:
+            match = re.search(
+                rf"(?m)^{re.escape(field)}:\s*(.*?)\s*$",
+                text.split("---", 2)[1],
+            )
+            if not match:
+                raise AssertionError(f"ADR field not found: {field}")
+            value = match.group(1)
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {'\"', "'"}:
+                value = value[1:-1]
+            return value
+
+        frontmatter_end = text.find("\n---\n", 4)
+        status = scalar("status")
+        schema_version = scalar("schema_version")
+        payload = {
+            "schema_version": scalar("schema_version"),
+            "id": scalar("id"),
+            "title": scalar("title"),
+            "research_refs": scalar("research_refs"),
+            "depends_on": scalar("depends_on"),
+            "amends": scalar("amends"),
+            "design_refs": scalar("design_refs"),
+            "decision_maker": scalar("decision_maker"),
+            "decided": scalar("decided"),
+            "decision_outcome": (
+                scalar("decision_outcome")
+                if schema_version == "1.4"
+                else "accepted"
+                if status in {"accepted", "under_review", "retired", "superseded"}
+                else status
+            ),
+            "body": text[frontmatter_end + 5 :],
+        }
+        if schema_version in {"1.2", "1.3", "1.4"}:
+            payload["amends_constraints"] = scalar("amends_constraints")
+        if schema_version in {"1.3", "1.4"}:
+            for field in (
+                "metadata_schema",
+                "artifact_type",
+                "author",
+                "owner",
+                "created",
+            ):
+                payload[field] = scalar(field)
+        if schema_version == "1.3":
+            payload["updated"] = scalar("updated")
+        digest = hashlib.sha256(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        EpctlTestCase.replace_frontmatter(path, "payload_sha256", digest)
+        return digest
+
+    @staticmethod
     def artifact_id(path: Path) -> str:
         match = re.search(
             r"(?m)^id:\s+((?:EP|R|ADR|BF)-\d+)\s*$",
@@ -331,7 +393,7 @@ class EpctlTestCase(unittest.TestCase):
         )
 
         expected_profiles = (
-            (adr, 'schema_version: "1.3"', "artifact_type: adr"),
+            (adr, 'schema_version: "1.4"', "artifact_type: adr"),
             (plan, 'schema_version: "2.7"', "artifact_type: exec-plan"),
             (task, 'schema_version: "1"', "artifact_type: task"),
             (bugfix, 'schema_version: "1"', "artifact_type: bugfix"),
@@ -761,14 +823,36 @@ class EpctlTestCase(unittest.TestCase):
         )
         replacement = self.new_adr("historical-v2")
         self.accept_adr(replacement, "ADR-002")
-        self.run_cli("supersede-adr", "ADR-001", "--by", "ADR-002")
+        preview = json.loads(
+            self.run_cli(
+                "supersede-adr",
+                "ADR-001",
+                "--by",
+                "ADR-002",
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "The old boundary is no longer fit.",
+            ).stdout
+        )
+        self.assertEqual(preview["mode"], "preview")
+        self.assertEqual(preview["affected_active_plans"], ["EP-002"])
+        self.run_cli(
+            "supersede-adr",
+            "ADR-001",
+            "--by",
+            "ADR-002",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "The old boundary is no longer fit.",
+            "--apply",
+        )
 
-        stale = self.run_cli("validate", expected=1)
-        error_lines = [
-            line for line in stale.stderr.splitlines() if line.startswith("ERROR:")
-        ]
-        self.assertTrue(any(str(active_plan) in line for line in error_lines))
-        self.assertFalse(any(str(archived) in line for line in error_lines))
+        stale = self.run_cli("validate")
+        self.assertIn("architecture_review_required", stale.stderr)
+        self.assertNotIn(f"ERROR: {active_plan}", stale.stderr)
+        self.assertNotIn(f"ERROR: {archived}", stale.stderr)
 
         cancelled = Path(
             self.run_cli(
@@ -782,6 +866,452 @@ class EpctlTestCase(unittest.TestCase):
         )
         self.assertIn("status: cancelled", cancelled.read_text(encoding="utf-8"))
         self.run_cli("validate")
+    def test_adr_review_transition_preserves_history_and_pauses_active_work(
+        self,
+    ) -> None:
+        self.init()
+        research = self.new_research("reversible-effect")
+        self.conclude_research(research)
+        base = self.new_adr("reversible-base")
+        self.accept_adr(base, "ADR-001")
+        amendment = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "reversible-amendment",
+                "--title",
+                "Reversible amendment",
+                "--research",
+                "R-001",
+                "--amends",
+                "ADR-001",
+                "--amends-constraint",
+                "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        self.accept_adr(amendment, "ADR-002")
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "reversible-plan",
+                "--title",
+                "Reversible plan",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+                "--adr",
+                "ADR-002",
+            ).stdout.strip()
+        )
+        original_digest = re.search(
+            r"(?m)^payload_sha256:\s*([0-9a-f]{64})$",
+            base.read_text(encoding="utf-8"),
+        ).group(1)
+
+        preview = json.loads(
+            self.run_cli(
+                "transition-adr",
+                "ADR-001",
+                "--to",
+                "under_review",
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "Production evidence questions the decision.",
+            ).stdout
+        )
+        self.assertEqual(preview["mode"], "preview")
+        self.assertEqual(preview["affected_adrs"], ["ADR-002"])
+        self.assertEqual(preview["affected_active_plans"], ["EP-001"])
+        self.assertIn("status: accepted", base.read_text(encoding="utf-8"))
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "under_review",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "Production evidence questions the decision.",
+            "--apply",
+        )
+        reviewed_text = base.read_text(encoding="utf-8")
+        self.assertIn("status: under_review", reviewed_text)
+        self.assertIn(f"payload_sha256: {original_digest}", reviewed_text)
+        validation = self.run_cli("validate")
+        self.assertIn("architecture_review_required", validation.stderr)
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        plan_status = next(row for row in status["plans"] if row["id"] == "EP-001")
+        self.assertTrue(plan_status["architecture_review_required"])
+        self.assertIn(
+            "architecture_review_required",
+            plan_status["completion_blockers"],
+        )
+        self.complete_all_placeholders(plan)
+        blocked = self.run_cli(
+            "archive-ep",
+            "EP-001",
+            *COMPLETION_ATTESTATION_ARGS,
+            expected=2,
+        )
+        self.assertIn("architecture_review_required", blocked.stderr)
+        stale = self.run_cli(
+            "new-ep",
+            "--slug",
+            "stale-reviewed-input",
+            "--title",
+            "Stale reviewed input",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-001",
+            "--adr",
+            "ADR-002",
+            expected=2,
+        )
+        self.assertIn("accepted and current", stale.stderr)
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "accepted",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "The decision was reaffirmed after review.",
+            "--apply",
+        )
+        self.assertIn("status: accepted", base.read_text(encoding="utf-8"))
+        self.assertIn(
+            f"payload_sha256: {original_digest}",
+            base.read_text(encoding="utf-8"),
+        )
+        self.run_cli("validate")
+
+    def test_retired_adr_is_terminal_without_a_replacement(self) -> None:
+        self.init()
+        research = self.new_research("retired-effect")
+        self.conclude_research(research)
+        adr = self.new_adr("retired-effect")
+        self.accept_adr(adr)
+
+        retired = json.loads(
+            self.run_cli(
+                "transition-adr",
+                "ADR-001",
+                "--to",
+                "retired",
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "The constraint is no longer required.",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(retired["replacement"], None)
+        self.assertIn("status: retired", adr.read_text(encoding="utf-8"))
+        illegal = self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "accepted",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "Attempt to reuse a terminal decision.",
+            expected=2,
+        )
+        self.assertIn("Illegal ADR effect transition", illegal.stderr)
+        self.run_cli("validate")
+
+    def test_schema_13_effect_transition_keeps_legacy_digest(self) -> None:
+        self.init()
+        research = self.new_research("legacy-effect-digest")
+        self.conclude_research(research)
+        adr = self.new_adr("legacy-effect-digest")
+        text = adr.read_text(encoding="utf-8").replace(
+            'schema_version: "1.4"',
+            'schema_version: "1.3"',
+            1,
+        )
+        for field in (
+            "decision_outcome",
+            "effect_changed_by",
+            "effect_changed",
+            "effect_reason",
+        ):
+            text = re.sub(rf"(?m)^{field}:.*\n", "", text, count=1)
+        adr.write_text(text, encoding="utf-8")
+        self.accept_adr(adr)
+        accepted = adr.read_text(encoding="utf-8")
+        digest = re.search(
+            r"(?m)^payload_sha256:\s*([0-9a-f]{64})$",
+            accepted,
+        ).group(1)
+        updated = re.search(r"(?m)^updated:\s*(\S+)$", accepted).group(1)
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "under_review",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "Question the legacy decision effect.",
+            "--apply",
+        )
+        reviewed = adr.read_text(encoding="utf-8")
+        self.assertIn(f"payload_sha256: {digest}", reviewed)
+        self.assertRegex(reviewed, rf"(?m)^updated:\s*{re.escape(updated)}$")
+        self.run_cli("validate")
+
+    def test_completed_ep_resolves_registered_historical_adr_revision(self) -> None:
+        self.init()
+        research = self.new_research("historical-byte-revision")
+        self.conclude_research(research)
+        adr = self.new_adr("historical-byte-revision")
+        self.complete_all_placeholders(adr)
+        adr.write_text(
+            adr.read_text(encoding="utf-8").replace(
+                "Recorded evidence.\n",
+                "Recorded evidence. \n",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.run_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "accepted",
+            "--decision-maker",
+            "Test Decision Owner",
+        )
+        historical_text = adr.read_text(encoding="utf-8")
+        historical_digest = re.search(
+            r"(?m)^payload_sha256:\s*([0-9a-f]{64})$",
+            historical_text,
+        ).group(1)
+
+        historical_plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "historical-byte-plan",
+                "--title",
+                "Historical byte plan",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        self.complete_all_placeholders(historical_plan)
+        archived_historical = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
+
+        source = self.repo / "evidence" / "adr-001-historical.md"
+        source.parent.mkdir()
+        source.write_text(historical_text, encoding="utf-8")
+        preview = json.loads(
+            self.run_cli(
+                "register-adr-revision",
+                "ADR-001",
+                "--from-file",
+                "evidence/adr-001-historical.md",
+            ).stdout
+        )
+        target = self.repo / preview["target"]
+        self.assertEqual(preview["action"], "create")
+        self.assertFalse(preview["applied"])
+        self.assertFalse(target.exists())
+        applied = json.loads(
+            self.run_cli(
+                "register-adr-revision",
+                "ADR-001",
+                "--from-file",
+                "evidence/adr-001-historical.md",
+                "--apply",
+            ).stdout
+        )
+        self.assertTrue(applied["applied"])
+        self.assertTrue(target.is_file())
+
+        normalized = adr.read_text(encoding="utf-8").replace(
+            "Recorded evidence. \n",
+            "Recorded evidence.\n",
+            1,
+        )
+        adr.write_text(normalized, encoding="utf-8")
+        current_digest = self.reseal_adr(adr)
+        self.assertNotEqual(historical_digest, current_digest)
+
+        current_plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "current-byte-plan",
+                "--title",
+                "Current byte plan",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        self.complete_all_placeholders(current_plan)
+        self.run_cli(
+            "archive-ep",
+            "EP-002",
+            *COMPLETION_ATTESTATION_ARGS,
+        )
+        clean = self.run_cli("validate")
+        self.assertIn('"errors": 0', clean.stdout)
+
+        target.unlink()
+        missing = self.run_cli("validate", expected=1)
+        self.assertIn("ADR evidence digest changed for ADR-001", missing.stderr)
+        self.run_cli(
+            "register-adr-revision",
+            "ADR-001",
+            "--from-file",
+            "evidence/adr-001-historical.md",
+            "--apply",
+        )
+
+        active = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "active-must-use-current",
+                "--title",
+                "Active must use current",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        self.replace_frontmatter(
+            active,
+            "adr_evidence",
+            f'["ADR-001@sha256:{historical_digest}"]',
+        )
+        stale_active = self.run_cli("validate", expected=1)
+        active_errors = [
+            line
+            for line in stale_active.stderr.splitlines()
+            if line.startswith("ERROR:") and str(active) in line
+        ]
+        self.assertTrue(
+            any("ADR evidence digest changed for ADR-001" in line for line in active_errors)
+        )
+        self.assertFalse(
+            any(str(archived_historical) in line for line in stale_active.stderr.splitlines())
+        )
+
+    def test_register_adr_revision_git_blob_and_store_fail_closed(self) -> None:
+        self.init()
+        research = self.new_research("git-revision-source")
+        self.conclude_research(research)
+        adr = self.new_adr("git-revision-source")
+        self.accept_adr(adr)
+        subprocess.run(
+            ["git", "init", "-q", str(self.repo)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        object_id = subprocess.run(
+            ["git", "-C", str(self.repo), "hash-object", "-w", str(adr)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+        preview = json.loads(
+            self.run_cli(
+                "register-adr-revision",
+                "ADR-001",
+                "--from-git-blob",
+                object_id,
+            ).stdout
+        )
+        self.assertEqual(preview["source"]["kind"], "git-blob")
+        self.assertEqual(preview["source"]["locator"], object_id)
+        target = self.repo / preview["target"]
+        self.assertFalse(target.exists())
+        self.run_cli(
+            "register-adr-revision",
+            "ADR-001",
+            "--from-git-blob",
+            object_id,
+            "--apply",
+        )
+        preserved = json.loads(
+            self.run_cli(
+                "register-adr-revision",
+                "ADR-001",
+                "--from-git-blob",
+                object_id,
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(preserved["action"], "preserve")
+
+        invalid_object = self.run_cli(
+            "register-adr-revision",
+            "ADR-001",
+            "--from-git-blob",
+            "abc123",
+            expected=2,
+        )
+        self.assertIn("full 40- or 64-character", invalid_object.stderr)
+        wrong_id = self.run_cli(
+            "register-adr-revision",
+            "ADR-002",
+            "--from-git-blob",
+            object_id,
+            expected=2,
+        )
+        self.assertIn("does not match ADR-002", wrong_id.stderr)
+
+        source_link = self.repo / "adr-source-link.md"
+        os.symlink(adr, source_link)
+        linked_source = self.run_cli(
+            "register-adr-revision",
+            "ADR-001",
+            "--from-file",
+            "adr-source-link.md",
+            expected=2,
+        )
+        self.assertIn("symbolic link", linked_source.stderr)
+
+        target.write_text(
+            target.read_text(encoding="utf-8") + "\nTampered revision.\n",
+            encoding="utf-8",
+        )
+        tampered = self.run_cli("validate", expected=1)
+        self.assertIn("decided ADR payload changed", tampered.stderr)
+        conflict = self.run_cli(
+            "register-adr-revision",
+            "ADR-001",
+            "--from-git-blob",
+            object_id,
+            "--apply",
+            expected=2,
+        )
+        self.assertIn("immutable bytes differ", conflict.stderr)
 
     def test_linked_multi_adr_and_design_doc_corpus_is_dependency_closed(
         self,
@@ -1056,7 +1586,7 @@ updated: 2026-07-28
         self.run_cli("reindex")
         result = self.run_cli("validate", expected=1)
         self.assertIn(
-            "ADR schema_version must be 1, 1.1, 1.2 or 1.3",
+            "ADR schema_version must be 1, 1.1, 1.2, 1.3 or 1.4",
             result.stderr,
         )
 
@@ -1069,19 +1599,43 @@ updated: 2026-07-28
         new_adr = self.new_adr("protocol-v2")
         self.accept_adr(new_adr, "ADR-002")
 
-        superseded = Path(
+        preview = json.loads(
             self.run_cli(
                 "supersede-adr",
                 "ADR-001",
                 "--by",
                 "ADR-002",
-            ).stdout.strip()
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "Protocol v2 replaces v1.",
+            ).stdout
         )
+        self.assertEqual(preview["mode"], "preview")
+        self.assertIn("status: accepted", old_adr.read_text(encoding="utf-8"))
+        applied = json.loads(
+            self.run_cli(
+                "supersede-adr",
+                "ADR-001",
+                "--by",
+                "ADR-002",
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "Protocol v2 replaces v1.",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(applied["mode"], "apply")
 
-        self.assertIn("status: superseded", superseded.read_text(encoding="utf-8"))
-        self.assertIn("superseded_by: ADR-002", superseded.read_text(encoding="utf-8"))
+        self.assertIn("status: superseded", old_adr.read_text(encoding="utf-8"))
+        self.assertIn("superseded_by: ADR-002", old_adr.read_text(encoding="utf-8"))
         self.assertIn(
             'supersedes: ["ADR-001"]',
+            new_adr.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            'effect_changed_by: "Test Decision Owner"',
             new_adr.read_text(encoding="utf-8"),
         )
         self.run_cli("validate")
@@ -1140,7 +1694,7 @@ updated: 2026-07-28
         second.write_text(accepted_text, encoding="utf-8")
         self.replace_frontmatter(second, "status", "rejected")
         outcome_tamper = self.run_cli("validate", expected=1)
-        self.assertIn("decided ADR payload changed", outcome_tamper.stderr)
+        self.assertIn("decision_outcome must be 'rejected'", outcome_tamper.stderr)
 
         second.write_text(accepted_text, encoding="utf-8")
         self.replace_frontmatter(second, "author", '"Tampered Writer"')
@@ -1153,7 +1707,7 @@ updated: 2026-07-28
         self.conclude_research(research)
         adr = self.new_adr("schema-11-compatible")
         text = adr.read_text(encoding="utf-8").replace(
-            'schema_version: "1.3"',
+            'schema_version: "1.4"',
             'schema_version: "1.1"',
             1,
         )

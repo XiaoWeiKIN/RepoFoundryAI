@@ -189,13 +189,13 @@ class RepositoryContractTestCase(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(len(active_manifest["documents"]), 5)
+            self.assertEqual(len(active_manifest["documents"]), 6)
             self.assertEqual(
                 sum(
                     item["role"] == "entrypoint"
                     for item in active_manifest["documents"]
                 ),
-                1,
+                2,
             )
             for document in active_manifest["documents"]:
                 source = (
@@ -251,7 +251,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             )
             self.assertEqual(sealed_manifest["status"], "sealed")
             self.assertEqual(sealed_manifest["mode"], "snapshot")
-            self.assertEqual(len(sealed_manifest["documents"]), 6)
+            self.assertEqual(len(sealed_manifest["documents"]), 7)
             self.assertTrue(
                 (
                     completed_research.parent
@@ -424,7 +424,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.4.0",
+            "0.5.0",
         )
         self.assertIn(
             "name: engineering-execution-plan",
@@ -588,11 +588,60 @@ class RepositoryContractTestCase(unittest.TestCase):
         router_skill = (router / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("name: engineering-specs", router_skill)
         self.assertIn("`Applicability` section", router_skill)
+        self.assertIn("## Classify the task", router_skill)
+        for mode in ("Explore", "Build", "Governed"):
+            self.assertIn(mode, router_skill)
         self.assertIn("bounded cards", router_skill)
         self.assertIn("--requirement <ID>", router_skill)
         self.assertIn("rehydrate", router_skill)
         self.assertTrue((router / "agents" / "openai.yaml").is_file())
         self.assertTrue((router / "scripts" / "spec_router.py").is_file())
+
+    def test_risk_adaptive_governance_surfaces_are_consistent(self) -> None:
+        agent_surfaces = (
+            ROOT / "assets/core/repo-foundry-ai/SKILL.md",
+            ROOT / "assets/adapters/codex/AGENTS.md",
+            ROOT / "assets/adapters/codex/engineering-specs/SKILL.md",
+            ROOT / "assets/adapters/claude/engineering-specs/SKILL.md",
+            ROOT / "assets/adapters/portable/agent-guide.md",
+        )
+        for path in agent_surfaces:
+            text = path.read_text(encoding="utf-8")
+            for mode in ("Explore", "Build", "Governed"):
+                self.assertIn(mode, text, msg=f"{path}: missing {mode}")
+
+        core_skill = agent_surfaces[0].read_text(encoding="utf-8")
+        self.assertIn("remain hard in every mode", core_skill)
+        self.assertIn("Missing policy means strict", core_skill)
+
+        router = (
+            ROOT / "assets/core/engineering-specs/spec_router.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'GOVERNANCE_MODES = ("explore", "build", "governed")',
+            router,
+        )
+        self.assertIn("governance_reasons", router)
+        self.assertIn("classify.set_defaults(handler=command_classify)", router)
+
+        foundryctl = (ROOT / "scripts/foundryctl.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('DEFAULT_GOVERNANCE_PROFILE = "adaptive"', foundryctl)
+        self.assertIn('LEGACY_GOVERNANCE_PROFILE = "strict"', foundryctl)
+        self.assertIn('"policy_schema": GOVERNANCE_POLICY_SCHEMA', foundryctl)
+
+        professional_surfaces = {
+            ROOT / "engineering-research/SKILL.md": (
+                "两者不因任务复杂度自动创建 Research"
+            ),
+            ROOT / "engineering-execution-plan/SKILL.md": (
+                "Explore/Build 不为“没有触发 Research”创建跳过制品"
+            ),
+            ROOT / "engineering-benchmark/SKILL.md": "普通测试",
+        }
+        for path, contract in professional_surfaces.items():
+            self.assertIn(contract, path.read_text(encoding="utf-8"), str(path))
 
     def test_core_and_adapter_assets_have_product_neutral_boundaries(self) -> None:
         core = ROOT / "assets" / "core"
@@ -678,6 +727,21 @@ class RepositoryContractTestCase(unittest.TestCase):
         canonical_path = ".repo-foundry/skills/repo-foundry-ai/SKILL.md"
         self.assertIn(canonical_path, assets["codex"][0].read_text(encoding="utf-8"))
         self.assertIn(canonical_path, assets["claude"][0].read_text(encoding="utf-8"))
+        for label in ("core", "codex", "claude"):
+            project_skill = assets[label][0].read_text(encoding="utf-8")
+            self.assertIn(
+                "Do not auto-trigger for ordinary read-only code explanation",
+                project_skill,
+                label,
+            )
+        core_skill = assets["core"][0].read_text(encoding="utf-8")
+        self.assertIn("do not start the full Harness workflow", core_skill)
+        self.assertIn("formal code review", core_skill)
+        self.assertIn("repository mutation", core_skill)
+        portable_guide = (
+            ROOT / "assets/adapters/portable/agent-guide.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("do not start the full Harness workflow", portable_guide)
         claude_specs = assets["claude-specs"][0].read_text(encoding="utf-8")
         self.assertIn(
             ".repo-foundry/engineering-specs/spec_router.py",

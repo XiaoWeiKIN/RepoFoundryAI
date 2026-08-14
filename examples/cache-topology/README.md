@@ -54,7 +54,7 @@ research-input/cache-topology/
 `index.md` 定义决策目的、Research Questions 和阅读路线；其他文档分别保存
 现状、选项和实验。它们共享同一个决策目的，因此使用一个 Research ID。
 
-## Skill 建立控制包后，manifest 应明确四篇文档
+## Skill 建立控制包后，manifest 应明确 corpus 与阅读入口
 
 Codex 触发 `engineering-research` 后，会在内部完成初始化、ID 分配、corpus
 注册和校验。用户不需要定位或运行 `researchctl.py`。
@@ -71,6 +71,7 @@ docs/research/active/r-001_cache-topology/
 ├── SYNTHESIS.md
 ├── rounds/
 ├── notes/
+│   └── README.md
 ├── snapshots/
 └── artifacts/
 ```
@@ -84,6 +85,10 @@ docs/research/active/r-001_cache-topology/
   "status": "active",
   "mode": "linked",
   "entrypoints": [
+    {
+      "base": "package",
+      "path": "notes/README.md"
+    },
     {
       "base": "repo",
       "path": "research-input/cache-topology/index.md"
@@ -100,9 +105,10 @@ docs/research/active/r-001_cache-topology/
 }
 ```
 
-实际 active manifest 包含四篇输入文档和一个 `RR-001` Round；`index.md` 的
-role 是 `entrypoint`。`bytes` 与完整 `sha256` 由 `researchctl` 根据源文件
-生成，不在说明文档中手抄。
+实际 active manifest 包含四篇输入文档、一个 `RR-001` Round 和一个
+`notes/README.md` 阅读入口；外部 `index.md` 与包内 README 的 role 都是
+`entrypoint`。`bytes` 与完整 `sha256` 由 `researchctl` 根据源文件生成，不在
+说明文档中手抄。
 
 ## Research 的结论应压缩证据，不复制 corpus
 

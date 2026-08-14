@@ -45,6 +45,8 @@ class SpecRouterTestCase(unittest.TestCase):
             "bootstrap",
             "--profile",
             "codex",
+            "--governance-profile",
+            "strict",
             "--spec-repository",
             self.catalog.resolve().as_uri(),
             "--spec-version",
@@ -77,6 +79,18 @@ class SpecRouterTestCase(unittest.TestCase):
             / ".repo-foundry"
             / "engineering-specs"
             / "spec_router.py"
+        )
+
+    def set_governance_profile(self, profile: str) -> None:
+        manifest_path = self.repo / "docs/.engineering/harness.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["governance"] = {
+            "policy_schema": 1,
+            "profile": profile,
+        }
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
         )
 
     def tearDown(self) -> None:
@@ -213,6 +227,151 @@ class SpecRouterTestCase(unittest.TestCase):
         self.assertEqual(requirement_index["schema_version"], 2)
         self.run_foundry("spec", "validate")
         self.run_foundry("validate", "--harness")
+
+    def test_adaptive_explore_allows_reversible_write_and_promotes_monotonically(
+        self,
+    ) -> None:
+        self.set_governance_profile("adaptive")
+        started = self.initialize_turn()
+        context = started["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Adaptive Explore mode is active", context)
+        self.assertIn("Governance mode: `explore`", context)
+
+        allowed = self.hook(
+            "PreToolUse",
+            tool_name="apply_patch",
+            tool_input={
+                "command": (
+                    "*** Begin Patch\n"
+                    "*** Update File: service/main.go\n"
+                    "@@\n-package service\n+package service\n"
+                    "*** End Patch"
+                )
+            },
+        )
+        self.assertEqual(allowed, {})
+
+        promoted = json.loads(
+            self.run_router(
+                "classify",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+                "--mode",
+                "build",
+                "--reason",
+                "bounded production source change",
+            ).stdout
+        )
+        self.assertEqual(promoted["governance_profile"], "adaptive")
+        self.assertEqual(promoted["governance_mode"], "build")
+        self.assertTrue(promoted["promoted"])
+
+        denied = self.hook(
+            "PreToolUse",
+            tool_name="apply_patch",
+            tool_input={
+                "command": (
+                    "*** Begin Patch\n"
+                    "*** Update File: service/main.go\n"
+                    "@@\n-package service\n+package service\n"
+                    "*** End Patch"
+                )
+            },
+        )
+        self.assertEqual(
+            denied["hookSpecificOutput"]["permissionDecision"],
+            "deny",
+        )
+        self.assertIn(
+            "activation before editing",
+            denied["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+        downgrade = self.run_router(
+            "classify",
+            "--session-id",
+            "session-1",
+            "--turn-id",
+            "turn-1",
+            "--mode",
+            "explore",
+            "--reason",
+            "try to bypass Build",
+            expected=2,
+        )
+        self.assertIn("ROUTER_GOVERNANCE_DOWNGRADE_DENIED", downgrade.stderr)
+
+        governed = json.loads(
+            self.run_router(
+                "classify",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+                "--mode",
+                "governed",
+                "--reason",
+                "public API compatibility trigger discovered",
+            ).stdout
+        )
+        self.assertEqual(governed["governance_mode"], "governed")
+
+    def test_adaptive_explore_stop_and_audit_do_not_require_activation(self) -> None:
+        self.set_governance_profile("adaptive")
+        self.initialize_turn()
+        (self.repo / "notes.txt").write_text("local exploration\n", encoding="utf-8")
+
+        audit = json.loads(
+            self.run_router(
+                "audit",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+                "--message",
+                "Exploration result with ordinary prose.",
+            ).stdout
+        )
+        self.assertTrue(audit["ok"])
+        self.assertEqual(audit["governance_mode"], "explore")
+        self.assertEqual(audit["missing_handoff_labels"], [])
+        self.assertIn("notes.txt", audit["changed_paths"])
+
+        stopped = self.hook(
+            "Stop",
+            last_assistant_message="Exploration result with ordinary prose.",
+        )
+        self.assertEqual(stopped, {})
+
+    def test_strict_profile_cannot_downgrade_from_governed(self) -> None:
+        self.initialize_turn()
+        status = json.loads(
+            self.run_router(
+                "status",
+                "--session-id",
+                "session-1",
+                "--turn-id",
+                "turn-1",
+            ).stdout
+        )
+        self.assertEqual(status["governance_profile"], "strict")
+        self.assertEqual(status["governance_mode"], "governed")
+
+        result = self.run_router(
+            "classify",
+            "--session-id",
+            "session-1",
+            "--turn-id",
+            "turn-1",
+            "--mode",
+            "build",
+            "--reason",
+            "attempted downgrade",
+            expected=2,
+        )
+        self.assertIn("ROUTER_GOVERNANCE_DOWNGRADE_DENIED", result.stderr)
 
     def test_codex_and_portable_share_results_but_isolate_receipts(self) -> None:
         self.initialize_turn()

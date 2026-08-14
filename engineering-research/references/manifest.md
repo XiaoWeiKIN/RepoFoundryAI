@@ -56,6 +56,21 @@ Research retain package-local analysis without modifying the adopted corpus. A
 root may set a default `role`, such as `round` or `snapshot`. Entrypoint role
 still takes precedence. A Markdown document declaring
 `doc_type: research-topic` receives `role: topic`.
+
+Every active schema 1.1 manifest also declares the package-local navigation
+entrypoint:
+
+```json
+{
+  "base": "package",
+  "path": "notes/README.md"
+}
+```
+
+The matching document record has `role: "entrypoint"`. Validation does not
+retroactively require it from schema 1 or sealed manifests. Explicitly running
+`sync-research` opts an active schema 1 package into the navigation convention
+without changing its schema; sealed manifests remain immutable.
 Schema 2.2 Topic records also contain their stable `topic_id`:
 
 ```json
@@ -108,9 +123,17 @@ A snapshotted document additionally retains `source_path` for provenance while
 
 ## Discovery and refresh
 
-`sync-research` expands each root's include patterns, sorts paths
+`sync-research` first ensures a supported active package has
+`notes/README.md`, a notes root that discovers it, and the canonical package
+entrypoint. It expands each root's include patterns, sorts paths
 lexicographically, computes byte size and SHA-256, assigns entrypoint and
 structured topic roles, and atomically replaces the active manifest.
+
+A generated README contains exactly one `RCTL:NOTES` marker pair. Refresh
+replaces only the delimited inventory with deterministic links to package-local
+Markdown notes. A README with neither marker is curated and remains byte-stable;
+missing note links are warnings. An incomplete, duplicate, reversed, or stale
+generated inventory is an error.
 
 Validation rescans active roots. A changed membership set, size, or digest is
 manifest drift. Refresh is explicit so users can review new or removed

@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -31,6 +32,8 @@ ASSET_DIR = SKILL_DIR / "assets"
 STATE_VERSION = 1
 CONFIG_VERSION = 1
 DEFAULT_ARCHITECTURE_ROOT = "docs/adr"
+ADR_REVISION_ROOT = Path("docs/.epctl/adr-revisions")
+ADR_REVISION_MAX_BYTES = 1024 * 1024
 
 INIT_DIRECTORIES = (
     "docs/.epctl",
@@ -161,7 +164,25 @@ PLAN_ACTIVE_STATUSES = {"active", "blocked"}
 PLAN_COMPLETED_STATUSES = {"completed", "cancelled"}
 RESEARCH_ACTIVE_STATUSES = {"active", "blocked"}
 RESEARCH_COMPLETED_STATUSES = {"concluded", "cancelled"}
-ADR_STATUSES = {"proposed", "accepted", "rejected", "superseded"}
+ADR_STATUSES = {
+    "proposed",
+    "accepted",
+    "rejected",
+    "under_review",
+    "retired",
+    "superseded",
+}
+ADR_ACCEPTED_ORIGIN_STATUSES = {
+    "accepted",
+    "under_review",
+    "retired",
+    "superseded",
+}
+ADR_HISTORICAL_STATUSES = ADR_ACCEPTED_ORIGIN_STATUSES | {"rejected"}
+ADR_TRANSITIONS = {
+    "accepted": {"under_review", "retired"},
+    "under_review": {"accepted", "retired"},
+}
 RESEARCH_QUESTION_STATUSES = {"open", "answered", "deferred", "invalidated"}
 TASK_STATUSES = {"todo", "in_progress", "blocked", "done", "cancelled"}
 BUGFIX_ACTIVE_STATUSES = {"open", "in_progress", "blocked"}
@@ -203,6 +224,8 @@ ADR_EVIDENCE_RE = re.compile(
     r"^(ADR-\d{3,})@sha256:([0-9a-f]{64})$",
     re.IGNORECASE,
 )
+ADR_REVISION_FILE_RE = re.compile(r"^sha256-([0-9a-f]{64})\.md$")
+GIT_OBJECT_ID_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.IGNORECASE)
 ADR_CONSTRAINT_STRENGTHS = {"must", "must_not", "should", "may"}
 CURRENT_METADATA_SCHEMA = "1"
 
@@ -780,8 +803,10 @@ def parse_legacy_frontmatter(text: str) -> tuple[dict[str, str], int, int]:
     return data, 4, end
 
 
-def adr_document_data(path: Path) -> tuple[dict[str, str], bool]:
-    text = path.read_text(encoding="utf-8")
+def adr_document_data_from_text(
+    path: Path,
+    text: str,
+) -> tuple[dict[str, str], bool]:
     try:
         data, _, _ = parse_frontmatter(text)
     except EpctlError as strict_error:
@@ -812,6 +837,10 @@ def adr_document_data(path: Path) -> tuple[dict[str, str], bool]:
             data.setdefault(field, "[]")
         data.setdefault("superseded_by", "")
     return data, strict
+
+
+def adr_document_data(path: Path) -> tuple[dict[str, str], bool]:
+    return adr_document_data_from_text(path, path.read_text(encoding="utf-8"))
 
 
 def update_frontmatter(text: str, updates: dict[str, str]) -> str:
@@ -1214,11 +1243,19 @@ def current_constraint_amendments(
 ) -> dict[str, list[str]]:
     applicable = set(constraint_refs)
     amendments: dict[str, list[str]] = {}
+    corpus = adr_corpus_data(repo)
     if not applicable:
         return amendments
     for path in adr_files(repo):
         data, _ = adr_document_data(path)
         if data.get("status") != "accepted":
+            continue
+        current, _ = adr_currentness(
+            repo,
+            data.get("id", ""),
+            data_by_id=corpus,
+        )
+        if not current:
             continue
         amended = parse_adr_constraint_array(
             data.get("amends_constraints", "[]"),
@@ -1520,6 +1557,7 @@ def managed_index_snapshots(repo: Path) -> dict[Path, str]:
             repo / "docs" / "RESEARCH.md",
             repo / "docs" / "DECISIONS.md",
             repo / "docs" / "BUGFIXES.md",
+            repo / "docs" / ".epctl" / "state.json",
         )
         if path.exists()
     }
@@ -1774,6 +1812,96 @@ def find_adr(repo: Path, adr_id: str) -> Path:
     return matches[0]
 
 
+def adr_revision_root(repo: Path) -> Path:
+    return repo / ADR_REVISION_ROOT
+
+
+def adr_revision_path(repo: Path, adr_id: str, digest: str) -> Path:
+    normalized_id = normalize_reference_ids((adr_id,), "ADR")[0]
+    normalized_digest = digest.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", normalized_digest):
+        raise EpctlError("ADR revision digest must be 64 lowercase hexadecimal characters")
+    return (
+        adr_revision_root(repo)
+        / normalized_id
+        / f"sha256-{normalized_digest}.md"
+    )
+
+
+def normalized_utf8_document(raw: bytes, source: str) -> str:
+    if len(raw) > ADR_REVISION_MAX_BYTES:
+        raise EpctlError(
+            f"ADR revision source exceeds {ADR_REVISION_MAX_BYTES} bytes: {source}"
+        )
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise EpctlError(f"ADR revision source is not UTF-8: {source}") from exc
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def read_adr_revision_file(repo: Path, value: str) -> tuple[str, str]:
+    relative, path = repository_relative_path(
+        repo,
+        value,
+        "ADR revision source",
+        require_file=True,
+    )
+    if path.stat().st_size > ADR_REVISION_MAX_BYTES:
+        raise EpctlError(
+            f"ADR revision source exceeds {ADR_REVISION_MAX_BYTES} bytes: {relative}"
+        )
+    return normalized_utf8_document(path.read_bytes(), relative), relative
+
+
+def git_blob(repo: Path, object_id: str) -> tuple[str, str]:
+    normalized = object_id.strip().lower()
+    if not GIT_OBJECT_ID_RE.fullmatch(normalized):
+        raise EpctlError(
+            "--from-git-blob requires a full 40- or 64-character hexadecimal object ID"
+        )
+
+    def run_git(*arguments: str, text: bool = True) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(repo), *arguments],
+                capture_output=True,
+                text=text,
+                timeout=30,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            raise EpctlError(
+                "Git is unavailable; use --from-file with a repository-relative source"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise EpctlError(f"Git timed out while reading object {normalized}") from exc
+
+    object_type = run_git("cat-file", "-t", normalized)
+    if object_type.returncode != 0:
+        details = object_type.stderr.strip() or "object not found"
+        raise EpctlError(f"Cannot read Git object {normalized}: {details}")
+    if object_type.stdout.strip() != "blob":
+        raise EpctlError(f"Git object {normalized} is not a blob")
+    size_result = run_git("cat-file", "-s", normalized)
+    try:
+        size = int(size_result.stdout.strip()) if size_result.returncode == 0 else -1
+    except ValueError:
+        size = -1
+    if size < 0:
+        details = size_result.stderr.strip() or "invalid object size"
+        raise EpctlError(f"Cannot size Git blob {normalized}: {details}")
+    if size > ADR_REVISION_MAX_BYTES:
+        raise EpctlError(
+            f"ADR revision source exceeds {ADR_REVISION_MAX_BYTES} bytes: {normalized}"
+        )
+    content = run_git("cat-file", "blob", normalized, text=False)
+    if content.returncode != 0:
+        details = content.stderr.decode("utf-8", errors="replace").strip()
+        raise EpctlError(f"Cannot read Git blob {normalized}: {details}")
+    return normalized_utf8_document(content.stdout, normalized), normalized
+
+
 def normalize_document_refs(
     repo: Path,
     values: Iterable[str],
@@ -1906,12 +2034,97 @@ def adr_relations(data: dict[str, str]) -> list[str]:
     return list(dict.fromkeys(relations))
 
 
+def adr_decision_outcome(data: dict[str, str]) -> str:
+    if data.get("schema_version") == "1.4":
+        return data.get("decision_outcome", "")
+    status = data.get("status", "")
+    return "accepted" if status in ADR_ACCEPTED_ORIGIN_STATUSES else status
+
+
+def adr_corpus_data(repo: Path) -> dict[str, dict[str, str]]:
+    corpus: dict[str, dict[str, str]] = {}
+    for path in adr_files(repo):
+        try:
+            data, _ = adr_document_data(path)
+        except (EpctlError, OSError, UnicodeDecodeError):
+            continue
+        adr_id = data.get("id", "")
+        if adr_id:
+            corpus[adr_id] = data
+    return corpus
+
+
+def adr_currentness(
+    repo: Path,
+    adr_id: str,
+    *,
+    data_by_id: dict[str, dict[str, str]] | None = None,
+) -> tuple[bool, list[str]]:
+    corpus = data_by_id if data_by_id is not None else adr_corpus_data(repo)
+    normalized = normalize_reference_ids((adr_id,), "ADR")[0]
+    memo: dict[str, tuple[bool, list[str]]] = {}
+    visiting: list[str] = []
+
+    def visit(item_id: str) -> tuple[bool, list[str]]:
+        if item_id in memo:
+            return memo[item_id]
+        if item_id in visiting:
+            cycle = " -> ".join((*visiting[visiting.index(item_id) :], item_id))
+            result = (False, [f"ADR dependency cycle: {cycle}"])
+            memo[item_id] = result
+            return result
+        data = corpus.get(item_id)
+        if data is None:
+            result = (False, [f"{item_id} is missing"])
+            memo[item_id] = result
+            return result
+        reasons: list[str] = []
+        status = data.get("status", "")
+        if status != "accepted":
+            reasons.append(f"{item_id} status is {status or 'missing'}")
+        visiting.append(item_id)
+        try:
+            for related_id in adr_relations(data):
+                related_current, related_reasons = visit(related_id)
+                if not related_current:
+                    reasons.append(
+                        f"{item_id} references non-current {related_id}"
+                    )
+                    reasons.extend(related_reasons)
+        except EpctlError as exc:
+            reasons.append(str(exc))
+        visiting.pop()
+        result = (not reasons, list(dict.fromkeys(reasons)))
+        memo[item_id] = result
+        return result
+
+    return visit(normalized)
+
+
+def architecture_review_reasons(
+    repo: Path,
+    adr_values: Iterable[str],
+) -> list[str]:
+    corpus = adr_corpus_data(repo)
+    reasons: list[str] = []
+    for adr_id in normalize_reference_ids(adr_values, "ADR"):
+        current, item_reasons = adr_currentness(
+            repo,
+            adr_id,
+            data_by_id=corpus,
+        )
+        if not current:
+            reasons.extend(item_reasons)
+    return list(dict.fromkeys(reasons))
+
+
 def adr_input_closure(
     repo: Path,
     adr_values: Iterable[str],
     *,
     allowed_statuses: set[str] | None = None,
     historical: bool = False,
+    data_overrides: dict[str, dict[str, str]] | None = None,
 ) -> tuple[list[str], dict[str, dict[str, str]]]:
     requested = normalize_reference_ids(adr_values, "ADR")
     valid_statuses = allowed_statuses or {"accepted"}
@@ -1925,8 +2138,12 @@ def adr_input_closure(
             raise EpctlError(f"ADR dependency cycle: {cycle}")
         if adr_id in data_by_id:
             return
-        path = find_adr(repo, adr_id)
-        adr_errors, _, data = validate_adr(path, historical=historical)
+        if data_overrides and adr_id in data_overrides:
+            adr_errors: list[str] = []
+            data = data_overrides[adr_id]
+        else:
+            path = find_adr(repo, adr_id)
+            adr_errors, _, data = validate_adr(path, historical=historical)
         if adr_errors or data.get("status") not in valid_statuses:
             details = "; ".join(adr_errors) if adr_errors else data.get("status", "")
             if valid_statuses == {"accepted"} and not historical:
@@ -1946,6 +2163,21 @@ def adr_input_closure(
 
     for adr_id in requested:
         visit(adr_id)
+    if not historical and valid_statuses == {"accepted"}:
+        corpus = adr_corpus_data(repo)
+        if data_overrides:
+            corpus.update(data_overrides)
+        for adr_id in requested:
+            current, reasons = adr_currentness(
+                repo,
+                adr_id,
+                data_by_id=corpus,
+            )
+            if not current:
+                raise EpctlError(
+                    f"{adr_id} must be valid, accepted and current: "
+                    + "; ".join(reasons)
+                )
     return ordered, data_by_id
 
 
@@ -1970,7 +2202,7 @@ def payload_sha256(text: str) -> str:
 
 
 def adr_payload_sha256(text: str, data: dict[str, str]) -> str:
-    if data.get("schema_version") not in {"1.1", "1.2", "1.3"}:
+    if data.get("schema_version") not in {"1.1", "1.2", "1.3", "1.4"}:
         return payload_sha256(text)
     decision_payload = {
         "schema_version": data.get("schema_version", ""),
@@ -1982,24 +2214,21 @@ def adr_payload_sha256(text: str, data: dict[str, str]) -> str:
         "design_refs": data.get("design_refs", ""),
         "decision_maker": data.get("decision_maker", ""),
         "decided": data.get("decided", ""),
-        "decision_outcome": (
-            "accepted"
-            if data.get("status") == "superseded"
-            else data.get("status", "")
-        ),
+        "decision_outcome": adr_decision_outcome(data),
         "body": frontmatter_body(text),
     }
-    if data.get("schema_version") in {"1.2", "1.3"}:
+    if data.get("schema_version") in {"1.2", "1.3", "1.4"}:
         decision_payload["amends_constraints"] = data.get(
             "amends_constraints",
             "",
         )
-    if data.get("schema_version") == "1.3":
+    if data.get("schema_version") in {"1.3", "1.4"}:
         decision_payload["metadata_schema"] = data.get("metadata_schema", "")
         decision_payload["artifact_type"] = data.get("artifact_type", "")
         decision_payload["author"] = data.get("author", "")
         decision_payload["owner"] = data.get("owner", "")
         decision_payload["created"] = data.get("created", "")
+    if data.get("schema_version") == "1.3":
         decision_payload["updated"] = data.get("updated", "")
     canonical = json.dumps(
         decision_payload,
@@ -2438,11 +2667,12 @@ def new_adr(
         for related_id in (*depends_on, *amends):
             related_path = find_adr(repo, related_id)
             related_errors, _, related_data = validate_adr(related_path)
-            if related_errors or related_data.get("status") != "accepted":
+            related_current, current_reasons = adr_currentness(repo, related_id)
+            if related_errors or not related_current:
                 details = (
                     "; ".join(related_errors)
                     if related_errors
-                    else related_data.get("status", "")
+                    else "; ".join(current_reasons)
                 )
                 raise EpctlError(
                     f"{related_id} must be valid, accepted and current: {details}"
@@ -3876,28 +4106,39 @@ def validate_adr(
     path: Path,
     *,
     historical: bool = False,
+    document_text: str | None = None,
 ) -> tuple[list[str], list[str], dict[str, str]]:
     errors: list[str] = []
     warnings: list[str] = []
-    text = path.read_text(encoding="utf-8")
+    text = (
+        document_text
+        if document_text is not None
+        else path.read_text(encoding="utf-8")
+    )
     try:
-        data, strict = adr_document_data(path)
+        data, strict = adr_document_data_from_text(path, text)
     except EpctlError as exc:
         return [f"{path}: {exc}"], warnings, {}
     adr_id = data.get("id", "")
     repo = repository_from_artifact(path)
     if strict:
         errors.extend(validate_common_frontmatter(path, data, "ADR"))
-        if data.get("schema_version") not in {"1", "1.1", "1.2", "1.3"}:
+        if data.get("schema_version") not in {
+            "1",
+            "1.1",
+            "1.2",
+            "1.3",
+            "1.4",
+        }:
             errors.append(
-                f"{path}: ADR schema_version must be 1, 1.1, 1.2 or 1.3"
+                f"{path}: ADR schema_version must be 1, 1.1, 1.2, 1.3 or 1.4"
             )
         errors.extend(validate_required_sections(path, text, ADR_SECTIONS))
-        if data.get("schema_version") in {"1.2", "1.3"}:
+        if data.get("schema_version") in {"1.2", "1.3", "1.4"}:
             errors.extend(
                 validate_required_sections(path, text, ADR_V12_SECTIONS)
             )
-        if data.get("schema_version") == "1.3" and adr_id:
+        if data.get("schema_version") in {"1.3", "1.4"} and adr_id:
             errors.extend(
                 validate_metadata_contract(path, data, "adr", adr_id)
             )
@@ -3915,6 +4156,29 @@ def validate_adr(
             "treat it as read-only and use a new strict ADR for later decisions"
         )
     status = data.get("status", "")
+    effect_metadata = (
+        inline_text(data.get("effect_changed_by", "")),
+        inline_text(data.get("effect_changed", "")),
+        inline_text(data.get("effect_reason", "")),
+    )
+    if data.get("schema_version") != "1.4" and any(effect_metadata):
+        if not all(effect_metadata):
+            errors.append(
+                f"{path}: effect transition metadata must set actor, time, and reason"
+            )
+        if status in {"under_review", "retired", "superseded"} and not all(
+            effect_metadata
+        ):
+            errors.append(
+                f"{path}: status {status!r} requires effect transition metadata"
+            )
+        if effect_metadata[1]:
+            try:
+                dt.datetime.fromisoformat(
+                    effect_metadata[1].replace("Z", "+00:00")
+                )
+            except ValueError:
+                errors.append(f"{path}: effect_changed must be an ISO timestamp")
     if status not in ADR_STATUSES:
         errors.append(f"{path}: invalid ADR status {status!r}")
     arrays: dict[str, list[str]] = {}
@@ -3947,10 +4211,19 @@ def validate_adr(
     depends_on = arrays["depends_on"]
     amends = arrays["amends"]
     supersedes = arrays["supersedes"]
-    if data.get("schema_version") in {"1.1", "1.2", "1.3"}:
+    if data.get("schema_version") in {"1.1", "1.2", "1.3", "1.4"}:
         required_fields = ["depends_on", "amends", "design_refs"]
-        if data.get("schema_version") in {"1.2", "1.3"}:
+        if data.get("schema_version") in {"1.2", "1.3", "1.4"}:
             required_fields.append("amends_constraints")
+        if data.get("schema_version") == "1.4":
+            required_fields.extend(
+                (
+                    "decision_outcome",
+                    "effect_changed_by",
+                    "effect_changed",
+                    "effect_reason",
+                )
+            )
         for field in required_fields:
             if field not in data:
                 errors.append(
@@ -3985,11 +4258,7 @@ def validate_adr(
         research_errors, _ = validate_research(research_path)
         if research_errors or research_data.get("status") != "concluded":
             errors.append(f"{path}: {research_id} is not valid and concluded")
-    relation_statuses = (
-        {"accepted", "superseded"}
-        if historical or status in {"rejected", "superseded"}
-        else {"accepted"}
-    )
+    relation_statuses = ADR_ACCEPTED_ORIGIN_STATUSES
     for related_id in (*depends_on, *amends):
         try:
             related_path = find_adr(repo, related_id)
@@ -4002,7 +4271,15 @@ def validate_adr(
                 f"{path}: {related_id} in depends_on/amends must have status in "
                 f"{sorted(relation_statuses)}"
             )
-    if data.get("schema_version") in {"1.2", "1.3"}:
+        elif (
+            status in {"proposed", "accepted"}
+            and related_data.get("status") != "accepted"
+        ):
+            warnings.append(
+                f"{path}: architecture_review_required because related ADR "
+                f"{related_id} is {related_data.get('status')!r}"
+            )
+    if data.get("schema_version") in {"1.2", "1.3", "1.4"}:
         decision_statement = re.sub(
             r"<!--[\s\S]*?-->",
             "",
@@ -4083,7 +4360,7 @@ def validate_adr(
     superseded_by = data.get("superseded_by", "")
     if superseded_by and not ID_RE["ADR"].fullmatch(superseded_by):
         errors.append(f"{path}: invalid superseded_by {superseded_by!r}")
-    decided = status in {"accepted", "rejected", "superseded"}
+    decided = status in ADR_HISTORICAL_STATUSES
     if strict and decided:
         if not data.get("decision_maker"):
             errors.append(f"{path}: decided ADR requires decision_maker")
@@ -4114,11 +4391,298 @@ def validate_adr(
             errors.append(f"{path}: proposed ADR cannot have payload_sha256")
         if marker_names(text):
             warnings.append(f"{path}: required placeholders remain")
+    if data.get("schema_version") == "1.4":
+        decision_outcome = data.get("decision_outcome", "")
+        expected_outcome = (
+            "accepted"
+            if status in ADR_ACCEPTED_ORIGIN_STATUSES
+            else "rejected"
+            if status == "rejected"
+            else ""
+        )
+        if decision_outcome != expected_outcome:
+            errors.append(
+                f"{path}: decision_outcome must be {expected_outcome!r} "
+                f"for status {status!r}"
+            )
+        effect_values = [
+            inline_text(data.get(field, ""))
+            for field in (
+                "effect_changed_by",
+                "effect_changed",
+                "effect_reason",
+            )
+        ]
+        if any(effect_values) and not all(effect_values):
+            errors.append(
+                f"{path}: effect transition metadata must set actor, time, and reason"
+            )
+        if status in {"under_review", "retired", "superseded"} and not all(
+            effect_values
+        ):
+            errors.append(
+                f"{path}: status {status!r} requires effect transition metadata"
+            )
+        if status in {"proposed", "rejected"} and any(effect_values):
+            errors.append(
+                f"{path}: status {status!r} cannot record effect transition metadata"
+            )
+        if effect_values[1]:
+            try:
+                dt.datetime.fromisoformat(effect_values[1].replace("Z", "+00:00"))
+            except ValueError:
+                errors.append(f"{path}: effect_changed must be an ISO timestamp")
     if status == "superseded" and not superseded_by:
         errors.append(f"{path}: superseded ADR requires superseded_by")
     if status != "superseded" and superseded_by:
         errors.append(f"{path}: only superseded ADR can set superseded_by")
     return errors, warnings, data
+
+
+def validate_registered_adr_revision(
+    repo: Path,
+    path: Path,
+    *,
+    document_text: str | None = None,
+    expected_adr_id: str | None = None,
+) -> tuple[list[str], list[str], dict[str, str], str]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    root = adr_revision_root(repo)
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return [f"{path}: ADR revision escapes {root}"], warnings, {}, ""
+    if len(relative.parts) != 2:
+        errors.append(
+            f"{path}: ADR revision path must use ADR-NNN/sha256-<digest>.md"
+        )
+        path_adr_id = ""
+        filename_digest = ""
+    else:
+        path_adr_id = relative.parts[0]
+        filename_match = ADR_REVISION_FILE_RE.fullmatch(relative.parts[1])
+        filename_digest = filename_match.group(1) if filename_match else ""
+        if not ID_RE["ADR"].fullmatch(path_adr_id) or path_adr_id != path_adr_id.upper():
+            errors.append(f"{path}: ADR revision directory must use canonical ADR-NNN")
+        if not filename_match:
+            errors.append(
+                f"{path}: ADR revision filename must use sha256-<64-hex>.md"
+            )
+    if document_text is None:
+        if path.is_symlink() or not path.is_file():
+            return [*errors, f"{path}: ADR revision must be a regular file"], warnings, {}, ""
+        if path.stat().st_size > ADR_REVISION_MAX_BYTES:
+            return [
+                *errors,
+                f"{path}: ADR revision exceeds {ADR_REVISION_MAX_BYTES} bytes",
+            ], warnings, {}, ""
+        try:
+            text = normalized_utf8_document(path.read_bytes(), str(path))
+        except EpctlError as exc:
+            return [*errors, str(exc)], warnings, {}, ""
+    else:
+        text = document_text
+    try:
+        _, strict = adr_document_data_from_text(path, text)
+    except EpctlError as exc:
+        return [*errors, f"{path}: {exc}"], warnings, {}, text
+    if not strict:
+        errors.append(f"{path}: registered ADR revision must use a strict schema")
+    adr_errors, adr_warnings, data = validate_adr(
+        path,
+        historical=True,
+        document_text=text,
+    )
+    errors.extend(adr_errors)
+    warnings.extend(adr_warnings)
+    adr_id = data.get("id", "")
+    digest = inline_text(data.get("payload_sha256", "")).lower()
+    if data.get("status") not in ADR_ACCEPTED_ORIGIN_STATUSES:
+        errors.append(
+            f"{path}: registered ADR revision must record an accepted decision outcome"
+        )
+    if path_adr_id and adr_id != path_adr_id:
+        errors.append(
+            f"{path}: registered ADR id {adr_id!r} does not match {path_adr_id}"
+        )
+    if expected_adr_id and adr_id != expected_adr_id:
+        errors.append(
+            f"{path}: registered ADR id {adr_id!r} does not match {expected_adr_id}"
+        )
+    if filename_digest and digest != filename_digest:
+        errors.append(
+            f"{path}: registered ADR digest {digest!r} does not match filename"
+        )
+    return errors, warnings, data, text
+
+
+def validate_adr_revision_store(
+    repo: Path,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    root = adr_revision_root(repo)
+    if not root.exists():
+        return errors, warnings
+    if root.is_symlink() or not root.is_dir():
+        return [f"{root}: ADR revision root must be a regular directory"], warnings
+    for directory in sorted(root.iterdir()):
+        if directory.is_symlink() or not directory.is_dir():
+            errors.append(f"{directory}: ADR revision entry must be an ADR-NNN directory")
+            continue
+        if not ID_RE["ADR"].fullmatch(directory.name) or directory.name != directory.name.upper():
+            errors.append(
+                f"{directory}: ADR revision directory must use canonical ADR-NNN"
+            )
+            continue
+        revisions = sorted(directory.iterdir())
+        if not revisions:
+            errors.append(f"{directory}: empty ADR revision directory")
+        for path in revisions:
+            item_errors, item_warnings, _, _ = validate_registered_adr_revision(
+                repo,
+                path,
+            )
+            errors.extend(item_errors)
+            warnings.extend(item_warnings)
+    return errors, warnings
+
+
+def resolve_adr_evidence(
+    repo: Path,
+    adr_id: str,
+    digest: str,
+) -> tuple[Path, str, dict[str, str]]:
+    normalized_id = normalize_reference_ids((adr_id,), "ADR")[0]
+    normalized_digest = digest.lower()
+    try:
+        current_path = find_adr(repo, normalized_id)
+    except EpctlError:
+        current_path = None
+    if current_path is not None:
+        current_errors, _, current_data = validate_adr(
+            current_path,
+            historical=True,
+        )
+        if (
+            not current_errors
+            and current_data.get("status") in {"accepted", "superseded"}
+            and inline_text(current_data.get("payload_sha256", "")).lower()
+            == normalized_digest
+        ):
+            return (
+                current_path,
+                current_path.read_text(encoding="utf-8"),
+                current_data,
+            )
+    revision_path = adr_revision_path(repo, normalized_id, normalized_digest)
+    if not revision_path.is_file() or revision_path.is_symlink():
+        raise EpctlError(
+            f"historical ADR revision is not registered for "
+            f"{normalized_id}@sha256:{normalized_digest}"
+        )
+    revision_errors, _, revision_data, revision_text = (
+        validate_registered_adr_revision(
+            repo,
+            revision_path,
+            expected_adr_id=normalized_id,
+        )
+    )
+    if revision_errors:
+        raise EpctlError(
+            f"historical ADR revision is invalid for "
+            f"{normalized_id}@sha256:{normalized_digest}: "
+            + "; ".join(revision_errors)
+        )
+    return revision_path, revision_text, revision_data
+
+
+def register_adr_revision(
+    repo: Path,
+    adr_id: str,
+    *,
+    source_file: str,
+    git_object_id: str,
+    apply: bool,
+) -> dict[str, object]:
+    normalized_id = normalize_reference_ids((adr_id,), "ADR")[0]
+
+    def build_registration() -> tuple[dict[str, object], Path, str]:
+        if source_file:
+            text, locator = read_adr_revision_file(repo, source_file)
+            source_kind = "file"
+        else:
+            text, locator = git_blob(repo, git_object_id)
+            source_kind = "git-blob"
+        try:
+            data, strict = adr_document_data_from_text(
+                adr_revision_root(repo) / normalized_id / "candidate.md",
+                text,
+            )
+        except EpctlError as exc:
+            raise EpctlError(f"Invalid ADR revision source: {exc}") from exc
+        if not strict:
+            raise EpctlError("ADR revision source must use a strict ADR schema")
+        digest = inline_text(data.get("payload_sha256", "")).lower()
+        target = adr_revision_path(repo, normalized_id, digest)
+        item_errors, item_warnings, _, _ = validate_registered_adr_revision(
+            repo,
+            target,
+            document_text=text,
+            expected_adr_id=normalized_id,
+        )
+        if item_errors:
+            raise EpctlError(
+                "ADR revision registration blocked:\n- "
+                + "\n- ".join(item_errors)
+            )
+        action = "create"
+        if target.exists():
+            reject_symlink_path(repo, target)
+            existing = normalized_utf8_document(target.read_bytes(), str(target))
+            if existing != text:
+                raise EpctlError(
+                    f"ADR revision conflict at {target}: immutable bytes differ"
+                )
+            action = "preserve"
+        result: dict[str, object] = {
+            "action": action,
+            "applied": apply,
+            "adr_id": normalized_id,
+            "payload_sha256": digest,
+            "document_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "bytes": len(text.encode("utf-8")),
+            "source": {"kind": source_kind, "locator": locator},
+            "target": target.relative_to(repo).as_posix(),
+            "warnings": item_warnings,
+        }
+        return result, target, text
+
+    if not apply:
+        result, _, _ = build_registration()
+        return result
+    with repo_lock(repo):
+        result, target, text = build_registration()
+        created = False
+        if result["action"] == "create":
+            reject_symlink_path(repo, target)
+            atomic_write(target, text)
+            created = True
+        post_errors, _, _, _ = validate_registered_adr_revision(repo, target)
+        if post_errors:
+            if created and target.is_file() and not target.is_symlink():
+                target.unlink()
+                if not any(target.parent.iterdir()):
+                    target.parent.rmdir()
+                root = adr_revision_root(repo)
+                if root.is_dir() and not any(root.iterdir()):
+                    root.rmdir()
+            raise EpctlError(
+                "ADR revision registration failed post-write validation:\n- "
+                + "\n- ".join(post_errors)
+            )
+        return result
 
 
 def validate_task(
@@ -4297,6 +4861,8 @@ def validate_plan(
             validate_metadata_contract(path, data, "exec-plan", plan_id)
         )
     required_benchmark_scenarios: list[str] | None = None
+    architecture_review_required = False
+    architecture_review_details: list[str] = []
     if schema_version not in {
         "2.0",
         "2.1",
@@ -4508,26 +5074,71 @@ def validate_plan(
                     f"{path}: invalid architecture_gate {architecture_gate!r}"
                 )
         adr_data_by_id: dict[str, dict[str, str]] = {}
+        adr_text_by_id: dict[str, str] = {}
+        adr_resolution_failures: set[str] = set()
         allowed_adr_statuses = (
-            {"accepted", "superseded"} if historical_plan else {"accepted"}
+            ADR_ACCEPTED_ORIGIN_STATUSES if historical_plan else {"accepted"}
         )
+        review_reasons = (
+            []
+            if historical_plan
+            else architecture_review_reasons(repo, adr_refs)
+        )
+        review_required = bool(review_reasons)
+        architecture_review_required = review_required
+        architecture_review_details = review_reasons
+        if review_required:
+            warnings.append(
+                f"{path}: architecture_review_required: "
+                + "; ".join(review_reasons)
+            )
         for adr_id in adr_refs:
-            try:
-                adr_path = find_adr(repo, adr_id)
-            except EpctlError:
-                errors.append(f"{path}: missing accepted ADR {adr_id}")
-                continue
+            adr_path: Path | None = None
+            adr_text = ""
+            if historical_plan and adr_id in adr_evidence:
+                try:
+                    adr_path, adr_text, _ = resolve_adr_evidence(
+                        repo,
+                        adr_id,
+                        adr_evidence[adr_id],
+                    )
+                except EpctlError as exc:
+                    errors.append(
+                        f"{path}: ADR evidence digest changed for {adr_id}: {exc}"
+                    )
+                    adr_resolution_failures.add(adr_id)
+            if adr_path is None:
+                try:
+                    adr_path = find_adr(repo, adr_id)
+                    adr_text = adr_path.read_text(encoding="utf-8")
+                except EpctlError:
+                    errors.append(f"{path}: missing accepted ADR {adr_id}")
+                    continue
             adr_errors, _, adr_data = validate_adr(
                 adr_path,
                 historical=historical_plan,
+                document_text=adr_text,
             )
-            if adr_errors or adr_data.get("status") not in allowed_adr_statuses:
+            historically_accepted = (
+                adr_decision_outcome(adr_data) == "accepted"
+            )
+            current_plan_adr = (
+                adr_data.get("status") == "accepted"
+                or (review_required and historically_accepted)
+            )
+            valid_for_plan = (
+                historically_accepted
+                if historical_plan
+                else current_plan_adr
+            )
+            if adr_errors or not valid_for_plan:
                 errors.append(
                     f"{path}: {adr_id} is not valid with status in "
                     f"{sorted(allowed_adr_statuses)}"
                 )
             else:
                 adr_data_by_id[adr_id] = adr_data
+                adr_text_by_id[adr_id] = adr_text
             missing_research = set(
                 parse_inline_ids(adr_data.get("research_refs", ""), "R")
             ) - set(research_refs)
@@ -4540,13 +5151,46 @@ def validate_plan(
                 errors.append(
                     f"{path}: Research and Architecture Inputs must mention {adr_id}"
                 )
-        if adr_data_by_id:
+        if adr_data_by_id and not review_required:
             try:
                 closure, closure_data = adr_input_closure(
                     repo,
                     adr_refs,
                     allowed_statuses=allowed_adr_statuses,
                     historical=historical_plan,
+                    data_overrides=(
+                        adr_data_by_id if historical_plan else None
+                    ),
+                )
+            except EpctlError as exc:
+                errors.append(f"{path}: {exc}")
+                closure = []
+                closure_data = {}
+            missing_adrs = set(closure) - set(adr_refs)
+            if missing_adrs:
+                errors.append(
+                    f"{path}: ADR set is not dependency-closed; missing "
+                    + ", ".join(sorted(missing_adrs))
+                )
+            for adr_id, adr_data in closure_data.items():
+                missing_designs = set(
+                    parse_string_array(
+                        adr_data.get("design_refs", ""),
+                        "design_refs",
+                    )
+                ) - set(design_refs)
+                if missing_designs:
+                    errors.append(
+                        f"{path}: {adr_id} requires missing Design Docs "
+                        + ", ".join(sorted(missing_designs))
+                    )
+        elif adr_data_by_id:
+            try:
+                closure, closure_data = adr_input_closure(
+                    repo,
+                    adr_refs,
+                    allowed_statuses=ADR_ACCEPTED_ORIGIN_STATUSES,
+                    historical=True,
                 )
             except EpctlError as exc:
                 errors.append(f"{path}: {exc}")
@@ -4618,9 +5262,8 @@ def validate_plan(
             for adr_id in adr_refs:
                 if adr_id not in adr_data_by_id:
                     continue
-                adr_path = find_adr(repo, adr_id)
                 constraints = adr_constraint_refs(
-                    adr_path.read_text(encoding="utf-8"),
+                    adr_text_by_id[adr_id],
                     adr_id,
                 )
                 if constraints:
@@ -4635,7 +5278,7 @@ def validate_plan(
                 and architecture_entrypoint
             ):
                 expected_matrix_refs.append(architecture_entrypoint)
-            if not historical_plan:
+            if not historical_plan and not review_required:
                 try:
                     scoped_amendments = current_constraint_amendments(
                         repo,
@@ -4699,7 +5342,16 @@ def validate_plan(
                 )
             for adr_id, digest in adr_evidence.items():
                 adr_data = adr_data_by_id.get(adr_id)
-                if adr_data and digest != adr_data.get("payload_sha256", ""):
+                recorded_digest = (
+                    inline_text(adr_data.get("payload_sha256", "")).lower()
+                    if adr_data
+                    else ""
+                )
+                if (
+                    adr_data
+                    and digest != recorded_digest
+                    and adr_id not in adr_resolution_failures
+                ):
                     errors.append(
                         f"{path}: ADR evidence digest changed for {adr_id}"
                     )
@@ -4801,6 +5453,11 @@ def validate_plan(
     completing = archive_status == "completed" or (
         archive_status is None and status == "completed"
     )
+    if completing and architecture_review_required:
+        errors.append(
+            f"{path}: architecture_review_required blocks completion: "
+            + "; ".join(architecture_review_details)
+        )
     if schema_version in {"2.3", "2.4", "2.5", "2.6", "2.7"}:
         attestation_version = schema_version
         if "verified_revision" not in data:
@@ -5143,6 +5800,9 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                 in {"PLANS.md", "RESEARCH.md", "DECISIONS.md", "BUGFIXES.md"}
             ):
                 errors.append(f"{path}: symbolic links are not supported")
+    revision_errors, revision_warnings = validate_adr_revision_store(repo)
+    errors.extend(revision_errors)
+    warnings.extend(revision_warnings)
     plans_index = repo / "docs" / "PLANS.md"
     research_index = repo / "docs" / "RESEARCH.md"
     decision_index = repo / "docs" / "DECISIONS.md"
@@ -5304,7 +5964,23 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                 errors.append(
                     f"{item_id}: {superseded_by} must list it in supersedes"
                 )
-        for old_id in parse_inline_ids(data.get("supersedes", ""), "ADR"):
+        supersedes_ids = parse_inline_ids(data.get("supersedes", ""), "ADR")
+        if supersedes_ids:
+            transition_fields = (
+                inline_text(data.get("effect_changed_by", "")),
+                inline_text(data.get("effect_changed", "")),
+                inline_text(data.get("effect_reason", "")),
+            )
+            if not all(transition_fields):
+                message = (
+                    f"{item_id}: supersession has no effect transition "
+                    "actor, time, and reason on the replacement ADR"
+                )
+                if data.get("schema_version") == "1.4":
+                    errors.append(message)
+                else:
+                    warnings.append(message + "; preserving legacy history")
+        for old_id in supersedes_ids:
             old = adr_data_by_id.get(old_id)
             if not old:
                 errors.append(f"{item_id}: superseded ADR {old_id} is missing")
@@ -5316,11 +5992,7 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                     f"{item_id}: supersession backlink from {old_id} is invalid"
                 )
         for relation in ("depends_on", "amends"):
-            related_statuses = (
-                {"accepted", "superseded"}
-                if data.get("status") in {"rejected", "superseded"}
-                else {"accepted"}
-            )
+            related_statuses = ADR_ACCEPTED_ORIGIN_STATUSES
             try:
                 related_ids = parse_reference_array(
                     data.get(relation, ""),
@@ -5339,6 +6011,15 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                     errors.append(
                         f"{item_id}: {relation} ADR {related_id} must have "
                         f"status in {sorted(related_statuses)}"
+                    )
+                elif (
+                    data.get("status") in {"proposed", "accepted"}
+                    and related.get("status") != "accepted"
+                ):
+                    warnings.append(
+                        f"{item_id}: architecture_review_required because "
+                        f"{relation} ADR {related_id} is "
+                        f"{related.get('status')!r}"
                     )
 
     adr_graph: dict[str, list[str]] = {}
@@ -5623,6 +6304,7 @@ def decide_adr(
                 "status": outcome,
                 "decision_maker": json.dumps(maker, ensure_ascii=False),
                 "decided": json.dumps(timestamp_string()),
+                "decision_outcome": outcome,
                 "updated": date_string(),
             },
         )
@@ -5652,12 +6334,204 @@ def decide_adr(
         return path
 
 
-def supersede_adr(repo: Path, old_adr_id: str, new_adr_id: str) -> Path:
+def adr_effect_updates(
+    data: dict[str, str],
+    target_status: str,
+    decision_maker: str,
+    reason: str,
+) -> dict[str, str]:
+    updates = {
+        "status": target_status,
+        "effect_changed_by": json.dumps(decision_maker, ensure_ascii=False),
+        "effect_changed": json.dumps(timestamp_string()),
+        "effect_reason": json.dumps(reason, ensure_ascii=False),
+    }
+    if data.get("schema_version") == "1.4":
+        updates["updated"] = date_string()
+    return updates
+
+
+def adr_effect_impact(
+    repo: Path,
+    adr_id: str,
+    from_status: str,
+    to_status: str,
+    *,
+    replacement: str = "",
+    apply: bool = False,
+    no_op: bool = False,
+) -> dict[str, object]:
+    corpus = adr_corpus_data(repo)
+    affected: set[str] = {adr_id}
+    changed = True
+    while changed:
+        changed = False
+        for item_id, data in corpus.items():
+            if item_id in affected:
+                continue
+            try:
+                relations = set(adr_relations(data))
+            except EpctlError:
+                relations = set()
+            if relations & affected:
+                affected.add(item_id)
+                changed = True
+    constraints: set[str] = set()
+    for item_id in affected:
+        try:
+            path = find_adr(repo, item_id)
+            constraints.update(
+                adr_constraint_refs(
+                    path.read_text(encoding="utf-8"),
+                    item_id,
+                )
+            )
+        except EpctlError:
+            continue
+    active_plans: list[str] = []
+    for path in plan_files(repo, "active"):
+        try:
+            data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+            plan_adrs = set(
+                parse_reference_array(data.get("adr_refs", "[]"), "ADR", "adr_refs")
+            )
+        except EpctlError:
+            continue
+        if plan_adrs & affected:
+            active_plans.append(data.get("id", path.stem))
+    actions = [
+        find_adr(repo, adr_id).relative_to(repo).as_posix(),
+        "docs/DECISIONS.md",
+    ]
+    if replacement:
+        actions.insert(1, find_adr(repo, replacement).relative_to(repo).as_posix())
+    return {
+        "mode": "apply" if apply else "preview",
+        "adr_id": adr_id,
+        "from_status": from_status,
+        "to_status": to_status,
+        "replacement": replacement or None,
+        "affected_constraints": sorted(constraints),
+        "affected_adrs": sorted(affected - {adr_id}),
+        "affected_active_plans": sorted(active_plans),
+        "actions": [] if no_op else actions,
+        "warnings": [
+            "Implementation and active ExecPlans are not modified automatically."
+        ],
+        "no_op": no_op,
+    }
+
+
+def validate_effect_authority(
+    decision_maker: str,
+    reason: str,
+) -> tuple[str, str]:
+    maker = inline_text(decision_maker)
+    rationale = inline_text(reason)
+    if not maker:
+        raise EpctlError("ADR effect change requires --decision-maker")
+    if not rationale:
+        raise EpctlError("ADR effect change requires --reason")
+    return maker, rationale
+
+
+def transition_adr(
+    repo: Path,
+    adr_id: str,
+    target_status: str,
+    decision_maker: str,
+    reason: str,
+    apply: bool,
+) -> dict[str, object]:
+    maker, rationale = validate_effect_authority(decision_maker, reason)
+    target = inline_text(target_status).lower()
+    if target not in {"accepted", "under_review", "retired"}:
+        raise EpctlError(
+            "ADR effect target must be accepted, under_review or retired"
+        )
+    normalized = normalize_reference_ids((adr_id,), "ADR")[0]
+
+    def prepare() -> tuple[Path, str, dict[str, str], dict[str, object]]:
+        path = find_adr(repo, normalized)
+        text = path.read_text(encoding="utf-8")
+        errors, _, data = validate_adr(path)
+        if errors:
+            raise EpctlError("ADR transition blocked:\n- " + "\n- ".join(errors))
+        source = data.get("status", "")
+        no_op = source == target
+        if no_op:
+            if source not in {"accepted", "under_review", "retired"}:
+                raise EpctlError(f"{normalized} cannot transition from {source!r}")
+        elif target not in ADR_TRANSITIONS.get(source, set()):
+            raise EpctlError(
+                f"Illegal ADR effect transition: {source} -> {target}"
+            )
+        impact = adr_effect_impact(
+            repo,
+            normalized,
+            source,
+            target,
+            apply=apply,
+            no_op=no_op,
+        )
+        return path, text, data, impact
+
+    if not apply:
+        return prepare()[3]
     with repo_lock(repo):
-        old_id = normalize_reference_ids((old_adr_id,), "ADR")[0]
-        new_id = normalize_reference_ids((new_adr_id,), "ADR")[0]
-        if old_id == new_id:
-            raise EpctlError("An ADR cannot supersede itself")
+        path, text, data, impact = prepare()
+        if impact["no_op"]:
+            return impact
+        candidate = update_frontmatter(
+            text,
+            adr_effect_updates(data, target, maker, rationale),
+        )
+        snapshots = managed_index_snapshots(repo)
+        try:
+            atomic_write(path, candidate)
+            post_errors, _, _ = validate_adr(path)
+            if post_errors:
+                raise EpctlError(
+                    "ADR transition produced invalid artifact:\n- "
+                    + "\n- ".join(post_errors)
+                )
+            rebuild_indexes(repo)
+            repo_errors, _ = validate_repo(repo)
+            if repo_errors:
+                raise EpctlError(
+                    "ADR transition produced an invalid repository:\n- "
+                    + "\n- ".join(repo_errors)
+                )
+        except Exception:
+            atomic_write(path, text)
+            restore_managed_indexes(snapshots)
+            raise
+        return impact
+
+
+def supersede_adr(
+    repo: Path,
+    old_adr_id: str,
+    new_adr_id: str,
+    decision_maker: str,
+    reason: str,
+    apply: bool,
+) -> dict[str, object]:
+    maker, rationale = validate_effect_authority(decision_maker, reason)
+    old_id = normalize_reference_ids((old_adr_id,), "ADR")[0]
+    new_id = normalize_reference_ids((new_adr_id,), "ADR")[0]
+    if old_id == new_id:
+        raise EpctlError("An ADR cannot supersede itself")
+
+    def prepare() -> tuple[
+        Path,
+        Path,
+        str,
+        str,
+        dict[str, str],
+        dict[str, str],
+        dict[str, object],
+    ]:
         old_path = find_adr(repo, old_id)
         new_path = find_adr(repo, new_id)
         old_text = old_path.read_text(encoding="utf-8")
@@ -5669,10 +6543,51 @@ def supersede_adr(repo: Path, old_adr_id: str, new_adr_id: str) -> Path:
                 "ADR supersession blocked:\n- "
                 + "\n- ".join((*old_errors, *new_errors))
             )
-        if old_data.get("status") != "accepted":
-            raise EpctlError(f"{old_id} must be accepted before supersession")
-        if new_data.get("status") != "accepted":
-            raise EpctlError(f"{new_id} must be accepted before supersession")
+        existing_replacement = old_data.get("superseded_by", "")
+        no_op = old_data.get("status") == "superseded" and existing_replacement == new_id
+        if not no_op and old_data.get("status") not in {"accepted", "under_review"}:
+            raise EpctlError(
+                f"{old_id} must be accepted or under_review before supersession"
+            )
+        new_current, new_reasons = adr_currentness(repo, new_id)
+        if not new_current:
+            raise EpctlError(
+                f"{new_id} must be valid, accepted and current: "
+                + "; ".join(new_reasons)
+            )
+        impact = adr_effect_impact(
+            repo,
+            old_id,
+            old_data.get("status", ""),
+            "superseded",
+            replacement=new_id,
+            apply=apply,
+            no_op=no_op,
+        )
+        return (
+            old_path,
+            new_path,
+            old_text,
+            new_text,
+            old_data,
+            new_data,
+            impact,
+        )
+
+    if not apply:
+        return prepare()[-1]
+    with repo_lock(repo):
+        (
+            old_path,
+            new_path,
+            old_text,
+            new_text,
+            old_data,
+            new_data,
+            impact,
+        ) = prepare()
+        if impact["no_op"]:
+            return impact
         supersedes = parse_reference_array(
             new_data.get("supersedes", ""),
             "ADR",
@@ -5680,21 +6595,25 @@ def supersede_adr(repo: Path, old_adr_id: str, new_adr_id: str) -> Path:
         )
         if old_id not in supersedes:
             supersedes.append(old_id)
-        old_candidate = update_frontmatter(
-            old_text,
-            {
-                "status": "superseded",
-                "superseded_by": new_id,
-                "updated": date_string(),
-            },
+        transition_time = timestamp_string()
+        old_updates = adr_effect_updates(
+            old_data,
+            "superseded",
+            maker,
+            rationale,
         )
-        new_candidate = update_frontmatter(
-            new_text,
-            {
-                "supersedes": json.dumps(supersedes),
-                "updated": date_string(),
-            },
-        )
+        old_updates["effect_changed"] = json.dumps(transition_time)
+        old_updates["superseded_by"] = new_id
+        new_updates = {
+            "supersedes": json.dumps(supersedes),
+            "effect_changed_by": json.dumps(maker, ensure_ascii=False),
+            "effect_changed": json.dumps(transition_time),
+            "effect_reason": json.dumps(rationale, ensure_ascii=False),
+        }
+        if new_data.get("schema_version") == "1.4":
+            new_updates["updated"] = date_string()
+        old_candidate = update_frontmatter(old_text, old_updates)
+        new_candidate = update_frontmatter(new_text, new_updates)
         snapshots = managed_index_snapshots(repo)
         try:
             atomic_write(old_path, old_candidate)
@@ -5707,12 +6626,18 @@ def supersede_adr(repo: Path, old_adr_id: str, new_adr_id: str) -> Path:
                     + "\n- ".join((*old_post, *new_post))
                 )
             rebuild_indexes(repo)
+            repo_errors, _ = validate_repo(repo)
+            if repo_errors:
+                raise EpctlError(
+                    "ADR supersession produced an invalid repository:\n- "
+                    + "\n- ".join(repo_errors)
+                )
         except Exception:
             atomic_write(old_path, old_text)
             atomic_write(new_path, new_text)
             restore_managed_indexes(snapshots)
             raise
-        return old_path
+        return impact
 
 
 def archive_ep(
@@ -5979,6 +6904,9 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 ),
                 "contract": "strict" if strict else "legacy-linked",
                 "superseded_by": data.get("superseded_by", ""),
+                "decision_outcome": adr_decision_outcome(data),
+                "current": adr_currentness(repo, data.get("id", ""))[0],
+                "review_reasons": adr_currentness(repo, data.get("id", ""))[1],
                 "last_activity": last_activity(text, data),
                 "path": path.relative_to(repo).as_posix(),
             }
@@ -6032,6 +6960,22 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 else "legacy"
             ),
         )
+        plan_adr_refs = parse_inline_ids(data.get("adr_refs", ""), "ADR")
+        review_reasons = (
+            architecture_review_reasons(repo, plan_adr_refs)
+            if data.get("status", "") in PLAN_ACTIVE_STATUSES
+            else []
+        )
+        if review_reasons:
+            lifecycle["completion"] = "archive_blocked"
+            lifecycle["completion_blockers"] = list(
+                dict.fromkeys(
+                    [
+                        *lifecycle["completion_blockers"],
+                        "architecture_review_required",
+                    ]
+                )
+            )
         plans.append(
             {
                 "id": data.get("id", ""),
@@ -6041,7 +6985,7 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "architecture_gate": decision_gate,
                 "architecture_decision_gate": decision_gate,
                 "architecture_compliance": architecture_compliance,
-                "adr_refs": parse_inline_ids(data.get("adr_refs", ""), "ADR"),
+                "adr_refs": plan_adr_refs,
                 "adr_constraint_refs": parse_string_array(
                     data.get("adr_constraint_refs", "[]"),
                     "adr_constraint_refs",
@@ -6058,6 +7002,8 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                     "architecture_entrypoint",
                     "",
                 ),
+                "architecture_review_required": bool(review_reasons),
+                "architecture_review_reasons": review_reasons,
                 "benchmark_scenarios": benchmark_scenarios,
                 "acceptance": f"{sum(acceptance)}/{len(acceptance)}",
                 "tasks": f"{sum(s in {'done', 'cancelled'} for s in tasks)}/{len(tasks)}"
@@ -6274,9 +7220,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     decide.add_argument("--decision-maker", required=True)
 
+    transition = sub.add_parser(
+        "transition-adr",
+        help="Preview or apply an authorized ADR effect-state transition",
+    )
+    transition.add_argument("adr_id", metavar="ADR-NNN")
+    transition.add_argument(
+        "--to",
+        choices=("accepted", "under_review", "retired"),
+        required=True,
+        dest="target_status",
+    )
+    transition.add_argument("--decision-maker", required=True)
+    transition.add_argument("--reason", required=True)
+    transition.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the previewed transition atomically",
+    )
+
     supersede = sub.add_parser(
         "supersede-adr",
-        help="Link an accepted ADR as the replacement for another accepted ADR",
+        help="Preview or apply an authorized ADR replacement",
     )
     supersede.add_argument("old_adr_id")
     supersede.add_argument(
@@ -6284,6 +7249,39 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         dest="new_adr_id",
         metavar="ADR-NNN",
+    )
+    supersede.add_argument("--decision-maker", required=True)
+    supersede.add_argument("--reason", required=True)
+    supersede.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the previewed supersession atomically",
+    )
+
+    register_revision = sub.add_parser(
+        "register-adr-revision",
+        help="Preview or store immutable historical ADR evidence",
+    )
+    register_revision.add_argument("adr_id", metavar="ADR-NNN")
+    revision_source = register_revision.add_mutually_exclusive_group(
+        required=True
+    )
+    revision_source.add_argument(
+        "--from-file",
+        default="",
+        metavar="PATH",
+        help="Repository-relative strict decided ADR document",
+    )
+    revision_source.add_argument(
+        "--from-git-blob",
+        default="",
+        metavar="OBJECT_ID",
+        help="Full Git blob object ID; Git is used only during explicit import",
+    )
+    register_revision.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the previewed immutable revision into docs/.epctl",
     )
 
     ep = sub.add_parser(
@@ -6491,8 +7489,50 @@ def main(argv: list[str] | None = None) -> int:
                     args.decision_maker,
                 )
             )
+        elif args.command == "transition-adr":
+            print(
+                json.dumps(
+                    transition_adr(
+                        repo,
+                        args.adr_id,
+                        args.target_status,
+                        args.decision_maker,
+                        args.reason,
+                        args.apply,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         elif args.command == "supersede-adr":
-            print(supersede_adr(repo, args.old_adr_id, args.new_adr_id))
+            print(
+                json.dumps(
+                    supersede_adr(
+                        repo,
+                        args.old_adr_id,
+                        args.new_adr_id,
+                        args.decision_maker,
+                        args.reason,
+                        args.apply,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        elif args.command == "register-adr-revision":
+            print(
+                json.dumps(
+                    register_adr_revision(
+                        repo,
+                        args.adr_id,
+                        source_file=args.from_file,
+                        git_object_id=args.from_git_blob,
+                        apply=args.apply,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         elif args.command == "new-ep":
             print(
                 new_ep(

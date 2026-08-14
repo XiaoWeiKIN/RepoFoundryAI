@@ -34,3 +34,9 @@ how accepted choices are realized.
 - [Artifact Metadata Contract](artifact-metadata-contract.md) — semantic
   provenance, identity, responsibility, time, compatibility, and integrity for
   governed engineering artifacts.
+- [Risk-adaptive Agent governance](risk-adaptive-agent-governance.md) —
+  Explore, Build, and Governed modes that scale process controls to risk while
+  keeping authority, safety, and evidence-integrity boundaries hard.
+- [Reversible ADR effect](reversible-adr-effect.md) — immutable decision
+  history with review, reaffirmation, retirement, supersession, and transitive
+  impact reporting.

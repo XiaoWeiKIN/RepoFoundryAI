@@ -78,7 +78,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.4.0
+  upgrade --to 0.5.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -126,9 +126,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.4.0
+  upgrade --to 0.5.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.4.0 --apply
+  upgrade --to 0.5.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -145,7 +145,8 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec plan
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  bootstrap --adapter codex --spec languages/go --apply
+  bootstrap --adapter codex --governance-profile adaptive \
+  --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec update --spec-version 1.5.0 --spec languages/go --apply
@@ -169,17 +170,37 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
 
+## 风险自适应治理
+
+schema 3 Harness 可记录 `governance.profile: adaptive|strict`。新仓库默认
+`adaptive`；缺少该字段的既有仓库按 `strict` 读取，只有显式 preview/apply
+`--governance-profile adaptive` 才迁移。strict 始终使用 Governed；adaptive 从
+Explore 开始，并只允许按 `Explore → Build → Governed` 单调升级：
+
+- Explore：有界、可逆的阅读、实验、本地编辑与测试，不要求持久制品或 Spec receipt。
+- Build：有界生产修改，维护简短 intent/path/acceptance/compatibility 契约并激活适用 Spec。
+- Governed：公共契约、安全、数据、不可逆操作、可靠性声明、发布或长期决定，按触发器使用 Research、ADR、ExecPlan 与 sealed Benchmark。
+
+所有模式都保持人类授权、破坏性/外部写入、安全、数据完整性、兼容性、locked/sealed
+证据与真实验证边界。不得用较低模式规避已确认边界，也不因“任务复杂”本身强制一张
+持久制品图。
+
 ## 激活任务规范
 
-Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。Codex 中实现或
-评审前调用 `$engineering-specs`；Claude 通过项目级 `$engineering-specs` Skill、
-Portable 通过 guide 运行同一引擎：`candidates` 判断 Spec Applicability，
+Bootstrap 只安装一个共享激活引擎，不为每份 Spec 创建 Skill。所有 adapter 先运行
+`begin` 取得 profile/mode；adaptive Explore 可直接进行有界可逆工作，跨越风险边界
+前用 `classify --mode build|governed --reason ...` 升级。Build/Governed 再执行
+`candidates/requirements/activate`：读取候选 Applicability，
 `requirements` 返回有界卡片，`activate` 记录带理由的直接 Requirement ID。Core
 计算精确依赖闭包，并从摘要已验证的源码范围编译解释框架、Requirement 块和对应
 Verification 行；16 KiB 卡片与 32 KiB 胶囊超限时失败，绝不摘要或截断规范原文。
 提高默认胶囊预算必须通过 `--capsule-budget-reason` 记录评审理由。
 旧文档、迁移或全库审计只能使用带理由的整份 Spec 回退；无适用项仍记录带理由的
 `none`。
+
+Codex Hook 在 Build/Governed 首次写入前注入已验证本地全文，Claude 与 Portable
+显式读取并审计。Governed 保留五字段 handoff；Explore 使用普通结果、验证与剩余
+风险说明。
 
 Core 只识别 `session_start`、`subagent_start`、`context_resume`、
 `before_mutation`、`stop` 五类标准化事件。协议 v2 回执记录直接/闭包 ID、理由、

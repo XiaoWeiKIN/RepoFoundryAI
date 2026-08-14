@@ -45,11 +45,15 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.3.0"
-CODEX_ADAPTER_VERSION = "2.3.0"
-CLAUDE_ADAPTER_VERSION = "1.2.0"
-PORTABLE_ADAPTER_VERSION = "1.2.0"
+CORE_HARNESS_VERSION = "1.4.0"
+CODEX_ADAPTER_VERSION = "2.4.0"
+CLAUDE_ADAPTER_VERSION = "1.3.0"
+PORTABLE_ADAPTER_VERSION = "1.3.0"
 ACTIVATION_PROTOCOL_VERSION = 2
+GOVERNANCE_POLICY_SCHEMA = 1
+GOVERNANCE_PROFILES = ("adaptive", "strict")
+DEFAULT_GOVERNANCE_PROFILE = "adaptive"
+LEGACY_GOVERNANCE_PROFILE = "strict"
 CODEX_AGENT_MAX_LINES = 100
 CODEX_AGENT_TEMPLATE_TARGET_LINES = 80
 CORE_SKILL_MAX_LINES = 120
@@ -789,6 +793,33 @@ def normalize_adapter_ids(values: tuple[str, ...] | list[str]) -> tuple[str, ...
     return tuple(item for item in ADAPTER_ORDER if item in requested)
 
 
+def normalize_governance_profile(value: str) -> str:
+    if value not in GOVERNANCE_PROFILES:
+        raise FoundryctlError(
+            "HARNESS_GOVERNANCE_PROFILE_UNSUPPORTED: "
+            f"{value!r}; supported profiles: {', '.join(GOVERNANCE_PROFILES)}"
+        )
+    return value
+
+
+def governance_manifest(profile: str) -> dict[str, object]:
+    return {
+        "policy_schema": GOVERNANCE_POLICY_SCHEMA,
+        "profile": normalize_governance_profile(profile),
+    }
+
+
+def harness_governance_profile(manifest: dict[str, object]) -> str:
+    if harness_schema_version(manifest) < HARNESS_SCHEMA_VERSION:
+        return LEGACY_GOVERNANCE_PROFILE
+    governance = manifest.get("governance")
+    if governance is None:
+        return LEGACY_GOVERNANCE_PROFILE
+    if not isinstance(governance, dict):  # validated manifests never reach this
+        raise FoundryctlError("Harness governance contract is invalid")
+    return normalize_governance_profile(str(governance.get("profile")))
+
+
 def selected_file_assets(
     adapter_ids: tuple[str, ...],
 ) -> tuple[tuple[str, str, str, str | None], ...]:
@@ -961,6 +992,7 @@ def harness_manifest(
     repo: Path | None,
     adapter_ids: tuple[str, ...],
     *,
+    governance_profile: str = DEFAULT_GOVERNANCE_PROFILE,
     applied_migrations: list[dict[str, str]] | None = None,
     existing_records: dict[str, dict[str, object]] | None = None,
 ) -> dict[str, object]:
@@ -1008,6 +1040,7 @@ def harness_manifest(
             }
             for adapter_id in adapters
         ],
+        "governance": governance_manifest(governance_profile),
         "components": ["engineering-execution-plan"],
         "instruction_files": instruction_files,
         "files": records,
@@ -1019,6 +1052,12 @@ def adapter_list_payload() -> dict[str, object]:
     return {
         "schema_version": HARNESS_SCHEMA_VERSION,
         "activation_protocol_version": ACTIVATION_PROTOCOL_VERSION,
+        "governance": {
+            "policy_schema": GOVERNANCE_POLICY_SCHEMA,
+            "fresh_default": DEFAULT_GOVERNANCE_PROFILE,
+            "profiles": list(GOVERNANCE_PROFILES),
+            "modes": ["explore", "build", "governed"],
+        },
         "adapters": [
             {
                 "id": adapter_id,
@@ -1095,7 +1134,7 @@ def validate_harness_v3_manifest_data(
     data: dict[str, object],
 ) -> dict[str, object]:
     prefix = f"HARNESS_MANIFEST_INVALID: {path}:"
-    expected_keys = {
+    required_keys = {
         "schema_version",
         "owner",
         "producer",
@@ -1106,10 +1145,12 @@ def validate_harness_v3_manifest_data(
         "files",
         "applied_migrations",
     }
-    if set(data) != expected_keys:
+    allowed_keys = {*required_keys, "governance"}
+    if not required_keys.issubset(data) or not set(data).issubset(allowed_keys):
         raise FoundryctlError(
-            f"{prefix} schema 3 keys must be "
-            + ", ".join(sorted(expected_keys))
+            f"{prefix} schema 3 keys must contain "
+            + ", ".join(sorted(required_keys))
+            + "; optional keys: governance"
         )
     supported_owners = {HARNESS_OWNER, *LEGACY_HARNESS_OWNERS}
     if data["owner"] not in supported_owners:
@@ -1184,6 +1225,22 @@ def validate_harness_v3_manifest_data(
     normalized_adapters = normalize_adapter_ids(adapter_ids)
     if tuple(adapter_ids) != normalized_adapters:
         raise FoundryctlError(f"{prefix} adapters order contract")
+    governance = data.get("governance")
+    if governance is not None:
+        if not isinstance(governance, dict) or set(governance) != {
+            "policy_schema",
+            "profile",
+        }:
+            raise FoundryctlError(f"{prefix} governance contract")
+        if governance["policy_schema"] != GOVERNANCE_POLICY_SCHEMA:
+            raise FoundryctlError(
+                f"{prefix} governance.policy_schema must be "
+                f"{GOVERNANCE_POLICY_SCHEMA}"
+            )
+        try:
+            normalize_governance_profile(str(governance["profile"]))
+        except FoundryctlError as exc:
+            raise FoundryctlError(f"{prefix} {exc}") from exc
     core_supports_project_skill = parsed_core >= semver_tuple(
         CORE_PROJECT_SKILL_INTRODUCED,
         "Core project Skill introduction",
@@ -1594,6 +1651,13 @@ def harness_manifest_warnings(
             f"upgrade --to {REPO_FOUNDRY_VERSION}`"
         )
         return warnings
+
+    if "governance" not in manifest:
+        warnings.append(
+            f"HARNESS_GOVERNANCE_STRICT_COMPATIBILITY: {HARNESS_MANIFEST}: "
+            "schema 3 manifest predates governance profiles and remains strict; "
+            "select adaptive only through an explicit previewed migration"
+        )
 
     producer = manifest["producer"]
     assert isinstance(producer, dict)
@@ -2773,6 +2837,8 @@ def _legacy_bootstrap_repo(
 def plan_harness_upgrade(
     repo: Path,
     target_version: str,
+    *,
+    governance_profile: str | None = None,
 ) -> tuple[
     dict[str, object],
     dict[str, str],
@@ -2791,6 +2857,10 @@ def plan_harness_upgrade(
         )
     manifest = load_harness_manifest(repo)
     schema = harness_schema_version(manifest)
+    previous_governance_profile = harness_governance_profile(manifest)
+    target_governance_profile = normalize_governance_profile(
+        governance_profile or previous_governance_profile
+    )
     adapter_ids = _manifest_adapter_ids(manifest)
     old_records: dict[str, dict[str, object]] = {}
     raw_records = manifest.get("files")
@@ -2947,6 +3017,7 @@ def plan_harness_upgrade(
     candidate = harness_manifest(
         None,
         adapter_ids,
+        governance_profile=target_governance_profile,
         applied_migrations=migrations,
     )
     candidate_records = candidate["files"]
@@ -2996,6 +3067,19 @@ def plan_harness_upgrade(
                 else f"codex@{LEGACY_UNVERSIONED}"
             ),
         }
+    if target_governance_profile != previous_governance_profile:
+        append_migration(
+            candidate,
+            migration_record(
+                (
+                    "governance-"
+                    f"{previous_governance_profile}-to-{target_governance_profile}"
+                ),
+                "governance",
+                previous_governance_profile,
+                target_governance_profile,
+            ),
+        )
     validate_harness_v3_manifest_data(harness_path(repo), candidate)
     write_manifest = candidate != manifest
     if write_manifest:
@@ -3018,6 +3102,7 @@ def plan_harness_upgrade(
                 f"{adapter_id}@{ADAPTER_VERSIONS[adapter_id]}"
                 for adapter_id in adapter_ids
             ],
+            "governance_profile": target_governance_profile,
         },
         "actions": actions,
         "warnings": list(dict.fromkeys(warnings)),
@@ -3032,10 +3117,12 @@ def upgrade_harness(
     target_version: str,
     *,
     apply_changes: bool,
+    governance_profile: str | None = None,
 ) -> dict[str, object]:
     planned, file_writes, candidate, write_manifest = plan_harness_upgrade(
         repo,
         target_version,
+        governance_profile=governance_profile,
     )
     conflicts = [
         item
@@ -3053,7 +3140,11 @@ def upgrade_harness(
     updated: list[str] = []
     validation_warnings: list[str] = []
     with repo_lock(repo):
-        locked = plan_harness_upgrade(repo, target_version)
+        locked = plan_harness_upgrade(
+            repo,
+            target_version,
+            governance_profile=governance_profile,
+        )
         if locked != (planned, file_writes, candidate, write_manifest):
             raise FoundryctlError(
                 "Harness upgrade preflight changed while acquiring the lock; "
@@ -3652,6 +3743,7 @@ def bootstrap_plan(
     initial_spec_source: dict[str, str],
     requested_spec_ids: tuple[str, ...] | None,
     *,
+    governance_profile: str | None = None,
     compatibility_warnings: tuple[str, ...] = (),
 ) -> dict[str, object]:
     requested = normalize_adapter_ids(list(adapter_ids))
@@ -3698,6 +3790,14 @@ def bootstrap_plan(
         )
     else:
         desired = requested
+    effective_governance_profile = normalize_governance_profile(
+        governance_profile
+        or (
+            harness_governance_profile(existing_manifest)
+            if existing_manifest is not None
+            else DEFAULT_GOVERNANCE_PROFILE
+        )
+    )
 
     directories = list(ep_directories)
     directories.extend(CORE_BOOTSTRAP_DIRECTORIES)
@@ -3739,7 +3839,11 @@ def bootstrap_plan(
 
     candidate_manifest: dict[str, object] | None = None
     if existing_manifest is None:
-        candidate_manifest = harness_manifest(repo, desired)
+        candidate_manifest = harness_manifest(
+            repo,
+            desired,
+            governance_profile=effective_governance_profile,
+        )
         actions.append({"action": "create_file", "path": HARNESS_MANIFEST})
     elif harness_schema_version(existing_manifest) == HARNESS_SCHEMA_VERSION:
         old_records = {
@@ -3750,9 +3854,25 @@ def bootstrap_plan(
         candidate_manifest = harness_manifest(
             repo,
             desired,
+            governance_profile=effective_governance_profile,
             applied_migrations=list(existing_manifest["applied_migrations"]),
             existing_records=old_records,
         )
+        previous_governance_profile = harness_governance_profile(existing_manifest)
+        if effective_governance_profile != previous_governance_profile:
+            append_migration(
+                candidate_manifest,
+                migration_record(
+                    (
+                        "governance-"
+                        f"{previous_governance_profile}-to-"
+                        f"{effective_governance_profile}"
+                    ),
+                    "governance",
+                    previous_governance_profile,
+                    effective_governance_profile,
+                ),
+            )
         append_component_migrations(candidate_manifest, existing_manifest)
         if candidate_manifest == existing_manifest:
             actions.append({"action": "preserve", "path": HARNESS_MANIFEST})
@@ -3821,6 +3941,7 @@ def bootstrap_plan(
     return {
         "adapters": list(desired),
         "profile": "codex" if desired == ("codex",) else None,
+        "governance_profile": effective_governance_profile,
         "components": ["engineering-execution-plan"],
         "specs": selected_specs,
         "configured_specs": configured_specs,
@@ -3840,6 +3961,7 @@ def bootstrap_repo(
     apply_changes: bool,
     initial_spec_source: dict[str, str],
     requested_spec_ids: tuple[str, ...] | None,
+    governance_profile: str | None = None,
     compatibility_warnings: tuple[str, ...] = (),
 ) -> dict[str, object]:
     planned = bootstrap_plan(
@@ -3847,6 +3969,7 @@ def bootstrap_repo(
         adapter_ids,
         initial_spec_source,
         requested_spec_ids,
+        governance_profile=governance_profile,
         compatibility_warnings=compatibility_warnings,
     )
     actions = planned["actions"]
@@ -3890,6 +4013,7 @@ def bootstrap_repo(
             adapter_ids,
             initial_spec_source,
             requested_spec_ids,
+            governance_profile=governance_profile,
             compatibility_warnings=compatibility_warnings,
         )
         locked_actions = locked["actions"]
@@ -4130,6 +4254,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Install every bundled adapter in deterministic registry order",
     )
+    bootstrap.add_argument(
+        "--governance-profile",
+        choices=GOVERNANCE_PROFILES,
+        help=(
+            "Select adaptive or strict governance; fresh Harnesses default "
+            "to adaptive, while existing Harnesses preserve their profile "
+            "unless this option is explicit"
+        ),
+    )
     add_spec_source_arguments(bootstrap)
     add_spec_selection_arguments(bootstrap)
     bootstrap_mode = bootstrap.add_mutually_exclusive_group()
@@ -4185,6 +4318,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Target RepoFoundry release bundled with this installation "
             f"(available: {REPO_FOUNDRY_VERSION})"
+        ),
+    )
+    upgrade_parser.add_argument(
+        "--governance-profile",
+        choices=GOVERNANCE_PROFILES,
+        help=(
+            "Explicitly migrate the Harness governance profile; omitted "
+            "preserves the existing effective profile"
         ),
     )
     upgrade_mode = upgrade_parser.add_mutually_exclusive_group()
@@ -4313,6 +4454,7 @@ def main(argv: list[str] | None = None) -> int:
                         apply_changes=args.apply,
                         initial_spec_source=initial_source,
                         requested_spec_ids=selection,
+                        governance_profile=args.governance_profile,
                         compatibility_warnings=compatibility_warnings,
                     ),
                     ensure_ascii=False,
@@ -4361,6 +4503,7 @@ def main(argv: list[str] | None = None) -> int:
                         repo,
                         args.to,
                         apply_changes=args.apply,
+                        governance_profile=args.governance_profile,
                     ),
                     ensure_ascii=False,
                     indent=2,

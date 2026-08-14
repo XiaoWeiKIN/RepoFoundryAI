@@ -19,8 +19,18 @@ python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   candidates --path <initial-scoped-path>
 ```
 
-Decide Spec Applicability, request bounded cards, then record exact direct
-Requirements with one reason per ID:
+The `begin` result reports adaptive/strict profile and Explore/Build/Governed
+mode. Adaptive Explore permits bounded reversible local work without a receipt.
+Promote before bounded production or governed-risk work:
+
+```bash
+python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
+  classify --adapter-id claude --session-id <session> --turn-id <turn> \
+  --mode <build|governed> --reason <risk-reason>
+```
+
+Build and Governed decide Spec Applicability, request bounded cards, then record
+exact direct Requirements with one reason per ID for every applicable path scope:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
@@ -38,7 +48,7 @@ audit. If none applies, use `--none` with a reason. After compaction, run
 list and never summarize or truncate normative text to fit a budget. Raising
 the default capsule budget requires `--capsule-budget-reason`.
 
-Before completion, audit the receipt and handoff:
+Before Build/Governed completion, audit the receipt and handoff:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
@@ -48,10 +58,11 @@ python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   --message-file <handoff-file>
 ```
 
+Explore reports outcome, verification, and unresolved risk in ordinary prose.
 The evidence export carries source-owned published levels and an Advisory
 effective level. It is activation evidence, not a finding-lifecycle claim.
-
-The final response must contain `Activated specifications:`,
+Build/Governed responses contain `Activated specifications:`,
 `Activated requirements:`, `Verification:`, `Exceptions:`, and
 `Compatibility or migration:`. Report a missing Router as an exception rather
-than claiming that no Specification applies.
+than claiming that no Specification applies. Never use Explore to bypass
+authority, destructive/external action, security, data, or integrity boundaries.

@@ -63,6 +63,24 @@ the equivalent provenance in a content-addressed Manifest; source code and
 generated indexes continue to use Git, CODEOWNERS, and generator provenance.
 See the [Artifact Metadata Contract](./docs/design-docs/artifact-metadata-contract.md).
 
+## Governance escalates with risk
+
+Fresh Harnesses default to the `adaptive` profile. Existing Harnesses without a
+profile remain `strict` until an explicit preview/apply migration. Adaptive work
+uses three monotonic modes:
+
+```mermaid
+flowchart LR
+    E["Explore<br/>bounded reversible work"] -->|"production change"| B["Build<br/>concise contract + applicable Specs"]
+    B -->|"hard-risk trigger"| G["Governed<br/>full evidence + authority chain"]
+```
+
+Explore needs no persistent artifact or Spec receipt. Build keeps only intent,
+paths, acceptance, and compatibility. Public contracts, security, data,
+irreversible operations, reliability claims, releases, and durable decisions
+promote to Governed. Human authority, destructive/external actions, security,
+data integrity, and evidence integrity remain hard boundaries in every mode.
+
 ## Evidence moves forward without losing authority
 
 ```mermaid
@@ -232,7 +250,7 @@ portable project adapter without either host directory.
 Examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.0 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.1 --host codex
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
 curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
 ```
@@ -251,12 +269,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.4.0`
+distribution upgrade, run this in each existing project and replace `0.5.0`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.4.0
-repofoundry --repo . upgrade --to 0.4.0 --apply
+repofoundry --repo . upgrade --to 0.5.0
+repofoundry --repo . upgrade --to 0.5.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -351,12 +369,14 @@ repofoundry --repo . adapter list
 repofoundry --repo . bootstrap --adapter portable
 repofoundry --repo . bootstrap --adapter claude --apply
 repofoundry --repo . \
-  bootstrap --all-adapters --spec languages/go --apply
+  bootstrap --all-adapters --governance-profile adaptive \
+  --spec languages/go --apply
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.4.0
-repofoundry --repo . upgrade --to 0.4.0 --apply
+repofoundry --repo . upgrade --to 0.5.0
+repofoundry --repo . upgrade --to 0.5.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.5.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -365,28 +385,53 @@ repofoundry --repo . \
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
+python3 "$RESEARCHCTL" --repo . sync-research R-001
 python3 "$RESEARCHCTL" --repo . validate
 python3 "$EPCTL" --repo . validate
 python3 "$EPCTL" --repo . status
+python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
+  --from-file evidence/adr-018-historical.md
+python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
+  --from-file evidence/adr-018-historical.md --apply
 ```
+
+New and synchronized current Research packages expose `notes/README.md` as the
+manifest entrypoint for navigating large note corpora. Generated inventories are
+maintained deterministically; hand-curated reading maps are preserved.
+
+The last two commands recover a historical ADR payload referenced by a sealed
+completed or cancelled ExecPlan. Preview is the default. Apply stores the valid
+strict ADR document at a digest-addressed path under
+`docs/.epctl/adr-revisions/`; normal validation is offline and Git-independent.
+When the only recoverable source is a local Git blob, replace `--from-file`
+with `--from-git-blob <full-object-id>`. Active ExecPlans never use this
+fallback and must continue to match the current accepted ADR.
 
 Bootstrap, Harness upgrades, and Spec writes are preview-first. Bootstrap
 creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.4.0` uses Harness schema `3`, Harness Core `1.3.0`, Codex
-adapter `2.3.0`, Claude adapter `1.2.0`, Portable adapter `1.2.0`, and
+RepoFoundry `0.5.0` uses Harness schema `3`, Harness Core `1.4.0`, Codex
+adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.4.0 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.5.0 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
 recorded installed SHA-256; customized or provenance-unknown files are
 preserved, and post-write validation failure rolls the migration back. See the
 [versioning and migration design](./docs/design-docs/repo-foundry-versioning-and-migrations.md).
+
+The project workflow now chooses activation depth before doing governance work.
+Ordinary read-only code explanation, navigation, call-chain tracing, and
+existing-behavior summaries read only the necessary code and documentation;
+they do not run full Harness validation, activate Specifications, create
+governed artifacts, or require an evidence handoff. Formal reviews, explicit
+Spec-conformance work, diagnoses, and repository mutations still escalate to
+the applicable Harness layer.
 
 Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
@@ -395,7 +440,7 @@ selected release again. New repositories default to fixed Catalog version
 `1.5.0`, represented as `refs/tags/v1.5.0`; production upgrades name another
 version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
 remains an explicit development-source escape hatch. `spec validate` is
-offline. Installing RepoFoundry `0.4.0` or upgrading only the Harness does not
+offline. Installing RepoFoundry `0.4.1` or upgrading only the Harness does not
 rewrite an existing project Spec manifest, lock, index, or managed content.
 
 `spec plan` lists every Catalog entry and separates required, recommended,

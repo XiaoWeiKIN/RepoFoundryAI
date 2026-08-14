@@ -1,0 +1,19 @@
+EP-057 focused test evidence
+Date: 2026-08-06
+
+Command:
+  python3 -B -m unittest discover -s engineering-execution-plan/tests -p test_epctl.py -v
+
+Results:
+  - development checkout: 50 tests passed
+  - composed 0.3.1 release source: 50 tests passed in 57.787s
+  - composed release canonical rerun: 50 tests passed in 49.764s
+
+New coverage includes:
+  - completed plans resolve an exact registered historical ADR revision
+  - active plans reject the same historical fallback
+  - preview/apply/idempotent registration from an exact Git blob
+  - validation without Git after repository evidence is stored
+  - wrong ID, invalid object ID, symlink, tamper and target-conflict rejection
+
+Outcome: PASS

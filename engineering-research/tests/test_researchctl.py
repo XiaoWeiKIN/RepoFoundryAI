@@ -479,10 +479,27 @@ Synthesis should retain the current contract.
         self.assertEqual(manifest["author"], "Test Researcher")
         self.assertEqual(manifest["owner"], "Test Research Owner")
         self.assertEqual(manifest["mode"], "managed")
-        self.assertEqual(
-            [item for item in manifest["documents"] if item["role"] == "round"],
-            [manifest["documents"][0]],
+        round_documents = [
+            item for item in manifest["documents"] if item["role"] == "round"
+        ]
+        self.assertEqual(len(round_documents), 1)
+        self.assertEqual(round_documents[0]["path"], "rounds/rr-001_baseline.md")
+        notes_index = next(
+            item
+            for item in manifest["documents"]
+            if item["path"] == "notes/README.md"
         )
+        self.assertEqual(notes_index["role"], "entrypoint")
+        self.assertIn(
+            {"base": "package", "path": "notes/README.md"},
+            manifest["entrypoints"],
+        )
+        notes_index_text = (research.parent / "notes" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("# R-001 Notes", notes_index_text)
+        self.assertIn("```mermaid", notes_index_text)
+        self.assertIn("<!-- RCTL:NOTES:START -->", notes_index_text)
         self.assertEqual(manifest["roots"][0]["base"], "package")
         self.assertEqual(manifest["roots"][0]["path"], "notes")
 
@@ -506,14 +523,109 @@ Synthesis should retain the current contract.
         notes = research.parent / "notes"
         (notes / "one.md").write_text("# One\n", encoding="utf-8")
         synced = json.loads(self.run_cli("sync-research", "R-001").stdout)
-        self.assertEqual(synced["documents"], 2)
+        self.assertEqual(synced["documents"], 3)
+        notes_index = notes / "README.md"
+        self.assertIn("- [One](./one.md)", notes_index.read_text(encoding="utf-8"))
         self.run_cli("validate")
 
         (notes / "two.md").write_text("# Two\n", encoding="utf-8")
         drift = self.run_cli("validate", expected=1)
         self.assertIn("manifest drift", drift.stderr)
+        self.assertIn("navigation does not link note documents", drift.stderr)
 
         self.run_cli("sync-research", "R-001")
+        synced_index = notes_index.read_text(encoding="utf-8")
+        self.assertIn("- [One](./one.md)", synced_index)
+        self.assertIn("- [Two](./two.md)", synced_index)
+        self.run_cli("sync-research", "R-001")
+        self.assertEqual(notes_index.read_text(encoding="utf-8"), synced_index)
+        self.run_cli("validate")
+
+    def test_sync_backfills_notes_navigation_for_current_active_manifest(self) -> None:
+        research = self.new_research("backfill-navigation")
+        manifest_path = research.parent / "RESEARCH_MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["entrypoints"] = [
+            item
+            for item in manifest["entrypoints"]
+            if item.get("path") != "notes/README.md"
+        ]
+        manifest["documents"] = [
+            item
+            for item in manifest["documents"]
+            if item.get("path") != "notes/README.md"
+        ]
+        (research.parent / "notes" / "README.md").unlink()
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        invalid = self.run_cli("validate", expected=1)
+        self.assertIn("missing Research notes navigation entrypoint", invalid.stderr)
+
+        self.run_cli("sync-research", "R-001")
+        refreshed = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertIn(
+            {"base": "package", "path": "notes/README.md"},
+            refreshed["entrypoints"],
+        )
+        self.assertTrue((research.parent / "notes" / "README.md").is_file())
+        self.run_cli("validate")
+
+    def test_sync_preserves_curated_notes_navigation(self) -> None:
+        research = self.new_research("curated-navigation")
+        notes = research.parent / "notes"
+        first_note = notes / "first.md"
+        first_note.write_text("# First note\n", encoding="utf-8")
+        curated = (
+            "# Curated reading map\n\n"
+            "Read the [first note](./first.md), then the synthesis.\n"
+        )
+        notes_index = notes / "README.md"
+        notes_index.write_text(curated, encoding="utf-8")
+
+        self.run_cli("sync-research", "R-001")
+        self.assertEqual(notes_index.read_text(encoding="utf-8"), curated)
+        self.run_cli("validate")
+
+        (notes / "second.md").write_text("# Second note\n", encoding="utf-8")
+        synced = self.run_cli("sync-research", "R-001")
+        self.assertIn("navigation does not link note documents", synced.stderr)
+        self.assertIn("notes/second.md", synced.stderr)
+        self.assertEqual(notes_index.read_text(encoding="utf-8"), curated)
+
+    def test_active_legacy_manifest_does_not_require_notes_navigation(self) -> None:
+        research = self.new_research("legacy-navigation")
+        manifest_path = research.parent / "RESEARCH_MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["schema_version"] = "1"
+        manifest["entrypoints"] = []
+        manifest["documents"] = [
+            item
+            for item in manifest["documents"]
+            if item.get("path") != "notes/README.md"
+        ]
+        (research.parent / "notes" / "README.md").unlink()
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        self.run_cli("validate")
+        self.run_cli("sync-research", "R-001")
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(migrated["schema_version"], "1")
+        self.assertIn(
+            {"base": "package", "path": "notes/README.md"},
+            migrated["entrypoints"],
+        )
+        index_record = next(
+            item
+            for item in migrated["documents"]
+            if item["path"] == "notes/README.md"
+        )
+        self.assertEqual(index_record["role"], "entrypoint")
         self.run_cli("validate")
 
     def test_new_topic_creates_auditable_round_evidence(self) -> None:
@@ -1037,7 +1149,10 @@ Synthesis should retain the current contract.
         )
 
         self.assertIn("unknown Research Questions: RQ-999", denied.stderr)
-        self.assertEqual(list((research.parent / "notes").iterdir()), [])
+        self.assertEqual(
+            [path.name for path in (research.parent / "notes").iterdir()],
+            ["README.md"],
+        )
         round_text = (
             research.parent / "rounds" / "rr-001_baseline.md"
         ).read_text(encoding="utf-8")
@@ -1331,11 +1446,14 @@ Synthesis should retain the current contract.
             (research.parent / "RESEARCH_MANIFEST.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["mode"], "linked")
-        self.assertEqual(len(manifest["documents"]), 3)
+        self.assertEqual(len(manifest["documents"]), 4)
         entrypoints = [
             item for item in manifest["documents"] if item["role"] == "entrypoint"
         ]
-        self.assertEqual(entrypoints[0]["path"], "existing/research/index.md")
+        self.assertEqual(
+            {item["path"] for item in entrypoints},
+            {"notes/README.md", "existing/research/index.md"},
+        )
         self.assertTrue(index.exists())
         self.run_cli("validate")
 
@@ -1349,12 +1467,28 @@ Synthesis should retain the current contract.
                 and root.get("path") == "notes"
             )
         ]
+        manifest["entrypoints"] = [
+            item
+            for item in manifest["entrypoints"]
+            if item.get("path") != "notes/README.md"
+        ]
+        manifest["documents"] = [
+            item
+            for item in manifest["documents"]
+            if item.get("path") != "notes/README.md"
+        ]
+        (research.parent / "notes" / "README.md").unlink()
         (research.parent / "RESEARCH_MANIFEST.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
             + "\n",
             encoding="utf-8",
         )
-        self.run_cli("validate")
+        missing_navigation = self.run_cli("validate", expected=1)
+        self.assertIn(
+            "missing Research notes navigation entrypoint",
+            missing_navigation.stderr,
+        )
+        self.run_cli("sync-research", "R-001")
 
         structured_topic = Path(
             self.run_cli(
@@ -1389,6 +1523,7 @@ Synthesis should retain the current contract.
                 for root in refreshed["roots"]
             )
         )
+        self.assertTrue((research.parent / "notes" / "README.md").is_file())
         self.run_cli("validate")
 
     def test_linked_corpus_supports_multiple_roots_and_entrypoints(self) -> None:
@@ -1418,11 +1553,11 @@ Synthesis should retain the current contract.
         )
 
         self.assertEqual(len(manifest["roots"]), 5)
-        self.assertEqual(len(manifest["entrypoints"]), 2)
-        self.assertEqual(len(manifest["documents"]), 4)
+        self.assertEqual(len(manifest["entrypoints"]), 3)
+        self.assertEqual(len(manifest["documents"]), 5)
         self.assertEqual(
             sum(item["role"] == "entrypoint" for item in manifest["documents"]),
-            2,
+            3,
         )
         self.run_cli("validate")
 

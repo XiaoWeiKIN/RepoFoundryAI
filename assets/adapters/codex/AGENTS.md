@@ -7,7 +7,7 @@
 - Read `README.md` for the project purpose and supported workflows.
 - Read `ARCHITECTURE.md` before changing module boundaries.
 - Use `docs/index.md` as the documentation map.
-- Before implementation or review, invoke `$engineering-specs`; use `docs/agent-guides/managed/index.md` only as its locked routing source.
+- Invoke `$engineering-specs` to inspect the current governance mode; use `docs/agent-guides/managed/index.md` only as its locked routing source.
 - Keep this file at or below 100 physical lines, including blank lines and comments.
 
 ## Knowledge Map
@@ -24,16 +24,18 @@
 
 ## Work Routing
 
-- Use a thread-local plan for small, reversible work.
-- Use Research when decision-relevant facts or evidence remain unknown.
-- Draft an ADR for durable choices; never accept or reject it without explicit authority.
-- Use an ExecPlan for cross-module, multi-milestone, or resumable implementation.
+- Adaptive Harnesses start Explore: bounded reversible inspection, experiments, local edits, and tests need no persistent artifact or Spec receipt.
+- Promote to Build for bounded production work; keep a concise intent/path/acceptance contract and activate applicable Specs.
+- Promote to Governed for public contracts, security, data, irreversible operations, reliability claims, releases, or durable decisions.
+- In Governed, use Research only for decision-relevant unknowns, ADR for durable choices, and ExecPlan for resumable delivery.
+- Never accept or reject an ADR without explicit authority.
 - Record a Bugfix only when persistent defect tracking is explicitly requested.
 - Convert repeated review feedback into tests, lint rules, types, or documented invariants.
 
 ## Working Agreement
 
 - Preserve existing user changes and sources of truth.
+- Do not use a lower mode to bypass authority, destructive/external-action, security, data-integrity, compatibility, or evidence-integrity boundaries.
 - Prefer repository-relative, versioned evidence over hidden conversational context.
 - Do not invent project commands, architecture facts, owners, SLOs, or security controls.
 - Keep detailed rules in their canonical documents and link them from this map.

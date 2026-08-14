@@ -155,7 +155,7 @@ decision ownership, or execution identity from authorship.
 
 ```yaml
 ---
-schema_version: "1.3"
+schema_version: "1.4"
 metadata_schema: "1"
 artifact_type: adr
 id: ADR-014
@@ -165,14 +165,23 @@ author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-04
 updated: 2026-08-04
+decision_outcome:
+effect_changed_by:
+effect_changed:
+effect_reason:
 ---
 ```
 
-The document remains a proposal until `decision_maker`, `decided`, and the
-sealed payload digest are written by an explicit ADR decision. The metadata
-describes the document; it does not silently decide it.
+The document remains a proposal until `decision_maker`, `decided`,
+`decision_outcome`, and the sealed payload digest are written by an explicit
+ADR decision. Schema 1.4 keeps identity, attribution, creation time, authority,
+inputs, and body in the decision payload while treating `status`, `updated`,
+effect metadata, and replacement links as validated lifecycle state. The
+metadata describes the document; it does not silently decide it.
 
 ## Revision Notes
 
 - 2026-08-04 — Defined the common metadata layer, actor semantics, profile
   versions, integrity boundaries, and legacy migration policy.
+- 2026-08-13 — ADR-016 separated immutable ADR decision metadata from
+  explicitly authorized mutable effect metadata in ADR schema 1.4.

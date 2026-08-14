@@ -1,0 +1,8 @@
+Command: python3 -B engineering-execution-plan/scripts/epctl.py --repo . validate
+Result: PASS
+Observed after final evidence update: 0 errors, 3 archival-readiness warnings.
+
+Two warnings concern pre-existing EP-006 and EP-057. The EP-055 warning is
+expected: implementation evidence is complete, but the mixed dirty worktree has
+no stable verified revision, so the plan intentionally remains active rather
+than inventing an archival attestation.

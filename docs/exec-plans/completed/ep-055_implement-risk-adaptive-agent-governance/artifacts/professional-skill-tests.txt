@@ -1,0 +1,11 @@
+Commands and results:
+
+- python3 -B engineering-execution-plan/tests/test_epctl.py
+  PASS — Ran 50 tests in 18.843s; OK.
+- python3 -B engineering-research/tests/test_researchctl.py
+  PASS — Ran 35 tests in 7.633s; OK.
+- python3 -B engineering-benchmark/tests/test_benchctl.py
+  PASS — Ran 9 tests in 2.298s; OK.
+
+Total: 94 tests passed. Existing authority, sealing, integrity, lifecycle, and
+Benchmark gate behavior remained green.

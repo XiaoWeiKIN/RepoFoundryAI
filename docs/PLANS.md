@@ -36,4 +36,8 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | EP-012 | Add project-scoped RepoFoundry AI Skill registration | completed | 2026-08-04 | [EXECPLAN](exec-plans/completed/ep-012_project-skill-registration/EXECPLAN.md) |
 | EP-013 | Implement Requirement-level Specification context activation | completed | 2026-08-10 | [EXECPLAN](exec-plans/completed/ep-013_requirement-context-activation/EXECPLAN.md) |
 | EP-014 | Require an explicit decision for new optional Specs | completed | 2026-08-06 | [EXECPLAN](exec-plans/completed/ep-014_explicit-spec-decision-gate/EXECPLAN.md) |
+| EP-054 | Require a notes navigation entrypoint for Engineering Research | completed | 2026-08-07 | [EXECPLAN](exec-plans/completed/ep-054_research-notes-navigation/EXECPLAN.md) |
+| EP-055 | Implement risk-adaptive Agent governance | completed | 2026-08-13 | [EXECPLAN](exec-plans/completed/ep-055_implement-risk-adaptive-agent-governance/EXECPLAN.md) |
+| EP-056 | Implement reversible ADR effect lifecycle | completed | 2026-08-13 | [EXECPLAN](exec-plans/completed/ep-056_reversible-adr-effect/EXECPLAN.md) |
+| EP-057 | Support historical ADR revision evidence | completed | 2026-08-13 | [EXECPLAN](exec-plans/completed/ep-057_historical-adr-revision-evidence/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->

@@ -1,0 +1,7 @@
+Command: python3 -B -m unittest tests.test_foundryctl tests.test_spec_router
+Result: PASS
+Observed: Ran 61 tests in 46.845s; OK.
+
+Harness coverage includes fresh adaptive defaults, legacy strict preservation,
+preview/apply profile migration, invalid-policy rejection, component-version
+migration, customization preservation, idempotence, and rollback.

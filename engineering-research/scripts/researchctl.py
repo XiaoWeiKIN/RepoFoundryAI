@@ -33,6 +33,9 @@ ASSET_DIR = SKILL_DIR / "assets"
 STATE_VERSION = 1
 MANIFEST_NAME = "RESEARCH_MANIFEST.json"
 SNAPSHOT_DIRECTORY = "artifacts/research-snapshot"
+NOTES_INDEX_PATH = "notes/README.md"
+NOTES_INDEX_START = "<!-- RCTL:NOTES:START -->"
+NOTES_INDEX_END = "<!-- RCTL:NOTES:END -->"
 
 RESEARCH_SECTIONS = (
     "Research Metadata",
@@ -1128,6 +1131,222 @@ def local_markdown_targets(text: str) -> list[str]:
     return targets
 
 
+def markdown_document_title(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return path.stem.replace("-", " ").strip().title()
+    for line in visible_markdown_lines(text):
+        match = re.match(r"^#\s+(.+?)\s*#*\s*$", line)
+        if match:
+            return match.group(1).strip()
+    return path.stem.replace("-", " ").strip().title()
+
+
+def notes_inventory(repo: Path, package: Path) -> str:
+    notes_root = package / "notes"
+    note_paths = [
+        path
+        for path in topic_note_paths(package)
+        if path.relative_to(package).as_posix() != NOTES_INDEX_PATH
+    ]
+    if not note_paths:
+        return "- No note documents yet."
+    rows: list[str] = []
+    for path in note_paths:
+        reject_symlink_path(repo, path)
+        relative = path.relative_to(notes_root).as_posix()
+        target = urllib.parse.quote(relative, safe="/-._~")
+        title = (
+            markdown_document_title(path)
+            .replace("\\", r"\\")
+            .replace("[", r"\[")
+            .replace("]", r"\]")
+        )
+        rows.append(f"- [{title}](./{target})")
+    return "\n".join(rows)
+
+
+def replace_notes_inventory(text: str, inventory: str) -> tuple[str, bool]:
+    start_count = text.count(NOTES_INDEX_START)
+    end_count = text.count(NOTES_INDEX_END)
+    if start_count == 0 and end_count == 0:
+        return text, False
+    if start_count != 1 or end_count != 1:
+        raise ResearchctlError(
+            "notes/README.md must contain exactly one complete RCTL:NOTES "
+            "marker pair or no markers"
+        )
+    start = text.index(NOTES_INDEX_START) + len(NOTES_INDEX_START)
+    end = text.index(NOTES_INDEX_END)
+    if end < start:
+        raise ResearchctlError(
+            "notes/README.md RCTL:NOTES markers are out of order"
+        )
+    replacement = "\n" + inventory.rstrip() + "\n"
+    return text[:start] + replacement + text[end:], True
+
+
+def current_notes_navigation_contract(manifest: dict[str, object]) -> bool:
+    return (
+        manifest.get("status") == "active"
+        and manifest.get("schema_version") == "1.1"
+    )
+
+
+def active_notes_navigation_migration(manifest: dict[str, object]) -> bool:
+    return (
+        manifest.get("status") == "active"
+        and manifest.get("schema_version") in {"1", "1.1"}
+    )
+
+
+def ensure_notes_navigation(
+    repo: Path,
+    research_path: Path,
+    manifest: dict[str, object],
+    research_data: dict[str, str],
+) -> None:
+    if not active_notes_navigation_migration(manifest):
+        return
+    ensure_notes_manifest_root(manifest, "README.md")
+    entrypoints = manifest.get("entrypoints")
+    if not isinstance(entrypoints, list):
+        raise ResearchctlError("Manifest entrypoints must be an array")
+    locator = {"base": "package", "path": NOTES_INDEX_PATH}
+    if not any(
+        isinstance(item, dict) and locator_key(item) == locator_key(locator)
+        for item in entrypoints
+    ):
+        entrypoints.append(locator)
+
+    index_path = research_path.parent / NOTES_INDEX_PATH
+    reject_symlink_path(repo, index_path)
+    if index_path.exists() and not index_path.is_file():
+        raise ResearchctlError(
+            f"Research notes navigation path is not a file: {index_path}"
+        )
+    if not index_path.exists():
+        atomic_write(
+            index_path,
+            render_asset(
+                "notes-readme.md",
+                {
+                    "ID": research_data.get("id", "Research"),
+                    "RESEARCH_LINK": "[RESEARCH.md](../RESEARCH.md)",
+                    "SYNTHESIS_LINK": "[SYNTHESIS.md](../SYNTHESIS.md)",
+                },
+            ),
+        )
+    try:
+        text = index_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ResearchctlError(
+            f"Research notes navigation entrypoint must be UTF-8: {index_path}"
+        ) from exc
+    updated, managed = replace_notes_inventory(
+        text,
+        notes_inventory(repo, research_path.parent),
+    )
+    if managed and updated != text:
+        atomic_write(index_path, updated)
+
+
+def notes_navigation_diagnostics(
+    repo: Path,
+    research_path: Path,
+    manifest: dict[str, object],
+    documents: list[dict[str, object]],
+) -> tuple[list[str], list[str]]:
+    if not current_notes_navigation_contract(manifest):
+        return [], []
+    errors: list[str] = []
+    warnings: list[str] = []
+    index_path = research_path.parent / NOTES_INDEX_PATH
+    try:
+        reject_symlink_path(repo, index_path)
+    except ResearchctlError as exc:
+        return [str(exc)], warnings
+    if not index_path.is_file():
+        return [
+            f"{index_path}: missing Research notes navigation entrypoint; "
+            "run sync-research"
+        ], warnings
+
+    entrypoints = manifest.get("entrypoints")
+    index_key = ("package", NOTES_INDEX_PATH)
+    if not isinstance(entrypoints, list) or not any(
+        isinstance(item, dict) and locator_key(item) == index_key
+        for item in entrypoints
+    ):
+        errors.append(
+            f"{manifest_path(research_path)}: {NOTES_INDEX_PATH} must be a "
+            "package entrypoint; run sync-research"
+        )
+    index_document = next(
+        (
+            item
+            for item in documents
+            if isinstance(item, dict) and locator_key(item) == index_key
+        ),
+        None,
+    )
+    if index_document is None or index_document.get("role") != "entrypoint":
+        errors.append(
+            f"{manifest_path(research_path)}: {NOTES_INDEX_PATH} must be "
+            "recorded with role entrypoint; run sync-research"
+        )
+
+    try:
+        index_text = index_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return errors + [f"{index_path}: navigation entrypoint must be UTF-8"], warnings
+    try:
+        _, managed = replace_notes_inventory(index_text, "")
+    except ResearchctlError as exc:
+        errors.append(f"{index_path}: {exc}")
+        managed = False
+
+    linked_paths: set[Path] = set()
+    for raw_target in local_markdown_targets(index_text):
+        parsed = urllib.parse.urlsplit(raw_target)
+        if parsed.scheme or raw_target.startswith(("#", "mailto:", "data:")):
+            continue
+        decoded = urllib.parse.unquote(parsed.path)
+        if not decoded:
+            continue
+        candidate = Path(decoded).expanduser()
+        if candidate.is_absolute():
+            continue
+        linked_paths.add((index_path.parent / candidate).resolve())
+
+    missing_links: list[str] = []
+    for document in documents:
+        if not isinstance(document, dict):
+            continue
+        base, raw_path = locator_key(document)
+        if (
+            base != "package"
+            or raw_path == NOTES_INDEX_PATH
+            or not raw_path.startswith("notes/")
+            or Path(raw_path).suffix.lower() not in {".md", ".markdown"}
+        ):
+            continue
+        candidate = (research_path.parent / raw_path).resolve()
+        if candidate not in linked_paths:
+            missing_links.append(raw_path)
+    if missing_links:
+        message = (
+            f"{index_path}: navigation does not link note documents: "
+            + ", ".join(sorted(missing_links))
+        )
+        if managed:
+            errors.append(message + "; run sync-research")
+        else:
+            warnings.append(message)
+    return errors, warnings
+
+
 def reference_diagnostics(
     repo: Path,
     package: Path,
@@ -1208,12 +1427,18 @@ def refresh_manifest(
     if manifest.get("status") != "active":
         raise ResearchctlError("Only an active manifest can be refreshed")
     sync_manifest_metadata(manifest, data)
+    ensure_notes_navigation(repo, research_path, manifest, data)
     documents = discover_documents(repo, research_path.parent, manifest)
     manifest["documents"] = documents
     manifest["payload_sha256"] = ""
     errors, warnings = reference_diagnostics(
         repo, research_path.parent, documents
     )
+    navigation_errors, navigation_warnings = notes_navigation_diagnostics(
+        repo, research_path, manifest, documents
+    )
+    errors.extend(navigation_errors)
+    warnings.extend(navigation_warnings)
     atomic_write(path, manifest_text(manifest))
     return manifest, errors, warnings
 
@@ -2776,6 +3001,11 @@ def validate_manifest(
             )
             errors.extend(reference_errors)
             warnings.extend(reference_warnings)
+            navigation_errors, navigation_warnings = notes_navigation_diagnostics(
+                repo, research_path, manifest, discovered
+            )
+            errors.extend(navigation_errors)
+            warnings.extend(navigation_warnings)
         except ResearchctlError as exc:
             errors.append(str(exc))
     return errors, warnings, manifest
@@ -3083,9 +3313,9 @@ def canonical_question_ids(values: list[str]) -> list[str]:
     return result
 
 
-def ensure_topic_manifest_root(
+def ensure_notes_manifest_root(
     manifest: dict[str, object],
-    topic_filename: str,
+    document_filename: str,
 ) -> None:
     roots = manifest.get("roots")
     if not isinstance(roots, list):
@@ -3123,10 +3353,10 @@ def ensure_topic_manifest_root(
     ):
         raise ResearchctlError("Manifest notes root has invalid include patterns")
     if not any(
-        value in {topic_filename, "*.md", "**/*.md", "**/*"}
+        value in {document_filename, "*.md", "**/*.md", "**/*"}
         for value in includes
     ):
-        includes.append(topic_filename)
+        includes.append(document_filename)
 
 
 def new_topic(
@@ -3227,7 +3457,7 @@ def new_topic(
         manifest = load_manifest(manifest_file)
         if manifest.get("status") != "active":
             raise ResearchctlError("Only active Research can add a topic")
-        ensure_topic_manifest_root(manifest, topic_path.name)
+        ensure_notes_manifest_root(manifest, topic_path.name)
         try:
             atomic_write(topic_path, topic_text)
             atomic_write(round_file, round_candidate)

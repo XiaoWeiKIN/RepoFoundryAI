@@ -91,7 +91,7 @@ design_refs: ["docs/design-docs/spans-env-placement-routing.md"]
 这只是补充关系元数据，不是补签决定。`epctl` 不会自动改写 legacy ADR，也不会
 从 `relates_to` 猜测关系。旧 ADR 缺少 `decision_maker` 和 seal 时，验证器会
 告警但允许 accepted 状态兼容作为 current architecture input；后续方向变化应创建
-严格 schema 1.3 ADR。
+严格 schema 1.4 ADR。
 
 ## 3. 创建依赖闭合的 EP
 
@@ -134,7 +134,7 @@ Compliance Matrix 按 ADR 整体映射：
 | ADR-011 | 实现 JSON Map 双模式 | OQL typing tests |
 | ADR-012 | 实现 Env Placement 路由 | routing integration tests |
 
-严格 schema 1.3 ADR 会改为逐条 `ADR-NNN#C-NNN` 映射，并在 `adr_evidence` 中固定
+严格 schema 1.2+ ADR 会改为逐条 `ADR-NNN#C-NNN` 映射，并在 `adr_evidence` 中固定
 决定 payload。Design Docs 提供解释，不覆盖上表中的 ADR 约束。
 
 如果只写 `--adr ADR-011 --adr ADR-012`，命令会因缺少依赖闭包中的 ADR-010

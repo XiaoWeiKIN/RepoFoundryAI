@@ -3,11 +3,20 @@
 This repository uses RepoFoundry's product-neutral engineering Harness. Read
 `ARCHITECTURE.md` and `docs/index.md` before changing established boundaries.
 
-## Engineering Specifications
+## Activation depth
 
-Before implementation or code review, create a stable local session and turn
-identifier, list the repository-relative paths you may change, and run the
-shared activation engine:
+Ordinary read-only code explanation, navigation, call-chain tracing, and
+existing-behavior summaries do not start the full Harness workflow. Read only
+the necessary code and repository documents; do not run Harness validation,
+activate Specifications, create governed artifacts, or require an evidence
+handoff solely for that analysis. Use the workflow below for implementation,
+formal code review, explicit Spec conformance, or repository mutation. A formal
+defect, security, or reliability diagnosis may consult repository contracts,
+but it escalates only when its requested scope requires review or change.
+
+## Governance and Engineering Specifications
+
+Create a stable local session and turn identifier and run the shared engine:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py begin \
@@ -17,9 +26,20 @@ python3 .repo-foundry/engineering-specs/spec_router.py candidates \
   --path <planned-path> [--path <planned-path> ...]
 ```
 
-Read each candidate's `Applicability` section. Request bounded cards for the
-applicable Specs, then record exact direct Requirements with reasons before the
-first write:
+`begin` reports the repository profile and mode. Adaptive Explore permits
+bounded reversible work without a receipt. Promote to Build for bounded
+production work or Governed for public contracts, security, data, irreversible
+operations, reliability claims, releases, or durable decisions:
+
+```bash
+python3 .repo-foundry/engineering-specs/spec_router.py classify \
+  --adapter-id portable --session-id <session-id> --turn-id <turn-id> \
+  --mode <build|governed> --reason <risk-reason>
+```
+
+In Build/Governed, read each candidate's `Applicability` section, request bounded
+cards for applicable Specs, then record exact direct Requirements with reasons
+or a justified explicit-none decision before the first mutation:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py requirements \
@@ -45,11 +65,11 @@ python3 .repo-foundry/engineering-specs/spec_router.py audit \
   --message-file <handoff-file>
 ```
 
+Explore may use normal prose for outcome, verification, and unresolved risk.
 The evidence export preserves each source-owned published level but records
 Advisory as RepoFoundry's effective ceiling. This adapter does not claim a
 finding executor or Warning/Blocking lifecycle.
-
-The handoff must contain all five labels:
+Build/Governed handoff contains all five labels:
 
 ```text
 Activated specifications: <IDs and versions | none>

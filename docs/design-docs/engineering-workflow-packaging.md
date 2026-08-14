@@ -100,6 +100,7 @@ scripts/engineeringctl.py
 engineering-execution-plan/scripts/epctl.py
   init
   register-architecture-root
+  register-adr-revision [--from-file | --from-git-blob] [--apply]
   new-adr / decide-adr / new-ep / ...
   validate / reindex / status
 ```
@@ -115,7 +116,9 @@ the bundled `epctl` contract, runs its idempotent `init`, and registers
 - `docs/.engineering/specs.json` records project Spec selection and overlays.
 - `docs/.engineering/specs.lock.json` records resolved versions and digests.
 - `docs/.engineering/lock` serializes Harness changes.
-- `docs/.epctl/state.json` and `docs/.epctl/config.json` remain EP state.
+- `docs/.epctl/state.json`, `docs/.epctl/config.json`, and optional immutable
+  `docs/.epctl/adr-revisions/` remain EP state. Historical ADR validation is
+  therefore portable and does not enter the Harness manifest or an Agent adapter.
 - `benchmarks/.benchctl/` remains Benchmark state.
 
 Project initialization may append `docs/design-docs` to the EP architecture
