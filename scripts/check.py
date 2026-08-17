@@ -343,6 +343,10 @@ def validate_eval_catalogs() -> None:
             "engineering-execution-plan",
         ),
         (
+            ROOT / "engineering-research" / "evals" / "evals.json",
+            "engineering-research",
+        ),
+        (
             ROOT / "engineering-benchmark" / "evals" / "evals.json",
             "engineering-benchmark",
         ),
