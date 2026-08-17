@@ -6,11 +6,11 @@ id: DD-007
 doc_type: design
 title: Agent-neutral Harness and Engineering Spec adapters
 status: current
-adr_refs: ["ADR-011", "ADR-012", "ADR-015"]
+adr_refs: ["ADR-011", "ADR-012", "ADR-015", "ADR-018"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-04
-updated: 2026-08-13
+updated: 2026-08-17
 ---
 
 # Agent-neutral Harness and Engineering Spec Adapters
@@ -175,10 +175,10 @@ strict, ordered, and forward-failing:
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "core": {
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "adapters": [
     {
@@ -202,6 +202,7 @@ strict, ordered, and forward-failing:
     "profile": "adaptive"
   },
   "components": [
+    "engineering-design",
     "engineering-execution-plan"
   ],
   "instruction_files": [],
@@ -247,8 +248,8 @@ foundryctl adapter list
 foundryctl validate --harness
 foundryctl validate --adapter codex
 foundryctl validate --adapter claude
-foundryctl upgrade --to 0.5.0
-foundryctl upgrade --to 0.5.0 --governance-profile adaptive
+foundryctl upgrade --to 0.6.0
+foundryctl upgrade --to 0.6.0 --governance-profile adaptive
 ```
 
 Bootstrap remains preview-first and preflights the complete Core plus adapter
@@ -263,7 +264,7 @@ For one compatibility release:
 - omitting both flags retains the `codex` default and emits a structured
   deprecation warning;
 - manifests continue to read schemas `1` and `2` but only an explicit
-  `upgrade --to 0.5.0 --apply` writes schema `3`;
+  `upgrade --to 0.6.0 --apply` writes schema `3`;
 - `validate` reports an available migration without silently changing state.
 
 The compatibility alias is removed only by a later explicit release and
@@ -423,6 +424,8 @@ Core `1.4.0`, Codex `2.4.0`, Claude `1.3.0`, and Portable `1.3.0` add
 risk-adaptive governance while preserving protocol v2. A previewed upgrade or
 adapter bootstrap replaces generated content only with proven template
 provenance; unknown or customized target bytes remain conflicts.
+Core `1.5.0` adds the independent Engineering Design route to the canonical
+project workflow without changing adapter or activation-protocol contracts.
 
 ## Safety and ownership
 

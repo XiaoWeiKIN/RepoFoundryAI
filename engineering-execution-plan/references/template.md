@@ -54,8 +54,8 @@
 | Revision Notes | 对当前事实的每次修订及原因 |
 
 使用 `assets/execplan.md` 作为唯一新建模板。新计划使用
-`schema_version: "2.7"`；v2.0–v2.6 只做兼容读取，不因普通编辑静默迁移。
-v2.7 同时实现 `metadata_schema: "1"`，要求 `artifact_type: exec-plan`、稳定
+`schema_version: "2.8"`；v2.0–v2.7 只做兼容读取，不因普通编辑静默迁移。
+v2.8 同时实现 `metadata_schema: "1"`，要求 `artifact_type: exec-plan`、稳定
 ID、title/status、author/owner 与 created/updated。
 
 ## Research 与 Architecture Inputs
@@ -70,8 +70,9 @@ ID、title/status、author/owner 与 created/updated。
 - schema 1.2+ 的 `ADR-NNN#C-NNN` constraints，以及 sealed
   `ADR-NNN@sha256:<payload>` evidence。
 - ADR 的 `depends_on` / `amends` 传递闭包，以及各关系为何属于本次实施输入。
-- 每份 Design Doc 提供的接口、数据流、迁移或运维细节；多文档集合优先给出
-  `architecture_entrypoint`。
+- 每份 Design revision 提供的接口、数据流、迁移或运维细节；多文档集合优先给出
+  `architecture_entrypoint`。schema 1.1 Design 使用
+  `DD-NNN@rev:N@sha256:<manifest-digest>` evidence 固定精确 approved revision。
 - 哪些事实是审计信息，哪些约束必须进入实现和验收。
 - 剩余未知为何不改变路线，或它们对应的实验、blocker、里程碑和验收项。
 - Gate/Compliance 为 `not_required` / `not_applicable` 时各自的具体依据。
@@ -155,14 +156,20 @@ current accepted ADR 的约束属于当前事实。若 ADR 后续 under_review�
 superseded，或其依赖闭包 non-current，active ExecPlan 必须重新评估路线并更新引用、
 Inputs、Compliance Matrix、Plan 和 Validation。它保持结构有效并显示
 `architecture_review_required`，但 completed 归档被阻止；cancelled 可明确终止。
-completed/cancelled v2.6/2.7 EP 保留当时的 ADR digest，作为历史证据继续验证。
+completed/cancelled v2.6–2.8 EP 保留当时的 ADR digest，作为历史证据继续验证。
 
 EP v2.4+ 的 `adr_refs` 必须依赖闭合：每个引用 ADR 的 `depends_on` 和 `amends`
 传递目标都要显式出现在数组中。ADR 的 `design_refs` 也必须进入 EP 的
 `design_refs`。这样根计划能展示准确输入边界，验证器不需要隐式猜测。
 
-EP v2.6/2.7 还必须包含命中任一所引用 constraint 的 current scoped amendment；
+EP v2.6–2.8 还必须包含命中任一所引用 constraint 的 current scoped amendment；
 `adr_constraint_refs`、`adr_evidence` 和 Compliance Matrix 均按该输入集精确校验。
+
+EP v2.8 的 `design_refs` 必须包含每个 schema 1.1 Design 的 typed dependency
+传递闭包。active 计划可引用未发布工作版本并显示告警，但 completed 计划必须在
+`design_evidence` 中精确固定闭包内每个 approved revision；验证器独立校验 snapshot
+manifest、entrypoint、reading map、文件 bytes 与 SHA-256。legacy schema 1 Design
+必须是 `current` 才能满足完成门禁。
 
 ## Task 规则
 

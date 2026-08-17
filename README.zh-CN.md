@@ -39,17 +39,18 @@ flowchart LR
 `Workflow` 描述某一项能力如何运行；RepoFoundry 提供承载、组合和验证这些流程的
 系统。
 
-## 五个 Skill 通过文件契约协作
+## 六个 Skill 通过文件契约协作
 
 | Skill | 职责 | 持久制品 |
 |---|---|---|
 | [`repo-foundry-ai`](./SKILL.md) | 盘点、Bootstrap、同步 Specs、验证 Harness、路由工作 | `AGENTS.md`、架构与文档地图、Harness 与 Spec manifests |
 | [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | 预声明并执行可复现测量 | Suite、Scenario、Run、Result、sealed Evidence Manifest |
 | [`engineering-research`](./engineering-research/SKILL.md) | 调研未知并综合多文档证据 | Research controller、corpus Manifest、Rounds、topics、sealed Synthesis |
+| [`engineering-design`](./engineering-design/SKILL.md) | 把已建立的证据翻译成可评审技术设计 | 单文件或多文档 Design Package、阅读地图、manifest、已批准 revision 快照 |
 | [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | 治理决定与实施 | ADR、ExecPlan、Task、Checkpoint、Bugfix、技术债务 |
 | [`engineering-case-study`](./engineering-case-study/SKILL.md) | 把已验证代码和过程证据写成可分享内容 | 中文、英文或中英双语工程案例 |
 
-四个专业 Skill 可以独立安装。它们通过版本化仓库文件交接，不依赖私有运行时
+五个专业 Skill 可以独立安装。它们通过版本化仓库文件交接，不依赖私有运行时
 导入。
 
 这些治理制品还共享一层语义元数据：稳定 type/ID、title/status、author/owner 与
@@ -249,11 +250,11 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.5.0` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.6.0` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.5.0
-repofoundry --repo . upgrade --to 0.5.0 --apply
+repofoundry --repo . upgrade --to 0.6.0
+repofoundry --repo . upgrade --to 0.6.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -300,6 +301,9 @@ adapter，并报告 create、preserve 和 conflict。只有预览无冲突时才
 使用 $engineering-research 调研缓存拓扑，保留反例和不确定性，
 停在 review-ready Synthesis。
 
+使用 $engineering-design 把已结束的 Research 翻译成技术 Design Package，
+明确边界、契约、失败语义和可评审 revision。
+
 使用 $engineering-execution-plan 消费已结束的 Research，起草 ADR，
 等待 Decision Owner 明确授权后再接受。
 
@@ -307,19 +311,21 @@ adapter，并报告 create、preserve 和 conflict。只有预览无冲突时才
 撰写一篇中英双语模块设计文章。
 ```
 
-[cache-topology 端到端示例](./examples/cache-topology/README.md)展示了如何从既有
-corpus 出发，经过 Research、明确授权的 ADR，最终进入 gated ExecPlan。
+[cache-topology 端到端示例](./examples/cache-topology/README.md)展示了既有 corpus
+到 Research 与决策的 Prompt 交接；当实施架构需要被明确说明时，Design 契约在
+证据与交付之间增加独立评审边界。
 
 ## Prompt 驱动的示例
 
 双语 [Prompt 示例目录](./examples/README.zh-CN.md)与
-[English catalog](./examples/README.md)覆盖五个 Skill 的独立入口和证据交接：
+[English catalog](./examples/README.md)覆盖六个 Skill 的独立入口和证据交接：
 
 | 场景 | 首选 Skill |
 |---|---|
 | 初始化仓库或路由模糊请求 | `$repo-foundry-ai` |
 | 产生可复现测量 | `$engineering-benchmark` |
 | 调研未知或接管现有 corpus | `$engineering-research` |
+| 创建或修订技术 Design Package | `$engineering-design` |
 | 记录决定或推动交付 | `$engineering-execution-plan` |
 | 编写可分享工程文章 | `$engineering-case-study` |
 
@@ -335,6 +341,7 @@ Skill 通过这些 CLI 修改状态并验证制品。维护者也可以直接用
 REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
 BENCHCTL="$REPO_FOUNDRY_HOME/engineering-benchmark/scripts/benchctl.py"
 RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
+DESIGNCTL="$REPO_FOUNDRY_HOME/engineering-design/scripts/designctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
 repofoundry --version
@@ -347,9 +354,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.5.0
-repofoundry --repo . upgrade --to 0.5.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.5.0 --apply
+repofoundry --repo . upgrade --to 0.6.0
+repofoundry --repo . upgrade --to 0.6.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.6.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -383,10 +390,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.5.0` 使用 Harness schema `3`、Harness Core `1.4.0`、Codex
+RepoFoundry `0.6.0` 使用 Harness schema `3`、Harness Core `1.5.0`、Codex
 adapter `2.4.0`、Claude adapter `1.3.0`、Portable adapter `1.3.0` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.5.0 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.6.0 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
@@ -509,8 +516,8 @@ ExecPlan 和 sealed 校验产物保留当时真实使用的历史名称。
 python3 -B scripts/check.py
 ```
 
-该命令验证五个 Skill package 与 eval catalog，执行所有治理测试，检查本地
-Markdown 链接和独立安装，并验证仓库内 Research 与 ExecPlan 状态。CI adapter
+该命令验证六个 Skill package 与五个 eval catalog，执行所有治理测试，检查本地
+Markdown 链接和独立安装，并验证仓库内 Research、Design 与 ExecPlan 状态。CI adapter
 只调用这一条命令。
 
 ## 参考入口
@@ -530,6 +537,8 @@ RepoFoundry AI：
 - [Benchmark 契约](./engineering-benchmark/references/contract.md)
 - [Research 方法](./engineering-research/references/research.md)
 - [Research Manifest](./engineering-research/references/manifest.md)
+- [技术 Design 契约](./engineering-design/references/contract.md)
+- [技术 Design 评审](./engineering-design/references/review.md)
 - [执行制品路由](./engineering-execution-plan/references/templates.md)
 - [ADR 契约](./engineering-execution-plan/references/adr.md)
 - [ExecPlan 规范](./engineering-execution-plan/references/template.md)

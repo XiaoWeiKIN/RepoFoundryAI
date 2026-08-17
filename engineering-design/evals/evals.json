@@ -1,0 +1,53 @@
+{
+  "skill_name": "engineering-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "把已经 concluded 的 UModel Research 转换成技术设计。它需要 API、数据、运维和验证多篇文档。",
+      "expected_output": "Creates one package-layout DD identity, consumes the concluded Research handoff, and organizes focused DOC members under one atomic review boundary.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "package-boundary",
+          "description": "Chooses one Design Package instead of treating Research as the design or allocating unrelated DD identities per document."
+        },
+        {
+          "name": "semantic-handoff",
+          "description": "Reproduces findings, confidence, negative evidence, and unknowns rather than keeping only a Research link."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "这个小型 health endpoint 改动不需要调研，帮我写一个 Design Doc。",
+      "expected_output": "Creates a single-layout Design only after recording a concrete research-not-required reason and keeps approval separate.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "single-layout",
+          "description": "Uses a bounded single-file Design when one document can cover the complete contract."
+        },
+        {
+          "name": "authority-boundary",
+          "description": "Does not infer Design approval or ADR acceptance from the request to draft."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "设计里有身份服务和调用方模块，两者 owner 和发布周期不同，怎么组织？",
+      "expected_output": "Creates separate DD identities joined by a typed acyclic dependency and keeps package-local DOC IDs for jointly approved topics.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "lifecycle-split",
+          "description": "Splits independently governed subdesigns rather than nesting one publication lifecycle inside another."
+        },
+        {
+          "name": "typed-dependency",
+          "description": "Uses a typed DD dependency and preserves atomic package approval."
+        }
+      ]
+    }
+  ]
+}

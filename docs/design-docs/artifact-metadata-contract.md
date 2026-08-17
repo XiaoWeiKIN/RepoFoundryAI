@@ -6,11 +6,11 @@ id: DD-008
 doc_type: design
 title: Artifact Metadata Contract
 status: current
-adr_refs: ["ADR-014"]
+adr_refs: ["ADR-014", "ADR-018"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-04
-updated: 2026-08-04
+updated: 2026-08-17
 ---
 
 # Artifact Metadata Contract
@@ -98,8 +98,8 @@ without claiming to have written its analysis.
 | Research Round | `RR-NNN` within its Research | `1.1` | Managed corpus manifest |
 | Research Topic | `RT-NNN` within its Research | `2.3` | Managed corpus manifest |
 | Research manifest | `R-NNN-MANIFEST` | `1.1` | Canonical JSON plus document SHA-256 values |
-| ADR | `ADR-NNN` | `1.3` | Accepted or rejected decision payload digest |
-| ExecPlan | `EP-NNN` | `2.7` | Completed or cancelled archive digest |
+| ADR | `ADR-NNN` | `1.4` | Accepted or rejected decision payload digest |
+| ExecPlan | `EP-NNN` | `2.8` | Completed or cancelled archive digest plus approved Design evidence |
 | Task | `T-NNN` within its ExecPlan | `1` | Parent plan validation and Git history |
 | Checkpoint | `CP-NNN` within its ExecPlan | `1.2` | Canonical whole-document digest |
 | Bugfix | `BF-NNN` | `1` | Lifecycle validation and Git history |
@@ -108,7 +108,7 @@ without claiming to have written its analysis.
 | Benchmark Result | `BR-NNN` | `1.1` | Sealed run manifest and SHA-256 inventory |
 | Benchmark manifest | `BR-NNN-MANIFEST` | `1.1` | Canonical manifest plus artifact SHA-256 values |
 | Case Study | `CS-NNN` | `1` | Review process and Git history |
-| Design Doc | `DD-NNN` | `1` | ADR links, validation, and Git history |
+| Design Doc | `DD-NNN` | `1.1` | Approved revision manifest, exact member SHA-256 values, and immutable snapshot |
 
 Profile schemas may advance without changing `metadata_schema` when only their
 domain fields or lifecycle rules change.

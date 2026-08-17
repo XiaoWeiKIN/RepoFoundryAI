@@ -39,4 +39,5 @@ and superseded states.
 | ADR-014 | Require semantic metadata for governed engineering artifacts | accepted | 2026-08-04 | [] |  | [ADR](adr/adr-014_governed-artifact-metadata-contract.md) |
 | ADR-015 | Adopt risk-adaptive Agent governance modes | accepted | 2026-08-13 | [] |  | [ADR](adr/adr-015_risk-adaptive-agent-governance.md) |
 | ADR-016 | Separate ADR history from current decision effect | accepted | 2026-08-13 | [] |  | [ADR](adr/adr-016_reversible-decision-effect.md) |
+| ADR-018 | Make technical Design Docs a first-class governed artifact | accepted | 2026-08-17 | [] |  | [ADR](adr/adr-018_first-class-technical-design-documents.md) |
 <!-- ADRCTL:COMPLETED:END -->

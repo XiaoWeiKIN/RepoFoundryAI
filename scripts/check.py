@@ -24,6 +24,7 @@ EXCLUDED_DIRECTORIES = {
 }
 INDEX_PATHS = (
     Path("docs/RESEARCH.md"),
+    Path("docs/DESIGN-DOCS.md"),
     Path("docs/DECISIONS.md"),
     Path("docs/PLANS.md"),
     Path("docs/BUGFIXES.md"),
@@ -45,7 +46,7 @@ def run(label: str, command: list[str], cwd: Path = ROOT) -> None:
         env=environment,
         text=True,
         capture_output=True,
-        timeout=180,
+        timeout=300,
     )
     if result.stdout:
         print(result.stdout, end="")
@@ -154,6 +155,7 @@ def validate_skill_packages() -> None:
             "engineering-execution-plan",
         ),
         (ROOT / "engineering-research", "engineering-research"),
+        (ROOT / "engineering-design", "engineering-design"),
         (ROOT / "engineering-benchmark", "engineering-benchmark"),
         (ROOT / "engineering-case-study", "engineering-case-study"),
     )
@@ -247,6 +249,8 @@ def validate_skill_packages() -> None:
         ),
         ROOT / "engineering-research" / "SKILL.md",
         *sorted((ROOT / "engineering-research" / "references").glob("*.md")),
+        ROOT / "engineering-design" / "SKILL.md",
+        *sorted((ROOT / "engineering-design" / "references").glob("*.md")),
         ROOT / "engineering-benchmark" / "SKILL.md",
         *sorted((ROOT / "engineering-benchmark" / "references").glob("*.md")),
         ROOT / "engineering-case-study" / "SKILL.md",
@@ -343,6 +347,10 @@ def validate_eval_catalogs() -> None:
             "engineering-benchmark",
         ),
         (
+            ROOT / "engineering-design" / "evals" / "evals.json",
+            "engineering-design",
+        ),
+        (
             ROOT / "engineering-case-study" / "evals" / "evals.json",
             "engineering-case-study",
         ),
@@ -407,6 +415,18 @@ def validate_generated_indexes() -> None:
                     / "scripts"
                     / "epctl.py"
                 ),
+                "--repo",
+                str(copied),
+                "reindex",
+            ],
+            copied,
+        )
+        run(
+            "Design index projection",
+            [
+                sys.executable,
+                "-B",
+                str(copied / "engineering-design" / "scripts" / "designctl.py"),
                 "--repo",
                 str(copied),
                 "reindex",
@@ -486,6 +506,21 @@ def main() -> int:
             ],
         )
         run(
+            "Engineering Design tests",
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "engineering-design/tests",
+                "-p",
+                "test_*.py",
+                "-v",
+            ],
+        )
+        run(
             "Engineering Execution Plan tests",
             [
                 sys.executable,
@@ -537,6 +572,17 @@ def main() -> int:
                     / "scripts"
                     / "epctl.py"
                 ),
+                "--repo",
+                str(ROOT),
+                "validate",
+            ],
+        )
+        run(
+            "Engineering Design repository validation",
+            [
+                sys.executable,
+                "-B",
+                str(ROOT / "engineering-design" / "scripts" / "designctl.py"),
                 "--repo",
                 str(ROOT),
                 "validate",

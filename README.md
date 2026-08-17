@@ -43,17 +43,18 @@ flowchart LR
 `Workflow` describes how an individual capability runs. RepoFoundry is the
 system that makes those workflows composable and verifiable.
 
-## Five Skills share file contracts
+## Six Skills share file contracts
 
 | Skill | Responsibility | Durable output |
 |---|---|---|
 | [`repo-foundry-ai`](./SKILL.md) | Inspect, Bootstrap, synchronize Specs, validate the Harness, and route work | `AGENTS.md`, architecture and docs maps, Harness and Spec manifests |
 | [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | Predeclare and execute reproducible measurement | Suite, Scenario, Run, Result, sealed Evidence Manifest |
 | [`engineering-research`](./engineering-research/SKILL.md) | Investigate unknowns and synthesize multi-document evidence | Research controller, corpus Manifest, Rounds, topics, sealed Synthesis |
+| [`engineering-design`](./engineering-design/SKILL.md) | Translate established evidence into a reviewable technical design | Single-file or multi-document Design Package, reading map, manifest, approved revision snapshot |
 | [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | Govern decisions and implementation | ADR, ExecPlan, Task, Checkpoint, Bugfix, technical debt |
 | [`engineering-case-study`](./engineering-case-study/SKILL.md) | Turn verified code and process evidence into a shareable narrative | Chinese, English, or bilingual engineering case study |
 
-The four professional Skills remain independently installable. They communicate
+The five professional Skills remain independently installable. They communicate
 through versioned repository files rather than private runtime imports.
 
 Governed artifacts also share one semantic metadata layer: stable type and ID,
@@ -269,12 +270,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.5.0`
+distribution upgrade, run this in each existing project and replace `0.6.0`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.5.0
-repofoundry --repo . upgrade --to 0.5.0 --apply
+repofoundry --repo . upgrade --to 0.6.0
+repofoundry --repo . upgrade --to 0.6.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -324,6 +325,10 @@ running the measurement.
 Use $engineering-research to investigate the cache topology, preserve
 counterevidence, and stop at review-ready Synthesis.
 
+Use $engineering-design to translate the concluded Research into a technical
+Design Package with explicit boundaries, contracts, failure behavior, and a
+reviewable revision.
+
 Use $engineering-execution-plan to consume the concluded Research, draft the
 ADR, and wait for Decision Owner authorization before accepting it.
 
@@ -331,14 +336,15 @@ Use $engineering-case-study with the verified code, Research, ADR, and ExecPlan
 to write a bilingual module-design article.
 ```
 
-The [cache-topology example](./examples/cache-topology/README.md) shows the full
-Prompt-driven handoff from an existing corpus to Research, an authorized ADR,
-and a gated ExecPlan.
+The [cache-topology example](./examples/cache-topology/README.md) shows a
+Prompt-driven Research-to-decision handoff. The Design contract adds a distinct
+review boundary between established evidence and delivery when implementation
+architecture must be specified.
 
 ## Prompt-driven examples
 
 The bilingual [Prompt example catalog](./examples/README.md) and
-[Chinese catalog](./examples/README.zh-CN.md) cover all five Skills as
+[Chinese catalog](./examples/README.zh-CN.md) cover all six Skills as
 standalone entrypoints and as evidence handoffs:
 
 | Situation | First Skill |
@@ -346,6 +352,7 @@ standalone entrypoints and as evidence handoffs:
 | Initialize a repository or route an ambiguous request | `$repo-foundry-ai` |
 | Produce reproducible measurements | `$engineering-benchmark` |
 | Investigate unknowns or adopt an existing corpus | `$engineering-research` |
+| Create or revise a technical Design Package | `$engineering-design` |
 | Record a decision or drive delivery | `$engineering-execution-plan` |
 | Write a shareable engineering narrative | `$engineering-case-study` |
 
@@ -362,6 +369,7 @@ directly for automation or diagnosis:
 REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
 BENCHCTL="$REPO_FOUNDRY_HOME/engineering-benchmark/scripts/benchctl.py"
 RESEARCHCTL="$REPO_FOUNDRY_HOME/engineering-research/scripts/researchctl.py"
+DESIGNCTL="$REPO_FOUNDRY_HOME/engineering-design/scripts/designctl.py"
 EPCTL="$REPO_FOUNDRY_HOME/engineering-execution-plan/scripts/epctl.py"
 
 repofoundry --version
@@ -374,9 +382,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.5.0
-repofoundry --repo . upgrade --to 0.5.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.5.0 --apply
+repofoundry --repo . upgrade --to 0.6.0
+repofoundry --repo . upgrade --to 0.6.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.6.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -412,12 +420,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.5.0` uses Harness schema `3`, Harness Core `1.4.0`, Codex
+RepoFoundry `0.6.0` uses Harness schema `3`, Harness Core `1.5.0`, Codex
 adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.5.0 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.6.0 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
@@ -522,8 +530,8 @@ mechanical gate.
 
 - RepoFoundry AI does not run a general agent runtime or hide orchestration state
   outside the repository.
-- The root Skill does not create Benchmark Runs, Research packages, ADRs,
-  ExecPlans, or Case Studies.
+- The root Skill does not create Benchmark Runs, Research packages, Design
+  Packages, ADRs, ExecPlans, or Case Studies.
 - Professional Skills do not infer Research Owner or Decision Owner authority.
 - Bootstrap does not overwrite repository-owned documentation.
 - Normative Engineering Specs stay in their independent repository.
@@ -567,9 +575,9 @@ Run the only canonical repository check:
 python3 -B scripts/check.py
 ```
 
-The command validates all five Skill packages and eval catalogs, runs every
+The command validates all six Skill packages and five eval catalogs, runs every
 governance test suite, checks local Markdown links and independent installation,
-and validates repository Research and ExecPlan state. CI adapters only invoke
+and validates repository Research, Design, and ExecPlan state. CI adapters only invoke
 this command.
 
 ## Reference map
@@ -589,6 +597,8 @@ Professional capabilities:
 - [Benchmark contract](./engineering-benchmark/references/contract.md)
 - [Research method](./engineering-research/references/research.md)
 - [Research manifest](./engineering-research/references/manifest.md)
+- [Technical Design contract](./engineering-design/references/contract.md)
+- [Technical Design review](./engineering-design/references/review.md)
 - [Execution artifact routing](./engineering-execution-plan/references/templates.md)
 - [Architecture Decision Records](./engineering-execution-plan/references/adr.md)
 - [ExecPlan specification](./engineering-execution-plan/references/template.md)

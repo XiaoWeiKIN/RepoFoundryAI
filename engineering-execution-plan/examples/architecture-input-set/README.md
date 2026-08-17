@@ -23,7 +23,7 @@ flowchart LR
     D11["oql-dynamic-attribute-typing.md"]
     D12["spans-env-placement-routing.md"]
     IDX["index.md"]
-    EP["EP-001 v2.7"]
+    EP["EP-001 v2.8"]
 
     A11 -->|"depends_on"| A10
     A12 -->|"depends_on"| A10
@@ -111,7 +111,7 @@ python3 "$EPCTL" --repo . new-ep \
   --architecture-entrypoint docs/design-docs/index.md
 ```
 
-生成的 v2.7 frontmatter 包含：
+生成的 v2.8 frontmatter 包含：
 
 ```yaml
 research_gate: not_required
@@ -119,6 +119,7 @@ adr_refs: ["ADR-010", "ADR-011", "ADR-012"]
 adr_constraint_refs: []
 adr_evidence: []
 design_refs: ["docs/design-docs/oql-dynamic-attribute-typing.md", "docs/design-docs/spans-env-placement-routing.md"]
+design_evidence: []
 architecture_entrypoint: "docs/design-docs/index.md"
 architecture_decision_gate: satisfied
 architecture_compliance: applicable

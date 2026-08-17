@@ -6,11 +6,11 @@ id: DD-004
 doc_type: design
 title: RepoFoundry AI system identity and packaging
 status: current
-adr_refs: ["ADR-007", "ADR-008", "ADR-009", "ADR-011", "ADR-012"]
+adr_refs: ["ADR-007", "ADR-008", "ADR-009", "ADR-011", "ADR-012", "ADR-018"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-07-31
-updated: 2026-08-06
+updated: 2026-08-17
 ---
 
 # RepoFoundry AI System Identity and Packaging
@@ -148,7 +148,7 @@ claim that external rename succeeded before it actually occurs.
 
 The canonical `python3 -B scripts/check.py` entrypoint proves:
 
-- all five Skill packages have valid metadata and routing, with the root
+- all six Skill packages have valid metadata and routing, with the root
   package named `repo-foundry-ai`;
 - the root CLI writes `repo-foundry` into new manifests;
 - legacy `engineering-workflow` manifests remain readable;

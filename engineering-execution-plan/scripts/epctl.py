@@ -224,6 +224,10 @@ ADR_EVIDENCE_RE = re.compile(
     r"^(ADR-\d{3,})@sha256:([0-9a-f]{64})$",
     re.IGNORECASE,
 )
+DESIGN_EVIDENCE_RE = re.compile(
+    r"^(DD-\d{3,})@rev:([1-9][0-9]*)@sha256:([0-9a-f]{64})$",
+    re.IGNORECASE,
+)
 ADR_REVISION_FILE_RE = re.compile(r"^sha256-([0-9a-f]{64})\.md$")
 GIT_OBJECT_ID_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.IGNORECASE)
 ADR_CONSTRAINT_STRENGTHS = {"must", "must_not", "should", "may"}
@@ -1927,39 +1931,276 @@ def normalize_document_refs(
     return normalized
 
 
-def validate_design_ref(
+def parse_design_evidence(value: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for item in parse_string_array(value, "design_evidence"):
+        match = DESIGN_EVIDENCE_RE.fullmatch(item)
+        if not match:
+            raise EpctlError(
+                "design_evidence must use "
+                "DD-NNN@rev:N@sha256:<64 lowercase hex>"
+            )
+        design_id = match.group(1).upper()
+        normalized = (
+            f"{design_id}@rev:{int(match.group(2))}@sha256:{match.group(3)}"
+        )
+        if design_id in result:
+            raise EpctlError(f"design_evidence duplicates {design_id}")
+        result[design_id] = normalized
+    return result
+
+
+def design_manifest_digest(value: dict[str, object]) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def load_json_object(path: Path, label: str) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise EpctlError(f"missing {label}: {path}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EpctlError(f"invalid {label} {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise EpctlError(f"{label} must be a JSON object: {path}")
+    return value
+
+
+def verify_design_manifest(
+    repo: Path,
+    manifest_path: Path,
+    bundle_root: Path,
+    *,
+    design_id: str,
+    layout: str,
+    root_data: dict[str, str] | None = None,
+    revision: int | None = None,
+    snapshot: bool = False,
+) -> tuple[dict[str, object] | None, list[str]]:
+    errors: list[str] = []
+    try:
+        manifest = load_json_object(manifest_path, "Design manifest")
+    except EpctlError as exc:
+        return None, [str(exc)]
+    expected_type = (
+        "design-revision-manifest" if layout == "single" else "design-manifest"
+    )
+    if manifest.get("schema_version") != "1":
+        errors.append(f"{manifest_path}: schema_version must be '1'")
+    if manifest.get("metadata_schema") != CURRENT_METADATA_SCHEMA:
+        errors.append(f"{manifest_path}: metadata_schema must be '1'")
+    if manifest.get("artifact_type") != expected_type:
+        errors.append(
+            f"{manifest_path}: artifact_type must be {expected_type!r}"
+        )
+    if manifest.get("design_id") != design_id:
+        errors.append(f"{manifest_path}: design_id must be {design_id}")
+    if manifest.get("layout") != layout:
+        errors.append(f"{manifest_path}: layout must be {layout!r}")
+    if root_data is not None:
+        for field in (
+            "status",
+            "author",
+            "owner",
+            "created",
+            "updated",
+        ):
+            if manifest.get(field) != root_data.get(field, ""):
+                errors.append(
+                    f"{manifest_path}: {field} does not match Design root"
+                )
+        for field in ("working_revision", "published_revision"):
+            try:
+                expected = int(root_data.get(field, ""))
+            except ValueError:
+                expected = -1
+            if manifest.get(field) != expected:
+                errors.append(
+                    f"{manifest_path}: {field} does not match Design root"
+                )
+    if revision is not None:
+        manifest_revision = (
+            manifest.get("revision")
+            if layout == "single"
+            else manifest.get("published_revision")
+        )
+        if manifest_revision != revision:
+            errors.append(
+                f"{manifest_path}: snapshot revision must be {revision}"
+            )
+    if layout == "package":
+        if manifest.get("entrypoint") != "DESIGN.md":
+            errors.append(f"{manifest_path}: entrypoint must be DESIGN.md")
+        if manifest.get("reading_map") != "docs/README.md":
+            errors.append(
+                f"{manifest_path}: reading_map must be docs/README.md"
+            )
+    elif manifest.get("entrypoint") != "DESIGN.md":
+        errors.append(f"{manifest_path}: entrypoint must be DESIGN.md")
+
+    documents = manifest.get("documents")
+    if not isinstance(documents, list) or not documents:
+        return manifest, errors + [f"{manifest_path}: documents must be non-empty"]
+    paths: set[str] = set()
+    ids: set[str] = set()
+    reading_maps = 0
+    for position, item in enumerate(documents, start=1):
+        prefix = f"{manifest_path}: document #{position}"
+        if not isinstance(item, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        document_id = item.get("id")
+        role = item.get("role")
+        raw_path = item.get("path")
+        if not isinstance(document_id, str) or not document_id:
+            errors.append(f"{prefix} id must be non-empty")
+        elif document_id in ids:
+            errors.append(f"{prefix} duplicates id {document_id}")
+        else:
+            ids.add(document_id)
+        if role == "reading-map":
+            reading_maps += 1
+        if not isinstance(raw_path, str) or not raw_path:
+            errors.append(f"{prefix} path must be non-empty")
+            continue
+        candidate = bundle_root / raw_path
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(bundle_root.resolve(strict=True))
+        except (FileNotFoundError, ValueError):
+            errors.append(f"{prefix} path is missing or escapes bundle: {raw_path}")
+            continue
+        if candidate.is_symlink():
+            errors.append(f"{prefix} path must not be a symbolic link: {raw_path}")
+            continue
+        if raw_path in paths:
+            errors.append(f"{prefix} duplicates path {raw_path}")
+            continue
+        paths.add(raw_path)
+        payload = candidate.read_bytes()
+        if item.get("bytes") != len(payload):
+            errors.append(f"{prefix} byte count drift for {raw_path}")
+        digest = hashlib.sha256(payload).hexdigest()
+        if item.get("sha256") != digest:
+            errors.append(f"{prefix} SHA-256 drift for {raw_path}")
+    if "DESIGN.md" not in paths:
+        errors.append(f"{manifest_path}: documents must include DESIGN.md")
+    if layout == "package":
+        if "docs/README.md" not in paths or reading_maps != 1:
+            errors.append(
+                f"{manifest_path}: package requires one docs/README.md reading map"
+            )
+        managed_paths = {"DESIGN.md"}
+        managed_roots = {
+            "architecture",
+            "contracts",
+            "data",
+            "docs",
+            "operations",
+            "migration",
+            "verification",
+        }
+        for candidate in bundle_root.rglob("*.md"):
+            relative = candidate.relative_to(bundle_root)
+            if not snapshot and "snapshots" in relative.parts:
+                continue
+            if snapshot or (relative.parts and relative.parts[0] in managed_roots):
+                managed_paths.add(relative.as_posix())
+        if paths != managed_paths:
+            missing = managed_paths - paths
+            extra = paths - managed_paths
+            if missing:
+                errors.append(
+                    f"{manifest_path}: unregistered managed Markdown: "
+                    + ", ".join(sorted(missing))
+                )
+            if extra:
+                errors.append(
+                    f"{manifest_path}: manifest paths outside managed set: "
+                    + ", ".join(sorted(extra))
+                )
+    elif paths != {"DESIGN.md"}:
+        errors.append(
+            f"{manifest_path}: single revision must contain only DESIGN.md"
+        )
+    return manifest, errors
+
+
+def design_snapshot_contract(
+    repo: Path,
+    path: Path,
+    data: dict[str, str],
+    revision: int,
+) -> tuple[str, list[str]]:
+    design_id = data.get("id", "").upper()
+    layout = data.get("layout", "")
+    if layout == "package":
+        snapshot = path.parent / "snapshots" / f"rev-{revision:03d}"
+    else:
+        snapshot = (
+            repo
+            / "docs"
+            / ".designctl"
+            / "snapshots"
+            / design_id
+            / f"rev-{revision:03d}"
+        )
+    manifest_path = snapshot / "DESIGN_MANIFEST.json"
+    manifest, errors = verify_design_manifest(
+        repo,
+        manifest_path,
+        snapshot,
+        design_id=design_id,
+        layout=layout,
+        revision=revision,
+        snapshot=True,
+    )
+    if manifest is None:
+        return "", errors
+    evidence = (
+        f"{design_id}@rev:{revision}@sha256:"
+        f"{design_manifest_digest(manifest)}"
+    )
+    return evidence, errors
+
+
+def design_ref_details(
     repo: Path,
     value: str,
     *,
     entrypoint: bool = False,
-) -> tuple[list[str], list[str]]:
+) -> tuple[dict[str, object], list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     label = "architecture_entrypoint" if entrypoint else "design_refs"
     try:
         refs = normalize_document_refs(repo, (value,), label)
     except EpctlError as exc:
-        return [str(exc)], warnings
-    path = repo / refs[0]
+        return {}, [str(exc)], warnings
+    relative = refs[0]
+    path = repo / relative
     try:
         data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
     except EpctlError:
         try:
-            data, _, _ = parse_legacy_frontmatter(path.read_text(encoding="utf-8"))
+            data, _, _ = parse_legacy_frontmatter(
+                path.read_text(encoding="utf-8")
+            )
         except EpctlError:
             warnings.append(
                 f"{path}: linked Design Doc has no readable metadata"
             )
-            return errors, warnings
+            return {"path": relative}, errors, warnings
+    design_id = data.get("id", "").upper()
     if data.get("metadata_schema"):
-        design_id = data.get("id", "")
         errors.extend(
-            validate_metadata_contract(
-                path,
-                data,
-                "design-doc",
-                design_id,
-            )
+            validate_metadata_contract(path, data, "design-doc", design_id)
         )
         if not ID_RE["DD"].fullmatch(design_id):
             errors.append(f"{path}: Design Doc id must use DD-NNN")
@@ -1975,11 +2216,236 @@ def validate_design_ref(
     status = data.get("status", "").lower()
     if status in {"obsolete", "abandoned", "superseded", "rejected"}:
         errors.append(f"{path}: linked Design Doc has terminal status {status!r}")
-    elif status == "draft":
-        warnings.append(f"{path}: linked Design Doc is still draft")
+    elif status in {"draft", "review_ready"}:
+        warnings.append(f"{path}: linked Design Doc is unpublished ({status})")
     elif not status:
         warnings.append(f"{path}: linked Design Doc has no status")
+
+    details: dict[str, object] = {
+        "path": relative,
+        "data": data,
+        "id": design_id,
+        "legacy": data.get("schema_version") != "1.1",
+        "dependencies": [],
+        "evidence": "",
+    }
+    if data.get("schema_version") != "1.1":
+        return details, errors, warnings
+    layout = data.get("layout", "")
+    if layout not in {"single", "package"}:
+        errors.append(f"{path}: Design layout must be single or package")
+    elif layout == "package" and path.name != "DESIGN.md":
+        errors.append(f"{path}: package Design entrypoint must be DESIGN.md")
+    elif layout == "single" and path.parent != repo / "docs" / "design-docs":
+        errors.append(
+            f"{path}: single Design must be directly under docs/design-docs"
+        )
+    try:
+        dependencies = parse_string_array(
+            data.get("design_dependencies", "[]"),
+            "design_dependencies",
+        )
+    except EpctlError as exc:
+        errors.append(f"{path}: {exc}")
+        dependencies = []
+    normalized_dependencies: list[str] = []
+    for dependency in dependencies:
+        if ":" not in dependency:
+            errors.append(
+                f"{path}: Design dependency must use TYPE:DD-NNN: {dependency}"
+            )
+            continue
+        kind, target = dependency.split(":", 1)
+        target = target.upper()
+        if kind not in {"uses", "extends", "implements", "replaces"}:
+            errors.append(f"{path}: invalid Design dependency type {kind!r}")
+        if not ID_RE["DD"].fullmatch(target):
+            errors.append(f"{path}: invalid Design dependency target {target!r}")
+        normalized_dependencies.append(f"{kind}:{target}")
+    details["dependencies"] = normalized_dependencies
+    try:
+        published_revision = int(data.get("published_revision", "0"))
+        working_revision = int(data.get("working_revision", "0"))
+    except ValueError:
+        errors.append(f"{path}: Design revisions must be integers")
+        published_revision = 0
+        working_revision = 0
+    if working_revision < 1 or published_revision < 0:
+        errors.append(f"{path}: invalid Design revision counters")
+    if status == "current" and working_revision != published_revision:
+        errors.append(
+            f"{path}: current Design working revision must be published"
+        )
+    if status == "revising" and published_revision > 0:
+        warnings.append(
+            f"{path}: working revision is unpublished; consumers use rev "
+            f"{published_revision}"
+        )
+    if layout == "package":
+        _, manifest_errors = verify_design_manifest(
+            repo,
+            path.parent / "DESIGN_MANIFEST.json",
+            path.parent,
+            design_id=design_id,
+            layout=layout,
+            root_data=data,
+        )
+        errors.extend(manifest_errors)
+    if published_revision > 0:
+        evidence, snapshot_errors = design_snapshot_contract(
+            repo, path, data, published_revision
+        )
+        details["evidence"] = evidence
+        errors.extend(snapshot_errors)
+        if not all(
+            data.get(field, "").strip()
+            for field in ("approved_by", "approved_at", "approval_ref")
+        ):
+            errors.append(f"{path}: published Design lacks approval metadata")
+    elif status == "current":
+        errors.append(f"{path}: current Design has no approved revision")
+    return details, list(dict.fromkeys(errors)), list(dict.fromkeys(warnings))
+
+
+def validate_design_evidence(
+    repo: Path,
+    design_ref: str,
+    evidence: str,
+) -> list[str]:
+    details, errors, _ = design_ref_details(repo, design_ref)
+    if errors:
+        return errors
+    data = details.get("data")
+    if not isinstance(data, dict) or details.get("legacy"):
+        return [f"{design_ref}: legacy Design cannot carry revision evidence"]
+    match = DESIGN_EVIDENCE_RE.fullmatch(evidence)
+    if not match or match.group(1).upper() != details.get("id"):
+        return [f"{design_ref}: Design evidence identity does not match"]
+    revision = int(match.group(2))
+    actual, snapshot_errors = design_snapshot_contract(
+        repo,
+        repo / str(details["path"]),
+        data,
+        revision,
+    )
+    if actual != evidence:
+        snapshot_errors.append(
+            f"{design_ref}: Design evidence digest changed for {evidence}"
+        )
+    return list(dict.fromkeys(snapshot_errors))
+
+
+def design_completion_blockers(
+    repo: Path,
+    schema_version: str,
+    design_details: dict[str, dict[str, object]],
+    design_evidence: dict[str, str],
+) -> list[str]:
+    if schema_version != "2.8":
+        return []
+    blockers: list[str] = []
+    for design_id, details in sorted(design_details.items()):
+        data = details.get("data")
+        if not isinstance(data, dict):
+            blockers.append(f"design_inputs_invalid:{design_id}")
+            continue
+        if details.get("legacy"):
+            if data.get("status") != "current":
+                blockers.append(f"design_unpublished:{design_id}")
+            continue
+        evidence = design_evidence.get(design_id)
+        if not evidence:
+            blockers.append(f"design_evidence_missing:{design_id}")
+            continue
+        evidence_errors = validate_design_evidence(
+            repo,
+            str(details["path"]),
+            evidence,
+        )
+        if evidence_errors:
+            blockers.append(f"design_evidence_invalid:{design_id}")
+    return blockers
+
+
+def validate_design_ref(
+    repo: Path,
+    value: str,
+    *,
+    entrypoint: bool = False,
+) -> tuple[list[str], list[str]]:
+    _, errors, warnings = design_ref_details(
+        repo,
+        value,
+        entrypoint=entrypoint,
+    )
     return errors, warnings
+
+
+def validate_design_input_set(
+    repo: Path,
+    design_refs: Iterable[str],
+) -> tuple[dict[str, dict[str, object]], list[str], list[str]]:
+    details_by_id: dict[str, dict[str, object]] = {}
+    errors: list[str] = []
+    warnings: list[str] = []
+    for design_ref in design_refs:
+        details, item_errors, item_warnings = design_ref_details(repo, design_ref)
+        errors.extend(item_errors)
+        warnings.extend(item_warnings)
+        design_id = details.get("id")
+        if not isinstance(design_id, str) or not design_id:
+            continue
+        previous = details_by_id.get(design_id)
+        if previous is not None and previous.get("path") != details.get("path"):
+            errors.append(
+                f"design_refs duplicate {design_id}: "
+                f"{previous.get('path')} and {details.get('path')}"
+            )
+        else:
+            details_by_id[design_id] = details
+
+    graph: dict[str, list[str]] = {}
+    for design_id, details in details_by_id.items():
+        targets: list[str] = []
+        dependencies = details.get("dependencies", [])
+        if not isinstance(dependencies, list):
+            dependencies = []
+        for dependency in dependencies:
+            if not isinstance(dependency, str) or ":" not in dependency:
+                continue
+            target = dependency.split(":", 1)[1].upper()
+            targets.append(target)
+            if target not in details_by_id:
+                errors.append(
+                    f"{details.get('path')}: Design dependency closure "
+                    f"requires a design_ref for {target}"
+                )
+        graph[design_id] = targets
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(node: str, trail: list[str]) -> None:
+        if node in visiting:
+            cycle = trail[trail.index(node) :] + [node]
+            errors.append("Design dependency cycle: " + " -> ".join(cycle))
+            return
+        if node in visited:
+            return
+        visiting.add(node)
+        for target in graph.get(node, []):
+            if target in graph:
+                visit(target, trail + [target])
+        visiting.remove(node)
+        visited.add(node)
+
+    for design_id in graph:
+        visit(design_id, [design_id])
+    return (
+        details_by_id,
+        list(dict.fromkeys(errors)),
+        list(dict.fromkeys(warnings)),
+    )
 
 
 def validate_design_doc_corpus(repo: Path) -> tuple[list[str], list[str]]:
@@ -1989,6 +2455,8 @@ def validate_design_doc_corpus(repo: Path) -> tuple[list[str], list[str]]:
     paths_by_id: dict[str, Path] = {}
     for root in architecture_roots(repo, existing_only=True):
         for path in sorted(root.rglob("*.md")):
+            if "snapshots" in path.relative_to(root).parts:
+                continue
             resolved = path.resolve(strict=False)
             if resolved in seen_paths or path.is_symlink():
                 continue
@@ -2024,6 +2492,14 @@ def validate_design_doc_corpus(repo: Path) -> tuple[list[str], list[str]]:
                 )
             else:
                 paths_by_id[design_id] = path
+            if data.get("schema_version") == "1.1":
+                relative = path.relative_to(repo).as_posix()
+                _, contract_errors, contract_warnings = design_ref_details(
+                    repo,
+                    relative,
+                )
+                errors.extend(contract_errors)
+                warnings.extend(contract_warnings)
     return errors, warnings
 
 
@@ -2797,6 +3273,21 @@ def new_ep(
             raw_design_values,
             "design_refs",
         )
+        design_details, design_errors, design_warnings = (
+            validate_design_input_set(repo, design_refs)
+        )
+        if design_errors:
+            raise EpctlError(
+                "Design input set is invalid:\n- "
+                + "\n- ".join(design_errors)
+            )
+        for warning in design_warnings:
+            print(f"WARNING: {warning}", file=sys.stderr)
+        design_evidence = [
+            str(details["evidence"])
+            for details in design_details.values()
+            if details.get("evidence")
+        ]
         architecture_entrypoint = ""
         if inline_text(architecture_entrypoint_value):
             architecture_entrypoint = normalize_document_refs(
@@ -2909,6 +3400,10 @@ def new_ep(
                     ensure_ascii=False,
                 ),
                 "DESIGN_REFS": json.dumps(design_refs, ensure_ascii=False),
+                "DESIGN_EVIDENCE": json.dumps(
+                    design_evidence,
+                    ensure_ascii=False,
+                ),
                 "REQUIRED_BENCHMARK_SCENARIOS": json.dumps(
                     benchmark_scenario_refs,
                     ensure_ascii=False,
@@ -3580,9 +4075,10 @@ def checkpoint_plan(
             "2.5",
             "2.6",
             "2.7",
+            "2.8",
         }:
             raise EpctlError(
-                "checkpoint requires schema_version 2.1 through 2.7 "
+                "checkpoint requires schema_version 2.1 through 2.8 "
                 "and ## Current Snapshot"
             )
         errors, _ = validate_plan(plan_path)
@@ -4856,13 +5352,16 @@ def validate_plan(
     plan_id = data.get("id", "")
     errors.extend(validate_common_frontmatter(path, data, "EP"))
     schema_version = data.get("schema_version", "2.0")
-    if (schema_version == "2.7" or data.get("metadata_schema")) and plan_id:
+    if (schema_version in {"2.7", "2.8"} or data.get("metadata_schema")) and plan_id:
         errors.extend(
             validate_metadata_contract(path, data, "exec-plan", plan_id)
         )
     required_benchmark_scenarios: list[str] | None = None
     architecture_review_required = False
     architecture_review_details: list[str] = []
+    repo = repository_from_artifact(path)
+    design_details: dict[str, dict[str, object]] = {}
+    design_evidence: dict[str, str] = {}
     if schema_version not in {
         "2.0",
         "2.1",
@@ -4872,9 +5371,10 @@ def validate_plan(
         "2.5",
         "2.6",
         "2.7",
+        "2.8",
     }:
         errors.append(f"{path}: unsupported schema_version {schema_version!r}")
-    if schema_version in {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7"}:
+    if schema_version in {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V21_SECTIONS)
         )
@@ -4890,7 +5390,7 @@ def validate_plan(
     historical_plan = (
         location == "completed" and status in PLAN_COMPLETED_STATUSES
     ) or archive_status == "cancelled"
-    if schema_version in {"2.2", "2.3", "2.4", "2.5", "2.6", "2.7"}:
+    if schema_version in {"2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V22_SECTIONS)
         )
@@ -4907,7 +5407,7 @@ def validate_plan(
             )
             design_refs = (
                 parse_string_array(data.get("design_refs", ""), "design_refs")
-                if schema_version in {"2.4", "2.5", "2.6", "2.7"}
+                if schema_version in {"2.4", "2.5", "2.6", "2.7", "2.8"}
                 else []
             )
             adr_constraint_ref_values = (
@@ -4915,12 +5415,17 @@ def validate_plan(
                     data.get("adr_constraint_refs", ""),
                     "adr_constraint_refs",
                 )
-                if schema_version in {"2.6", "2.7"}
+                if schema_version in {"2.6", "2.7", "2.8"}
                 else []
             )
             adr_evidence = (
                 parse_adr_evidence(data.get("adr_evidence", ""))
-                if schema_version in {"2.6", "2.7"}
+                if schema_version in {"2.6", "2.7", "2.8"}
+                else {}
+            )
+            design_evidence = (
+                parse_design_evidence(data.get("design_evidence", ""))
+                if schema_version == "2.8"
                 else {}
             )
         except EpctlError as exc:
@@ -4930,6 +5435,7 @@ def validate_plan(
             design_refs = []
             adr_constraint_ref_values = []
             adr_evidence = {}
+            design_evidence = {}
         repo = repository_from_artifact(path)
         inputs = section(text, "Research and Architecture Inputs") or ""
         research_gate = data.get("research_gate", "")
@@ -4971,10 +5477,10 @@ def validate_plan(
                 )
         architecture_entrypoint = (
             inline_text(data.get("architecture_entrypoint", ""))
-            if schema_version in {"2.4", "2.5", "2.6", "2.7"}
+            if schema_version in {"2.4", "2.5", "2.6", "2.7", "2.8"}
             else ""
         )
-        if schema_version in {"2.6", "2.7"}:
+        if schema_version in {"2.6", "2.7", "2.8"}:
             decision_gate = data.get("architecture_decision_gate", "")
             decision_reason = inline_text(
                 data.get("architecture_decision_gate_reason", "")
@@ -5214,17 +5720,20 @@ def validate_plan(
                         f"{path}: {adr_id} requires missing Design Docs "
                         + ", ".join(sorted(missing_designs))
                     )
-        if schema_version in {"2.4", "2.5", "2.6", "2.7"}:
+        design_details = {}
+        if schema_version in {"2.4", "2.5", "2.6", "2.7", "2.8"}:
             if "design_refs" not in data:
                 errors.append(f"{path}: missing frontmatter field design_refs")
             if "architecture_entrypoint" not in data:
                 errors.append(
                     f"{path}: missing frontmatter field architecture_entrypoint"
                 )
+            design_details, design_errors, design_warnings = (
+                validate_design_input_set(repo, design_refs)
+            )
+            errors.extend(f"{path}: {error}" for error in design_errors)
+            warnings.extend(design_warnings)
             for design_ref in design_refs:
-                item_errors, item_warnings = validate_design_ref(repo, design_ref)
-                errors.extend(f"{path}: {error}" for error in item_errors)
-                warnings.extend(item_warnings)
                 if design_ref not in inputs:
                     errors.append(
                         f"{path}: Research and Architecture Inputs must mention "
@@ -5243,7 +5752,37 @@ def validate_plan(
                         f"{path}: Research and Architecture Inputs must mention "
                         f"{architecture_entrypoint}"
                     )
-        if schema_version in {"2.6", "2.7"}:
+            if schema_version == "2.8":
+                if "design_evidence" not in data:
+                    errors.append(
+                        f"{path}: missing frontmatter field design_evidence"
+                    )
+                unknown_evidence = set(design_evidence) - set(design_details)
+                if unknown_evidence:
+                    errors.append(
+                        f"{path}: design_evidence references unlinked Designs: "
+                        + ", ".join(sorted(unknown_evidence))
+                    )
+                for design_id, evidence_value in design_evidence.items():
+                    details = design_details.get(design_id)
+                    if details is None:
+                        continue
+                    evidence_errors = validate_design_evidence(
+                        repo,
+                        str(details["path"]),
+                        evidence_value,
+                    )
+                    errors.extend(
+                        f"{path}: {error}" for error in evidence_errors
+                    )
+                if design_evidence and not all(
+                    value in inputs for value in design_evidence.values()
+                ):
+                    errors.append(
+                        f"{path}: Research and Architecture Inputs must mention "
+                        "every design_evidence pin"
+                    )
+        if schema_version in {"2.6", "2.7", "2.8"}:
             errors.extend(
                 validate_required_sections(path, text, EXECPLAN_V26_SECTIONS)
             )
@@ -5409,7 +5948,7 @@ def validate_plan(
                     f"{path}: Architecture Compliance Matrix does not match "
                     "architecture inputs: " + "; ".join(details)
                 )
-    if schema_version in {"2.5", "2.6", "2.7"}:
+    if schema_version in {"2.5", "2.6", "2.7", "2.8"}:
         errors.extend(
             validate_required_sections(path, text, EXECPLAN_V25_SECTIONS)
         )
@@ -5458,7 +5997,27 @@ def validate_plan(
             f"{path}: architecture_review_required blocks completion: "
             + "; ".join(architecture_review_details)
         )
-    if schema_version in {"2.3", "2.4", "2.5", "2.6", "2.7"}:
+    if completing and schema_version == "2.8":
+        for design_id, details in design_details.items():
+            design_data = details.get("data")
+            if not isinstance(design_data, dict):
+                errors.append(
+                    f"{path}: {design_id} has no readable Design contract"
+                )
+                continue
+            if details.get("legacy"):
+                if design_data.get("status") != "current":
+                    errors.append(
+                        f"{path}: legacy Design {design_id} must be current "
+                        "before EP completion"
+                    )
+                continue
+            if design_id not in design_evidence:
+                errors.append(
+                    f"{path}: EP completion requires approved revision "
+                    f"evidence for {design_id}"
+                )
+    if schema_version in {"2.3", "2.4", "2.5", "2.6", "2.7", "2.8"}:
         attestation_version = schema_version
         if "verified_revision" not in data:
             errors.append(f"{path}: missing frontmatter field verified_revision")
@@ -5625,12 +6184,22 @@ def validate_plan(
         "2.5",
         "2.6",
         "2.7",
+        "2.8",
     } and not re.search(
         r"(?im)^-\s+Next action:\s+\S",
         snapshot,
     ):
         errors.append(f"{path}: Current Snapshot requires a non-empty Next action")
     lifecycle = plan_lifecycle_metrics(text, status, task_statuses.values())
+    completion_design_blockers = design_completion_blockers(
+        repo,
+        schema_version,
+        design_details,
+        design_evidence,
+    )
+    if completion_design_blockers and lifecycle["completion"] == "ready_to_archive":
+        lifecycle["completion"] = "archive_blocked"
+        lifecycle["completion_blockers"] = completion_design_blockers
     if status in PLAN_ACTIVE_STATUSES:
         root_lines = lifecycle["root_lines"]
         root_bytes = lifecycle["root_bytes"]
@@ -6681,6 +7250,7 @@ def archive_ep(
             "2.5",
             "2.6",
             "2.7",
+            "2.8",
         }
         if outcome == "completed" and has_completion_attestation:
             if not verified_revision:
@@ -6692,7 +7262,7 @@ def archive_ep(
                     "Completed v2.3+ EP requires at least one --evidence"
                 )
             required_benchmark_scenarios: list[str] | None = None
-            if schema_version in {"2.5", "2.6", "2.7"}:
+            if schema_version in {"2.5", "2.6", "2.7", "2.8"}:
                 required_benchmark_scenarios = parse_reference_array(
                     data.get("required_benchmark_scenarios", ""),
                     "BS",
@@ -6943,7 +7513,7 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
             ["verified_revision", "verification_evidence"]
             if data.get("status", "") in PLAN_ACTIVE_STATUSES
             and data.get("schema_version", "")
-            in {"2.3", "2.4", "2.5", "2.6", "2.7"}
+            in {"2.3", "2.4", "2.5", "2.6", "2.7", "2.8"}
             else []
         )
         decision_gate = data.get(
@@ -6976,6 +7546,40 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                     ]
                 )
             )
+        if (
+            lifecycle["completion"] == "ready_to_archive"
+            and data.get("schema_version", "") == "2.8"
+        ):
+            try:
+                status_design_refs = parse_string_array(
+                    data.get("design_refs", ""),
+                    "design_refs",
+                )
+                status_design_evidence = parse_design_evidence(
+                    data.get("design_evidence", "")
+                )
+                status_design_details, status_design_errors, _ = (
+                    validate_design_input_set(repo, status_design_refs)
+                )
+                if set(status_design_evidence) - set(status_design_details):
+                    status_design_errors.append(
+                        "design_evidence references an unlinked Design"
+                    )
+                status_design_blockers = design_completion_blockers(
+                    repo,
+                    "2.8",
+                    status_design_details,
+                    status_design_evidence,
+                )
+                if status_design_errors:
+                    status_design_blockers.insert(0, "design_inputs_invalid")
+            except EpctlError:
+                status_design_blockers = ["design_inputs_invalid"]
+            if status_design_blockers:
+                lifecycle["completion"] = "archive_blocked"
+                lifecycle["completion_blockers"] = list(
+                    dict.fromkeys(status_design_blockers)
+                )
         plans.append(
             {
                 "id": data.get("id", ""),
@@ -7286,7 +7890,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ep = sub.add_parser(
         "new-ep",
-        help="Create a gated v2.7 ExecPlan from architecture and benchmark inputs",
+        help="Create a gated v2.8 ExecPlan from architecture, Design and benchmark inputs",
     )
     ep.add_argument("--slug", required=True)
     ep.add_argument("--title", required=True)

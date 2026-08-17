@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "帮我把这个仓库初始化成 Codex agent-first 项目：先预览要创建的文档，再应用。保留已有文件，AGENTS.md 无论如何不能超过 100 行。",
-      "expected_output": "先用 foundryctl bootstrap --adapter codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，组合 engineering-execution-plan 初始化，并生成单个项目级 $engineering-specs Router Skill 与 .codex/hooks.json。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
+      "expected_output": "先用 foundryctl bootstrap --adapter codex dry-run 并检查 conflict；确认后用 --apply 创建缺失的 AGENTS.md、ARCHITECTURE.md、docs 索引、质量、可靠性、安全与 Design Doc 入口，分别组合 engineering-design 和 engineering-execution-plan 初始化，并生成单个项目级 $engineering-specs Router Skill 与 .codex/hooks.json。已有文件保持字节不变，docs/.engineering/harness.json 使用 owner repo-foundry 并注册 AGENTS.md max_lines=100，最终 foundryctl validate --harness 通过。",
       "files": [],
       "assertions": [
         {
@@ -16,8 +16,8 @@
           "description": "apply 只补缺失文件，不覆盖、截断或移动已有文档"
         },
         {
-          "name": "composes_execution_plan_init",
-          "description": "项目级 Bootstrap 调用 engineering-execution-plan 的初始化契约，不复制 ADR 或 ExecPlan 逻辑"
+          "name": "composes_professional_initializers",
+          "description": "项目级 Bootstrap 分别调用 engineering-design 和 engineering-execution-plan 的初始化契约，不复制 Design、ADR 或 ExecPlan 逻辑"
         },
         {
           "name": "enforces_agents_line_limit",
@@ -25,7 +25,7 @@
         },
         {
           "name": "separates_state_ownership",
-          "description": "Harness manifest 位于 docs/.engineering，EP 状态继续位于 docs/.epctl"
+          "description": "Harness manifest 位于 docs/.engineering，Design 与 EP 状态分别位于 docs/.designctl 和 docs/.epctl"
         },
         {
           "name": "generates_one_task_router",
@@ -206,6 +206,22 @@
         {
           "name": "escalates_only_on_scope_change",
           "description": "只有正式评审、诊断、Spec 合规判断或代码修改才升级到对应治理层级"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "R-012 已经 concluded。我要把 UModel 模块的 API、数据、运维和验证组织成一套技术设计，再交给实施计划。",
+      "expected_output": "不把 Research 当作设计文档；路由到 engineering-design，以一个 DD-NNN Design Package 管理多篇 DOC-NNN、阅读地图、manifest 和统一评审边界。Design Owner 明确批准后输出 revision evidence，再由 engineering-execution-plan 只读消费；ADR 授权仍独立。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "routes_design_production",
+          "description": "系统边界、接口、数据、失败、运维与验证设计由 engineering-design 生产"
+        },
+        {
+          "name": "keeps_authority_boundaries",
+          "description": "Research conclusion、Design approval、ADR acceptance 与 EP completion 不互相推断"
         }
       ]
     }

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "metadata_schema": "1",
+  "artifact_type": "design-manifest",
+  "id": "{{DESIGN_ID}}-MANIFEST",
+  "design_id": "{{DESIGN_ID}}",
+  "title": "{{TITLE}} — Design manifest",
+  "status": "draft",
+  "layout": "package",
+  "author": "{{AUTHOR}}",
+  "owner": "{{OWNER}}",
+  "created": "{{DATE}}",
+  "updated": "{{DATE}}",
+  "working_revision": 1,
+  "published_revision": 0,
+  "entrypoint": "DESIGN.md",
+  "reading_map": "docs/README.md",
+  "design_dependencies": [],
+  "documents": []
+}

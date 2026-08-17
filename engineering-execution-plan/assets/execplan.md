@@ -1,5 +1,5 @@
 ---
-schema_version: "2.7"
+schema_version: "2.8"
 metadata_schema: "1"
 artifact_type: exec-plan
 id: {{ID}}
@@ -13,6 +13,7 @@ adr_refs: {{ADR_REFS}}
 adr_constraint_refs: {{ADR_CONSTRAINT_REFS}}
 adr_evidence: {{ADR_EVIDENCE}}
 design_refs: {{DESIGN_REFS}}
+design_evidence: {{DESIGN_EVIDENCE}}
 architecture_entrypoint: "{{ARCHITECTURE_ENTRYPOINT}}"
 architecture_decision_gate: {{ARCHITECTURE_DECISION_GATE}}
 architecture_decision_gate_reason: "{{ARCHITECTURE_DECISION_GATE_REASON}}"
@@ -67,6 +68,7 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 - ADR constraint references: {{ADR_CONSTRAINT_REFS}}.
 - ADR evidence: {{ADR_EVIDENCE}}.
 - Design document references: {{DESIGN_REFS}}.
+- Approved Design revision evidence: {{DESIGN_EVIDENCE}}.
 - Architecture entrypoint: `{{ARCHITECTURE_ENTRYPOINT}}`.
 
 <!-- REQUIRED: Restate the Research conclusions, accepted ADR consequences, implementation constraints, and remaining unknowns needed to execute this plan without opening upstream artifacts. Explain each not-required reason when a gate was explicitly skipped. -->

@@ -14,11 +14,14 @@ flowchart LR
     U["User prompt"] --> W["$repo-foundry-ai<br/>bootstrap or route"]
     W --> B["$engineering-benchmark<br/>measure"]
     W --> R["$engineering-research<br/>explain unknowns"]
+    W --> D["$engineering-design<br/>specify the system"]
     W --> E["$engineering-execution-plan<br/>decide and deliver"]
     W --> C["$engineering-case-study<br/>share"]
     B -->|"route may change"| R
     B -->|"final revision gate"| E
+    R --> D
     R --> E
+    D --> E
     E -->|"verification"| B
     E -->|"explicit writing request"| C
 ```
@@ -30,6 +33,7 @@ flowchart LR
 | Initialize an Agent-first repository or decide where work belongs | `$repo-foundry-ai` | Route to one professional Skill |
 | Produce reproducible performance, capacity, reliability, or regression evidence | `$engineering-benchmark` | Research, EP, or CI / Runbook |
 | Investigate unknowns, reconcile sources, or maintain a Research corpus | `$engineering-research` | Proposed ADR or another Research Round |
+| Translate established evidence into system boundaries, contracts, data, flows, and failure behavior | `$engineering-design` | Design review, ADR alignment, or ExecPlan |
 | Record a decision, create an ExecPlan, track a Bugfix, or drive implementation | `$engineering-execution-plan` | Benchmark gates and completion evidence |
 | Turn verified engineering work into a shareable article | `$engineering-case-study` | Draft review and explicit publication verification |
 
@@ -56,7 +60,7 @@ result and report the created entrypoints and the recommended next Skill.
 ```
 
 Expected boundary: Workflow may create the Harness and recommend another Skill.
-It does not create a Benchmark Run, Research, ADR, ExecPlan, or Case Study on
+It does not create a Benchmark Run, Research, Design, ADR, ExecPlan, or Case Study on
 their behalf.
 
 ## Example 2: ask the router before creating any durable artifact
@@ -69,7 +73,7 @@ Use $repo-foundry-ai only to route this request:
 architecture is wrong and then fix it."
 
 Inspect the available evidence and tell me whether to start with
-$engineering-benchmark, $engineering-research, or
+$engineering-benchmark, $engineering-research, $engineering-design, or
 $engineering-execution-plan. Explain the boundary and expected artifact.
 Do not create a durable professional artifact yet.
 ```
@@ -124,7 +128,40 @@ accept or reject that exact ADR before the Skill creates a gated ExecPlan.
 Expected boundary: review-ready, concluded Research, proposed ADR, accepted
 ADR, and active ExecPlan are separate states with separate authority.
 
-## Example 5: use several Benchmark Scenarios as final delivery gates
+## Example 5: turn concluded Research into one multi-document module design
+
+Use one logical Design Package when several focused documents must be reviewed
+and released together:
+
+```text
+Use $engineering-design to convert concluded R-012 into the UModel module
+technical design. Organize architecture, public contracts, data ownership,
+operations, migration, and verification as focused documents under one
+DD-NNN review boundary and reading map.
+
+Preserve the Research findings, confidence limits, counterevidence, and open
+unknowns. Use package-local DOC-NNN identities for jointly approved topics.
+If a subdesign has a different owner or release lifecycle, give it a separate
+DD-NNN and a typed dependency. Stop at review-ready; do not infer Design
+approval or ADR acceptance.
+```
+
+Expected organization:
+
+```mermaid
+flowchart TB
+    D["DD-NNN module Design"] --> A["architecture/DOC-NNN"]
+    D --> I["contracts/DOC-NNN"]
+    D --> O["operations/DOC-NNN"]
+    D --> V["verification/DOC-NNN"]
+    D -.->|"independent lifecycle"| X["another DD-NNN"]
+```
+
+Expected boundary: Research remains evidence, the Design Package explains how
+the system will work, ADR authority stays separate, and an ExecPlan can only
+complete against an approved revision evidence pin.
+
+## Example 6: use several Benchmark Scenarios as final delivery gates
 
 The route is already accepted, so the measurements verify one final revision
 rather than reopen the architecture by default.
@@ -157,7 +194,7 @@ for the same verified revision, all Tasks are terminal, and no blocker remains.
 Otherwise keep the plan active and list the missing gates.
 ```
 
-## Example 6: keep a Bugfix small, or escalate it deliberately
+## Example 7: keep a Bugfix small, or escalate it deliberately
 
 ```text
 Use $engineering-execution-plan to record the duplicate retry notification as
@@ -173,7 +210,7 @@ project log.
 Expected boundary: an ordinary coding fix remains ordinary work unless the user
 asks for a durable Bugfix record. Escalation preserves the original history.
 
-## Example 7: write a module-design article from verified evidence
+## Example 8: write a module-design article from verified evidence
 
 Case Study is manually triggered after the user chooses the writing purpose and
 language:
@@ -212,7 +249,7 @@ Expected boundary: completing an EP does not automatically create an article.
 The article remains a derived narrative and never becomes the architecture
 source of truth.
 
-## A complete five-Skill journey is optional
+## A complete six-Skill journey is optional
 
 One large feature can use every Skill, but each transition must be justified:
 
@@ -220,12 +257,13 @@ One large feature can use every Skill, but each transition must be justified:
 flowchart LR
     W["Harness ready"] --> B1["Exploratory evidence"]
     B1 --> R["Concluded Research"]
-    R --> E["Accepted decision + active EP"]
+    R --> D["Approved Design revision"]
+    D --> E["Accepted decision + active EP"]
     E --> B2["Final-revision evidence"]
     B2 --> D["Completed EP"]
     D --> C["Manually requested Case Study"]
 ```
 
 Use this full path only when the work actually contains each boundary. A known,
-local, reversible change should not manufacture Research, an ADR, Benchmark
-evidence, or a Case Study merely to fill the diagram.
+local, reversible change should not manufacture Research, a Design, an ADR,
+Benchmark evidence, or a Case Study merely to fill the diagram.
