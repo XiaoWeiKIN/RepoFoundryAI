@@ -127,6 +127,11 @@ class DesignctlTestCase(unittest.TestCase):
 
     def test_package_manifest_members_and_atomic_snapshot(self) -> None:
         design = self.new_design("registry-module", layout="package")
+        reading_map = design.parent / "docs/README.md"
+        self.assertIn(
+            'href="../DESIGN.md"',
+            reading_map.read_text(encoding="utf-8"),
+        )
         member = Path(
             self.run_cli(
                 "new-member",

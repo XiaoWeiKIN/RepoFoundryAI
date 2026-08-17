@@ -16,9 +16,9 @@ updated: {{DATE}}
 
 # {{TITLE}}
 
-Start with [`DESIGN.md`](DESIGN.md) for scope, invariants, input evidence,
-cross-document conclusions, and lifecycle state. Follow the generated routes
-below for specialist review.
+Start with <a href="../DESIGN.md"><code>DESIGN.md</code></a> for scope,
+invariants, input evidence, cross-document conclusions, and lifecycle state.
+Follow the generated routes below for specialist review.
 
 <!-- DESIGNCTL:READING:START -->
 No focused member documents yet.
