@@ -216,10 +216,10 @@ Hook 不可用时仍必须手动遵循 Router Skill 并运行其 `audit` 命令�
 
 | 请求 | 使用 Skill |
 |---|---|
-| 预声明并执行性能、容量或回归测量；为一个 EP 建立多个独立测量门禁 | `engineering-benchmark`，再由 `engineering-execution-plan` 声明 Gate Set |
-| 搜集证据、解释矛盾、维护多文档 Research | `engineering-research` |
-| 把已收敛证据转成单文档或多文档技术设计包，并管理评审与版本 | `engineering-design` |
-| ADR、ExecPlan、Task、Checkpoint、Bugfix | `engineering-execution-plan` |
+| 共同校准 Scenario，再预声明并执行性能、容量或回归测量；为一个 EP 建立多个独立测量门禁 | `engineering-benchmark`，再由 `engineering-execution-plan` 声明 Gate Set |
+| 共同校准研究问题与证据方向，解释矛盾并维护多文档 Research | `engineering-research` |
+| 共同探索架构取舍，把已收敛证据转成单文档或多文档技术设计包，并管理评审与版本 | `engineering-design` |
+| 共同权衡 ADR、校准 ExecPlan；确定性维护 Task、Checkpoint、Bugfix | `engineering-execution-plan` |
 | 基于真实代码和过程证据撰写工程分享 | `engineering-case-study` |
 
 一次请求可以按证据流依次经过多个 Skill，但不要让聚合 Skill 伪造其输出。专业

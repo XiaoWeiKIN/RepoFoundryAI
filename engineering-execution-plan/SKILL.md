@@ -1,7 +1,7 @@
 ---
 name: engineering-execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务，并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务，并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Engineering Execution Plan
@@ -90,6 +90,22 @@ Bugfix 一旦需要 Research、ADR、任务拆分、公共契约变更或持续�
 完整判定与状态机见 `references/templates.md`。消费 manifest-bearing Research
 前读取 `references/research.md`；起草或决定 ADR 前读取
 `references/adr.md`。
+
+## 交互式决策与计划校准
+
+用户要求共同讨论 ADR、一起拆解 EP，或存在会实质改变长期约束、实施边界、迁移
+顺序、回滚或验收证据的多个可信方案时，完整读取
+[collaboration.md](references/collaboration.md)。交互状态只服务会话收敛，不新增
+ADR/EP lifecycle，也不替代 Research、Design、Decision Owner 或完成证据。
+
+- ADR 使用交互式权衡：比较原子选项、Decision Drivers、后果和一个区分性反例，
+  再形成可整体接受或拒绝的 proposed ADR。探索中的简短选项回复只是候选偏好；
+  只有可归因主体对具体 ADR outcome 的明确接受/拒绝才构成决定授权。
+- ExecPlan 使用实施校准：在 accepted ADR 与 approved Design 输入不变的前提下，
+  校准范围、里程碑、依赖、迁移、回滚和验收。若讨论重新打开公共契约、数据所有权
+  或长期架构选择，停止计划收敛并路由回 Research、Design 或 ADR。
+- 不逐项询问可由仓库事实推导的 Task 细节。Checkpoint、验证、Benchmark Run、
+  seal 和 archive 继续按证据与状态机确定性执行，不能通过协商改变结果。
 
 ## 仓库布局
 
@@ -238,6 +254,10 @@ Agent 可以调研、比较并起草 `proposed` ADR。只有当前对话或明�
 
 以下表达不构成决策授权：要求分析、要求起草、同意继续研究、同意实施整个 skill 改造、沉默或推断出的偏好。授权必须能回答“谁决定了哪份 ADR 的哪个结果”。
 
+当 ADR 仍在共同权衡时，先按 `references/collaboration.md` 把候选偏好经过后果复述
+和区分性压力场景，再写成 proposed ADR。裸露的 `1`、`2`、`Option B` 不自动等于
+对某份完整 ADR 的接受；明确身份、目标 ADR 和 outcome 的授权仍可直接进入决定门槛。
+
 决定前：
 
 1. 复述 sealed Synthesis 中影响选择的结论和证据路径。
@@ -276,28 +296,31 @@ non-current ADR 不能满足新 ExecPlan；受影响的既有 active EP 显示
 
 执行前读取 `references/template.md`。
 
-1. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
-2. Architecture Decision Gate 必须由所需 accepted ADR 满足，或提供具体
+1. 若实施范围、里程碑边界、迁移顺序、回滚或验收方案存在多个会显著改变计划的
+   可信形态，先按 `references/collaboration.md` 做有界实施校准；不要在 EP 内重新
+   决定未收敛的架构。
+2. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
+3. Architecture Decision Gate 必须由所需 accepted ADR 满足，或提供具体
    not-required 理由；提供理由时仍可引用适用的既有 ADR。
-3. Architecture Compliance 必须独立标为 `applicable` 或 `not_applicable`：
+4. Architecture Compliance 必须独立标为 `applicable` 或 `not_applicable`：
    applicable 时引用全部相关当前 ADR/Design Docs；not_applicable 时不得夹带
    architecture inputs，并写明具体理由。
-4. ADR 引用的 Research 和 Design Docs 也必须进入 ExecPlan 的对应引用数组。
-5. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
-6. 对每个需要性能、容量、可靠性或回归验收的独立维度，先完成一个稳定的
+5. ADR 引用的 Research 和 Design Docs 也必须进入 ExecPlan 的对应引用数组。
+6. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
+7. 对每个需要性能、容量、可靠性或回归验收的独立维度，先完成一个稳定的
    Benchmark Scenario。不要等实现完成、看到结果后才补门禁。
-7. 运行 `new-ep` 创建 v2.8 目录和模板；已发布 Design evidence 自动固定；对每个必需 Scenario重复
+8. 运行 `new-ep` 创建 v2.8 目录和模板；已发布 Design evidence 自动固定；对每个必需 Scenario重复
    `--benchmark-scenario BS-NNN`。没有 Benchmark 门禁时保留空集合。
-8. 在 `Architecture Compliance Matrix` 中逐条映射所有 `ADR-NNN#C-NNN` 到实施
+9. 在 `Architecture Compliance Matrix` 中逐条映射所有 `ADR-NNN#C-NNN` 到实施
    位置和 test/lint/schema/observable evidence；Design Doc 只能解释，不能覆盖 ADR。
-9. 在 `Benchmark Gate Set` 中写清每个 Scenario 驱动哪个开发决定或里程碑。
+10. 在 `Benchmark Gate Set` 中写清每个 Scenario 驱动哪个开发决定或里程碑。
    不同环境、流量模型或判定规则保持为不同 Scenario，不聚合成不可解释的总分。
-10. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
+11. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
    - 支持路线的关键证据与置信边界；
    - accepted ADR 的接口、数据、运维、迁移和负面后果；
    - 仍需在实现中验证的未知；
    - 跳过 Gate 的具体理由。
-11. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
+12. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
    - 解释目的、术语、用户可观察结果和系统现状；
    - 给出准确仓库相对路径、接口与依赖；
    - 提供独立可验证里程碑、工作目录、命令、预期输出和证据位置；
@@ -448,3 +471,4 @@ corpus 由 `validate` 检查，legacy Design Doc 只读兼容并告警。
 - 文档—代码完整性、CI 适配与合并门禁 → `references/integrity.md`
 - Bugfix 字段与升级/归档 → `references/bugfix.md`
 - Prompt 示例、典型场景和端到端输出边界 → `references/examples.md`
+- ADR 权衡与 ExecPlan 实施校准 → `references/collaboration.md`

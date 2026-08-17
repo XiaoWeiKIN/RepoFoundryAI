@@ -1,7 +1,7 @@
 ---
 name: engineering-benchmark
 description: |
-  设计、执行和封存可复现的工程 Benchmark 证据，包括 Benchmark Suite、稳定 Scenario、单次 Run、原始 artifacts、Result 与带 SHA-256 的 Evidence Manifest。适用于用户要求做性能压测、容量测试、方案对比、回归基线、故障注入、外部压测、让一个或多个压测 Scenario 驱动某个 EP 的验收，或提到 benchmark、load test、基准、吞吐、延迟、资源占用、回归证据。只负责生成事实证据，不解释跨来源冲突、不形成 Research Synthesis、不接受 ADR，也不替代 EP 的决策与实施治理。
+  通过执行前的交互式 Scenario 校准，设计、执行和封存可复现的工程 Benchmark 证据，包括 Benchmark Suite、稳定 Scenario、单次 Run、原始 artifacts、Result 与带 SHA-256 的 Evidence Manifest。适用于用户要求一起设计压测场景、校准工作负载或判定阈值，做性能压测、容量测试、方案对比、回归基线、故障注入、外部压测、让一个或多个压测 Scenario 驱动某个 EP 的验收，或提到 benchmark、load test、基准、吞吐、延迟、资源占用、回归证据。只负责生成事实证据，不解释跨来源冲突、不形成 Research Synthesis、不接受 ADR，也不替代 EP 的决策与实施治理。
 ---
 
 # Engineering Benchmark
@@ -81,6 +81,21 @@ benchmarks/
 `references/contract.md`。选择 Research、EP 或 CI 路由时读取
 `references/examples.md`。
 
+## Scenario 协作校准
+
+用户要求一起设计压测，或工作负载、环境、指标、阈值、安全限制与外推边界存在多个
+会改变证据含义的可信定义时，创建 Run 前完整读取
+[collaboration.md](references/collaboration.md)。
+
+- 从现有 SLO、EP gate、生产特征和仓库事实提出具体默认 Scenario，再比较 2–3 个
+  有意义的工作负载或判定形态及其可证明范围；一次只询问一个用户拥有的约束。
+- 用户的简短选择形成候选协议。先用一个 burst、长尾、冷缓存、故障或资源安全场景
+  复验，再认为 Scenario 可用于创建 Run。
+- `new-run` 复制 Scenario 后，该 Run 的协议不可协商。结果不理想不能改阈值、环境
+  或 observation；协议实质变化创建新 Scenario，执行问题创建新 Run。
+- Run、Result、seal 和 outcome 始终证据驱动。交互不能把 `failed`、
+  `inconclusive` 或 `errored` 改成 `passed`。
+
 ## 优先使用 benchctl
 
 把 `<skill-dir>` 解析为本 Skill 所在目录。命令都在目标仓库根目录运行：
@@ -121,21 +136,24 @@ python3 <skill-dir>/scripts/benchctl.py --repo . reindex
 1. 检查仓库约定和现有 Benchmark，确认是复用 Suite/Scenario 还是创建新的。
 2. 在 Suite 中写清主题、被测系统边界、Owner、非目标和消费者。
    `Unassigned` 只允许保留 Suite 草稿，不能创建 Scenario。
-3. 在执行前完成 Scenario。假设必须可证伪；受控变量、数据集、环境、warmup、
+3. 若 Scenario 的代表性或判定规则包含用户拥有的产品/SLO 取舍，先按
+   `references/collaboration.md` 校准候选协议并用一个区分性压力场景复验；不要
+   询问可以从系统和已有证据推导的技术默认值。
+4. 在执行前完成 Scenario。假设必须可证伪；受控变量、数据集、环境、warmup、
    重复次数、缓存状态、清理和失败恢复必须明确。
-4. 预声明指标与判定规则。看完结果后再改变规则属于新的 Scenario 或 Run，
+5. 预声明指标与判定规则。看完结果后再改变规则属于新的 Scenario 或 Run，
    不能回写历史。
-5. 如果这些测量是 EP 完成门禁，在实现前把所有必需 Scenario 通过
+6. 如果这些测量是 EP 完成门禁，在实现前把所有必需 Scenario 通过
    `epctl new-ep --benchmark-scenario BS-NNN` 声明到同一个 EP。一个 Scenario
    对应一个独立门禁；不要把不同环境或判定规则压成一个总分。
-6. 创建 Run，记录不可变的 subject revision 与 harness revision。
-7. 执行真实命令；保留 stdout、stderr、配置、Trace 和机器可读结果。Observation
+7. 创建 Run，记录不可变的 subject revision 与 harness revision。
+8. 执行真实命令；保留 stdout、stderr、配置、Trace 和机器可读结果。Observation
    与 Interpretation 分开写。
-8. 即使失败、无结论或工具报错，也保留 Run，并选择 `failed`、
+9. 即使失败、无结论或工具报错，也保留 Run，并选择 `failed`、
    `inconclusive` 或 `errored`，不要删除负面证据。
-9. `seal-run` 后不得修改 Result、Scenario snapshot 或本地 artifacts。修正错误
+10. `seal-run` 后不得修改 Result、Scenario snapshot 或本地 artifacts。修正错误
    或补证据时创建新 Run，并用 `--supersedes BR-NNN` 建立替代链。
-10. 把 `BR-NNN` 与 Manifest payload SHA-256 交给下游消费者。
+11. 把 `BR-NNN` 与 Manifest payload SHA-256 交给下游消费者。
    优先用 `evidence-ref` 生成已验真的标准引用。
 
 ## 封存规则
@@ -173,3 +191,6 @@ author，除非调用者显式提供新的 `--author`。
 不能替代封存事件的 `executed_by`。Raw CSV、日志、Trace、截图和 profiler 文件
 不嵌入重复 metadata，由 Evidence Manifest 携带 provenance 并用 SHA-256 绑定。
 sealed bundle 的 metadata 不可原地修订；旧 schema 1 bundle 保持兼容。
+
+Scenario 校准的交互边界见 `references/collaboration.md`；Benchmark 的事实、完整性
+和消费者契约仍以 `references/contract.md` 为准。

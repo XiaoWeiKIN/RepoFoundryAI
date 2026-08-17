@@ -1,7 +1,7 @@
 ---
 name: engineering-research
 description: |
-  创建、接管和迭代维护仓库内的工程 Research 与 Synthesis，包括研究问题、结构化专题文档、源码/文档/网络来源、实验与 prototype、多文档 corpus、研究轮次、阶段性 Synthesis revision、作者与研究类型元数据、入口索引、manifest、引用完整性、linked corpus 快照和显式授权后的结论封存。适用于用户要求先调研一个功能或技术方案、创建或评审专题研究文档、基于第一版继续深入、讨论某个研究点、比较选项、分析现有多篇研究文档、处理 BMAD/Deep Research 产物、生成决策级总结，或提到 Research、技术调研、专题文档、证据、Synthesis、research corpus、research manifest。普通代码解释、方向已固定的局部实现或纯 ExecPlan 维护不触发本 skill。
+  创建、接管和迭代维护仓库内的工程 Research 与 Synthesis，并通过交互式研究引导与用户共同校准研究问题、证据缺口和下一轮方向；包括结构化专题文档、源码/文档/网络来源、实验与 prototype、多文档 corpus、研究轮次、阶段性 Synthesis revision、作者与研究类型元数据、入口索引、manifest、引用完整性、linked corpus 快照和显式授权后的结论封存。适用于用户要求一起调研或讨论某个研究点、先调研一个功能或技术方案、创建或评审专题研究文档、基于第一版继续深入、比较选项、分析现有多篇研究文档、处理 BMAD/Deep Research 产物、生成决策级总结，或提到 Research、技术调研、专题文档、证据、Synthesis、research corpus、research manifest。普通代码解释、方向已固定的局部实现或纯 ExecPlan 维护不触发本 skill。
 ---
 
 # Engineering Research
@@ -50,6 +50,21 @@ Research 时，才使用本 Skill。所有模式都保留真实来源与不确�
 执行 Research 前读取 `references/research.md`。注册 existing corpus、修改
 manifest 或处理归档完整性前再读取 `references/manifest.md`。
 创建或评审结构化专题文档前读取 `references/topic.md`。
+
+## 交互式研究引导
+
+用户要求一起研究、讨论某个研究点，或现有证据暴露多个会改变下游决定的调查分支
+时，完整读取 [collaboration.md](references/collaboration.md)。交互只校准问题、
+优先级、适用场景和下一步证据，不通过偏好投票决定事实。
+
+- 先报告当前发现、置信度、矛盾和真正的证据缺口，再给出 2–3 个有区分力的下一步
+  调查方向及其决策影响；说明推荐顺序，只问一个主要方向问题。
+- 用户的简短选择可以改变当前 Round 的 focus，但不能自动把 `RQ-NNN` 标为
+  `answered`、把假设写成结论或触发 `conclude-research`。
+- 当用户纠正研究意图时，区分误解与新 inquiry，按当前 Round、
+  `amend-current-round` 或 `new-round` 的既有规则处理；不要为每个聊天回合建 Round。
+- 证据与用户偏好冲突时保留矛盾。Research 可以推荐带条件的方案，但架构接受属于
+  下游 authority，Research 结束仍需 Owner 明确授权。
 
 ## 仓库制品
 
@@ -135,12 +150,15 @@ schema 1 或 1.1 package 补齐缺失入口，并只更新带完整 `RCTL:NOTES`
 1. 先检查仓库代码、测试、已有文档和权威外部来源。
 2. 创建 Research，写清 Purpose、Scope、Decision Drivers 和所有 `RQ-NNN`。
    `owner`、`author` 和 `research_type` 必须真实；未知就保留未分配，禁止杜撰。
-3. 用 Round 组织每次有界研究迭代；用 `new-topic` 创建关联 `RQ-NNN` 的
+3. 若用户要求共同探索或多个证据分支会改变下游决定，按
+   `references/collaboration.md` 校准 Research Questions、当前 Round focus、停止条件
+   和下一步证据；不要询问可自行检索的事实。
+4. 用 Round 组织每次有界研究迭代；用 `new-topic` 创建关联 `RQ-NNN` 的
    structured topic，其他 managed 分析写到 `notes/`，existing corpus 用 linked
    模式登记。新 Topic 使用 schema 2.3，并自动获得 Research 内唯一且不可复用的
    `RT-NNN`：首屏给答案、置信度、适用边界和决策影响；正文先建立心智模型，
    再用连续分析帮助读者理解；证据索引放到 Handoff 之后供评审追溯。
-4. 保留 Topic 的 `RT-NNN`，改标题或移动文件时不得重编号。跨文档引用写成
+5. 保留 Topic 的 `RT-NNN`，改标题或移动文件时不得重编号。跨文档引用写成
    `R-NNN/RT-NNN/A-NNN`；Topic 内部可使用短编号。每个推理单元使用一个
    `A-NNN` 小节，标题先写可读主张、编号放末尾。正文用
    连续 prose、例子、反例、表格或 Mermaid 展开机制，并就近引用 `E-NNN`；
@@ -148,23 +166,23 @@ schema 1 或 1.1 package 补齐缺失入口，并只更新带完整 `RCTL:NOTES`
    每个关键主张保留可定位来源或可复现实验，并区分 Observation 与
    Interpretation。可复用或需要审计的实验使用 `engineering-benchmark`，在
    Research 中记录 `BR-NNN` 与 Manifest payload SHA-256。
-5. 每次新增、删除、移动研究文档后更新 `notes/README.md` 的阅读路线并运行
+6. 每次新增、删除、移动研究文档后更新 `notes/README.md` 的阅读路线并运行
    `sync-research`。工具生成的 README 会自动维护目录；人工 README 由作者维护。
-6. 修复 manifest drift、缺失本地引用和不可解释的冲突；绝对来源路径至少记录
+7. 修复 manifest drift、缺失本地引用和不可解释的冲突；绝对来源路径至少记录
    可移植替代或 provenance。
-7. 在 `SYNTHESIS.md` 直接回答研究目的，比较选项，保留负面证据、置信边界、
+8. 在 `SYNTHESIS.md` 直接回答研究目的，比较选项，保留负面证据、置信边界、
    剩余未知、推荐条件和下游约束。
-8. 没有 open Research Question、open blocker 或 REQUIRED 标记时，执行
+9. 没有 open Research Question、open blocker 或 REQUIRED 标记时，执行
    `mark-review-ready`。普通轮次不加 `--snapshot`；正式评审、下游交接或重大
    决策节点才加。两者都不是结束授权。
-9. 区分“纠正误解”和“继续研究”：用户明确否定当前未封存结果，说明它不是自己
+10. 区分“纠正误解”和“继续研究”：用户明确否定当前未封存结果，说明它不是自己
    要研究的内容时，若当前 review 没有 milestone snapshot，使用
    `amend-current-round` 原地重开当前 Round，撤掉错误专题并修正 Synthesis；不要
    为 Agent 的误解创建新 Round。若当前 Round 仍为 active，直接原地编辑。
-10. 用户在已认可方向上继续深入、复核或补证据时，用 `new-round`；已有 milestone
+11. 用户在已认可方向上继续深入、复核或补证据时，用 `new-round`；已有 milestone
     snapshot 或下游交接时也必须新增 Round，不能改写已形成的评审边界。默认发现与
     上下文装载不读取历史快照。
-11. 只有用户或声明的 Research Owner 明确说出结束、定稿、归档或 conclude，
+12. 只有用户或声明的 Research Owner 明确说出结束、定稿、归档或 conclude，
     才执行 `conclude-research` 并记录 `approved_by` 与可审计 `approval_ref`。
 
 ## 制品元数据
@@ -220,4 +238,5 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 
 消费者必须依赖该文件契约，而不是本 skill 的安装路径。完整字段、摘要算法、
 引用诊断和兼容规则见 `references/manifest.md`；典型场景见
-`references/examples.md`。
+`references/examples.md`；交互式问题与证据方向校准见
+`references/collaboration.md`。

@@ -32,6 +32,9 @@ Also confirm:
 - old/new coexistence, downgrade, cleanup, and irreversible boundaries are clear;
 - verification names evidence that an ExecPlan can actually collect;
 - typed Design dependencies are current and acyclic.
+- material choices explored with the user are either confirmed Design inputs or
+  explicit open questions with owner, impact, and revisit trigger; provisional
+  preferences are not presented as settled invariants.
 
 ## Approval boundary
 

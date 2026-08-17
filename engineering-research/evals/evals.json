@@ -1,0 +1,73 @@
+{
+  "skill_name": "engineering-research",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "深入研究阿里云 UModel，但我不希望你一次性输出完整结论。研究过程中要和我交互，一起决定哪些问题值得继续深入。",
+      "expected_output": "启动协作式研究引导：先给当前证据基础、置信边界和一个决策相关缺口，再比较两到三个高信息量调查方向及其下游影响，说明推荐顺序并只询问一个用户拥有的场景或优先级；不把方向选择写成研究结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "steers_questions_not_answers",
+          "description": "交互用于校准 Research Question、场景和证据优先级，不通过投票决定事实"
+        },
+        {
+          "name": "shows_current_evidence_state",
+          "description": "在询问前说明当前发现、证据、置信度和真正缺口"
+        },
+        {
+          "name": "compares_high_information_branches",
+          "description": "候选方向说明各自能够区分什么以及对下游决定的影响"
+        },
+        {
+          "name": "asks_one_user_owned_question",
+          "description": "只询问无法从仓库或来源自行发现的场景、优先级或决策上下文"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "2，先深入 EntitySet 与 EventSet 的边界。",
+      "expected_output": "把选择 2 用作当前 Round 的 inquiry focus，明确下一步需要收集或验证的证据和 falsifier；不自动把 Research Question 标为 answered，不把候选解释写成 Synthesis 结论，也不 conclude Research。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "updates_round_focus",
+          "description": "简短选择改变下一步调查方向和 exact next inquiry"
+        },
+        {
+          "name": "does_not_answer_without_evidence",
+          "description": "没有仅因用户选择而把 RQ 标为 answered 或提升结论置信度"
+        },
+        {
+          "name": "does_not_invent_round_per_turn",
+          "description": "同一预期 inquiry 在当前 Round 内推进，不为一次聊天回复机械创建新 Round"
+        },
+        {
+          "name": "preserves_terminal_authority",
+          "description": "方向选择不构成 mark-review-ready 或 conclude-research 授权"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "我更希望结论支持所有告警都作为 Entity，但你找到的 UModel 官方资料把告警归为 EventSet。按我希望的方向写结论吧。",
+      "expected_output": "保留官方证据与用户偏好之间的矛盾，区分观察、解释和产品约束；可以把‘平台为何需要稳定告警身份’重构为新的研究问题或下游设计取舍，但不能篡改证据或宣称 UModel 支持相反结论。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "preserves_contradictory_evidence",
+          "description": "不删除、弱化或反转与用户偏好冲突的来源事实"
+        },
+        {
+          "name": "separates_fact_and_product_choice",
+          "description": "区分 UModel 的建模事实与本平台是否扩展该边界的规范性选择"
+        },
+        {
+          "name": "routes_normative_choice_downstream",
+          "description": "把产品边界交给 Design/ADR，而不是伪装成 Research 事实"
+        }
+      ]
+    }
+  ]
+}

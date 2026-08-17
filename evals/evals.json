@@ -224,6 +224,30 @@
           "description": "Research conclusion、Design approval、ADR acceptance 与 EP completion 不互相推断"
         }
       ]
+    },
+    {
+      "id": 11,
+      "prompt": "UModel 平台还要继续调研、做技术设计、形成 ADR 和实施 EP。我希望这些阶段都能和我交互探索，但压测结果、Checkpoint 和归档不能靠讨论改变。",
+      "expected_output": "按制品职责路由不同协作协议：Research 共同校准问题和证据方向，Design 共同探索系统形态，ADR 共同权衡但保留 Decision Owner 授权，EP 只校准实施边界，Benchmark 只在 Scenario 创建 Run 前校准；Task、Run、Checkpoint、验证和归档保持状态机与证据驱动。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "routes_domain_specific_collaboration",
+          "description": "没有把一个通用聊天状态机复制到所有专业制品"
+        },
+        {
+          "name": "preserves_authority_boundaries",
+          "description": "Research conclusion、Design approval、ADR acceptance 和 EP completion 仍分别需要各自授权或证据"
+        },
+        {
+          "name": "keeps_evidence_phases_deterministic",
+          "description": "Benchmark observation、sealed Run、Checkpoint、验证和归档不能通过交互协商改写"
+        },
+        {
+          "name": "keeps_independent_skill_contracts",
+          "description": "各专业 Skill 独立携带其协作协议，不依赖另一个 Skill 的安装路径"
+        }
+      ]
     }
   ]
 }
