@@ -273,7 +273,7 @@ verification_evidence 必须引用真实 CI 和仓库内验收产物。
 ```
 
 `verified_revision` 绑定“哪些代码被验证过”，evidence 绑定“在哪里可以复核”。
-复选框全部勾选但缺少这两类信息时，v2.7 EP 仍不能完成。非 Git 仓库可以使用
+复选框全部勾选但缺少这两类信息时，v2.8 EP 仍不能完成。非 Git 仓库可以使用
 稳定的 `snapshot:<id>`；该契约不依赖 GitHub 或 GitLab。
 
 ## 最后一条 Prompt 验证完整链路

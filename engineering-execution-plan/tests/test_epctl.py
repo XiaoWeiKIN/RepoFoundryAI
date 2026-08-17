@@ -70,6 +70,115 @@ class EpctlTestCase(unittest.TestCase):
         )
         return Path(result.stdout.strip())
 
+    def write_single_design(
+        self,
+        design_id: str,
+        slug: str,
+        *,
+        status: str = "current",
+        dependencies: list[str] | None = None,
+    ) -> tuple[str, str]:
+        number = int(design_id.split("-", 1)[1])
+        design_root = self.repo / "docs" / "design-docs"
+        design_root.mkdir(parents=True, exist_ok=True)
+        relative = f"docs/design-docs/dd-{number:03d}_{slug}.md"
+        path = self.repo / relative
+        published = 1 if status == "current" else 0
+        approval = (
+            (
+                'approved_by: "Design Authority"\n'
+                'approved_at: "2026-08-17T00:00:00Z"\n'
+                'approval_ref: "test:explicit-design-approval"\n'
+            )
+            if published
+            else 'approved_by: ""\napproved_at: ""\napproval_ref: ""\n'
+        )
+        title = f"{slug.replace('-', ' ').title()} design"
+        root_text = (
+            "---\n"
+            'schema_version: "1.1"\n'
+            'metadata_schema: "1"\n'
+            "artifact_type: design-doc\n"
+            f"id: {design_id}\n"
+            "doc_type: design\n"
+            "layout: single\n"
+            f'title: "{title}"\n'
+            f"status: {status}\n"
+            'working_revision: "1"\n'
+            f'published_revision: "{published}"\n'
+            "research_refs: []\n"
+            'research_not_required_reason: "Existing accepted architecture fixes this test input"\n'
+            "adr_refs: []\n"
+            f"design_dependencies: {json.dumps(dependencies or [])}\n"
+            'decision_not_required_reason: "The fixture introduces no durable architecture decision"\n'
+            f"{approval}"
+            'superseded_by: ""\n'
+            'terminal_reason: ""\n'
+            'revision_reason: ""\n'
+            'author: "Design Author"\n'
+            'owner: "Design Owner"\n'
+            "created: 2026-08-17\n"
+            "updated: 2026-08-17\n"
+            "---\n\n"
+            f"# {title}\n\nThe complete technical contract is recorded here.\n"
+        )
+        path.write_text(root_text, encoding="utf-8")
+        if not published:
+            return relative, ""
+        snapshot = (
+            self.repo
+            / "docs/.designctl/snapshots"
+            / design_id
+            / "rev-001"
+        )
+        snapshot.mkdir(parents=True)
+        snapshot_design = snapshot / "DESIGN.md"
+        snapshot_design.write_text(root_text, encoding="utf-8")
+        payload = root_text.encode("utf-8")
+        manifest = {
+            "schema_version": "1",
+            "metadata_schema": "1",
+            "artifact_type": "design-revision-manifest",
+            "id": f"{design_id}-REV-001",
+            "design_id": design_id,
+            "title": f"{title} — approved revision 1",
+            "status": "current",
+            "layout": "single",
+            "author": "Design Author",
+            "owner": "Design Owner",
+            "created": "2026-08-17",
+            "updated": "2026-08-17",
+            "revision": 1,
+            "approved_by": "Design Authority",
+            "approved_at": "2026-08-17T00:00:00Z",
+            "approval_ref": "test:explicit-design-approval",
+            "entrypoint": "DESIGN.md",
+            "documents": [
+                {
+                    "id": design_id,
+                    "role": "entrypoint",
+                    "path": "DESIGN.md",
+                    "title": title,
+                    "bytes": len(payload),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                }
+            ],
+        }
+        (snapshot / "DESIGN_MANIFEST.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        digest = hashlib.sha256(
+            json.dumps(
+                manifest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return relative, f"{design_id}@rev:1@sha256:{digest}"
+
     def new_research(self, slug: str = "sample-research") -> Path:
         result = self.run_cli(
             "new-research",
@@ -394,7 +503,7 @@ class EpctlTestCase(unittest.TestCase):
 
         expected_profiles = (
             (adr, 'schema_version: "1.4"', "artifact_type: adr"),
-            (plan, 'schema_version: "2.7"', "artifact_type: exec-plan"),
+            (plan, 'schema_version: "2.8"', "artifact_type: exec-plan"),
             (task, 'schema_version: "1"', "artifact_type: task"),
             (bugfix, 'schema_version: "1"', "artifact_type: bugfix"),
         )
@@ -586,7 +695,7 @@ class EpctlTestCase(unittest.TestCase):
             ).stdout.strip()
         )
         content = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.7"', content)
+        self.assertIn('schema_version: "2.8"', content)
         self.assertIn('metadata_schema: "1"', content)
         self.assertIn("artifact_type: exec-plan", content)
         self.assertIn('author: "Unassigned"', content)
@@ -1391,7 +1500,7 @@ relates_to:
         validation = self.run_cli("validate")
         self.assertIn('"errors": 0', validation.stdout)
         self.assertIn("legacy linked ADR", validation.stderr)
-        self.assertIn("still draft", validation.stderr)
+        self.assertIn("unpublished (draft)", validation.stderr)
         status = json.loads(self.run_cli("status", "--json").stdout)
         self.assertEqual(len(status["adrs"]), 2)
         self.assertEqual(status["adrs"][1]["depends_on"], ["ADR-010"])
@@ -1448,7 +1557,7 @@ relates_to:
             ).stdout.strip()
         )
         plan_text = plan.read_text(encoding="utf-8")
-        self.assertIn('schema_version: "2.7"', plan_text)
+        self.assertIn('schema_version: "2.8"', plan_text)
         self.assertIn('adr_refs: ["ADR-010", "ADR-011"]', plan_text)
         self.assertIn("architecture_decision_gate: satisfied", plan_text)
         self.assertIn("architecture_compliance: applicable", plan_text)
@@ -1458,6 +1567,148 @@ relates_to:
             plan_text,
         )
         self.run_cli("validate")
+
+    def test_v28_execplan_pins_approved_design_revision(self) -> None:
+        self.init()
+        design_ref, design_evidence = self.write_single_design(
+            "DD-001", "approved-service"
+        )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "approved-design",
+                "--title",
+                "Implement approved design",
+                "--research-not-required-reason",
+                "The approved Design already carries the required evidence input",
+                "--decision-not-required-reason",
+                "The accepted Design introduces no additional architecture choice",
+                "--design",
+                design_ref,
+            ).stdout.strip()
+        )
+        text = plan.read_text(encoding="utf-8")
+        self.assertIn('schema_version: "2.8"', text)
+        self.assertIn(
+            f'design_evidence: ["{design_evidence}"]',
+            text,
+        )
+        self.assertIn(
+            f"Approved Design revision evidence: [\"{design_evidence}\"]",
+            text,
+        )
+        self.complete_all_placeholders(plan)
+        archived = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
+        self.assertTrue(archived.is_file())
+        self.run_cli("validate")
+
+        snapshot = self.repo / "docs/.designctl/snapshots/DD-001/rev-001/DESIGN.md"
+        snapshot.write_text(
+            snapshot.read_text(encoding="utf-8") + "\nTampered.\n",
+            encoding="utf-8",
+        )
+        tampered = self.run_cli("validate", expected=1)
+        self.assertIn("SHA-256 drift", tampered.stderr)
+
+    def test_v28_completion_rejects_unpublished_design(self) -> None:
+        self.init()
+        design_ref, _ = self.write_single_design(
+            "DD-001",
+            "draft-service",
+            status="draft",
+        )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+        created = self.run_cli(
+            "new-ep",
+            "--slug",
+            "draft-design",
+            "--title",
+            "Inspect draft design",
+            "--research-not-required-reason",
+            "The draft Design already carries the required evidence input",
+            "--decision-not-required-reason",
+            "The draft introduces no additional architecture choice yet",
+            "--design",
+            design_ref,
+        )
+        self.assertIn("unpublished (draft)", created.stderr)
+        plan = Path(created.stdout.strip())
+        self.assertIn("design_evidence: []", plan.read_text(encoding="utf-8"))
+        self.complete_all_placeholders(plan)
+        status = json.loads(self.run_cli("status", "--json").stdout)["plans"][0]
+        self.assertEqual(status["completion"], "archive_blocked")
+        self.assertEqual(
+            status["completion_blockers"],
+            ["design_evidence_missing:DD-001"],
+        )
+        blocked = self.run_cli(
+            "archive-ep",
+            "EP-001",
+            *COMPLETION_ATTESTATION_ARGS,
+            expected=2,
+        )
+        self.assertIn(
+            "EP completion requires approved revision evidence for DD-001",
+            blocked.stderr,
+        )
+
+    def test_design_dependency_closure_is_required(self) -> None:
+        self.init()
+        caller_ref, _ = self.write_single_design(
+            "DD-001",
+            "caller",
+            dependencies=["uses:DD-002"],
+        )
+        dependency_ref, dependency_evidence = self.write_single_design(
+            "DD-002",
+            "identity-service",
+        )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+        missing = self.run_cli(
+            "new-ep",
+            "--slug",
+            "missing-design-dependency",
+            "--title",
+            "Missing Design dependency",
+            "--research-not-required-reason",
+            "The approved Designs already carry the required evidence input",
+            "--decision-not-required-reason",
+            "The Designs introduce no additional architecture choice",
+            "--design",
+            caller_ref,
+            expected=2,
+        )
+        self.assertIn("requires a design_ref for DD-002", missing.stderr)
+
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "closed-design-dependency",
+                "--title",
+                "Closed Design dependency",
+                "--research-not-required-reason",
+                "The approved Designs already carry the required evidence input",
+                "--decision-not-required-reason",
+                "The Designs introduce no additional architecture choice",
+                "--design",
+                caller_ref,
+                "--design",
+                dependency_ref,
+            ).stdout.strip()
+        )
+        self.assertIn(
+            dependency_evidence,
+            plan.read_text(encoding="utf-8"),
+        )
 
     def test_adr_dependency_cycles_and_duplicate_ids_are_rejected(self) -> None:
         self.init()
@@ -1789,7 +2040,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v25-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.7"',
+            'schema_version: "2.8"',
             'schema_version: "2.5"',
             1,
         )
@@ -1835,7 +2086,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v24-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.7"',
+            'schema_version: "2.8"',
             'schema_version: "2.4"',
             1,
         )
@@ -1888,7 +2139,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("legacy-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.7"',
+            'schema_version: "2.8"',
             'schema_version: "2.1"',
             1,
         )
@@ -1931,7 +2182,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v22-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.7"',
+            'schema_version: "2.8"',
             'schema_version: "2.2"',
             1,
         )
@@ -1981,7 +2232,7 @@ updated: 2026-07-28
         self.init()
         plan = self.new_ep("v20-compatible")
         text = plan.read_text(encoding="utf-8").replace(
-            'schema_version: "2.7"',
+            'schema_version: "2.8"',
             'schema_version: "2.0"',
             1,
         )
@@ -2212,7 +2463,7 @@ updated: 2026-07-28
             encoding="utf-8",
         )
         tampered = self.run_cli("validate", expected=1)
-        self.assertIn("archived v2.7 plan changed", tampered.stderr)
+        self.assertIn("archived v2.8 plan changed", tampered.stderr)
         plans_index = (self.repo / "docs" / "PLANS.md").read_text(
             encoding="utf-8"
         )

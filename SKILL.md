@@ -1,14 +1,14 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、项目级 RepoFoundry Skill、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex、Claude Code 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、把 RepoFoundry Skills 注册到当前项目、选择一个或全部 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-execution-plan 初始化。
+  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、项目级 RepoFoundry Skill、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex、Claude Code 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、把 RepoFoundry Skills 注册到当前项目、选择一个或全部 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Design、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-design 与 engineering-execution-plan 初始化。
 ---
 
 # RepoFoundry AI
 
 把普通代码仓库锻造成 AI Agent 可导航、规范可组合、证据可追溯、交付可验证的
 工程系统。RepoFoundry AI 的根 Skill 负责 Inventory、Scaffold、Repository
-Harness、Spec 解析和能力路由；专业制品生命周期仍由四个独立 Skill 持有。
+Harness、Spec 解析和能力路由；专业制品生命周期仍由五个独立 Skill 持有。
 
 ```mermaid
 flowchart LR
@@ -22,6 +22,7 @@ flowchart LR
     S --> T
     W --> B["engineering-benchmark<br/>可复现测量"]
     W --> R["engineering-research<br/>问题与证据综合"]
+    W --> G["engineering-design<br/>技术设计包"]
     W --> E["engineering-execution-plan<br/>ADR 与实施"]
     W --> C["engineering-case-study<br/>工程分享"]
 ```
@@ -78,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.5.0
+  upgrade --to 0.6.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -89,7 +90,8 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 1. 默认先 dry-run，检查 `create`、`preserve`、`register` 和 `conflict`。
 2. 有 conflict 时停止，不进行部分写入。
 3. 用户要求实际初始化时使用 `--apply`；只补缺失路径。
-4. 组合 `engineering-execution-plan` 的 `epctl init`，不要复制其制品逻辑。
+4. 分别组合 `engineering-design` 的 `designctl init` 与
+   `engineering-execution-plan` 的 `epctl init`，不要复制任一制品逻辑。
 5. 完成后运行 Harness 验证；详细契约见
    [bootstrap.md](references/bootstrap.md)。
 
@@ -114,7 +116,8 @@ RepoFoundry 的有效自动执法上限固定为 Advisory，不得宣称 finding
 
 所有注册的 Agent instruction 文件按物理行计数。Codex adapter 的根 `AGENTS.md` 必须不超过
 100 行；模板目标不超过 80 行，为项目维护保留余量。Harness 契约写入
-`docs/.engineering/harness.json`，EP 状态继续写入 `docs/.epctl/`。
+`docs/.engineering/harness.json`，Design 与 EP 状态分别写入
+`docs/.designctl/` 和 `docs/.epctl/`。
 
 ## 升级 Harness
 
@@ -126,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.5.0
+  upgrade --to 0.6.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.5.0 --apply
+  upgrade --to 0.6.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -215,6 +218,7 @@ Hook 不可用时仍必须手动遵循 Router Skill 并运行其 `audit` 命令�
 |---|---|
 | 预声明并执行性能、容量或回归测量；为一个 EP 建立多个独立测量门禁 | `engineering-benchmark`，再由 `engineering-execution-plan` 声明 Gate Set |
 | 搜集证据、解释矛盾、维护多文档 Research | `engineering-research` |
+| 把已收敛证据转成单文档或多文档技术设计包，并管理评审与版本 | `engineering-design` |
 | ADR、ExecPlan、Task、Checkpoint、Bugfix | `engineering-execution-plan` |
 | 基于真实代码和过程证据撰写工程分享 | `engineering-case-study` |
 
@@ -229,7 +233,7 @@ Skill 必须保持可独立安装和运行；只有 `repo-foundry-ai` 可以显�
 ## 边界
 
 - 不在本 Skill 接受或拒绝 ADR。
-- 不在本 Skill 创建 Research、Benchmark Run、ExecPlan 或 Case Study。
+- 不在本 Skill 创建 Research、Benchmark Run、Design、ExecPlan 或 Case Study。
 - 不覆盖、搬迁或重写已有项目文档。
 - 不把规范正文内置到 RepoFoundry；不执行远程仓库内容。
 - 不接收、记录或管理 Git 凭据；只使用用户已有的 credential helper / SSH agent。

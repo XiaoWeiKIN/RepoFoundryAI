@@ -22,6 +22,7 @@ EPCTL = (
     / "epctl.py"
 )
 RESEARCHCTL = ROOT / "engineering-research" / "scripts" / "researchctl.py"
+DESIGNCTL = ROOT / "engineering-design" / "scripts" / "designctl.py"
 BENCHCTL = ROOT / "engineering-benchmark" / "scripts" / "benchctl.py"
 EXAMPLE = ROOT / "examples" / "cache-topology"
 
@@ -93,6 +94,8 @@ class RepositoryContractTestCase(unittest.TestCase):
             "engineering-research/assets/synthesis.md": "research-synthesis",
             "engineering-research/assets/round.md": "research-round",
             "engineering-research/assets/topic.md": "research-topic",
+            "engineering-design/assets/design.md": "design-doc",
+            "engineering-design/assets/member.md": "design-member",
             "engineering-execution-plan/assets/research.md": "research",
             "engineering-execution-plan/assets/synthesis.md": "research-synthesis",
             "engineering-execution-plan/assets/adr.md": "adr",
@@ -140,6 +143,17 @@ class RepositoryContractTestCase(unittest.TestCase):
         for field in common_fields:
             self.assertIn(f'"{field}":', manifest_asset)
 
+        design_manifest_asset = (
+            ROOT / "engineering-design/assets/manifest.json"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"metadata_schema": "1"', design_manifest_asset)
+        self.assertIn(
+            '"artifact_type": "design-manifest"',
+            design_manifest_asset,
+        )
+        for field in common_fields:
+            self.assertIn(f'"{field}":', design_manifest_asset)
+
         design_ids: list[str] = []
         for path in sorted((ROOT / "docs/design-docs").glob("*.md")):
             text = path.read_text(encoding="utf-8")
@@ -164,7 +178,14 @@ class RepositoryContractTestCase(unittest.TestCase):
             corpus = repository / "research-input" / "cache-topology"
             shutil.copytree(EXAMPLE / "corpus", corpus)
             self.run_cli(RESEARCHCTL, repository, "init")
+            self.run_cli(DESIGNCTL, repository, "init")
             self.run_cli(EPCTL, repository, "init")
+            self.run_cli(
+                EPCTL,
+                repository,
+                "register-architecture-root",
+                "docs/design-docs",
+            )
             research = Path(
                 self.run_cli(
                     RESEARCHCTL,
@@ -284,6 +305,65 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "--decision-maker",
                 "Contract Test Decision Owner",
             )
+            design = Path(
+                self.run_cli(
+                    DESIGNCTL,
+                    repository,
+                    "new-design",
+                    "--slug",
+                    "cache-topology",
+                    "--title",
+                    "Tenant settings cache topology design",
+                    "--layout",
+                    "package",
+                    "--research",
+                    "R-001",
+                    "--adr",
+                    "ADR-001",
+                    "--author",
+                    "Example Designer",
+                    "--owner",
+                    "Cache Platform Owner",
+                ).stdout.strip()
+            )
+            design_member = Path(
+                self.run_cli(
+                    DESIGNCTL,
+                    repository,
+                    "new-member",
+                    "DD-001",
+                    "--role",
+                    "interface",
+                    "--slug",
+                    "cache-contract",
+                    "--title",
+                    "Cache contract",
+                ).stdout.strip()
+            )
+            self.complete_placeholders(design)
+            self.complete_placeholders(design.parent / "docs/README.md")
+            self.complete_placeholders(design_member)
+            self.run_cli(DESIGNCTL, repository, "sync", "DD-001")
+            self.run_cli(
+                DESIGNCTL,
+                repository,
+                "mark-review-ready",
+                "DD-001",
+            )
+            design_evidence = self.run_cli(
+                DESIGNCTL,
+                repository,
+                "approve",
+                "DD-001",
+                "--approved-by",
+                "Cache Platform Owner",
+                "--approval-ref",
+                "example:explicit-design-approval",
+            ).stdout.strip()
+            self.assertRegex(
+                design_evidence,
+                r"^DD-001@rev:1@sha256:[0-9a-f]{64}$",
+            )
             plan = Path(
                 self.run_cli(
                     EPCTL,
@@ -297,10 +377,12 @@ class RepositoryContractTestCase(unittest.TestCase):
                     "R-001",
                     "--adr",
                     "ADR-001",
+                    "--design",
+                    str(design.relative_to(repository.resolve())),
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.7"', plan_text)
+            self.assertIn('schema_version: "2.8"', plan_text)
             self.assertIn('metadata_schema: "1"', plan_text)
             self.assertIn("required_benchmark_scenarios: []", plan_text)
             self.assertIn("research_gate: satisfied", plan_text)
@@ -313,6 +395,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 'adr_constraint_refs: ["ADR-001#C-001"]',
                 plan_text,
             )
+            self.assertIn(f'design_evidence: ["{design_evidence}"]', plan_text)
             self.complete_placeholders(plan)
             archived_plan = Path(
                 self.run_cli(
@@ -340,6 +423,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 r"(?m)^archive_sha256: [0-9a-f]{64}$",
             )
             self.run_cli(RESEARCHCTL, repository, "validate")
+            self.run_cli(DESIGNCTL, repository, "validate")
             self.run_cli(EPCTL, repository, "validate")
 
     def test_repofoundry_ai_project_and_skill_names_are_aligned(self) -> None:
@@ -424,7 +508,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.5.0",
+            "0.6.0",
         )
         self.assertIn(
             "name: engineering-execution-plan",
@@ -437,6 +521,12 @@ class RepositoryContractTestCase(unittest.TestCase):
         self.assertIn(
             "name: engineering-research",
             (ROOT / "engineering-research" / "SKILL.md").read_text(
+                encoding="utf-8"
+            ),
+        )
+        self.assertIn(
+            "name: engineering-design",
+            (ROOT / "engineering-design" / "SKILL.md").read_text(
                 encoding="utf-8"
             ),
         )
@@ -560,6 +650,58 @@ class RepositoryContractTestCase(unittest.TestCase):
             (ROOT / "README.zh-CN.md").read_text(encoding="utf-8"),
         )
 
+    def test_design_lifecycle_has_one_mutation_owner_and_file_only_consumers(self) -> None:
+        design_help = subprocess.run(
+            [sys.executable, "-B", str(DESIGNCTL), "--help"],
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        ).stdout
+        ep_help = subprocess.run(
+            [sys.executable, "-B", str(EPCTL), "--help"],
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        ).stdout
+        research_help = subprocess.run(
+            [sys.executable, "-B", str(RESEARCHCTL), "--help"],
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        ).stdout
+        design_specific_mutators = (
+            "new-design",
+            "new-member",
+            "approve-design",
+            "revise-design",
+            "abandon-design",
+            "supersede-design",
+        )
+        for command in design_specific_mutators:
+            self.assertIn(command, design_help)
+            self.assertNotIn(command, ep_help)
+            self.assertNotIn(command, research_help)
+
+        # Lifecycle verbs may be shared across artifact types; ownership is
+        # distinguished by the Design-specific commands and state surface.
+        self.assertIn("mark-review-ready", design_help)
+
+        source_contracts = {
+            DESIGNCTL: ("researchctl", "epctl"),
+            EPCTL: ("designctl",),
+        }
+        for source, forbidden_imports in source_contracts.items():
+            text = source.read_text(encoding="utf-8")
+            for module in forbidden_imports:
+                self.assertNotRegex(
+                    text,
+                    rf"(?m)^\s*(?:from|import)\s+[^\n]*{module}",
+                    msg=f"{source} imports sibling {module}",
+                )
+
     def test_codex_agents_bootstrap_template_has_reserved_line_budget(self) -> None:
         template = ROOT / "assets" / "adapters" / "codex" / "AGENTS.md"
         line_count = len(template.read_text(encoding="utf-8").splitlines())
@@ -637,6 +779,9 @@ class RepositoryContractTestCase(unittest.TestCase):
             ),
             ROOT / "engineering-execution-plan/SKILL.md": (
                 "Explore/Build 不为“没有触发 Research”创建跳过制品"
+            ),
+            ROOT / "engineering-design/SKILL.md": (
+                "Design approval 确认整套解释自洽"
             ),
             ROOT / "engineering-benchmark/SKILL.md": "普通测试",
         }
@@ -870,7 +1015,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn('schema_version: "2.7"', plan_text)
+            self.assertIn('schema_version: "2.8"', plan_text)
             self.assertIn('metadata_schema: "1"', plan_text)
             self.assertIn(
                 'required_benchmark_scenarios: ["BS-001", "BS-002"]',
@@ -1107,6 +1252,10 @@ class RepositoryContractTestCase(unittest.TestCase):
                 else:
                     shutil.copy2(source, destination)
             shutil.copytree(
+                ROOT / "engineering-design",
+                workflow_skill / "engineering-design",
+            )
+            shutil.copytree(
                 ROOT / "engineering-execution-plan",
                 workflow_skill / "engineering-execution-plan",
             )
@@ -1116,6 +1265,9 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ROOT / "engineering-execution-plan",
                 execution_skill,
             )
+
+            design_skill = base / "engineering-design"
+            shutil.copytree(ROOT / "engineering-design", design_skill)
 
             research_skill = base / "engineering-research"
             shutil.copytree(ROOT / "engineering-research", research_skill)
@@ -1215,6 +1367,25 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "The fixture introduces no durable choice.",
             )
             self.run_cli(execution_script, execution_repo, "validate")
+
+            design_repo = base / "design-repo"
+            design_repo.mkdir()
+            design_script = design_skill / "scripts" / "designctl.py"
+            self.run_cli(design_script, design_repo, "init")
+            self.run_cli(
+                design_script,
+                design_repo,
+                "new-design",
+                "--slug",
+                "portable-install",
+                "--title",
+                "Portable install",
+                "--layout",
+                "single",
+                "--research-not-required-reason",
+                "The fixture has fixed authoritative inputs.",
+            )
+            self.run_cli(design_script, design_repo, "validate")
 
             research_repo = base / "research-repo"
             research_repo.mkdir()

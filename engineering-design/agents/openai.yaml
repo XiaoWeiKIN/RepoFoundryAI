@@ -1,0 +1,4 @@
+interface:
+  display_name: "Engineering Design"
+  short_description: "Create and govern technical Design Packages"
+  default_prompt: "Use $engineering-design to turn concluded Research into a reviewable technical Design Package."

@@ -10,7 +10,7 @@ adr_refs: ["ADR-011", "ADR-012", "ADR-015"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-03
-updated: 2026-08-13
+updated: 2026-08-17
 ---
 
 # RepoFoundry Versioning and Harness Migrations
@@ -21,8 +21,8 @@ RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and gene
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The current distribution is `0.5.0`. It writes Harness schema `3`, Core
-`1.4.0`, Codex adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter
+The current distribution is `0.6.0`. It writes Harness schema `3`, Core
+`1.5.0`, Codex adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter
 `1.3.0`, governance policy schema `1`, and activation protocol `2`.
 Engineering Specifications keep their independent Catalog version and lock
 lifecycle. Earlier distributions, schemas `1` and `2`, earlier schema-3 Core
@@ -32,9 +32,9 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.5.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| RepoFoundry distribution | `0.6.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
-| Harness Core | `1.4.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and mode-aware activation behavior |
+| Harness Core | `1.5.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and mode-aware activation behavior |
 | Codex adapter | `2.4.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
 | Claude adapter | `1.3.0` | `adapters[]`, adapter file records | Claude project Skills with CLI/advisory classification and activation |
 | Portable adapter | `1.3.0` | `adapters[]`, adapter file records | CLI and advisory classification and activation |
@@ -44,6 +44,16 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 No plane inherits another plane's version. A Spec update does not migrate the
 Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
+
+Release `0.6.0` adds `engineering-design` as a fifth independently installable
+professional Skill. Fresh Harness manifests register both `engineering-design`
+and `engineering-execution-plan`; existing schema-3 manifests with only the EP
+component remain readable and gain the Design component through a previewed
+bootstrap or upgrade migration. Design uses its own `docs/.designctl` state and
+approved revision evidence, while `epctl` is a read-only consumer. The canonical
+project workflow now routes governed technical-design production to that peer, so
+Core advances to `1.5.0`; Harness schema, adapters, governance policy, and activation
+protocol remain unchanged.
 
 Release `0.5.0` adds risk-adaptive governance. Fresh Harnesses start in
 adaptive Explore while existing manifests without a profile remain strict until
@@ -90,10 +100,10 @@ the new derived Requirement index without selecting another Catalog.
 
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.5.0"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.6.0"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
-    U --> C["Harness Core 1.4.0"]
+    U --> C["Harness Core 1.5.0"]
     U --> A["Codex + Claude + Portable adapters"]
     C --> F["Core file provenance"]
     A --> F

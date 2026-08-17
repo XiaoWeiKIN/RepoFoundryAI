@@ -12,11 +12,14 @@ flowchart LR
     U["用户 Prompt"] --> W["$repo-foundry-ai<br/>初始化或路由"]
     W --> B["$engineering-benchmark<br/>测量"]
     W --> R["$engineering-research<br/>解释未知"]
+    W --> D["$engineering-design<br/>定义系统"]
     W --> E["$engineering-execution-plan<br/>决策与交付"]
     W --> C["$engineering-case-study<br/>分享"]
     B -->|"结果可能改变路线"| R
     B -->|"最终版本门禁"| E
+    R --> D
     R --> E
+    D --> E
     E -->|"验收"| B
     E -->|"用户明确要求写作"| C
 ```
@@ -28,6 +31,7 @@ flowchart LR
 | 初始化 Agent-first 仓库，或判断请求应由谁负责 | `$repo-foundry-ai` | 路由到一个专业 Skill |
 | 产生可复现的性能、容量、可靠性或回归证据 | `$engineering-benchmark` | Research、EP 或 CI / Runbook |
 | 调研未知、解释多来源证据、维护 Research corpus | `$engineering-research` | proposed ADR 或下一轮 Research |
+| 把已建立证据翻译成系统边界、契约、数据、流程和失败语义 | `$engineering-design` | Design 评审、ADR 对齐或 ExecPlan |
 | 记录决定、创建 ExecPlan、维护 Bugfix 或推动实施 | `$engineering-execution-plan` | Benchmark 门禁与完成证据 |
 | 把已验证工程工作整理成可分享文章 | `$engineering-case-study` | 草稿评审与显式发布验证 |
 
@@ -52,7 +56,7 @@ flowchart LR
 ```
 
 预期边界：Workflow 可以创建 Harness 并推荐后续 Skill，但不会替 Benchmark、
-Research、Execution Plan 或 Case Study 创建专业制品。
+Research、Design、Execution Plan 或 Case Study 创建专业制品。
 
 ## 示例二：不确定走哪条流程时只使用路由能力
 
@@ -61,7 +65,7 @@ Research、Execution Plan 或 Case Study 创建专业制品。
 “存储迁移后 p95 上升了。我需要判断架构是否有问题，然后修复。”
 
 检查现有证据，判断应该从 $engineering-benchmark、
-$engineering-research 还是 $engineering-execution-plan 开始。
+$engineering-research、$engineering-design 还是 $engineering-execution-plan 开始。
 解释选择依据和预期制品，但暂时不要创建任何持久专业制品。
 ```
 
@@ -110,7 +114,35 @@ ADR 明确接受或拒绝，Skill 才能创建有 Gate 的 ExecPlan。
 预期边界：review-ready、concluded Research、proposed ADR、accepted ADR 和
 active ExecPlan 是五个独立状态，授权也互不替代。
 
-## 示例五：用多个 Benchmark Scenario 验收同一个最终版本
+## 示例五：把 concluded Research 转成一个多文档模块设计
+
+当多篇聚焦文档必须作为一个整体评审和发布时，使用一个逻辑 Design Package：
+
+```text
+使用 $engineering-design，把 concluded R-012 转成 UModel 模块技术设计。
+把架构、公共契约、数据所有权、运维、迁移和验证分别组织为聚焦文档，
+但共享一个 DD-NNN 评审边界和阅读地图。
+
+保留 Research 的结论、置信边界、反例和开放未知。共同批准的专题使用包内
+DOC-NNN 身份；如果子设计具有不同 owner 或发布生命周期，则分配独立 DD-NNN
+并建立 typed dependency。停在 review-ready，不要推断 Design approval 或 ADR 接受。
+```
+
+预期组织：
+
+```mermaid
+flowchart TB
+    D["DD-NNN 模块 Design"] --> A["architecture/DOC-NNN"]
+    D --> I["contracts/DOC-NNN"]
+    D --> O["operations/DOC-NNN"]
+    D --> V["verification/DOC-NNN"]
+    D -.->|"独立生命周期"| X["另一个 DD-NNN"]
+```
+
+预期边界：Research 仍是证据，Design Package 解释系统如何工作，ADR 授权保持
+独立，ExecPlan 只有固定 approved revision evidence 后才能完成。
+
+## 示例六：用多个 Benchmark Scenario 验收同一个最终版本
 
 架构路线已经接受，此时 Benchmark 验证最终实现，不默认重新开启架构选择。
 
@@ -140,7 +172,7 @@ Run、全部 Task 已终态且没有 blocker 时，才归档 completed。
 否则保持 active，并准确列出缺失门禁。
 ```
 
-## 示例六：让 Bugfix 保持小而完整，必要时显式升级
+## 示例七：让 Bugfix 保持小而完整，必要时显式升级
 
 ```text
 使用 $engineering-execution-plan，把重复发送 retry notification 记录为 Bugfix。
@@ -153,7 +185,7 @@ Run、全部 Task 已终态且没有 blocker 时，才归档 completed。
 预期边界：普通修复默认仍是普通编码工作；只有用户要求持久记录时才建立 Bugfix。
 升级后仍保留原始缺陷历史。
 
-## 示例七：基于已验证证据写模块设计文章
+## 示例八：基于已验证证据写模块设计文章
 
 Case Study 由用户手动触发，并且先明确写作目的与语言：
 
@@ -189,7 +221,7 @@ query semantics。
 预期边界：EP 完成不会自动生成文章。Case Study 是派生叙事，不能反向成为
 架构事实源。
 
-## 完整五 Skill 链路是可选项
+## 完整六 Skill 链路是可选项
 
 大型功能可能经过所有 Skill，但每次转移都必须有明确理由：
 
@@ -197,11 +229,12 @@ query semantics。
 flowchart LR
     W["Harness 就绪"] --> B1["探索性证据"]
     B1 --> R["Concluded Research"]
-    R --> E["Accepted 决定 + Active EP"]
+    R --> D["Approved Design revision"]
+    D --> E["Accepted 决定 + Active EP"]
     E --> B2["最终版本证据"]
     B2 --> D["Completed EP"]
     D --> C["用户手动请求 Case Study"]
 ```
 
 只有工作确实包含这些边界时才走完整链路。方向明确、局部、可逆的改动无需为了
-填满流程而制造 Research、ADR、Benchmark 证据或 Case Study。
+填满流程而制造 Research、Design、ADR、Benchmark 证据或 Case Study。

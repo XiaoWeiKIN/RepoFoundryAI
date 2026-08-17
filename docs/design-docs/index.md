@@ -10,7 +10,7 @@ adr_refs: []
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-07-30
-updated: 2026-08-04
+updated: 2026-08-16
 ---
 
 # Design Documents
@@ -40,3 +40,8 @@ how accepted choices are realized.
 - [Reversible ADR effect](reversible-adr-effect.md) — immutable decision
   history with review, reaffirmation, retirement, supersession, and transitive
   impact reporting.
+
+## Drafts
+
+- [First-class technical Design Documents](first-class-technical-design-documents.md) —
+  lifecycle and Research-to-design handoff proposed by ADR-018.

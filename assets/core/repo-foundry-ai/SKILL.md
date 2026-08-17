@@ -52,7 +52,9 @@ do not depend on a user-home installation path.
   acceptance, and compatibility contract; activate applicable Specs.
 - Promote to Governed for public contracts, security, data, irreversible
   operations, reliability claims, release, or durable decisions. Use Research,
-  ADR, ExecPlan, and sealed Benchmark only when their trigger applies.
+  Design Package, ADR, ExecPlan, and sealed Benchmark only when their trigger
+  applies. Research establishes evidence; Design specifies how the system works;
+  ADR authorizes durable choices; ExecPlan governs delivery.
 - Use the case-study workflow only after implementation evidence exists.
 
 Authority, destructive or external actions, security, data integrity, locked

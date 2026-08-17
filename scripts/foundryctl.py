@@ -33,6 +33,11 @@ VERSION_FILE = SKILL_DIR / "VERSION"
 EXECUTION_PLAN_CTL = (
     SKILL_DIR / "engineering-execution-plan" / "scripts" / "epctl.py"
 )
+DESIGN_CTL = SKILL_DIR / "engineering-design" / "scripts" / "designctl.py"
+PROFESSIONAL_COMPONENTS = [
+    "engineering-design",
+    "engineering-execution-plan",
+]
 DEFAULT_SPEC_REPOSITORY = (
     "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git"
 )
@@ -45,7 +50,7 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.4.0"
+CORE_HARNESS_VERSION = "1.5.0"
 CODEX_ADAPTER_VERSION = "2.4.0"
 CLAUDE_ADAPTER_VERSION = "1.3.0"
 PORTABLE_ADAPTER_VERSION = "1.3.0"
@@ -453,7 +458,12 @@ def load_execution_plan_ctl() -> ModuleType:
             f"Unable to load engineering-execution-plan: {EXECUTION_PLAN_CTL}"
         )
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(spec.name, None)
+        raise
     for attribute in (
         "INIT_DIRECTORIES",
         "INIT_FILE_ASSETS",
@@ -467,6 +477,43 @@ def load_execution_plan_ctl() -> ModuleType:
             raise FoundryctlError(
                 "engineering-execution-plan component does not expose "
                 f"the required bootstrap contract: {attribute}"
+            )
+    return module
+
+
+def load_design_ctl() -> ModuleType:
+    if not DESIGN_CTL.is_file():
+        raise FoundryctlError(
+            "Bundled engineering-design component is missing: "
+            f"{DESIGN_CTL}"
+        )
+    spec = importlib.util.spec_from_file_location(
+        "_repo_foundry_designctl",
+        DESIGN_CTL,
+    )
+    if spec is None or spec.loader is None:
+        raise FoundryctlError(
+            f"Unable to load engineering-design: {DESIGN_CTL}"
+        )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(spec.name, None)
+        raise
+    for attribute in (
+        "INIT_DIRECTORIES",
+        "INIT_FILES",
+        "init_repo",
+        "reindex",
+        "repo_lock",
+        "validate_repo",
+    ):
+        if not hasattr(module, attribute):
+            raise FoundryctlError(
+                "engineering-design component does not expose the required "
+                f"bootstrap contract: {attribute}"
             )
     return module
 
@@ -1041,7 +1088,7 @@ def harness_manifest(
             for adapter_id in adapters
         ],
         "governance": governance_manifest(governance_profile),
-        "components": ["engineering-execution-plan"],
+        "components": list(PROFESSIONAL_COMPONENTS),
         "instruction_files": instruction_files,
         "files": records,
         "applied_migrations": list(applied_migrations or []),
@@ -1260,7 +1307,10 @@ def validate_harness_v3_manifest_data(
                 f">={CORE_PROJECT_SKILL_INTRODUCED}"
             )
 
-    if data["components"] != ["engineering-execution-plan"]:
+    if data["components"] not in (
+        ["engineering-execution-plan"],
+        PROFESSIONAL_COMPONENTS,
+    ):
         raise FoundryctlError(f"{prefix} components contract")
     expected_instruction_files = instruction_files_for_versions(
         str(core["version"]),
@@ -1659,6 +1709,12 @@ def harness_manifest_warnings(
             "select adaptive only through an explicit previewed migration"
         )
 
+    if manifest.get("components") != PROFESSIONAL_COMPONENTS:
+        warnings.append(
+            f"HARNESS_COMPONENT_UPGRADE_AVAILABLE: {HARNESS_MANIFEST}: "
+            "register engineering-design through an explicit bootstrap or upgrade"
+        )
+
     producer = manifest["producer"]
     assert isinstance(producer, dict)
     if producer["version"] != REPO_FOUNDRY_VERSION:
@@ -1738,6 +1794,15 @@ def execution_plan_contract(
         str(relative) for relative, _ in epctl.INIT_FILE_ASSETS
     ) + ("docs/.epctl/state.json",)
     return directories, files
+
+
+def design_contract(
+    designctl: ModuleType,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    return (
+        tuple(str(item) for item in designctl.INIT_DIRECTORIES),
+        tuple(str(item) for item in designctl.INIT_FILES),
+    )
 
 
 # Frozen v0.1 profile algorithms are kept as executable migration references.
@@ -2099,6 +2164,22 @@ def append_component_migrations(
     """Record schema 3 Core/adapter version transitions once."""
     if harness_schema_version(previous) != HARNESS_SCHEMA_VERSION:
         return
+    previous_components = previous.get("components")
+    if previous_components != PROFESSIONAL_COMPONENTS:
+        old_components = (
+            ",".join(str(item) for item in previous_components)
+            if isinstance(previous_components, list)
+            else "unknown"
+        )
+        append_migration(
+            candidate,
+            migration_record(
+                "components-add-engineering-design",
+                "components",
+                old_components,
+                ",".join(PROFESSIONAL_COMPONENTS),
+            ),
+        )
     previous_core = previous["core"]
     if not isinstance(previous_core, dict):  # pragma: no cover - validated
         raise FoundryctlError("Harness Core contract is invalid")
@@ -3656,6 +3737,20 @@ def validate_harness(
             errors.append(
                 "HARNESS_ARCHITECTURE_ROOT_MISSING: docs/design-docs"
             )
+    try:
+        designctl = load_design_ctl()
+        design_errors, design_warnings = designctl.validate_repo(repo)
+    except Exception as exc:
+        errors.append(f"HARNESS_DESIGN_CONTRACT_INVALID: {exc}")
+    else:
+        errors.extend(
+            f"HARNESS_DESIGN_CONTRACT_INVALID: {item}"
+            for item in design_errors
+        )
+        warnings.extend(
+            f"HARNESS_DESIGN_CONTRACT_WARNING: {item}"
+            for item in design_warnings
+        )
     spec_errors, spec_warnings = specctl.validate_spec_state(
         repo,
         require_manifest=False,
@@ -3749,6 +3844,8 @@ def bootstrap_plan(
     requested = normalize_adapter_ids(list(adapter_ids))
     epctl = load_execution_plan_ctl()
     ep_directories, ep_files = execution_plan_contract(epctl)
+    designctl = load_design_ctl()
+    design_directories, design_files = design_contract(designctl)
     actions: list[dict[str, object]] = []
     warnings = list(compatibility_warnings)
     existing_manifest: dict[str, object] | None = None
@@ -3799,7 +3896,7 @@ def bootstrap_plan(
         )
     )
 
-    directories = list(ep_directories)
+    directories = [*ep_directories, *design_directories]
     directories.extend(CORE_BOOTSTRAP_DIRECTORIES)
     for adapter_id in desired:
         directories.extend(ADAPTER_DIRECTORIES[adapter_id])
@@ -3814,9 +3911,10 @@ def bootstrap_plan(
             actions.append({"action": "create_directory", "path": relative + "/"})
 
     expected_assets = selected_file_assets(desired)
-    for relative in (*ep_files, *(item[0] for item in expected_assets)):
+    professional_files = {*ep_files, *design_files}
+    for relative in (*ep_files, *design_files, *(item[0] for item in expected_assets)):
         path = repo / relative
-        if relative in ep_files:
+        if relative in professional_files:
             reason = managed_path_conflict(repo, path, "file")
             warning = None
         else:
@@ -3942,7 +4040,7 @@ def bootstrap_plan(
         "adapters": list(desired),
         "profile": "codex" if desired == ("codex",) else None,
         "governance_profile": effective_governance_profile,
-        "components": ["engineering-execution-plan"],
+        "components": list(PROFESSIONAL_COMPONENTS),
         "specs": selected_specs,
         "configured_specs": configured_specs,
         "required_specs": required_specs,
@@ -4005,8 +4103,10 @@ def bootstrap_repo(
     assert isinstance(candidate, dict)
     desired = tuple(str(item) for item in planned["adapters"])
     epctl = load_execution_plan_ctl()
+    designctl = load_design_ctl()
     created: list[str] = []
     updated: list[str] = []
+    design_bootstrap_warnings: list[str] = []
     with repo_lock(repo):
         locked = bootstrap_plan(
             repo,
@@ -4039,10 +4139,15 @@ def bootstrap_repo(
             requested_spec_ids=requested_spec_ids,
         )
         ep_directories, ep_files = execution_plan_contract(epctl)
-        managed_directories = [*ep_directories, *CORE_BOOTSTRAP_DIRECTORIES]
+        design_directories, design_files = design_contract(designctl)
+        managed_directories = [
+            *ep_directories,
+            *design_directories,
+            *CORE_BOOTSTRAP_DIRECTORIES,
+        ]
         for adapter_id in desired:
             managed_directories.extend(ADAPTER_DIRECTORIES[adapter_id])
-        touched_relatives = set(ep_files)
+        touched_relatives = {*ep_files, *design_files}
         touched_relatives.update(
             relative
             for relative, _, _, _ in selected_file_assets(desired)
@@ -4069,6 +4174,8 @@ def bootstrap_repo(
         try:
             with epctl.repo_lock(repo):
                 created.extend(epctl.init_repo(repo))
+                with designctl.repo_lock(repo):
+                    created.extend(designctl.init_repo(repo))
                 directories = list(CORE_BOOTSTRAP_DIRECTORIES)
                 for adapter_id in desired:
                     directories.extend(ADAPTER_DIRECTORIES[adapter_id])
@@ -4108,6 +4215,12 @@ def bootstrap_repo(
                     (updated if config_existed else created).append(
                         config.relative_to(repo).as_posix()
                     )
+                with designctl.repo_lock(repo):
+                    reindex_warnings = designctl.reindex(repo)
+                    if isinstance(reindex_warnings, list):
+                        design_bootstrap_warnings.extend(
+                            str(item) for item in reindex_warnings
+                        )
                 spec_created, spec_updated, spec_removed = specctl.apply_spec_plan(
                     repo,
                     locked_spec_plan,
@@ -4156,7 +4269,13 @@ def bootstrap_repo(
                 raise
             raise FoundryctlError(f"Bootstrap initialization failed: {exc}") from exc
     payload["warnings"] = list(
-        dict.fromkeys([*list(planned["warnings"]), *harness_warnings])
+        dict.fromkeys(
+            [
+                *list(planned["warnings"]),
+                *design_bootstrap_warnings,
+                *harness_warnings,
+            ]
+        )
     )
     payload["created"] = list(dict.fromkeys(created))
     payload["updated"] = list(dict.fromkeys(updated))
