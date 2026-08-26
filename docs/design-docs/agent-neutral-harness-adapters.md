@@ -175,7 +175,7 @@ strict, ordered, and forward-failing:
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "core": {
     "version": "1.5.0"
@@ -248,8 +248,8 @@ foundryctl adapter list
 foundryctl validate --harness
 foundryctl validate --adapter codex
 foundryctl validate --adapter claude
-foundryctl upgrade --to 0.6.0
-foundryctl upgrade --to 0.6.0 --governance-profile adaptive
+foundryctl upgrade --to 0.7.0
+foundryctl upgrade --to 0.7.0 --governance-profile adaptive
 ```
 
 Bootstrap remains preview-first and preflights the complete Core plus adapter
@@ -264,7 +264,7 @@ For one compatibility release:
 - omitting both flags retains the `codex` default and emits a structured
   deprecation warning;
 - manifests continue to read schemas `1` and `2` but only an explicit
-  `upgrade --to 0.6.0 --apply` writes schema `3`;
+  `upgrade --to 0.7.0 --apply` writes schema `3`;
 - `validate` reports an available migration without silently changing state.
 
 The compatibility alias is removed only by a later explicit release and

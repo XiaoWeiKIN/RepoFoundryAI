@@ -508,7 +508,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.6.0",
+            "0.7.0",
         )
         self.assertIn(
             "name: engineering-execution-plan",

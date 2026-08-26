@@ -48,10 +48,10 @@ system that makes those workflows composable and verifiable.
 | Skill | Responsibility | Durable output |
 |---|---|---|
 | [`repo-foundry-ai`](./SKILL.md) | Inspect, Bootstrap, synchronize Specs, validate the Harness, and route work | `AGENTS.md`, architecture and docs maps, Harness and Spec manifests |
-| [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | Predeclare and execute reproducible measurement | Suite, Scenario, Run, Result, sealed Evidence Manifest |
-| [`engineering-research`](./engineering-research/SKILL.md) | Investigate unknowns and synthesize multi-document evidence | Research controller, corpus Manifest, Rounds, topics, sealed Synthesis |
-| [`engineering-design`](./engineering-design/SKILL.md) | Translate established evidence into a reviewable technical design | Single-file or multi-document Design Package, reading map, manifest, approved revision snapshot |
-| [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | Govern decisions and implementation | ADR, ExecPlan, Task, Checkpoint, Bugfix, technical debt |
+| [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | Collaboratively calibrate, then execute reproducible measurement | Suite, Scenario, Run, Result, sealed Evidence Manifest |
+| [`engineering-research`](./engineering-research/SKILL.md) | Collaboratively steer unknowns and synthesize multi-document evidence | Research controller, corpus Manifest, Rounds, topics, sealed Synthesis |
+| [`engineering-design`](./engineering-design/SKILL.md) | Explore trade-offs and translate established evidence into a reviewable design | Single-file or multi-document Design Package, reading map, manifest, approved revision snapshot |
+| [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | Deliberate ADRs and align governed implementation | ADR, ExecPlan, Task, Checkpoint, Bugfix, technical debt |
 | [`engineering-case-study`](./engineering-case-study/SKILL.md) | Turn verified code and process evidence into a shareable narrative | Chinese, English, or bilingual engineering case study |
 
 The five professional Skills remain independently installable. They communicate
@@ -270,12 +270,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.6.0`
+distribution upgrade, run this in each existing project and replace `0.7.0`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.6.0
-repofoundry --repo . upgrade --to 0.6.0 --apply
+repofoundry --repo . upgrade --to 0.7.0
+repofoundry --repo . upgrade --to 0.7.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -319,18 +319,19 @@ Harness and local Specs.
 Route specialized work:
 
 ```text
-Use $engineering-benchmark to define a reproducible capacity Scenario before
-running the measurement.
+Use $engineering-benchmark to collaboratively calibrate a representative,
+reproducible capacity Scenario before running the measurement.
 
-Use $engineering-research to investigate the cache topology, preserve
-counterevidence, and stop at review-ready Synthesis.
+Use $engineering-research to collaboratively steer the cache-topology questions
+and evidence branches, preserve counterevidence, and stop at review-ready
+Synthesis.
 
-Use $engineering-design to translate the concluded Research into a technical
-Design Package with explicit boundaries, contracts, failure behavior, and a
-reviewable revision.
+Use $engineering-design to collaboratively explore material trade-offs, then
+translate confirmed inputs into a technical Design Package with explicit
+boundaries, contracts, failure behavior, and a reviewable revision.
 
-Use $engineering-execution-plan to consume the concluded Research, draft the
-ADR, and wait for Decision Owner authorization before accepting it.
+Use $engineering-execution-plan to deliberate the ADR, wait for Decision Owner
+authorization, then align the governed implementation plan.
 
 Use $engineering-case-study with the verified code, Research, ADR, and ExecPlan
 to write a bilingual module-design article.
@@ -382,9 +383,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.6.0
-repofoundry --repo . upgrade --to 0.6.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.6.0 --apply
+repofoundry --repo . upgrade --to 0.7.0
+repofoundry --repo . upgrade --to 0.7.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.7.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -420,12 +421,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.6.0` uses Harness schema `3`, Harness Core `1.5.0`, Codex
+RepoFoundry `0.7.0` uses Harness schema `3`, Harness Core `1.5.0`, Codex
 adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.6.0 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.7.0 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
@@ -595,13 +596,17 @@ RepoFoundry AI:
 Professional capabilities:
 
 - [Benchmark contract](./engineering-benchmark/references/contract.md)
+- [Benchmark Scenario collaboration](./engineering-benchmark/references/collaboration.md)
 - [Research method](./engineering-research/references/research.md)
 - [Research manifest](./engineering-research/references/manifest.md)
+- [Research collaboration](./engineering-research/references/collaboration.md)
 - [Technical Design contract](./engineering-design/references/contract.md)
 - [Technical Design review](./engineering-design/references/review.md)
+- [Interactive Design exploration](./engineering-design/references/exploration.md)
 - [Execution artifact routing](./engineering-execution-plan/references/templates.md)
 - [Architecture Decision Records](./engineering-execution-plan/references/adr.md)
 - [ExecPlan specification](./engineering-execution-plan/references/template.md)
+- [ADR and ExecPlan collaboration](./engineering-execution-plan/references/collaboration.md)
 - [Benchmark gates for ExecPlans](./engineering-execution-plan/references/benchmark.md)
 - [Documentation and code integrity](./engineering-execution-plan/references/integrity.md)
 - [Case Study source evidence](./engineering-case-study/references/source-evidence.md)

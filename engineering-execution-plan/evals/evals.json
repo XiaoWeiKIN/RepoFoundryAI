@@ -540,6 +540,78 @@
           "description": "ADR 保持 proposed，没有伪造 decision_maker、decided 或 payload_sha256"
         }
       ]
+    },
+    {
+      "id": 24,
+      "prompt": "我们要决定统一运行上下文平台是否直接执行生产变更。先和我一起讨论这个 ADR，不要替我直接定案。",
+      "expected_output": "进入有界 ADR deliberation：用一个具体生产变更场景比较两到三个原子选项、Decision Drivers、后果和失效条件，说明当前倾向并只提出一个允许修改或组合方案的问题；不接受 ADR，也不把讨论请求视为决定授权。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "deliberates_one_atomic_decision",
+          "description": "围绕是否直接执行生产变更这一项原子决定展开，而不是一次讨论所有平台设计"
+        },
+        {
+          "name": "uses_scenario_and_tradeoffs",
+          "description": "通过具体场景、可信选项、后果和失效条件支撑共同权衡"
+        },
+        {
+          "name": "asks_one_open_question",
+          "description": "问题允许用户修改或组合候选模型，不退化为机械投票"
+        },
+        {
+          "name": "does_not_infer_decision_authority",
+          "description": "讨论或起草请求没有被当成 accepted/rejected ADR 授权"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "2，就采用决策与闭环协调平台。",
+      "expected_output": "把选项 2 记录为候选偏好，复述它对平台和外部执行器的责任约束，并用一个区分性故障或权限场景复验；在用户尚未对完整 ADR outcome 明确授权时保持 proposed，不运行 decide-adr。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "treats_terse_choice_as_candidate",
+          "description": "探索中的简短选项回复不会直接成为 accepted ADR"
+        },
+        {
+          "name": "restates_normative_consequences",
+          "description": "说明平台意图、审批、执行器和结果验证之间的责任边界"
+        },
+        {
+          "name": "pressure_tests_preference",
+          "description": "使用一个能区分方案的故障、权限或回滚场景复验偏好"
+        },
+        {
+          "name": "keeps_explicit_authority_gate",
+          "description": "未获得具体 ADR outcome 的可归因授权时不运行 decide-adr"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "R-008 已 concluded，ADR-007 已 accepted，DD-012 也已批准。和我一起把迁移 EP 的里程碑、灰度顺序和回滚边界想清楚，先不要开始实现。",
+      "expected_output": "在固定 Research/ADR/Design 输入下进行 ExecPlan alignment：先提出具体默认里程碑，再比较会显著改变迁移风险的灰度或回滚形态，用一个部分迁移失败场景复验并询问一个用户拥有的约束；不重新决定架构，不标记 Task、Validation 或 Progress 已完成。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "keeps_architecture_inputs_fixed",
+          "description": "计划校准消费已决定输入，不在 EP 内静默创建新架构政策"
+        },
+        {
+          "name": "proposes_default_plan",
+          "description": "先给可执行默认里程碑和依赖顺序，而不是把所有计划工作反问给用户"
+        },
+        {
+          "name": "tests_migration_failure",
+          "description": "用部分灰度、回滚或外部依赖失败场景区分计划形态"
+        },
+        {
+          "name": "does_not_fake_execution_progress",
+          "description": "计划对齐不等于任务、验收、Benchmark gate 或实现已经完成"
+        }
+      ]
     }
   ]
 }

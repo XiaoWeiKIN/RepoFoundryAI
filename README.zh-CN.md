@@ -44,10 +44,10 @@ flowchart LR
 | Skill | 职责 | 持久制品 |
 |---|---|---|
 | [`repo-foundry-ai`](./SKILL.md) | 盘点、Bootstrap、同步 Specs、验证 Harness、路由工作 | `AGENTS.md`、架构与文档地图、Harness 与 Spec manifests |
-| [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | 预声明并执行可复现测量 | Suite、Scenario、Run、Result、sealed Evidence Manifest |
-| [`engineering-research`](./engineering-research/SKILL.md) | 调研未知并综合多文档证据 | Research controller、corpus Manifest、Rounds、topics、sealed Synthesis |
-| [`engineering-design`](./engineering-design/SKILL.md) | 把已建立的证据翻译成可评审技术设计 | 单文件或多文档 Design Package、阅读地图、manifest、已批准 revision 快照 |
-| [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | 治理决定与实施 | ADR、ExecPlan、Task、Checkpoint、Bugfix、技术债务 |
+| [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | 共同校准并执行可复现测量 | Suite、Scenario、Run、Result、sealed Evidence Manifest |
+| [`engineering-research`](./engineering-research/SKILL.md) | 共同引导未知并综合多文档证据 | Research controller、corpus Manifest、Rounds、topics、sealed Synthesis |
+| [`engineering-design`](./engineering-design/SKILL.md) | 探索取舍并把已建立的证据翻译成可评审设计 | 单文件或多文档 Design Package、阅读地图、manifest、已批准 revision 快照 |
+| [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | 共同权衡 ADR 并校准受治理实施 | ADR、ExecPlan、Task、Checkpoint、Bugfix、技术债务 |
 | [`engineering-case-study`](./engineering-case-study/SKILL.md) | 把已验证代码和过程证据写成可分享内容 | 中文、英文或中英双语工程案例 |
 
 五个专业 Skill 可以独立安装。它们通过版本化仓库文件交接，不依赖私有运行时
@@ -250,11 +250,11 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.6.0` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.7.0` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.6.0
-repofoundry --repo . upgrade --to 0.6.0 --apply
+repofoundry --repo . upgrade --to 0.7.0
+repofoundry --repo . upgrade --to 0.7.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -296,16 +296,16 @@ adapter，并报告 create、preserve 和 conflict。只有预览无冲突时才
 路由专业工作：
 
 ```text
-使用 $engineering-benchmark，在执行容量测量前定义可复现 Scenario。
+使用 $engineering-benchmark，在执行容量测量前共同校准有代表性、可复现的 Scenario。
 
-使用 $engineering-research 调研缓存拓扑，保留反例和不确定性，
-停在 review-ready Synthesis。
+使用 $engineering-research 共同校准缓存拓扑的研究问题和证据方向，
+保留反例和不确定性，停在 review-ready Synthesis。
 
-使用 $engineering-design 把已结束的 Research 翻译成技术 Design Package，
-明确边界、契约、失败语义和可评审 revision。
+使用 $engineering-design 共同探索实质取舍，再把已确认输入翻译成技术
+Design Package，明确边界、契约、失败语义和可评审 revision。
 
-使用 $engineering-execution-plan 消费已结束的 Research，起草 ADR，
-等待 Decision Owner 明确授权后再接受。
+使用 $engineering-execution-plan 共同权衡 ADR，等待 Decision Owner 明确授权，
+再校准受治理的实施计划。
 
 使用 $engineering-case-study，结合已验证代码、Research、ADR 和 ExecPlan，
 撰写一篇中英双语模块设计文章。
@@ -354,9 +354,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.6.0
-repofoundry --repo . upgrade --to 0.6.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.6.0 --apply
+repofoundry --repo . upgrade --to 0.7.0
+repofoundry --repo . upgrade --to 0.7.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.7.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -390,10 +390,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.6.0` 使用 Harness schema `3`、Harness Core `1.5.0`、Codex
+RepoFoundry `0.7.0` 使用 Harness schema `3`、Harness Core `1.5.0`、Codex
 adapter `2.4.0`、Claude adapter `1.3.0`、Portable adapter `1.3.0` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.6.0 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.7.0 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
@@ -535,13 +535,17 @@ RepoFoundry AI：
 专业能力：
 
 - [Benchmark 契约](./engineering-benchmark/references/contract.md)
+- [Benchmark Scenario 协作校准](./engineering-benchmark/references/collaboration.md)
 - [Research 方法](./engineering-research/references/research.md)
 - [Research Manifest](./engineering-research/references/manifest.md)
+- [Research 协作引导](./engineering-research/references/collaboration.md)
 - [技术 Design 契约](./engineering-design/references/contract.md)
 - [技术 Design 评审](./engineering-design/references/review.md)
+- [交互式 Design 探索](./engineering-design/references/exploration.md)
 - [执行制品路由](./engineering-execution-plan/references/templates.md)
 - [ADR 契约](./engineering-execution-plan/references/adr.md)
 - [ExecPlan 规范](./engineering-execution-plan/references/template.md)
+- [ADR 与 ExecPlan 协作](./engineering-execution-plan/references/collaboration.md)
 - [ExecPlan Benchmark 门禁](./engineering-execution-plan/references/benchmark.md)
 - [文档—代码完整性](./engineering-execution-plan/references/integrity.md)
 - [Case Study 证据](./engineering-case-study/references/source-evidence.md)

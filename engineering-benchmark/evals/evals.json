@@ -140,6 +140,50 @@
           "description": "每个 gate 的 passed Run 都绑定同一最终 revision"
         }
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "和我一起设计 API 网关容量 Benchmark。现在不确定应该用稳定流量、突发流量还是长尾请求作为主场景，先别创建 Run。",
+      "expected_output": "进入 Scenario calibration：先根据现有 SLO、生产特征或显式假设提出具体默认协议，比较稳定、突发和长尾定义分别能证明什么、遗漏什么，说明推荐选择并只询问一个代表性或风险约束；不创建 Run，也不把用户偏好当成观测结果。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "proposes_concrete_default_scenario",
+          "description": "先给有事实或显式假设支撑的 workload、metrics 和 rule 基线"
+        },
+        {
+          "name": "compares_evidence_meaning",
+          "description": "候选流量模型说明各自可支持的结论和代表性缺口"
+        },
+        {
+          "name": "asks_one_user_owned_constraint",
+          "description": "只询问产品代表性、风险或阈值等无法自行发现的约束"
+        },
+        {
+          "name": "does_not_create_run_early",
+          "description": "Scenario 尚未校准和压力复验时不创建不可变 Run snapshot"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "2，就用突发流量，马上开始跑。",
+      "expected_output": "把突发流量作为候选协议，复述 burst 形态、持续时间、正确性与资源安全约束，并先用一个区分性边界场景复验代表性；只有协议、falsifier、判定规则和安全限制完整后才创建 Run。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "treats_choice_as_candidate_protocol",
+          "description": "简短选择不会跳过 Scenario 完整性和代表性复验"
+        },
+        {
+          "name": "pressure_tests_burst_definition",
+          "description": "检验 burst 高度、持续时间、恢复窗口或资源饱和边界之一"
+        },
+        {
+          "name": "preserves_predeclaration",
+          "description": "Run 前固定环境、指标、falsifier、decision rule、安全和清理协议"
+        }
+      ]
     }
   ]
 }

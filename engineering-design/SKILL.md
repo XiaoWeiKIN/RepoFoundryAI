@@ -1,19 +1,21 @@
 ---
 name: engineering-design
 description: |
-  把已完成的工程 Research、当前 ADR 约束或明确的非 Research 输入转化为可评审、可复用的技术 Design，并治理单文件 Design 与多文档 Design Package 的身份、内容覆盖、成员 manifest、修订快照、批准证据、依赖和生命周期。适用于用户要求把 Research 转成技术设计、设计一个模块或系统、创建/拆分/评审/批准/修订 Design Doc、组织一系列共同组成模块设计的文档，或提到 Design Package、DD-NNN、技术设计文档。Research 调研、ADR 决策授权、ExecPlan 交付规划和普通代码说明不触发本 skill。
+  通过与用户交互式探索尚未收敛的架构取舍，把已完成的工程 Research、当前 ADR 约束或明确的非 Research 输入转化为可评审、可复用的技术 Design，并治理单文件 Design 与多文档 Design Package 的身份、内容覆盖、成员 manifest、修订快照、批准证据、依赖和生命周期。适用于用户要求共同讨论或细化平台定位、边界、核心不变量与方案取舍，把 Research 转成技术设计，设计一个模块或系统，创建/拆分/评审/批准/修订 Design Doc，组织一系列共同组成模块设计的文档，或提到 Design Package、DD-NNN、技术设计文档。Research 调研、ADR 决策授权、ExecPlan 交付规划和普通代码说明不触发本 skill。
 ---
 
 # Engineering Design
 
-把“已经知道什么”翻译为“系统将如何工作”，并让一个模块的多篇技术文档共享同一
-设计身份、评审边界和批准修订。Design approval 确认整套解释自洽，不代替 ADR 的
-Decision Owner 授权。
+把“已经知道什么”翻译为“系统将如何工作”。当设计仍有多种合理形态时，先与用户
+共同探索场景、取舍和失效条件，再把收敛结果写入 Design。一个模块的多篇技术文档
+共享同一设计身份、评审边界和批准修订。Design approval 确认整套解释自洽，不代替
+ADR 的 Decision Owner 授权。
 
 ```mermaid
 flowchart LR
   R["Concluded Research"] -->|"findings, confidence, negative evidence, unknowns"| D["Engineering Design"]
   A["Current accepted ADRs"] -->|"constraints"| D
+  X["Interactive exploration"] -->|"confirmed design inputs"| D
   D -->|"approved revision evidence"| E["ExecPlan"]
 ```
 
@@ -23,6 +25,8 @@ flowchart LR
 迁移、运行和验证，且结果需要被评审或复用。以下请求分别路由：
 
 - 仍有会改变路线的未知：先用 `engineering-research`。
+- 外部事实已经足够，但平台边界、状态所有权、接口形态、失败策略等仍有多个合理取舍：
+  留在本 skill，先做交互式探索。
 - 需要授权一个长期架构选择：用 `engineering-execution-plan` 创建 ADR。
 - 方向和设计均已批准，只需拆交付步骤：用 `engineering-execution-plan` 创建 EP。
 - 只解释现有代码且不产生持久设计契约：直接回答，不创建 Design。
@@ -32,29 +36,53 @@ flowchart LR
 消费者、ADR、批准节奏或发布生命周期时，才拆成另一个全局 `DD-NNN`；包内专题使用
 局部 `DOC-NNN`。
 
+## 交互式探索
+
+当用户要求“一起思考”、讨论或细化定位、边界、不变量、模型和关键取舍，或者一个
+未确认选择会实质改变组件职责、数据所有权、接口或失败语义时，开始前完整读取
+[exploration.md](references/exploration.md)。不要把这种未知误路由为 Research：Research
+解决事实证据不足，交互式探索解决同一组事实之上的价值选择和架构取舍。
+
+- 每轮聚焦一个会改变设计形态的矛盾，用具体场景比较 2–3 个可行模型、收益、代价和
+  失效条件，并说明当前倾向及依据。
+- 问题必须允许用户修改、组合或否定候选模型；不要把共同设计退化成连续投票。
+- 用户的简短选择只形成 `provisional` 偏好。先复述由此产生的约束，再用一个反例、
+  故障或规模场景复验；经过用户明确确认后才记为 `confirmed`。
+- Research、标准和参考系统只提供证据，不自动替用户作规范性选择。
+- 维护轻量决策台账 `open → exploring → provisional → confirmed`。这里的 `confirmed`
+  只是当前 Design 的写作输入，不代表 Design approval 或 ADR acceptance。
+- 探索尚未收敛时不把候选答案伪装成正式不变量并写回 Design；用户明确要求实时草稿
+  时，可以写入但必须标出未确认状态和有效条件。
+
+输入已经明确、用户要求直接起草，或取舍可安全地作为显式假设记录时，不要强制启动
+访谈式流程。完成一组相互依赖的探索后统一写回，避免每一轮都机械修改文档。
+
 ## 工作流
 
 开始前完整读取 [contract.md](references/contract.md)。准备评审或执行生命周期转换前，
 再读取 [review.md](references/review.md)。常见调用见
 [examples.md](references/examples.md)。
 
-1. 检查 `docs/design-docs/`、concluded Research、当前 ADR closure 和已有 Design
+1. 判断是否存在需要交互式探索的实质取舍。需要时先运行探索循环，记录已确认输入、
+   被否决方案、有效条件和仍需 Research 或验证的问题；不要因一次选项回复提前收敛。
+2. 检查 `docs/design-docs/`、concluded Research、当前 ADR closure 和已有 Design
    dependency，确认是继续同一 Design 还是分配新身份。
-2. 执行 `python3 scripts/designctl.py --repo <repo> init`。该命令接管现有目录但不迁移
+3. 执行 `python3 scripts/designctl.py --repo <repo> init`。该命令接管现有目录但不迁移
    schema-1 文档。
-3. 用 `new-design` 创建单文件或包。必须提供至少一个 `--research R-NNN`，或明确的
+4. 用 `new-design` 创建单文件或包。必须提供至少一个 `--research R-NNN`，或明确的
    `--research-not-required-reason`；不要代替用户编造 owner、author 或批准者。
-4. 对 package 用 `new-member` 增加聚焦文档。每次成员变化后运行 `sync`，保持路径、
+5. 对 package 用 `new-member` 增加聚焦文档。每次成员变化后运行 `sync`，保持路径、
    字节数和 SHA-256 manifest 精确一致。
-5. 语义性撰写整套 Design。必须复述结论与置信边界、负面证据和剩余未知，不能只放
-   Research 链接。所有必需 concern 都要有实质内容，或写明具体的 `Not applicable`
-   原因。
-6. 运行 `mark-review-ready DD-NNN`。失败时修正文档，不绕过 REQUIRED marker、
+6. 语义性撰写整套 Design。必须复述结论与置信边界、负面证据和剩余未知，不能只放
+   Research 链接；把探索中确认的约束、方案理由、反例复验和否决项写入对应 concern，
+   不复制完整聊天记录。所有必需 concern 都要有实质内容，或写明具体的
+   `Not applicable` 原因。
+7. 运行 `mark-review-ready DD-NNN`。失败时修正文档，不绕过 REQUIRED marker、
    Research、ADR、依赖环或 manifest drift 门禁。
-7. 只有 Design Owner 或声明的 Design authority 明确批准该完整修订后，才运行
+8. 只有 Design Owner 或声明的 Design authority 明确批准该完整修订后，才运行
    `approve ... --approved-by ... --approval-ref ...`。批准会封存完整快照并输出可供
    EP 使用的 evidence pin。
-8. 已发布设计的新工作使用 `revise`；旧快照继续服务既有消费者。放弃或替代设计也
+9. 已发布设计的新工作使用 `revise`；旧快照继续服务既有消费者。放弃或替代设计也
    要显式 authority、审计引用和原因。
 
 ## 命令面

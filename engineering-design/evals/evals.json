@@ -48,6 +48,46 @@
           "description": "Uses a typed DD dependency and preserves atomic package approval."
         }
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "我要细化统一运行上下文平台的定位、边界与核心不变量。先别替我写结论，要和我讨论交互，一起来思考。",
+      "expected_output": "Starts a focused co-design loop before authoring: frames one material tension with a concrete scenario, compares viable models and trade-offs, states a reasoned inclination, and asks one open scaffolded question without writing a Design conclusion.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "exploration-before-authoring",
+          "description": "Does not create or rewrite the Design while material boundaries are still being jointly explored."
+        },
+        {
+          "name": "co-design-not-polling",
+          "description": "Uses scenarios and consequences and lets the user modify or combine models instead of reducing interaction to a forced vote."
+        },
+        {
+          "name": "one-decision-round",
+          "description": "Keeps the turn focused on one design-shaping tension and asks one primary question."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "2。我也倾向把 Incident、ChangeRequest 和 Release 都作为 Entity，UModel 似乎也是这样。",
+      "expected_output": "Treats the short selection as provisional, distinguishes UModel evidence from this platform's normative choice, restates the implied boundary, and pressure-tests it with one discriminating counterexample before confirmation.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no-premature-convergence",
+          "description": "Does not turn a terse option selection directly into a confirmed invariant or immediately write it into the Design."
+        },
+        {
+          "name": "evidence-not-authority",
+          "description": "Uses UModel as evidence about viable modeling but does not let it decide this platform's product boundary."
+        },
+        {
+          "name": "pressure-test",
+          "description": "Introduces one counterexample or failure condition that can discriminate whether the preference should survive or gain constraints."
+        }
+      ]
     }
   ]
 }

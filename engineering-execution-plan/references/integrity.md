@@ -15,7 +15,9 @@ flowchart LR
 ## 三类文档
 
 - 生成投影：索引、manifest、命令参考。由工具生成或用 regeneration-diff
-  验证，不手抄哈希、字节数和派生状态。
+  验证，不手抄哈希、字节数和派生状态。ADR 索引默认投影递归 current 的
+  Effective 集合，并把 Proposed、Review Required、Historical 和当前 constraint
+  amendments 分区；`reindex` 是旧布局的确定性升级入口。
 - 当前规范：架构边界、公开契约和用户行为。把重要约束编码为测试、lint、
   schema check 或可观察验收。
 - 历史制品：concluded Research、decided ADR、Checkpoint 和 completed EP。决定
@@ -62,6 +64,12 @@ ADR effect change 不等于实现 rollback。`transition-adr` / `supersede-adr` 
 ADR lifecycle 和派生索引；impact preview 列出 affected constraints、ADRs 和 active
 EPs。受影响 active EP 进入 `architecture_review_required`，在架构输入被修订或
 reaffirm 前不能 completed 归档。
+
+ADR 索引和 `status` 必须使用同一 currentness/effect 派生模型。current ADR 被
+current amendment 局部修改时，只在投影中显示 `partially amended` 和 constraint
+映射，不能新增伪 lifecycle 状态。canonical check 应在 reindex 后验证无 diff；
+旧两表布局可告警并由 `validate --fix-index` 升级，但完整新布局中的错分、漏项或
+陈旧关系必须失败。
 
 ## Revision 与完成证明
 
