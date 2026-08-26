@@ -21,7 +21,7 @@ RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and gene
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The current distribution is `0.7.0`. It writes Harness schema `3`, Core
+The current distribution is `0.7.1`. It writes Harness schema `3`, Core
 `1.5.0`, Codex adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter
 `1.3.0`, governance policy schema `1`, and activation protocol `2`.
 Engineering Specifications keep their independent Catalog version and lock
@@ -32,7 +32,7 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.7.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| RepoFoundry distribution | `0.7.1` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
 | Harness Core | `1.5.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and mode-aware activation behavior |
 | Codex adapter | `2.4.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
@@ -44,6 +44,12 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 No plane inherits another plane's version. A Spec update does not migrate the
 Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
+
+Release `0.7.1` fixes lifecycle writes for registered legacy ADRs whose YAML
+frontmatter uses block-style relationship lists. Preview and authority gates are
+unchanged; apply now updates only top-level lifecycle metadata while preserving
+repository-owned legacy fields. Harness schema, Core, adapters, governance
+policy, and activation protocol remain unchanged.
 
 Release `0.7.0` makes the authoring phases of Engineering Benchmark, Research,
 Design, and Execution Plan explicitly collaborative while keeping their
@@ -109,7 +115,7 @@ the new derived Requirement index without selecting another Catalog.
 
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.7.0"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.7.1"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
     U --> C["Harness Core 1.5.0"]

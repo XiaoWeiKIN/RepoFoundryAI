@@ -48,7 +48,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 ```
 
 adapter ID 不得重复，生成路径不得发生 ownership collision。现有 schema 3 Harness
-可以追加 adapter；删除 adapter 不在 `0.7.0` 范围内，因为删除定制配置需要独立的
+可以追加 adapter；删除 adapter 不在 `0.7.1` 范围内，因为删除定制配置需要独立的
 所有权和迁移决策。
 
 `--all-adapters` 确定性展开为 `codex`、`claude`、`portable`，不能与 `--profile`
@@ -61,7 +61,7 @@ adapter ID 不得重复，生成路径不得发生 ownership collision。现有 
 - 同时传 `--profile` 与 `--adapter` 会失败；
 - 两者都省略时暂时默认 `codex`，并返回
   `HARNESS_ADAPTER_DEFAULT_DEPRECATED`；
-- schema 1/2 只读兼容，只有显式 `upgrade --to 0.7.0 --apply` 写 schema 3。
+- schema 1/2 只读兼容，只有显式 `upgrade --to 0.7.1 --apply` 写 schema 3。
 
 ## Core 与 adapter 的安装结构
 
@@ -164,7 +164,7 @@ adapter 能力由 `adapter list` 的结构化输出声明：
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.7.0"
+    "version": "0.7.1"
   },
   "core": {
     "version": "1.5.0"
@@ -204,13 +204,13 @@ protocol 与 Engineering Specifications Catalog 分别版本化。改变 Codex H
 
 ## 版本与 Harness 升级
 
-当前迁移目标为 `0.7.0`：
+当前迁移目标为 `0.7.1`：
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.7.0
+  upgrade --to 0.7.1
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.7.0 --apply
+  upgrade --to 0.7.1 --apply
 ```
 
 迁移默认只预览，并遵循以下证据规则：

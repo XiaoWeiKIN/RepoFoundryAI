@@ -1754,6 +1754,82 @@ relates_to:
         )
         self.run_cli("validate")
 
+    def test_legacy_linked_adr_retirement_preserves_block_frontmatter(self) -> None:
+        self.init()
+        design_root = self.repo / "docs" / "design-docs"
+        design_root.mkdir()
+        (design_root / "index.md").write_text(
+            "# Architecture entrypoint\n",
+            encoding="utf-8",
+        )
+        adr = design_root / "ADR-010-Historical-API.md"
+        adr.write_text(
+            """---
+doc_type: adr
+title: Historical API design
+status: accepted
+last_verified: 2026-08-26
+owner: platform
+relates_to:
+  - docs/current-api.md
+  - pkg/api/
+---
+
+# ADR-010: Historical API design
+""",
+            encoding="utf-8",
+        )
+        self.run_cli(
+            "register-architecture-root",
+            "docs/design-docs",
+        )
+
+        preview = json.loads(
+            self.run_cli(
+                "transition-adr",
+                "ADR-010",
+                "--to",
+                "retired",
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "Current specifications own the contract.",
+            ).stdout
+        )
+        self.assertEqual(preview["affected_adrs"], [])
+        self.assertEqual(preview["affected_active_plans"], [])
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-010",
+            "--to",
+            "retired",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "Current specifications own the contract.",
+            "--apply",
+        )
+        retired = adr.read_text(encoding="utf-8")
+        self.assertIn("status: retired", retired)
+        self.assertIn(
+            "relates_to:\n  - docs/current-api.md\n  - pkg/api/",
+            retired,
+        )
+        self.assertIn('effect_changed_by: "Test Decision Owner"', retired)
+        self.assertIn(
+            'effect_reason: "Current specifications own the contract."',
+            retired,
+        )
+        decision_index = (self.repo / "docs" / "DECISIONS.md").read_text(
+            encoding="utf-8"
+        )
+        historical = self.managed_index_body(decision_index, "COMPLETED")
+        self.assertIn("| ADR-010 |", historical)
+        self.assertIn("| accepted | retired |", historical)
+        validation = self.run_cli("validate")
+        self.assertIn('{"errors": 0', validation.stdout)
+
     def test_v28_execplan_pins_approved_design_revision(self) -> None:
         self.init()
         design_ref, design_evidence = self.write_single_design(
