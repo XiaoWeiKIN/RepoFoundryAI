@@ -863,6 +863,41 @@ def update_frontmatter(text: str, updates: dict[str, str]) -> str:
     return "---\n" + "\n".join(output) + "\n---\n" + text[end + 5 :]
 
 
+def update_adr_frontmatter(
+    text: str,
+    data: dict[str, str],
+    updates: dict[str, str],
+) -> str:
+    """Update ADR lifecycle fields while preserving linked legacy YAML.
+
+    Strict RepoFoundry artifacts intentionally use only top-level scalar and
+    JSON-array fields, so ``update_frontmatter`` remains fail-closed for every
+    other caller. Registered legacy ADRs may contain the block-style string
+    arrays accepted by ``parse_legacy_frontmatter``. Effect transitions only
+    replace or append top-level lifecycle fields and must leave those owned
+    legacy fields byte-for-byte intact.
+    """
+    if data.get("schema_version") != "legacy-linked":
+        return update_frontmatter(text, updates)
+
+    _, start, end = parse_legacy_frontmatter(text)
+    lines = text[start:end].splitlines()
+    remaining = dict(updates)
+    output: list[str] = []
+    for line in lines:
+        key = ""
+        if line and not line[:1].isspace() and ":" in line:
+            key = line.split(":", 1)[0].strip().replace("-", "_")
+        if key in remaining:
+            original_key = line.split(":", 1)[0].strip()
+            output.append(f"{original_key}: {remaining.pop(key)}")
+        else:
+            output.append(line)
+    for key, value in remaining.items():
+        output.append(f"{key}: {value}")
+    return "---\n" + "\n".join(output) + "\n---\n" + text[end + 5 :]
+
+
 def visible_markdown_lines(text: str) -> Iterable[str]:
     fence: str | None = None
     for line in text.splitlines():
@@ -7377,8 +7412,9 @@ def transition_adr(
         path, text, data, impact = prepare()
         if impact["no_op"]:
             return impact
-        candidate = update_frontmatter(
+        candidate = update_adr_frontmatter(
             text,
+            data,
             adr_effect_updates(data, target, maker, rationale),
         )
         snapshots = managed_index_snapshots(repo)
@@ -7507,8 +7543,8 @@ def supersede_adr(
         }
         if new_data.get("schema_version") == "1.4":
             new_updates["updated"] = date_string()
-        old_candidate = update_frontmatter(old_text, old_updates)
-        new_candidate = update_frontmatter(new_text, new_updates)
+        old_candidate = update_adr_frontmatter(old_text, old_data, old_updates)
+        new_candidate = update_adr_frontmatter(new_text, new_data, new_updates)
         snapshots = managed_index_snapshots(repo)
         try:
             atomic_write(old_path, old_candidate)
