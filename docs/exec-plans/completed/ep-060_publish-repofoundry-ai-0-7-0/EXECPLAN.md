@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-060
 title: "Publish RepoFoundry AI 0.7.0"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -20,9 +20,9 @@ architecture_decision_gate_reason: "The accepted versioning design and SemVer-co
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "df2cb6b197b5d0815f18dde922e8f8ca79331bf9"
+verification_evidence: ["python3 scripts/check.py: Research 35, Benchmark 9, Design 16, Execution Plan 59, integration 118; all passed", "GitHub Actions run 32921152852: Python 3.10, Python 3.14, and ep-integrity passed", "PR #34 merged: https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/34", "GitHub Release v0.7.0: https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.7.0", "Public installer smoke: release 0.7.0-df2cb6b197b5, CLI RepoFoundry AI 0.7.0, package SHA-256 2d52535c4959dec67fefaac28bc35f6b3461a6eff479dcc8ace4088563051180"]
+archive_sha256: 931a7f07b5fbe00489605cbdd1508dfa5f45527aebf3c460a5db7a256910ecca
 created: 2026-08-26
 updated: 2026-08-26
 author: "Codex"
@@ -43,15 +43,13 @@ policy, and activation protocol remain compatible.
 
 ## Current Snapshot
 
-<!-- REQUIRED: State the current milestone, what is true now, the exact next action, and any open question. Keep this section short enough for handoff. -->
-
 - Latest checkpoint: none.
-- Current milestone: prepare the `0.7.0` release candidate.
-- Current state: PR #34 contains the collaborative workflow feature; the
-  completed EP-059 working tree adds effective and historical ADR projections.
-  `main` and the latest GitHub Release remain at `0.6.0`.
-- Next action: update distribution metadata and current-version documentation,
-  then run `python3 scripts/check.py`.
+- Current milestone: seal verified public release evidence.
+- Current state: PR #34 is merged at `df2cb6b197b5d0815f18dde922e8f8ca79331bf9`;
+  tag and latest GitHub Release `v0.7.0` are published; an isolated public
+  Release install reports `RepoFoundry AI 0.7.0`.
+- Next action: archive EP-060 against the verified merge revision, then merge
+  the documentation-only evidence update.
 
 ## Context and Orientation
 
@@ -68,8 +66,6 @@ Harness templates, manifest schema, Core files, adapter bytes, governance
 policy, or activation protocol.
 
 ## Constraints and References
-
-<!-- REQUIRED: Summarize task-relevant invariants here, then link canonical repository sources. -->
 
 | Source | Why it matters | When to read |
 |---|---|---|
@@ -174,17 +170,15 @@ Work from `/Users/wangxiaowei1/x-otel/EngineeringPlan`.
 
 ## Validation and Acceptance
 
-<!-- REQUIRED: Replace every placeholder with observable behavior, exact commands, expected results, and evidence. -->
-
 - [x] From the repository root, run `python3 scripts/check.py`; expect all
   canonical suites and integrity checks to pass. Evidence: concise transcript in
   this plan and GitHub Actions on PR #34.
-- [ ] Run `gh pr checks 34 --repo XiaoWeiKIN/RepoFoundryAI`; expect every check
+- [x] Run `gh pr checks 34 --repo XiaoWeiKIN/RepoFoundryAI`; expect every check
   to pass before merge. Evidence: PR #34 check rollup.
-- [ ] Run `gh release view v0.7.0 --repo XiaoWeiKIN/RepoFoundryAI`; expect a
+- [x] Run `gh release view v0.7.0 --repo XiaoWeiKIN/RepoFoundryAI`; expect a
   published, non-draft, non-prerelease Release targeting the merged `main`
   commit. Evidence: Release URL and tag commit recorded below.
-- [ ] Run the stable installer into an isolated temporary prefix with
+- [x] Run the stable installer into an isolated temporary prefix with
   `--version 0.7.0 --host none`; expect its launcher to print
   `RepoFoundry AI 0.7.0`. Evidence: concise transcript recorded below.
 
@@ -223,6 +217,22 @@ prefix and does not register host Skills.
 - [x] (2026-08-26) Ran `python3 scripts/check.py`: Research 35, Benchmark 9,
   Design 16, Execution Plan 59, and integration 118 tests passed; every
   integrity check passed.
+- [x] (2026-08-26) Pushed candidate `258b19c`; GitHub Actions run `32921152852`
+  passed Python 3.10, Python 3.14, and ep-integrity.
+- [x] (2026-08-26) Squash-merged PR #34 as
+  `df2cb6b197b5d0815f18dde922e8f8ca79331bf9`; its tree
+  `0ca92508b2c32627c67802a999d0d789d0235c30` exactly matches the verified
+  candidate tree.
+- [x] (2026-08-26) Published annotated tag and latest GitHub Release `v0.7.0`;
+  the tag dereferences to the merge commit and the Release is neither draft nor
+  prerelease.
+- [x] (2026-08-26) Installed from the public GitHub Release into
+  `/tmp/repofoundry-v070-smoke.kVnpZM` with no host registration or project
+  mutation. The launcher reported `RepoFoundry AI 0.7.0`; provenance recorded
+  release ID `0.7.0-df2cb6b197b5`, package SHA-256
+  `2d52535c4959dec67fefaac28bc35f6b3461a6eff479dcc8ace4088563051180`, and
+  archive SHA-256
+  `b830189118c497fa9434de21d97997e59b65388cf31ad25720e9d14630c34578`.
 
 ## Surprises & Discoveries
 
@@ -246,7 +256,17 @@ prefix and does not register host Skills.
 
 ## Outcomes & Retrospective
 
-<!-- REQUIRED_AT_COMPLETION: Compare the result with the original purpose. Record completed behavior, evidence, gaps, remaining work, and lessons. -->
+RepoFoundry AI `0.7.0` is publicly available from
+`https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.7.0`. It combines
+collaborative engineering authoring with effective/current/review/historical ADR
+projections, and the public installer resolves the release to the exact verified
+merge commit. All local and GitHub checks passed. Compatibility matched the
+plan: only the distribution version advanced; no Harness schema, Core, adapter,
+governance-policy, or activation-protocol migration was introduced.
+
+No product gap remains. EP archival evidence is intentionally merged after the
+release tag so the plan can truthfully record the public Release and installer
+result; that follow-up changes documentation only and does not alter v0.7.0.
 
 ### Knowledge promotion candidates
 
@@ -262,8 +282,8 @@ version surface `repofoundry --version`. No new runtime dependency is added.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-060_publish-repofoundry-ai-0-7-0/EXECPLAN.md`
-- Release notes: `docs/exec-plans/active/ep-060_publish-repofoundry-ai-0-7-0/artifacts/release-notes.md`
+- Plan after archival: `docs/exec-plans/completed/ep-060_publish-repofoundry-ai-0-7-0/EXECPLAN.md`
+- Release notes after archival: `docs/exec-plans/completed/ep-060_publish-repofoundry-ai-0-7-0/artifacts/release-notes.md`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -271,3 +291,5 @@ version surface `repofoundry --version`. No new runtime dependency is added.
 - 2026-08-26T01:53:51Z — Initial plan created.
 - 2026-08-26 — Replaced all required placeholders with the bounded `0.7.0`
   release, verification, recovery, and evidence workflow.
+- 2026-08-26 — Recorded the merged commit, public tag and Release, CI run, and
+  isolated installer provenance before archival.
