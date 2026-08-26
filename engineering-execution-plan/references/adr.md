@@ -75,6 +75,43 @@ stateDiagram-v2
 - `retired`：明确撤销当前效力且没有 replacement；不暗示代码已自动回滚。
 - `superseded`：被新的 accepted、current ADR 替代。
 
+## 当前效力投影与索引升级
+
+`docs/DECISIONS.md` 默认回答“哪些决定现在约束新工作”，而不是把所有曾经决定过的
+ADR 平铺在一张表里。`epctl reindex` 从 ADR 文档和关系图派生五个受管区域：
+
+```mermaid
+flowchart LR
+    A["ADR corpus"] --> P["Proposed<br/>尚未决定"]
+    A --> E["Effective<br/>递归 current 的 accepted ADR"]
+    A --> R["Review Required<br/>under_review 或传递 non-current"]
+    A --> H["Historical<br/>rejected / retired / superseded"]
+    E --> M["Current constraint amendments<br/>ADR-NNN#C-NNN → amendment ADR"]
+```
+
+- `Effective` 是新 ExecPlan 的默认入口。accepted ADR 只有在自身及
+  `depends_on` / `amends` 传递闭包都 current 时才进入该表。
+- current ADR 若被一份或多份 current ADR 局部修订，显示派生 effect
+  `partially amended`；这不是新的 lifecycle status，两份 ADR 仍为 accepted。
+- `Current constraint amendments` 精确列出当前生效的
+  `ADR-NNN#C-NNN → amendment ADR` 映射；旧 schema 的非结构化修订仍通过
+  `amended by` / `amends` 关系导航。
+- `Review Required` 保留显式 review 与传递失效原因，避免下游 ADR 继续被误当作
+  current；`Historical` 保留完整可审计路径，不删除 ADR。
+
+旧版只有 `Proposed` / `Decided` 两张表时，`validate` 给出可升级告警。安装新版
+RepoFoundry 后运行以下任一命令，只会重建受管索引区域，不修改 ADR 正文或 seal：
+
+```bash
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . reindex
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  validate --fix-index
+```
+
+`status --json` 同步输出 `decision_outcome`、`projection`、`effect`、`current`、
+`amended_by` 和 `review_reasons`；人类可读状态表展示 Decision、Effect、Current 与
+Amended by。生命周期与索引使用同一派生模型，重复 reindex 必须 byte-stable。
+
 只有 proposed ADR 可以执行 `decide-adr`。命令要求 `--decision-maker`；skill 还要求本轮对话存在用户或 Decision Owner 的明确授权。脚本记录授权主体，不能推断授权。
 
 accepted 和 rejected schema 1.1/1.2/1.3/1.4 ADR 的正文、Research/ADR/Design 输入、

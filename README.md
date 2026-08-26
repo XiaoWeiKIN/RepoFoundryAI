@@ -270,12 +270,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.6.0`
+distribution upgrade, run this in each existing project and replace `0.7.0`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.6.0
-repofoundry --repo . upgrade --to 0.6.0 --apply
+repofoundry --repo . upgrade --to 0.7.0
+repofoundry --repo . upgrade --to 0.7.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -383,9 +383,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.6.0
-repofoundry --repo . upgrade --to 0.6.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.6.0 --apply
+repofoundry --repo . upgrade --to 0.7.0
+repofoundry --repo . upgrade --to 0.7.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.7.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -421,12 +421,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.6.0` uses Harness schema `3`, Harness Core `1.5.0`, Codex
+RepoFoundry `0.7.0` uses Harness schema `3`, Harness Core `1.5.0`, Codex
 adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.6.0 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.7.0 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the

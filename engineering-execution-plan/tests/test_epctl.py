@@ -370,6 +370,17 @@ class EpctlTestCase(unittest.TestCase):
             raise AssertionError(f"section not found: {heading}")
         path.write_text(updated, encoding="utf-8")
 
+    @staticmethod
+    def managed_index_body(text: str, table: str) -> str:
+        match = re.search(
+            rf"<!-- ADRCTL:{re.escape(table)}:START -->([\s\S]*?)"
+            rf"<!-- ADRCTL:{re.escape(table)}:END -->",
+            text,
+        )
+        if not match:
+            raise AssertionError(f"managed ADR table not found: {table}")
+        return match.group(1)
+
     def prepare_checkpoint_plan(self, plan: Path) -> None:
         self.complete_all_placeholders(plan)
         self.replace_section_body(
@@ -1099,6 +1110,181 @@ class EpctlTestCase(unittest.TestCase):
             f"payload_sha256: {original_digest}",
             base.read_text(encoding="utf-8"),
         )
+        self.run_cli("validate")
+
+    def test_adr_index_projects_effective_review_and_history(self) -> None:
+        self.init()
+        research = self.new_research("effect-projection")
+        self.conclude_research(research)
+        base = self.new_adr("effect-base")
+        self.accept_adr(base, "ADR-001")
+        amendment = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "effect-amendment",
+                "--title",
+                "Effect amendment",
+                "--research",
+                "R-001",
+                "--amends",
+                "ADR-001",
+                "--amends-constraint",
+                "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        self.accept_adr(amendment, "ADR-002")
+
+        decision_index = self.repo / "docs" / "DECISIONS.md"
+        projected = decision_index.read_text(encoding="utf-8")
+        for table in ("CURRENT", "AMENDMENTS", "REVIEW"):
+            self.assertIn(f"<!-- ADRCTL:{table}:START -->", projected)
+        current = self.managed_index_body(projected, "CURRENT")
+        amendments = self.managed_index_body(projected, "AMENDMENTS")
+        historical = self.managed_index_body(projected, "COMPLETED")
+        self.assertIn("| ADR-001 |", current)
+        self.assertIn("| ADR-002 |", current)
+        self.assertIn("partially amended", current)
+        self.assertIn("amended by ADR-002", current)
+        self.assertIn("| ADR-001#C-001 | ADR-002 | Effect amendment |", amendments)
+        self.assertNotIn("| ADR-001 |", historical)
+
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        base_status = next(row for row in status["adrs"] if row["id"] == "ADR-001")
+        self.assertEqual(base_status["decision_outcome"], "accepted")
+        self.assertEqual(base_status["projection"], "effective")
+        self.assertEqual(base_status["effect"], "partially_amended")
+        self.assertEqual(base_status["amended_by"], ["ADR-002"])
+        self.assertTrue(base_status["current"])
+        human_status = self.run_cli("status").stdout
+        self.assertIn("| Decision | Effect | Current | Amended by |", human_status)
+        self.assertIn("partially amended", human_status)
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "under_review",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "Production evidence questions the base decision.",
+            "--apply",
+        )
+        projected = decision_index.read_text(encoding="utf-8")
+        current = self.managed_index_body(projected, "CURRENT")
+        review = self.managed_index_body(projected, "REVIEW")
+        amendments = self.managed_index_body(projected, "AMENDMENTS")
+        self.assertNotIn("| ADR-001 |", current)
+        self.assertNotIn("| ADR-002 |", current)
+        self.assertIn("| ADR-001 |", review)
+        self.assertIn("under review", review)
+        self.assertIn("| ADR-002 |", review)
+        self.assertIn("review required", review)
+        self.assertNotIn("ADR-001#C-001", amendments)
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "retired",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "The base constraint is no longer required.",
+            "--apply",
+        )
+        projected = decision_index.read_text(encoding="utf-8")
+        review = self.managed_index_body(projected, "REVIEW")
+        historical = self.managed_index_body(projected, "COMPLETED")
+        self.assertIn("| ADR-001 |", historical)
+        self.assertIn("retired", historical)
+        self.assertIn("| ADR-002 |", review)
+        self.run_cli("validate")
+
+    def test_reindex_upgrades_legacy_adr_layout_without_losing_human_notes(
+        self,
+    ) -> None:
+        self.init()
+        research = self.new_research("legacy-index")
+        self.conclude_research(research)
+        adr = self.new_adr("legacy-index")
+        self.accept_adr(adr)
+        relative = f"adr/{adr.name}"
+        decision_index = self.repo / "docs" / "DECISIONS.md"
+        legacy = (
+            "# Architecture Decisions\n\n"
+            "Human introduction that must survive projection upgrades.\n\n"
+            "## Proposed\n\n"
+            "<!-- ADRCTL:ACTIVE:START -->\n"
+            "| ID | Title | Status | Updated | Research | Superseded By | Path |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "<!-- ADRCTL:ACTIVE:END -->\n\n"
+            "## Decided\n\n"
+            "<!-- ADRCTL:COMPLETED:START -->\n"
+            "| ID | Title | Status | Updated | Research | Superseded By | Path |\n"
+            "|---|---|---|---|---|---|---|\n"
+            f"| ADR-001 | Legacy Index | accepted | 2026-08-26 | "
+            f"[\"R-001\"] |  | [ADR]({relative}) |\n"
+            "<!-- ADRCTL:COMPLETED:END -->\n\n"
+            "Human appendix that must also survive projection upgrades.\n"
+        )
+        decision_index.write_text(legacy, encoding="utf-8")
+
+        validation = self.run_cli("validate")
+        self.assertIn("legacy ADR index projection", validation.stderr)
+        self.assertIn("run reindex", validation.stderr)
+
+        self.run_cli("reindex")
+        upgraded = decision_index.read_text(encoding="utf-8")
+        self.assertIn("Human introduction that must survive", upgraded)
+        self.assertIn("Human appendix that must also survive", upgraded)
+        self.assertIn("## Effective", upgraded)
+        self.assertIn("## Historical", upgraded)
+        self.assertIn(
+            "## Historical\n\n<!-- ADRCTL:COMPLETED:START -->",
+            upgraded,
+        )
+        self.assertNotIn("## Decided", upgraded)
+        self.assertIn(
+            "| ADR-001 |",
+            self.managed_index_body(upgraded, "CURRENT"),
+        )
+        self.assertNotIn(
+            "| ADR-001 |",
+            self.managed_index_body(upgraded, "COMPLETED"),
+        )
+        self.run_cli("validate")
+
+        self.run_cli("reindex")
+        self.assertEqual(upgraded, decision_index.read_text(encoding="utf-8"))
+
+    def test_rejected_adr_is_projected_as_historical(self) -> None:
+        self.init()
+        research = self.new_research("rejected-projection")
+        self.conclude_research(research)
+        adr = self.new_adr("rejected-projection")
+        self.complete_all_placeholders(adr)
+        self.run_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "rejected",
+            "--decision-maker",
+            "Test Decision Owner",
+        )
+
+        decision_index = (self.repo / "docs" / "DECISIONS.md").read_text(
+            encoding="utf-8"
+        )
+        historical = self.managed_index_body(decision_index, "COMPLETED")
+        self.assertIn("| ADR-001 |", historical)
+        self.assertIn("| rejected | rejected |", historical)
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        row = next(item for item in status["adrs"] if item["id"] == "ADR-001")
+        self.assertEqual(row["projection"], "historical")
+        self.assertEqual(row["effect"], "rejected")
+        self.assertFalse(row["current"])
         self.run_cli("validate")
 
     def test_retired_adr_is_terminal_without_a_replacement(self) -> None:
@@ -1889,6 +2075,15 @@ updated: 2026-07-28
             'effect_changed_by: "Test Decision Owner"',
             new_adr.read_text(encoding="utf-8"),
         )
+        decision_index = (self.repo / "docs" / "DECISIONS.md").read_text(
+            encoding="utf-8"
+        )
+        historical = self.managed_index_body(decision_index, "COMPLETED")
+        current_projection = self.managed_index_body(decision_index, "CURRENT")
+        self.assertIn("| ADR-001 |", historical)
+        self.assertIn("superseded by ADR-002", historical)
+        self.assertIn("| ADR-002 |", current_projection)
+        self.assertIn("supersedes ADR-001", current_projection)
         self.run_cli("validate")
         stale = self.run_cli(
             "new-ep",

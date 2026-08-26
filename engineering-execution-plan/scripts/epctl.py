@@ -1346,13 +1346,28 @@ def marker_block(kind: str) -> str:
         return (
             "\n\n## epctl managed ADR index\n\n### Proposed\n\n"
             "<!-- ADRCTL:ACTIVE:START -->\n"
-            "| ID | Title | Status | Updated | Research | Superseded By | Path |\n"
-            "|---|---|---|---|---|---|---|\n"
+            "| ID | Title | Decision | Effect | Related ADRs | Updated | Research | Path |\n"
+            "|---|---|---|---|---|---|---|---|\n"
             "<!-- ADRCTL:ACTIVE:END -->\n\n"
-            "### Decided\n\n"
+            "### Effective\n\n"
+            "<!-- ADRCTL:CURRENT:START -->\n"
+            "| ID | Title | Decision | Effect | Related ADRs | Updated | Research | Path |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+            "<!-- ADRCTL:CURRENT:END -->\n\n"
+            "### Current constraint amendments\n\n"
+            "<!-- ADRCTL:AMENDMENTS:START -->\n"
+            "| Constraint | Amended By | Amendment | Path |\n"
+            "|---|---|---|---|\n"
+            "<!-- ADRCTL:AMENDMENTS:END -->\n\n"
+            "### Review required\n\n"
+            "<!-- ADRCTL:REVIEW:START -->\n"
+            "| ID | Title | Decision | Effect | Related ADRs | Updated | Research | Path |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+            "<!-- ADRCTL:REVIEW:END -->\n\n"
+            "### Historical\n\n"
             "<!-- ADRCTL:COMPLETED:START -->\n"
-            "| ID | Title | Status | Updated | Research | Superseded By | Path |\n"
-            "|---|---|---|---|---|---|---|\n"
+            "| ID | Title | Decision | Effect | Related ADRs | Updated | Research | Path |\n"
+            "|---|---|---|---|---|---|---|---|\n"
             "<!-- ADRCTL:COMPLETED:END -->\n"
         )
     if kind == "TD":
@@ -1370,7 +1385,84 @@ def marker_block(kind: str) -> str:
     raise EpctlError(f"Unknown index kind: {kind}")
 
 
+def ensure_adr_index_layout(text: str) -> str:
+    active_start = "<!-- ADRCTL:ACTIVE:START -->"
+    active_end = "<!-- ADRCTL:ACTIVE:END -->"
+    completed_start = "<!-- ADRCTL:COMPLETED:START -->"
+    completed_end = "<!-- ADRCTL:COMPLETED:END -->"
+    if active_start not in text:
+        return text.rstrip() + marker_block("ADR")
+    if any(marker not in text for marker in (active_end, completed_start, completed_end)):
+        raise EpctlError("Malformed ADR index compatibility markers")
+
+    added_tables = ("CURRENT", "AMENDMENTS", "REVIEW")
+    marker_presence = {
+        table: (
+            f"<!-- ADRCTL:{table}:START -->" in text
+            and f"<!-- ADRCTL:{table}:END -->" in text
+        )
+        for table in added_tables
+    }
+    if all(marker_presence.values()):
+        return text
+    if any(marker_presence.values()):
+        raise EpctlError(
+            "Malformed ADR effect projection markers; run reindex after restoring "
+            "the managed layout"
+        )
+
+    active_marker_end = text.find(active_end) + len(active_end)
+    completed_marker_start = text.find(completed_start, active_marker_end)
+    if completed_marker_start < 0:
+        raise EpctlError("Malformed ADR index compatibility markers")
+    heading_matches = list(
+        re.finditer(
+            r"(?m)^(#{2,6})[ \t]+[^\n]+?[ \t]*$",
+            text[: text.find(active_start)],
+        )
+    )
+    heading_prefix = heading_matches[-1].group(1) if heading_matches else "###"
+    middle = text[active_marker_end:completed_marker_start]
+    decided_heading = re.search(
+        r"(?m)^(#{2,6})[ \t]+Decided[ \t]*$",
+        middle,
+    )
+    if decided_heading:
+        middle = (
+            middle[: decided_heading.start()]
+            + f"{decided_heading.group(1)} Historical"
+            + middle[decided_heading.end() :]
+        )
+    else:
+        middle = middle.rstrip() + f"\n\n{heading_prefix} Historical\n\n"
+
+    regular_header, regular_divider = index_header("ADR", "CURRENT")
+    amendment_header, amendment_divider = index_header("ADR", "AMENDMENTS")
+    inserted = (
+        f"\n\n{heading_prefix} Effective\n\n"
+        "<!-- ADRCTL:CURRENT:START -->\n"
+        f"{regular_header}\n{regular_divider}\n"
+        "<!-- ADRCTL:CURRENT:END -->\n\n"
+        f"{heading_prefix} Current constraint amendments\n\n"
+        "<!-- ADRCTL:AMENDMENTS:START -->\n"
+        f"{amendment_header}\n{amendment_divider}\n"
+        "<!-- ADRCTL:AMENDMENTS:END -->\n\n"
+        f"{heading_prefix} Review required\n\n"
+        "<!-- ADRCTL:REVIEW:START -->\n"
+        f"{regular_header}\n{regular_divider}\n"
+        "<!-- ADRCTL:REVIEW:END -->"
+    )
+    return (
+        text[:active_marker_end]
+        + inserted
+        + middle
+        + text[completed_marker_start:]
+    )
+
+
 def ensure_markers(text: str, kind: str) -> str:
+    if kind == "ADR":
+        return ensure_adr_index_layout(text)
     start = f"<!-- {kind}CTL:ACTIVE:START -->"
     return text if start in text else text.rstrip() + marker_block(kind)
 
@@ -1400,7 +1492,7 @@ def upsert_index_row(
     return text[:body_start] + replacement + text[end:]
 
 
-def index_header(kind: str) -> tuple[str, str]:
+def index_header(kind: str, table: str = "") -> tuple[str, str]:
     if kind == "EP":
         return (
             "| ID | Title | Status | Updated | Path |",
@@ -1417,9 +1509,14 @@ def index_header(kind: str) -> tuple[str, str]:
             "|---|---|---|---|---|---|---|---|---|",
         )
     if kind == "ADR":
+        if table == "AMENDMENTS":
+            return (
+                "| Constraint | Amended By | Amendment | Path |",
+                "|---|---|---|---|",
+            )
         return (
-            "| ID | Title | Status | Updated | Research | Superseded By | Path |",
-            "|---|---|---|---|---|---|---|",
+            "| ID | Title | Decision | Effect | Related ADRs | Updated | Research | Path |",
+            "|---|---|---|---|---|---|---|---|",
         )
     raise EpctlError(f"Unsupported index kind: {kind}")
 
@@ -1438,13 +1535,24 @@ def replace_index_rows(
     if start < 0 or end < 0 or end < start:
         raise EpctlError(f"Malformed {kind} index markers for {table}")
     body_start = start + len(start_marker)
-    header, divider = index_header(kind)
-    ordered_rows = sorted(
-        rows,
-        key=lambda row: int(ID_RE[kind].search(row).group(1)),
-    )
-    replacement = "\n" + "\n".join((header, divider, *ordered_rows)) + "\n"
+    replacement = rendered_index_body(kind, table, rows)
     return text[:body_start] + replacement + text[end:]
+
+
+def rendered_index_body(
+    kind: str,
+    table: str,
+    rows: Iterable[str],
+) -> str:
+    header, divider = index_header(kind, table)
+    if kind == "ADR" and table == "AMENDMENTS":
+        ordered_rows = sorted(rows)
+    else:
+        ordered_rows = sorted(
+            rows,
+            key=lambda row: int(ID_RE[kind].search(row).group(1)),
+        )
+    return "\n" + "\n".join((header, divider, *ordered_rows)) + "\n"
 
 
 def managed_index_body(text: str, kind: str, table: str) -> str:
@@ -1460,8 +1568,9 @@ def managed_index_body(text: str, kind: str, table: str) -> str:
 def managed_table_ids(text: str, kind: str, table: str) -> set[str]:
     return {
         f"{kind}-{int(number):03d}"
-        for number in ID_RE[kind].findall(
-            managed_index_body(text, kind, table)
+        for number in re.findall(
+            rf"(?mi)^\|\s*{re.escape(kind)}-(\d{{3,}})\s*\|",
+            managed_index_body(text, kind, table),
         )
     }
 
@@ -1541,16 +1650,186 @@ def research_index_row(repo: Path, path: Path) -> str:
     )
 
 
-def adr_index_row(repo: Path, path: Path) -> str:
-    data = artifact_metadata(path, "ADR")
-    item_id = data.get("id", "")
+def adr_effect_projection(
+    repo: Path,
+    paths: Iterable[Path] | None = None,
+) -> list[dict[str, object]]:
+    adr_paths = list(paths) if paths is not None else adr_files(repo)
+    corpus: dict[str, dict[str, str]] = {}
+    paths_by_id: dict[str, Path] = {}
+    for path in adr_paths:
+        data = artifact_metadata(path, "ADR")
+        item_id = data.get("id", "")
+        if item_id:
+            corpus[item_id] = data
+            paths_by_id[item_id] = path
+
+    currentness: dict[str, tuple[bool, list[str]]] = {}
+    currentness_memo: dict[str, tuple[bool, list[str]]] = {}
+    for item_id in corpus:
+        try:
+            currentness[item_id] = adr_currentness(
+                repo,
+                item_id,
+                data_by_id=corpus,
+                _memo=currentness_memo,
+            )
+        except EpctlError as exc:
+            currentness[item_id] = (False, [str(exc)])
+
+    current_amenders: dict[str, list[str]] = {}
+    for item_id, data in corpus.items():
+        if data.get("status") != "accepted" or not currentness[item_id][0]:
+            continue
+        for amended_id in parse_inline_ids(data.get("amends", ""), "ADR"):
+            current_amenders.setdefault(amended_id, []).append(item_id)
+    for amended_ids in current_amenders.values():
+        amended_ids.sort()
+
+    projection: list[dict[str, object]] = []
+    for item_id in sorted(corpus):
+        data = corpus[item_id]
+        path = paths_by_id[item_id]
+        status = data.get("status", "")
+        current, review_reasons = currentness[item_id]
+        amended_by = current_amenders.get(item_id, [])
+        if status == "proposed":
+            table = "ACTIVE"
+            projection_name = "proposed"
+            effect = "proposed"
+        elif status == "accepted" and current:
+            table = "CURRENT"
+            projection_name = "effective"
+            effect = "partially_amended" if amended_by else "current"
+        elif status in {"accepted", "under_review"}:
+            table = "REVIEW"
+            projection_name = "review_required"
+            effect = "under_review" if status == "under_review" else "review_required"
+        else:
+            table = "COMPLETED"
+            projection_name = "historical"
+            effect = status or "unknown"
+
+        related: list[str] = []
+        related.extend(
+            f"depends on {related_id}"
+            for related_id in parse_inline_ids(data.get("depends_on", ""), "ADR")
+        )
+        related.extend(
+            f"amends {related_id}"
+            for related_id in parse_inline_ids(data.get("amends", ""), "ADR")
+        )
+        related.extend(
+            f"supersedes {related_id}"
+            for related_id in parse_inline_ids(data.get("supersedes", ""), "ADR")
+        )
+        related.extend(f"amended by {related_id}" for related_id in amended_by)
+        if data.get("superseded_by", ""):
+            related.append(f"superseded by {data['superseded_by']}")
+        if table == "REVIEW":
+            related.extend(f"review: {reason}" for reason in review_reasons)
+        projection.append(
+            {
+                "id": item_id,
+                "data": data,
+                "path": path,
+                "table": table,
+                "projection": projection_name,
+                "effect": effect,
+                "current": current,
+                "amended_by": amended_by,
+                "review_reasons": review_reasons,
+                "related": list(dict.fromkeys(related)),
+            }
+        )
+    return projection
+
+
+def adr_index_row(repo: Path, item: dict[str, object]) -> str:
+    data = item["data"]
+    path = item["path"]
+    assert isinstance(data, dict)
+    assert isinstance(path, Path)
+    item_id = str(item["id"])
     relative = path.relative_to(repo / "docs").as_posix()
+    decision = adr_decision_outcome(data) or "pending"
+    related = item.get("related", [])
+    assert isinstance(related, list)
     return (
         f"| {item_id} | {md_cell(data.get('title', item_id))} | "
-        f"{md_cell(data.get('status', ''))} | {md_cell(data.get('updated', ''))} | "
-        f"{md_cell(data.get('research_refs', ''))} | "
-        f"{md_cell(data.get('superseded_by', ''))} | [ADR]({relative}) |"
+        f"{md_cell(decision)} | "
+        f"{md_cell(str(item.get('effect', '')).replace('_', ' '))} | "
+        f"{md_cell('; '.join(str(value) for value in related) or '—')} | "
+        f"{md_cell(data.get('updated', ''))} | "
+        f"{md_cell(data.get('research_refs', ''))} | [ADR]({relative}) |"
     )
+
+
+def adr_amendment_index_rows(
+    repo: Path,
+    projection: Iterable[dict[str, object]],
+) -> list[str]:
+    rows: list[str] = []
+    for item in projection:
+        if item.get("table") != "CURRENT":
+            continue
+        data = item["data"]
+        path = item["path"]
+        assert isinstance(data, dict)
+        assert isinstance(path, Path)
+        try:
+            constraints = parse_adr_constraint_array(
+                data.get("amends_constraints", "[]"),
+                "amends_constraints",
+            )
+        except EpctlError:
+            constraints = []
+        relative = path.relative_to(repo / "docs").as_posix()
+        for constraint_ref in constraints:
+            rows.append(
+                f"| {constraint_ref} | {item['id']} | "
+                f"{md_cell(data.get('title', str(item['id'])))} | "
+                f"[ADR]({relative}) |"
+            )
+    return rows
+
+
+def rebuild_adr_index_text(
+    repo: Path,
+    text: str,
+    paths: Iterable[Path] | None = None,
+) -> str:
+    projection = adr_effect_projection(repo, paths)
+    updated = text
+    for table in ("ACTIVE", "CURRENT"):
+        updated = replace_index_rows(
+            updated,
+            "ADR",
+            table,
+            (
+                adr_index_row(repo, item)
+                for item in projection
+                if item.get("table") == table
+            ),
+        )
+    updated = replace_index_rows(
+        updated,
+        "ADR",
+        "AMENDMENTS",
+        adr_amendment_index_rows(repo, projection),
+    )
+    for table in ("REVIEW", "COMPLETED"):
+        updated = replace_index_rows(
+            updated,
+            "ADR",
+            table,
+            (
+                adr_index_row(repo, item)
+                for item in projection
+                if item.get("table") == table
+            ),
+        )
+    return updated
 
 
 def managed_index_snapshots(repo: Path) -> dict[Path, str]:
@@ -1616,26 +1895,10 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
     )
     atomic_write(research_index, research_text)
 
-    decision_text = decision_index.read_text(encoding="utf-8")
-    decision_text = replace_index_rows(
-        decision_text,
-        "ADR",
-        "ACTIVE",
-        (
-            adr_index_row(repo, path)
-            for path in adrs
-            if artifact_metadata(path, "ADR").get("status") == "proposed"
-        ),
-    )
-    decision_text = replace_index_rows(
-        decision_text,
-        "ADR",
-        "COMPLETED",
-        (
-            adr_index_row(repo, path)
-            for path in adrs
-            if artifact_metadata(path, "ADR").get("status") != "proposed"
-        ),
+    decision_text = rebuild_adr_index_text(
+        repo,
+        decision_index.read_text(encoding="utf-8"),
+        adrs,
     )
     atomic_write(decision_index, decision_text)
 
@@ -2535,10 +2798,11 @@ def adr_currentness(
     adr_id: str,
     *,
     data_by_id: dict[str, dict[str, str]] | None = None,
+    _memo: dict[str, tuple[bool, list[str]]] | None = None,
 ) -> tuple[bool, list[str]]:
     corpus = data_by_id if data_by_id is not None else adr_corpus_data(repo)
     normalized = normalize_reference_ids((adr_id,), "ADR")[0]
-    memo: dict[str, tuple[bool, list[str]]] = {}
+    memo = _memo if _memo is not None else {}
     visiting: list[str] = []
 
     def visit(item_id: str) -> tuple[bool, list[str]]:
@@ -3195,17 +3459,12 @@ def new_adr(
         )
         index_path = repo / "docs" / "DECISIONS.md"
         old_index = index_path.read_text(encoding="utf-8")
-        relative = path.relative_to(repo / "docs").as_posix()
-        row = (
-            f"| {item_id} | {md_cell(title)} | proposed | {date_string()} | "
-            f"{md_cell(refs_json)} |  | [ADR]({relative}) |"
-        )
-        new_index = upsert_index_row(
-            old_index, "ADR", "ACTIVE", item_id, row
-        )
         try:
             atomic_write(path, text)
-            atomic_write(index_path, new_index)
+            atomic_write(
+                index_path,
+                rebuild_adr_index_text(repo, old_index),
+            )
         except Exception:
             if path.exists():
                 path.unlink()
@@ -6619,25 +6878,92 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
     for item_id in sorted(adr_graph):
         visit_adr_graph(item_id)
     if "<!-- ADRCTL:ACTIVE:START -->" in decision_text:
-        for table in ("ACTIVE", "COMPLETED"):
-            body = managed_index_body(decision_text, "ADR", table)
-            indexed = managed_table_ids(decision_text, "ADR", table)
-            expected = adr_ids_by_table[table]
-            for item_id in sorted(expected - indexed):
-                errors.append(
-                    f"{decision_index}: {item_id} missing from {table.lower()}; "
-                    "run reindex"
+        effect_markers = tuple(
+            f"<!-- ADRCTL:{table}:{boundary} -->"
+            for table in ("CURRENT", "AMENDMENTS", "REVIEW")
+            for boundary in ("START", "END")
+        )
+        has_any_effect_markers = any(
+            marker in decision_text for marker in effect_markers
+        )
+        has_all_effect_markers = all(
+            marker in decision_text for marker in effect_markers
+        )
+        if has_all_effect_markers:
+            projection = adr_effect_projection(repo)
+            for table in ("ACTIVE", "CURRENT", "REVIEW", "COMPLETED"):
+                expected_items = [
+                    item for item in projection if item.get("table") == table
+                ]
+                expected_ids = {str(item["id"]) for item in expected_items}
+                indexed_ids = managed_table_ids(
+                    decision_text,
+                    "ADR",
+                    table,
                 )
-            for item_id in sorted(indexed - expected):
-                errors.append(
-                    f"{decision_index}: stale {item_id} in {table.lower()}; "
-                    "run reindex"
-                )
-            for item_id in sorted(expected & indexed):
-                if adr_paths_by_table[table][item_id] not in body:
+                for item_id in sorted(expected_ids - indexed_ids):
                     errors.append(
-                        f"{decision_index}: stale path for {item_id}; run reindex"
+                        f"{decision_index}: {item_id} missing from "
+                        f"{table.lower()}; run reindex"
                     )
+                for item_id in sorted(indexed_ids - expected_ids):
+                    errors.append(
+                        f"{decision_index}: stale {item_id} in "
+                        f"{table.lower()}; run reindex"
+                    )
+                expected_rows = [
+                    adr_index_row(repo, item)
+                    for item in expected_items
+                ]
+                expected_body = rendered_index_body("ADR", table, expected_rows)
+                if managed_index_body(decision_text, "ADR", table) != expected_body:
+                    errors.append(
+                        f"{decision_index}: stale {table.lower()} ADR projection; "
+                        "run reindex"
+                    )
+            expected_amendments = rendered_index_body(
+                "ADR",
+                "AMENDMENTS",
+                adr_amendment_index_rows(repo, projection),
+            )
+            if (
+                managed_index_body(decision_text, "ADR", "AMENDMENTS")
+                != expected_amendments
+            ):
+                errors.append(
+                    f"{decision_index}: stale current constraint amendment "
+                    "projection; run reindex"
+                )
+        elif has_any_effect_markers:
+            errors.append(
+                f"{decision_index}: incomplete ADR effect projection markers; "
+                "run reindex after restoring the managed layout"
+            )
+        else:
+            for table in ("ACTIVE", "COMPLETED"):
+                body = managed_index_body(decision_text, "ADR", table)
+                indexed = managed_table_ids(decision_text, "ADR", table)
+                expected = adr_ids_by_table[table]
+                for item_id in sorted(expected - indexed):
+                    errors.append(
+                        f"{decision_index}: {item_id} missing from "
+                        f"{table.lower()}; run reindex"
+                    )
+                for item_id in sorted(indexed - expected):
+                    errors.append(
+                        f"{decision_index}: stale {item_id} in "
+                        f"{table.lower()}; run reindex"
+                    )
+                for item_id in sorted(expected & indexed):
+                    if adr_paths_by_table[table][item_id] not in body:
+                        errors.append(
+                            f"{decision_index}: stale path for {item_id}; "
+                            "run reindex"
+                        )
+            warnings.append(
+                f"{decision_index}: legacy ADR index projection; run reindex "
+                "or validate --fix-index to expose effective decisions"
+            )
     elif decision_index.exists():
         warnings.append(f"{decision_index}: no epctl managed block; run reindex")
 
@@ -7441,6 +7767,9 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "path": path.relative_to(repo).as_posix(),
             }
         )
+    adr_projection_by_id = {
+        str(item["id"]): item for item in adr_effect_projection(repo)
+    }
     adrs: list[dict[str, object]] = []
     for path in adr_files(repo):
         try:
@@ -7448,6 +7777,7 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
             data, strict = adr_document_data(path)
         except EpctlError:
             continue
+        projected = adr_projection_by_id.get(data.get("id", ""), {})
         adrs.append(
             {
                 "id": data.get("id", ""),
@@ -7475,8 +7805,11 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "contract": "strict" if strict else "legacy-linked",
                 "superseded_by": data.get("superseded_by", ""),
                 "decision_outcome": adr_decision_outcome(data),
-                "current": adr_currentness(repo, data.get("id", ""))[0],
-                "review_reasons": adr_currentness(repo, data.get("id", ""))[1],
+                "projection": projected.get("projection", "unknown"),
+                "effect": projected.get("effect", data.get("status", "unknown")),
+                "current": projected.get("current", False),
+                "amended_by": projected.get("amended_by", []),
+                "review_reasons": projected.get("review_reasons", []),
                 "last_activity": last_activity(text, data),
                 "path": path.relative_to(repo).as_posix(),
             }
@@ -7681,10 +8014,11 @@ def print_status(repo: Path, as_json: bool) -> None:
         )
     print()
     print(
-        "| ADR | Title | Status | Relations | Constraints | Research | Designs | Contract | "
-        "Decision maker | Superseded by | Last activity |"
+        "| ADR | Title | Status | Decision | Effect | Current | Amended by | "
+        "Relations | Constraints | Research | Designs | Contract | Decision maker | "
+        "Superseded by | Last activity |"
     )
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for row in payload["adrs"]:
         relations = [
             *(f"depends:{item}" for item in row["depends_on"]),
@@ -7692,6 +8026,10 @@ def print_status(repo: Path, as_json: bool) -> None:
         ]
         print(
             f"| {row['id']} | {md_cell(str(row['title']))} | {row['status']} | "
+            f"{row['decision_outcome'] or 'pending'} | "
+            f"{str(row['effect']).replace('_', ' ')} | "
+            f"{'yes' if row['current'] else 'no'} | "
+            f"{md_cell(', '.join(row['amended_by']) or '—')} | "
             f"{md_cell(', '.join(relations) or '—')} | "
             f"{len(row['constraints']) or '—'} | "
             f"{md_cell(', '.join(row['research_refs']) or '—')} | "

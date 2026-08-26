@@ -146,7 +146,10 @@ docs/
 
 Research 结论或取消时整体移动到 `research/completed/`。新 ADR 始终写入
 `docs/adr/`，路径稳定且不随状态移动。既有 ADR / Design Doc corpus 可以原地注册，
-不要求搬迁。四个根索引都是可重建投影；制品文件才是事实源。
+不要求搬迁。四个根索引都是可重建投影；制品文件才是事实源。`DECISIONS.md` 的
+默认 `Effective` 表只包含递归 current 的 accepted ADR，并另行投影 Proposed、
+Review Required、Historical 与当前 constraint amendments。旧版两表布局通过
+`reindex` 或 `validate --fix-index` 原地升级，不修改 ADR 文档。
 
 ## 优先使用确定性脚本
 
@@ -213,6 +216,9 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   repository evidence。也可以显式使用 `--from-git-blob <full-object-id>` 恢复
   Git blob；正常 `validate` 只读仓库文件，不依赖 Git。
 - `validate --fix-index` 只修复派生索引，不改事实制品。
+- 升级 RepoFoundry 后先运行 `reindex`；它会把旧 `Proposed` / `Decided` ADR 索引
+  转为 Proposed / Effective / Review Required / Historical，并保留受管区域之外的
+  人工内容。重复运行应无 diff。
 - 脚本不可用时按 `assets/` 模板执行，并扫描文件系统、索引和高水位后取最大 ID +1。
 - 不要求目标仓库使用 Git。
 
@@ -274,6 +280,12 @@ preview-first 的 `supersede-adr`；若仅需暂停调查，则 preview/apply
 都要求授权主体和原因。不要编辑旧决定，也不要把状态变化当作自动代码回滚。
 non-current ADR 不能满足新 ExecPlan；受影响的既有 active EP 显示
 `architecture_review_required` 并禁止 completed 归档。
+
+日常检索从 `DECISIONS.md` 的 Effective 开始。current ADR 被 current amendment
+局部修订时，索引显示 `partially amended` 并把每个受影响
+`ADR-NNN#C-NNN` 映射到 amendment ADR；这只是派生 effect，不新增状态或改写旧
+决定。Review Required 用于处理 under-review 和传递 non-current 链，Historical
+保留 rejected、retired、superseded 决定。
 
 一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
 
