@@ -17,7 +17,6 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 |---|---|---|---|---|
 | EP-006 | Migrate EngineeringWorkflow to RepoFoundry AI | active | 2026-08-04 | [EXECPLAN](exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md) |
 | EP-058 | Implement the Engineering Design skill | active | 2026-08-17 | [EXECPLAN](exec-plans/active/ep-058_implement-engineering-design-skill/EXECPLAN.md) |
-| EP-060 | Publish RepoFoundry AI 0.7.0 | active | 2026-08-26 | [EXECPLAN](exec-plans/active/ep-060_publish-repofoundry-ai-0-7-0/EXECPLAN.md) |
 <!-- EPCTL:ACTIVE:END -->
 
 ## Completed
@@ -43,4 +42,5 @@ This file is the repository entry point and index for persistent ExecPlans. Each
 | EP-056 | Implement reversible ADR effect lifecycle | completed | 2026-08-13 | [EXECPLAN](exec-plans/completed/ep-056_reversible-adr-effect/EXECPLAN.md) |
 | EP-057 | Support historical ADR revision evidence | completed | 2026-08-13 | [EXECPLAN](exec-plans/completed/ep-057_historical-adr-revision-evidence/EXECPLAN.md) |
 | EP-059 | Expose effective and historical ADR projections | completed | 2026-08-26 | [EXECPLAN](exec-plans/completed/ep-059_effective-adr-index-projection/EXECPLAN.md) |
+| EP-060 | Publish RepoFoundry AI 0.7.0 | completed | 2026-08-26 | [EXECPLAN](exec-plans/completed/ep-060_publish-repofoundry-ai-0-7-0/EXECPLAN.md) |
 <!-- EPCTL:COMPLETED:END -->
