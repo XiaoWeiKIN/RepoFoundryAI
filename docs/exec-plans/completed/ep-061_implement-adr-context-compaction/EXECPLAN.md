@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-061
 title: "Implement lossless ADR context compaction"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -20,9 +20,9 @@ architecture_decision_gate_reason: ""
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "8e3d361a1c82deecace8d8b489cf125a9ded4021"
+verification_evidence: ["local: python3 -B scripts/check.py; 66 EP tests and 119 RepoFoundry/Harness/installer/spec tests passed", "github-pr: https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/37", "github-ci: https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/33461621482", "github-release: https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.8.0", "install: /Users/wangxiaowei1/.local/share/repofoundry-ai/install.json; package sha256 a8ae9ab05a6d6c14d1ee3f9f1dde88bf9d060d53f410b9e007c6a6d79e0cc4f8", "datafox: seven views cover 47 current ADRs; decision-view validation zero errors/warnings; 51-source aggregate sha256 168044c324ab5a79ec1b36ee508d6967c321fd02d25ac2c1b68eb54d4e31bcc5"]
+archive_sha256: b8fff92cba765569ec53d75bd8264ada1c5315f6abfe985de90af4055b26042b
 created: 2026-09-01
 updated: 2026-09-01
 author: "Codex"
@@ -47,14 +47,15 @@ ADR corpus after its Harness upgrade.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 4 — release, installation, and DataFox adoption.
-- Current state: resolver, views, capsules, health, consolidation preview, additive
-  Harness migration, public documentation, and 0.8.0 version contracts are implemented;
-  focused suites and the provider-neutral full check pass.
-- Next action: commit and push the reviewed branch, open the release PR, wait for CI,
-  merge, tag/release 0.8.0, install it, then upgrade and organize DataFox.
-- Open questions: DataFox View taxonomy will be chosen from its real current-effect
-  graph after the released tool is installed; no ADR lifecycle changes are implied.
+- Current milestone: Milestone 4 complete — release, installation, and DataFox adoption.
+- Current state: RepoFoundry AI 0.8.0 is merged, tagged, released, installed into the
+  local Codex host, and adopted by DataFox through an additive Harness upgrade and
+  seven non-normative Decision Views covering all 47 current ADRs.
+- Next action: archive EP-061 with the merged release revision and final verification
+  evidence, then merge this documentation-only evidence follow-up.
+- Open questions: none blocking. DataFox's 144,285-byte OQL lineage remains a useful
+  navigation View but requires constraint selection or a reviewed higher budget for
+  task context; consolidation remains deferred while active/proposed work depends on it.
 
 ## Context and Orientation
 
@@ -91,8 +92,6 @@ flowchart LR
 ```
 
 ## Constraints and References
-
-<!-- REQUIRED: Summarize task-relevant invariants here, then link canonical repository sources. -->
 
 | Source | Why it matters | When to read |
 |---|---|---|
@@ -268,13 +267,17 @@ Work from `/Users/wangxiaowei1/x-otel/EngineeringPlan-adr-context-compaction`.
 - [x] Exercise consolidation preview; expect no ADR/EP/source byte changes and an
   explicit `preview_only` result with active-plan/proposed/legacy impact. Evidence:
   before/after digest assertions.
-- [ ] Verify GitHub PR checks, merged commit, tag, and release v0.8.0 all point to the
-  intended revision. Evidence: GitHub URLs and CLI transcript in the final report.
-- [ ] Install v0.8.0 locally; expect host registration and `repofoundry --version` to
-  report 0.8.0. Evidence: installer receipt and version output.
-- [ ] Preview/apply DataFox Harness 0.8.0, define views with released commands, run
+- [x] Verify GitHub PR checks, merged commit, tag, and release v0.8.0 all point to the
+  intended revision. Evidence: PR #37, CI run 33461621482, release v0.8.0, and tag all
+  resolve to `8e3d361a1c82deecace8d8b489cf125a9ded4021`.
+- [x] Install v0.8.0 locally; expect host registration and `repofoundry --version` to
+  report 0.8.0. Evidence: `~/.local/share/repofoundry-ai/install.json`, the Codex Skill
+  symlink, and launcher version output.
+- [x] Preview/apply DataFox Harness 0.8.0, define views with released commands, run
   health/capsule/consolidation/validate, and prove every ADR source digest is
-  unchanged. Evidence: DataFox command transcript and digest comparison.
+  unchanged. Evidence: seven generated views cover all 47 current ADRs; view-only
+  validation has zero errors/warnings; the 51-source aggregate remains
+  `168044c324ab5a79ec1b36ee508d6967c321fd02d25ac2c1b68eb54d4e31bcc5`.
 
 ### Required Benchmark Scenario Gates
 
@@ -309,7 +312,9 @@ alter authority. Do not use destructive Git commands or remove user worktree cha
   budget diagnostics, independent health dimensions, and mutation-free consolidation.
 - [x] (2026-09-01T03:30:00Z) Completed Milestone 3 documentation, 0.8.0 versioning,
   additive Harness migration tests, repeated reindex, and the canonical full check.
-- [ ] Complete Milestone 4 release, installation, and DataFox adoption.
+- [x] (2026-09-01T02:41:37Z) Completed Milestone 4: merged PR #37 after the Python
+  3.10/Python 3.14/EP integrity matrix passed, published v0.8.0, installed the immutable
+  GitHub release into Codex, upgraded DataFox, and organized its current ADR context.
 
 ## Surprises & Discoveries
 
@@ -324,6 +329,12 @@ alter authority. Do not use destructive Git commands or remove user worktree cha
   initialized and upgraded infrastructure now includes a repository-neutral `.gitkeep`
   marker so `docs/decision-views/` remains present after clone and validation remains
   reproducible.
+- DataFox's seven Views cover every current ADR, but the OQL lineage closure is
+  144,285 bytes. A constraint-targeted capsule (`ADR-028#C-001`) fits at 30,434 bytes,
+  demonstrating that view coverage and task-context budget are intentionally separate.
+- DataFox changed three unrelated Design paths after the Router baseline in its already
+  dirty worktree. The final audit reports those paths as uncovered rather than silently
+  attributing them to this ADR organization; all paths changed by this plan are covered.
 
 ## Decision Log
 
@@ -337,6 +348,10 @@ alter authority. Do not use destructive Git commands or remove user worktree cha
   and 8 partially amended ADRs; these signals never trigger lifecycle mutation.
 - 2026-09-01 — Keep Harness schema/Core/adapter versions unchanged for 0.8.0 and model
   Decision View setup as an additive distribution migration, not a schema migration.
+- 2026-09-01 — Define seven DataFox domain Views whose union covers all 47 current ADRs;
+  treat the largest OQL lineage as navigation and require task-level constraint selection.
+- 2026-09-01 — Defer semantic consolidation for both inspected DataFox chains because
+  active or proposed work still depends on them; do not infer any lifecycle transition.
 
 ## Blockers
 
@@ -345,7 +360,39 @@ alter authority. Do not use destructive Git commands or remove user worktree cha
 
 ## Outcomes & Retrospective
 
-<!-- REQUIRED_AT_COMPLETION: Compare the result with the original purpose. Record completed behavior, evidence, gaps, remaining work, and lessons. -->
+The plan achieved its original purpose without weakening ADR authority. RepoFoundry
+AI 0.8.0 now supplies deterministic current-context resolution, persistent generated
+Decision Views, exact digest-verifiable capsules, independent health signals, and a
+preview-only consolidation analysis. The implementation passed 66 focused `epctl`
+tests and the canonical 119-test provider-neutral integrity suite locally. GitHub CI
+then passed on Python 3.10, Python 3.14, and the EP integrity job before PR #37 merged.
+
+Release v0.8.0 and tag `v0.8.0` resolve to merged revision
+`8e3d361a1c82deecace8d8b489cf125a9ded4021`. The authenticated release installation
+registered the local Codex Skill and records archive SHA-256
+`059164f5dd70febca054430629460c6aa4a12dc289386acbf7b99c7b1a85f545`
+and package SHA-256
+`a8ae9ab05a6d6c14d1ee3f9f1dde88bf9d060d53f410b9e007c6a6d79e0cc4f8`.
+Repeating installation produced an unchanged result.
+
+DataFox upgraded additively from Harness producer 0.7.1 to 0.8.0. Seven Views cover
+all 47 current ADRs while leaving all 51 ADR source documents byte-identical; their
+stable aggregate SHA-256 is
+`168044c324ab5a79ec1b36ee508d6967c321fd02d25ac2c1b68eb54d4e31bcc5`.
+Six full View capsules fit the default 32 KiB budget. The OQL lineage reports its
+144,285-byte cost instead of truncating, while a targeted 30,434-byte constraint
+capsule succeeds. Consolidation reports for the OQL lineage and span attribute storage
+remain preview-only and recommend deferral because active/proposed work still depends
+on the context. No ADR was merged, accepted, retired, superseded, rewritten, or deleted.
+
+The remaining DataFox validation noise is outside this plan: full `epctl validate`
+reports six pre-existing EP-091/EP-092 errors in the dirty worktree, while the new
+Decision View validator returns zero errors and warnings. The Specifications Router
+also honestly flags three unrelated Design paths that changed after this plan's
+baseline. Neither exception affects the released implementation or the ADR-source
+immutability evidence. The main lesson is that mature ADR corpora need two independent
+controls: stable navigation coverage for discovery and bounded task capsules for agent
+context; lifecycle cleanup remains an explicit human-governed decision.
 
 ### Knowledge promotion candidates
 
@@ -367,9 +414,17 @@ is permitted.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-061_implement-adr-context-compaction/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-061_implement-adr-context-compaction/EXECPLAN.md`
+- Release PR: `https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/37`
+- Passing CI: `https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/33461621482`
+- Immutable release: `https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.8.0`
+- Install receipt: `/Users/wangxiaowei1/.local/share/repofoundry-ai/install.json`
+- DataFox generated index: `/Users/wangxiaowei1/x-otel/datafox/docs/DECISION-VIEWS.md`
+- DataFox view registry: `/Users/wangxiaowei1/x-otel/datafox/docs/.epctl/decision-views.json`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
 
 - 2026-09-01T00:49:56Z — Initial plan created.
+- 2026-09-01T02:41:37Z — Recorded merged release, installation, DataFox adoption,
+  immutable source evidence, validation exceptions, and completion retrospective.
