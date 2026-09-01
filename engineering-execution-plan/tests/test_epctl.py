@@ -3310,6 +3310,510 @@ updated: 2026-07-28
         self.assertEqual(blocked["completion_blockers"], ["unfinished_tasks"])
         self.assertEqual(blocked["unfinished_tasks"], 1)
 
+    def test_decision_view_preview_apply_reindex_and_remove_are_safe(self) -> None:
+        self.init()
+        self.assertEqual(
+            json.loads(
+                (self.repo / "docs/.epctl/decision-views.json").read_text(
+                    encoding="utf-8"
+                )
+            ),
+            {"version": 1, "views": []},
+        )
+        self.assertTrue((self.repo / "docs/DECISION-VIEWS.md").is_file())
+        research = self.new_research("view-source")
+        self.conclude_research(research)
+        adr = self.new_adr("view-source")
+        self.accept_adr(adr)
+        adr_bytes = adr.read_bytes()
+        registry = self.repo / "docs/.epctl/decision-views.json"
+        registry_before = registry.read_bytes()
+        view = self.repo / "docs/decision-views/runtime.md"
+
+        preview = json.loads(
+            self.run_cli(
+                "set-decision-view",
+                "runtime",
+                "--title",
+                "Runtime decisions",
+                "--adr",
+                "ADR-001",
+            ).stdout
+        )
+        self.assertFalse(preview["applied"])
+        self.assertEqual(preview["resolved_adrs"], ["ADR-001"])
+        self.assertEqual(registry.read_bytes(), registry_before)
+        self.assertFalse(view.exists())
+
+        applied = json.loads(
+            self.run_cli(
+                "set-decision-view",
+                "runtime",
+                "--title",
+                "Runtime decisions",
+                "--adr",
+                "ADR-001",
+                "--apply",
+            ).stdout
+        )
+        self.assertTrue(applied["applied"])
+        self.assertIn("Status: `current`", view.read_text(encoding="utf-8"))
+        managed = {
+            path: path.read_bytes()
+            for path in (
+                registry,
+                self.repo / "docs/DECISION-VIEWS.md",
+                view,
+            )
+        }
+        self.run_cli(
+            "set-decision-view",
+            "runtime",
+            "--title",
+            "Runtime decisions",
+            "--adr",
+            "ADR-001",
+            "--apply",
+        )
+        self.run_cli("reindex")
+        self.assertEqual(
+            managed,
+            {path: path.read_bytes() for path in managed},
+        )
+
+        view.write_text(view.read_text(encoding="utf-8") + "drift\n", encoding="utf-8")
+        drift = self.run_cli("validate", expected=1)
+        self.assertIn("generated Decision View drift", drift.stderr)
+        self.run_cli("validate", "--fix-index")
+        self.assertEqual(view.read_bytes(), managed[view])
+        self.assertEqual(adr.read_bytes(), adr_bytes)
+
+        remove_preview = json.loads(
+            self.run_cli("remove-decision-view", "runtime").stdout
+        )
+        self.assertFalse(remove_preview["applied"])
+        self.assertTrue(view.exists())
+        self.run_cli("remove-decision-view", "runtime", "--apply")
+        self.assertFalse(view.exists())
+        self.assertEqual(adr.read_bytes(), adr_bytes)
+        self.run_cli("validate")
+
+        orphan = self.repo / "docs/decision-views/orphan.md"
+        orphan.write_text("unregistered\n", encoding="utf-8")
+        orphaned = self.run_cli("validate", expected=1)
+        self.assertIn("unregistered Decision View projection", orphaned.stderr)
+        orphan.unlink()
+
+        registry.unlink()
+        (self.repo / "docs/DECISION-VIEWS.md").unlink()
+        (self.repo / "docs/decision-views").rmdir()
+        missing_preview = json.loads(
+            self.run_cli(
+                "set-decision-view",
+                "runtime",
+                "--title",
+                "Runtime decisions",
+                "--adr",
+                "ADR-001",
+            ).stdout
+        )
+        self.assertFalse(missing_preview["applied"])
+        missing_apply = self.run_cli(
+            "set-decision-view",
+            "runtime",
+            "--title",
+            "Runtime decisions",
+            "--adr",
+            "ADR-001",
+            "--apply",
+            expected=2,
+        )
+        self.assertIn("infrastructure is missing", missing_apply.stderr)
+        self.assertFalse(registry.exists())
+        self.assertFalse((self.repo / "docs/DECISION-VIEWS.md").exists())
+        self.assertFalse((self.repo / "docs/decision-views").exists())
+
+    def test_decision_view_expands_amendment_and_survives_retirement_as_review(self) -> None:
+        self.init()
+        research = self.new_research("view-amendment")
+        self.conclude_research(research)
+        base = self.new_adr("view-base")
+        self.accept_adr(base)
+        amendment = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "view-amendment",
+                "--title",
+                "View amendment",
+                "--research",
+                "R-001",
+                "--amends",
+                "ADR-001",
+                "--amends-constraint",
+                "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        self.accept_adr(amendment, "ADR-002")
+
+        applied = json.loads(
+            self.run_cli(
+                "set-decision-view",
+                "amended",
+                "--title",
+                "Amended context",
+                "--adr",
+                "ADR-001",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(applied["resolved_adrs"], ["ADR-001", "ADR-002"])
+        view = self.repo / "docs/decision-views/amended.md"
+        self.assertIn("ADR-001#C-001", view.read_text(encoding="utf-8"))
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "retired",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "The source boundary no longer applies.",
+            "--apply",
+        )
+        reviewed = view.read_text(encoding="utf-8")
+        self.assertIn("Status: `review_required`", reviewed)
+        validation = self.run_cli("validate")
+        self.assertIn("Decision View requires owner review", validation.stderr)
+        self.assertIn("status: retired", base.read_text(encoding="utf-8"))
+
+    def test_decision_capsule_is_exact_selected_and_budgeted(self) -> None:
+        self.init()
+        research = self.new_research("capsule-source")
+        self.conclude_research(research)
+        base = self.new_adr("capsule-base")
+        self.complete_all_placeholders(base)
+        self.replace_section_body(
+            base,
+            "Decision Statement",
+            "Base decision statement: preserve exact UTF-8 字节。",
+        )
+        base.write_text(
+            base.read_text(encoding="utf-8").replace(
+                "The implementation must preserve the test boundary.",
+                "Base exact constraint text.",
+            ),
+            encoding="utf-8",
+        )
+        self.run_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "accepted",
+            "--decision-maker",
+            "Test Decision Owner",
+        )
+        base.write_bytes(base.read_bytes().replace(b"\n", b"\r\n"))
+        amendment = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "capsule-amendment",
+                "--title",
+                "Capsule amendment",
+                "--research",
+                "R-001",
+                "--amends",
+                "ADR-001",
+                "--amends-constraint",
+                "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        self.accept_adr(amendment, "ADR-002")
+        source_hashes = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in (base, amendment)}
+
+        capsule = json.loads(
+            self.run_cli(
+                "decision-capsule",
+                "--adr",
+                "ADR-001",
+                "--constraint",
+                "ADR-001#C-001",
+                "--json",
+            ).stdout
+        )
+        self.assertEqual(capsule["resolved_adrs"], ["ADR-001", "ADR-002"])
+        self.assertEqual(
+            capsule["selected_constraints"],
+            ["ADR-001#C-001", "ADR-002#C-001"],
+        )
+        self.assertIn(
+            "Base decision statement: preserve exact UTF-8 字节。",
+            capsule["context"],
+        )
+        self.assertIn("Base exact constraint text.", capsule["context"])
+        self.assertIn(
+            "## Decision Statement\r\n\r\n"
+            "Base decision statement: preserve exact UTF-8 字节。\r\n",
+            capsule["context"],
+        )
+        exact_constraint_line = next(
+            line
+            for line in base.read_bytes().decode("utf-8").splitlines(keepends=True)
+            if "Base exact constraint text." in line
+        )
+        self.assertTrue(exact_constraint_line.endswith("\r\n"))
+        self.assertIn(exact_constraint_line, capsule["context"])
+        base_source = next(
+            source for source in capsule["sources"] if source["adr_id"] == "ADR-001"
+        )
+        self.assertEqual(
+            hashlib.sha256(base.read_bytes()).hexdigest(),
+            base_source["document_sha256"],
+        )
+        self.assertEqual(
+            hashlib.sha256(capsule["context"].encode("utf-8")).hexdigest(),
+            capsule["sha256"],
+        )
+        self.assertEqual(len(capsule["context"].encode("utf-8")), capsule["bytes"])
+
+        overflow = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-001",
+            "--budget-bytes",
+            "1",
+            expected=2,
+        )
+        self.assertIn("DECISION_CONTEXT_BUDGET_EXCEEDED", overflow.stderr)
+        self.assertIn("ADR-001:", overflow.stderr)
+        unjustified = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-001",
+            "--budget-bytes",
+            "32769",
+            expected=2,
+        )
+        self.assertIn("requires --budget-reason", unjustified.stderr)
+        outside = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-001",
+            "--constraint",
+            "ADR-999#C-001",
+            expected=2,
+        )
+        self.assertIn("outside the resolved context", outside.stderr)
+        duplicate = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-001",
+            "--constraint",
+            "ADR-001#C-001",
+            "--constraint",
+            "ADR-001#C-001",
+            expected=2,
+        )
+        self.assertIn("duplicate", duplicate.stderr)
+        self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-001",
+            "--budget-bytes",
+            "100000",
+            "--budget-reason",
+            "Reviewed integration context.",
+        )
+        self.assertEqual(
+            source_hashes,
+            {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in source_hashes},
+        )
+
+    def test_legacy_capsule_health_and_consolidation_are_lossless(self) -> None:
+        self.init()
+        legacy = self.repo / "docs/adr/adr-010_legacy-runtime.md"
+        legacy_text = """---
+doc_type: adr
+title: Legacy runtime
+status: accepted
+created: 2026-01-01
+last_verified: 2026-01-02
+depends_on: []
+amends: []
+---
+
+# ADR-010: Legacy runtime
+
+The whole legacy document is normative, including this unique sentence.
+"""
+        legacy.write_text(legacy_text, encoding="utf-8")
+        self.run_cli("reindex")
+        before = hashlib.sha256(legacy.read_bytes()).hexdigest()
+
+        capsule = json.loads(
+            self.run_cli(
+                "decision-capsule",
+                "--adr",
+                "ADR-010",
+                "--json",
+            ).stdout
+        )
+        self.assertEqual(capsule["sources"][0]["contract"], "whole-document")
+        self.assertIn(legacy_text, capsule["context"])
+        health = json.loads(self.run_cli("adr-health", "--json").stdout)
+        self.assertEqual(health["contracts"]["whole_document_current_adrs"], 1)
+        self.assertNotIn("score", json.dumps(health))
+
+        self.run_cli(
+            "set-decision-view",
+            "legacy-runtime",
+            "--title",
+            "Legacy runtime",
+            "--adr",
+            "ADR-010",
+            "--apply",
+        )
+        preview = json.loads(
+            self.run_cli(
+                "adr-consolidation-plan",
+                "--view",
+                "legacy-runtime",
+                "--json",
+            ).stdout
+        )
+        self.assertTrue(preview["preview_only"])
+        self.assertEqual(preview["whole_document_legacy_adrs"], ["ADR-010"])
+        self.assertEqual(hashlib.sha256(legacy.read_bytes()).hexdigest(), before)
+
+    def test_health_and_consolidation_expose_plan_and_proposal_impact(self) -> None:
+        self.init()
+        research = self.new_research("consolidation-impact")
+        self.conclude_research(research)
+        base = self.new_adr("impact-base")
+        self.accept_adr(base)
+        amendment = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "impact-amendment",
+                "--title",
+                "Impact amendment",
+                "--research",
+                "R-001",
+                "--amends",
+                "ADR-001",
+                "--amends-constraint",
+                "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        self.accept_adr(amendment, "ADR-002")
+        self.run_cli(
+            "new-ep",
+            "--slug",
+            "consume-impact",
+            "--title",
+            "Consume impact",
+            "--research",
+            "R-001",
+            "--adr",
+            "ADR-001",
+            "--adr",
+            "ADR-002",
+        )
+        proposed = Path(
+            self.run_cli(
+                "new-adr",
+                "--slug",
+                "proposed-overlap",
+                "--title",
+                "Proposed overlap",
+                "--research",
+                "R-001",
+                "--amends",
+                "ADR-001",
+                "--amends-constraint",
+                "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        non_current = self.run_cli(
+            "set-decision-view",
+            "proposed",
+            "--title",
+            "Proposed context",
+            "--adr",
+            "ADR-003",
+            expected=2,
+        )
+        self.assertIn("accepted and current", non_current.stderr)
+        self.run_cli(
+            "set-decision-view",
+            "impact",
+            "--title",
+            "Impact context",
+            "--adr",
+            "ADR-001",
+            "--apply",
+        )
+        health = json.loads(self.run_cli("adr-health", "--json").stdout)
+        self.assertEqual(health["corpus"]["total_adrs"], 3)
+        self.assertEqual(health["corpus"]["effective_adrs"], 2)
+        self.assertEqual(health["amendments"]["partially_amended_adrs"], 1)
+        self.assertEqual(health["active_plans"]["max_adr_refs"], 2)
+        self.assertEqual(health["views"]["covered_current_adrs"], 2)
+        before = {
+            path: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in (base, amendment, proposed)
+        }
+        preview = json.loads(
+            self.run_cli(
+                "adr-consolidation-plan",
+                "--view",
+                "impact",
+                "--json",
+            ).stdout
+        )
+        self.assertTrue(preview["preview_only"])
+        self.assertEqual(preview["active_plan_impact"][0]["id"], "EP-001")
+        self.assertEqual(preview["proposed_overlap"][0]["id"], "ADR-003")
+        self.assertEqual(
+            preview["recommendation"],
+            "defer_while_active_or_proposed_work_depends_on_context",
+        )
+        self.assertEqual(
+            before,
+            {
+                path: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in before
+            },
+        )
+
+    def test_decision_view_registry_and_symlinks_fail_closed(self) -> None:
+        self.init()
+        research = self.new_research("view-path-safety")
+        self.conclude_research(research)
+        self.accept_adr(self.new_adr("view-path-safety"))
+        registry = self.repo / "docs/.epctl/decision-views.json"
+        registry.write_text('{"version": 999, "views": []}\n', encoding="utf-8")
+        invalid = self.run_cli("validate", expected=1)
+        self.assertIn("Unsupported Decision View registry", invalid.stderr)
+        registry.write_text('{"version": 1, "views": []}\n', encoding="utf-8")
+        link = self.repo / "docs/decision-views/escape.md"
+        link.symlink_to(self.repo / "outside.md")
+        rejected = self.run_cli("validate", expected=1)
+        self.assertIn("symbolic links are not supported", rejected.stderr)
+        rejected_preview = self.run_cli(
+            "set-decision-view",
+            "escape",
+            "--title",
+            "Escaping view",
+            "--adr",
+            "ADR-001",
+            expected=2,
+        )
+        self.assertIn("Refusing to manage symbolic link", rejected_preview.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,7 @@
 ---
 name: engineering-execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务，并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务；为大型 ADR corpus 生成 lossless Decision View、精确有界 capsule、独立健康度与只读合并影响预览；并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、ADR 太多、整理或压缩 ADR 上下文、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Engineering Execution Plan
@@ -114,11 +114,13 @@ docs/
 ├── .epctl/
 │   ├── state.json
 │   ├── config.json          # 可选：注册既有 architecture roots
+│   ├── decision-views.json  # schema 1：显式 View 种子；非规范
 │   └── adr-revisions/       # 可选：completed/cancelled EP 的历史 ADR payload
 │       └── ADR-NNN/
 │           └── sha256-<payload>.md
 ├── RESEARCH.md
 ├── DECISIONS.md
+├── DECISION-VIEWS.md        # 可重建 View 索引
 ├── PLANS.md
 ├── BUGFIXES.md
 ├── research/
@@ -130,6 +132,8 @@ docs/
 │   └── completed/
 ├── adr/
 │   └── adr-NNN_slug.md
+├── decision-views/          # 由 epctl 生成；不要手工编辑
+│   └── <view>.md
 ├── design-docs/             # 可选：既有 ADR / Design Doc corpus
 ├── exec-plans/
 │   ├── active/ep-NNN_slug/
@@ -178,6 +182,16 @@ python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
   --from-file evidence/adr-001-historical.md
 python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
   --from-file evidence/adr-001-historical.md --apply
+
+python3 <skill-dir>/scripts/epctl.py --repo . adr-health --json
+python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
+  --title "Runtime decisions" --adr ADR-004 --adr ADR-005
+python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
+  --title "Runtime decisions" --adr ADR-004 --adr ADR-005 --apply
+python3 <skill-dir>/scripts/epctl.py --repo . decision-capsule \
+  --view runtime --constraint ADR-005#C-002 --json
+python3 <skill-dir>/scripts/epctl.py --repo . adr-consolidation-plan \
+  --view runtime --json
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   --slug implement-cache --title "Implement cache topology" \
@@ -286,6 +300,24 @@ non-current ADR 不能满足新 ExecPlan；受影响的既有 active EP 显示
 `ADR-NNN#C-NNN` 映射到 amendment ADR；这只是派生 effect，不新增状态或改写旧
 决定。Review Required 用于处理 under-review 和传递 non-current 链，Historical
 保留 rejected、retired、superseded 决定。
+
+当 current ADR 数量、关系图或 active EP 输入过大时，不要为减少文件数而退役仍然
+有效的决定。先运行 `adr-health` 查看 corpus、contract、graph、constraint、
+amendment、active-plan、View coverage 与 context cost 各维度；输出没有聚合总分，
+也不会触发生命周期变化。由 repository owner 用
+`set-decision-view` 明确维护领域种子；工具每次从 current-effect 图重建依赖、
+amendment 和 constraint 身份。View 是持久导航，不是 ADR，也没有 accepted 状态。
+
+任务开始时用 `decision-capsule --view ...` 或显式 `--adr` 编译临时上下文。strict
+ADR 只复制原文 `Decision Statement` 和选中的 `Normative Constraints` 行并报告
+source/capsule SHA-256；legacy ADR 必须整篇复制。默认 32 KiB，超限失败并给出每个
+source 的 byte cost，绝不摘要或截断；提高预算必须写 `--budget-reason`。Capsule
+只辅助 Architecture Input 阅读，不替代 ExecPlan 的 Compliance Matrix。
+
+`adr-consolidation-plan` 只报告 amendment chain、legacy contract、proposed overlap
+和 active EP impact，并始终声明 `preview_only: true`。语义合并必须另起一份原子
+proposed ADR，取得明确 Decision Owner acceptance，完成迁移后再走授权的
+supersede/retire 流程。该命令本身无权修改、接受、退役、替代或删除任何 ADR。
 
 一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
 

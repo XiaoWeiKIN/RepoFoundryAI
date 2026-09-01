@@ -43,6 +43,7 @@ and superseded states so history remains auditable.
 | ADR-015 | Adopt risk-adaptive Agent governance modes | accepted | current | depends on ADR-004; depends on ADR-012 | 2026-08-13 | [] | [ADR](adr/adr-015_risk-adaptive-agent-governance.md) |
 | ADR-016 | Separate ADR history from current decision effect | accepted | current | amends ADR-014 | 2026-08-13 | [] | [ADR](adr/adr-016_reversible-decision-effect.md) |
 | ADR-018 | Make technical Design Docs a first-class governed artifact | accepted | current | depends on ADR-001; depends on ADR-004; depends on ADR-014 | 2026-08-17 | [] | [ADR](adr/adr-018_first-class-technical-design-documents.md) |
+| ADR-058 | Separate ADR history from lossless decision working context | accepted | current | depends on ADR-014; depends on ADR-016 | 2026-09-01 | [] | [ADR](adr/adr-058_lossless-adr-context-compaction.md) |
 <!-- ADRCTL:CURRENT:END -->
 
 ## Current constraint amendments

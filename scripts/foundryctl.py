@@ -2981,6 +2981,60 @@ def plan_harness_upgrade(
     warnings: list[str] = []
     file_writes: dict[str, str] = {}
     record_overrides: dict[str, dict[str, object]] = {}
+    epctl = load_execution_plan_ctl()
+    additive_directories = tuple(
+        str(item)
+        for item in getattr(epctl, "UPGRADE_ADDITIVE_DIRECTORIES", ())
+    )
+    additive_files = tuple(
+        (str(relative), str(asset))
+        for relative, asset in getattr(
+            epctl,
+            "UPGRADE_ADDITIVE_FILE_ASSETS",
+            (),
+        )
+    )
+    for relative in additive_directories:
+        target = repo / relative
+        reason = managed_path_conflict(repo, target, "directory")
+        if reason:
+            actions.append(
+                {"action": "conflict", "path": relative, "reason": reason}
+            )
+        elif target.is_dir():
+            actions.append({"action": "preserve", "path": relative + "/"})
+        else:
+            actions.append(
+                {
+                    "action": "create_directory",
+                    "path": relative + "/",
+                    "reason": "new additive execution-plan infrastructure",
+                }
+            )
+    for relative, asset in additive_files:
+        target = repo / relative
+        reason = managed_path_conflict(repo, target, "file")
+        if reason:
+            actions.append(
+                {"action": "conflict", "path": relative, "reason": reason}
+            )
+        elif target.is_file():
+            actions.append(
+                {
+                    "action": "preserve",
+                    "path": relative,
+                    "reason": "existing repository-owned additive file",
+                }
+            )
+        else:
+            file_writes[relative] = epctl.asset_text(asset)
+            actions.append(
+                {
+                    "action": "create_file",
+                    "path": relative,
+                    "reason": "new additive execution-plan infrastructure",
+                }
+            )
     contract = selected_file_assets(adapter_ids)
     for relative, asset, owner_kind, owner_id in contract:
         target = repo / relative
@@ -3217,6 +3271,12 @@ def upgrade_harness(
             f"{item.get('path')}: {item.get('reason')}" for item in conflicts
         )
         raise FoundryctlError(f"Harness upgrade preflight failed: {details}")
+    additive_directories = [
+        str(item["path"]).rstrip("/")
+        for item in planned["actions"]
+        if isinstance(item, dict) and item.get("action") == "create_directory"
+    ]
+    epctl = load_execution_plan_ctl()
     created: list[str] = []
     updated: list[str] = []
     validation_warnings: list[str] = []
@@ -3245,7 +3305,18 @@ def upgrade_harness(
             for parent in path.parents
             if parent != repo and repo in parent.parents and not parent.exists()
         }
+        missing_parents.update(
+            repo / relative
+            for relative in additive_directories
+            if not (repo / relative).exists()
+        )
         try:
+            for relative in additive_directories:
+                directory = repo / relative
+                reject_symlink_path(repo, directory)
+                if not directory.exists():
+                    directory.mkdir(parents=True)
+                    created.append(relative + "/")
             for relative, content in file_writes.items():
                 target = repo / relative
                 existed = target.exists()
@@ -3267,6 +3338,9 @@ def upgrade_harness(
                 repo,
                 require_manifest=True,
             )
+            view_errors, view_warnings = epctl.validate_decision_views(repo)
+            errors.extend(view_errors)
+            validation_warnings.extend(view_warnings)
             if errors:
                 raise FoundryctlError(
                     "Harness validation failed after upgrade: " + "; ".join(errors)
