@@ -20,6 +20,7 @@ EPCTL = (
     / "scripts"
     / "epctl.py"
 )
+PREVIOUS_DISTRIBUTION = "0.7.1"
 from tests.spec_git_fixture import (  # noqa: E402
     add_specialized_go_specs,
     commit_all,
@@ -654,7 +655,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 3)
         self.assertEqual(
             manifest["producer"],
-            {"name": "repo-foundry", "version": "0.7.1"},
+            {"name": "repo-foundry", "version": "0.8.0"},
         )
         self.assertEqual(
             manifest["core"],
@@ -778,7 +779,108 @@ class FoundryctlTestCase(unittest.TestCase):
     def test_cli_reports_the_distribution_version(self) -> None:
         result = self.run_cli("--version")
 
-        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.7.1")
+        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.8.0")
+
+    def test_distribution_upgrade_adds_empty_decision_view_infrastructure(
+        self,
+    ) -> None:
+        self.run_cli("bootstrap", "--adapter", "codex", "--apply")
+        manifest_path = self.repo / foundryctl.HARNESS_MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["producer"]["version"] = PREVIOUS_DISTRIBUTION
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        registry = self.repo / "docs/.epctl/decision-views.json"
+        index = self.repo / "docs/DECISION-VIEWS.md"
+        view_root = self.repo / "docs/decision-views"
+        view_marker = view_root / ".gitkeep"
+        registry.unlink()
+        index.unlink()
+        view_marker.unlink()
+        view_root.rmdir()
+        adr = self.repo / "docs/adr/adr-900_existing-source.md"
+        adr.write_text(
+            "---\n"
+            "doc_type: adr\n"
+            "title: Existing source\n"
+            "status: accepted\n"
+            "created: 2026-01-01\n"
+            "last_verified: 2026-01-02\n"
+            "depends_on: []\n"
+            "amends: []\n"
+            "---\n\n"
+            "# ADR-900: Existing source\n",
+            encoding="utf-8",
+        )
+        adr_before = adr.read_bytes()
+
+        preview = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                foundryctl.REPO_FOUNDRY_VERSION,
+            ).stdout
+        )
+        create_paths = {
+            str(item["path"])
+            for item in preview["actions"]
+            if item["action"] in {"create_file", "create_directory"}
+        }
+        self.assertEqual(
+            create_paths,
+            {
+                "docs/decision-views/",
+                "docs/decision-views/.gitkeep",
+                "docs/DECISION-VIEWS.md",
+                "docs/.epctl/decision-views.json",
+            },
+        )
+        self.assertFalse(registry.exists())
+        self.assertFalse(index.exists())
+        self.assertFalse(view_root.exists())
+
+        applied = json.loads(
+            self.run_cli(
+                "upgrade",
+                "--to",
+                foundryctl.REPO_FOUNDRY_VERSION,
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(
+            set(applied["created"]),
+            {
+                "docs/decision-views/",
+                "docs/decision-views/.gitkeep",
+                "docs/DECISION-VIEWS.md",
+                "docs/.epctl/decision-views.json",
+            },
+        )
+        self.assertEqual(
+            json.loads(registry.read_text(encoding="utf-8")),
+            {"version": 1, "views": []},
+        )
+        self.assertTrue(index.is_file())
+        self.assertTrue(view_root.is_dir())
+        self.assertTrue(view_marker.is_file())
+        self.assertEqual(adr.read_bytes(), adr_before)
+        migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            migrated["producer"]["version"],
+            foundryctl.REPO_FOUNDRY_VERSION,
+        )
+        self.assertIn(
+            (
+                f"distribution-{PREVIOUS_DISTRIBUTION}-to-"
+                f"{foundryctl.REPO_FOUNDRY_VERSION}"
+            ),
+            [item["id"] for item in migrated["applied_migrations"]],
+        )
+        self.run_ep_cli("reindex")
+        self.run_ep_cli("validate")
+        self.assertEqual(adr.read_bytes(), adr_before)
 
     def test_legacy_schema_upgrade_is_preview_first_and_idempotent(
         self,
@@ -805,7 +907,7 @@ class FoundryctlTestCase(unittest.TestCase):
         validation = self.run_cli("validate", "--harness")
         self.assertIn("HARNESS_SCHEMA_UPGRADE_AVAILABLE", validation.stderr)
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
 
         self.assertEqual(preview["mode"], "dry-run")
@@ -825,7 +927,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -860,7 +962,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -890,7 +992,7 @@ class FoundryctlTestCase(unittest.TestCase):
             (self.repo / relative).unlink()
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
         self.assertEqual(
             {
@@ -910,7 +1012,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -935,7 +1037,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertIn("HARNESS_ADAPTER_UPGRADE_AVAILABLE", validation.stderr)
         self.assertIn("HARNESS_COMPONENT_UPGRADE_AVAILABLE", validation.stderr)
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
         self.assertEqual(
             {
@@ -954,7 +1056,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -1037,7 +1139,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -1090,11 +1192,14 @@ class FoundryctlTestCase(unittest.TestCase):
         }
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
 
         self.assertEqual(preview["from"]["distribution"], "0.6.0")
-        self.assertEqual(preview["to"]["distribution"], "0.7.1")
+        self.assertEqual(
+            preview["to"]["distribution"],
+            foundryctl.REPO_FOUNDRY_VERSION,
+        )
         self.assertEqual(
             [
                 item["action"]
@@ -1116,7 +1221,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -1126,10 +1231,13 @@ class FoundryctlTestCase(unittest.TestCase):
             applied["updated"],
             [foundryctl.HARNESS_MANIFEST],
         )
-        self.assertEqual(migrated["producer"]["version"], "0.7.1")
+        self.assertEqual(
+            migrated["producer"]["version"],
+            foundryctl.REPO_FOUNDRY_VERSION,
+        )
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
-            ["distribution-0.6.0-to-0.7.1"],
+            [f"distribution-0.6.0-to-{foundryctl.REPO_FOUNDRY_VERSION}"],
         )
         self.assertEqual(
             {
@@ -1200,7 +1308,7 @@ class FoundryctlTestCase(unittest.TestCase):
         )
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
         self.assertEqual(
             {
@@ -1220,7 +1328,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -1231,7 +1339,10 @@ class FoundryctlTestCase(unittest.TestCase):
                 (self.repo / relative).read_text(encoding="utf-8"),
                 foundryctl.asset_text(asset),
             )
-        self.assertEqual(migrated["producer"]["version"], "0.7.1")
+        self.assertEqual(
+            migrated["producer"]["version"],
+            foundryctl.REPO_FOUNDRY_VERSION,
+        )
         self.assertEqual(migrated["core"]["version"], "1.5.0")
         self.assertEqual(
             [adapter["version"] for adapter in migrated["adapters"]],
@@ -1244,7 +1355,7 @@ class FoundryctlTestCase(unittest.TestCase):
                 "adapter-codex-2.3.0-to-2.4.0",
                 "adapter-claude-1.2.0-to-1.3.0",
                 "adapter-portable-1.2.0-to-1.3.0",
-                "distribution-0.4.0-to-0.7.1",
+                f"distribution-0.4.0-to-{foundryctl.REPO_FOUNDRY_VERSION}",
             ],
         )
         self.run_cli("validate", "--harness")
@@ -1294,7 +1405,7 @@ class FoundryctlTestCase(unittest.TestCase):
         }
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
         self.assertIn(
             foundryctl.CORE_PROJECT_SKILL_PATH,
@@ -1310,7 +1421,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -1321,13 +1432,16 @@ class FoundryctlTestCase(unittest.TestCase):
             skill_path.read_text(encoding="utf-8"),
             foundryctl.asset_text("core/repo-foundry-ai/SKILL.md"),
         )
-        self.assertEqual(migrated["producer"]["version"], "0.7.1")
+        self.assertEqual(
+            migrated["producer"]["version"],
+            foundryctl.REPO_FOUNDRY_VERSION,
+        )
         self.assertEqual(migrated["core"]["version"], "1.5.0")
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
             [
                 "core-1.2.0-to-1.5.0",
-                "distribution-0.3.0-to-0.7.1",
+                f"distribution-0.3.0-to-{foundryctl.REPO_FOUNDRY_VERSION}",
             ],
         )
         self.assertEqual(
@@ -1364,7 +1478,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -1406,7 +1520,7 @@ class FoundryctlTestCase(unittest.TestCase):
         )
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
         self.assertIn(
             "ARCHITECTURE.md",
@@ -1419,7 +1533,7 @@ class FoundryctlTestCase(unittest.TestCase):
             self.run_cli(
                 "upgrade",
                 "--to",
-                "0.7.1",
+                foundryctl.REPO_FOUNDRY_VERSION,
                 "--apply",
             ).stdout
         )
@@ -1475,7 +1589,7 @@ class FoundryctlTestCase(unittest.TestCase):
         before_file = adapter.read_bytes()
 
         preview = json.loads(
-            self.run_cli("upgrade", "--to", "0.7.1").stdout
+            self.run_cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION).stdout
         )
         self.assertIn(
             ".agents/skills/engineering-specs/scripts/spec_router.py",
@@ -1487,7 +1601,7 @@ class FoundryctlTestCase(unittest.TestCase):
         failed = self.run_cli(
             "upgrade",
             "--to",
-            "0.7.1",
+            foundryctl.REPO_FOUNDRY_VERSION,
             "--apply",
             expected=2,
         )
@@ -1511,7 +1625,7 @@ class FoundryctlTestCase(unittest.TestCase):
         schema_result = self.run_cli(
             "upgrade",
             "--to",
-            "0.7.1",
+            foundryctl.REPO_FOUNDRY_VERSION,
             expected=2,
         )
         self.assertIn("HARNESS_SCHEMA_TOO_NEW", schema_result.stderr)
@@ -1525,7 +1639,7 @@ class FoundryctlTestCase(unittest.TestCase):
         product_result = self.run_cli(
             "upgrade",
             "--to",
-            "0.7.1",
+            foundryctl.REPO_FOUNDRY_VERSION,
             expected=2,
         )
         self.assertIn("HARNESS_PRODUCER_TOO_NEW", product_result.stderr)
@@ -1622,7 +1736,7 @@ class FoundryctlTestCase(unittest.TestCase):
         result = self.run_cli(
             "upgrade",
             "--to",
-            "0.7.1",
+            foundryctl.REPO_FOUNDRY_VERSION,
             "--apply",
             expected=2,
         )

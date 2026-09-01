@@ -612,6 +612,30 @@
           "description": "计划对齐不等于任务、验收、Benchmark gate 或实现已经完成"
         }
       ]
+    },
+    {
+      "id": 27,
+      "prompt": "仓库已有 50 多份 ADR，部分是 current amendment，active EP 还引用其中很多。我想压缩 Agent 上下文并整理领域入口；不要因为数量多就自动退役或合并 ADR。",
+      "expected_output": "先运行 adr-health 查看独立压力维度，再由 owner 明确 current ADR seeds，以 preview/apply 建立非规范 Decision Views；任务通过 exact decision-capsule 在预算内选取 verified source bytes。可运行 preview-only consolidation impact，但任何语义合并仍需新 proposed ADR、Decision Owner acceptance 与正常 effect transition。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "separates_history_from_context",
+          "description": "保留原子 ADR、seal、constraint IDs 和生命周期，只压缩非规范检索上下文"
+        },
+        {
+          "name": "uses_explainable_health",
+          "description": "分别报告 corpus、graph、legacy、amendment、active-plan、coverage 与 cost，不输出聚合分数"
+        },
+        {
+          "name": "compiles_exact_bounded_context",
+          "description": "strict 片段和 legacy 全文保持精确并带 digest；超预算失败而不是摘要或截断"
+        },
+        {
+          "name": "preserves_decision_authority",
+          "description": "View 或 consolidation preview 不执行 accept、retire、supersede、rewrite 或 delete"
+        }
+      ]
     }
   ]
 }

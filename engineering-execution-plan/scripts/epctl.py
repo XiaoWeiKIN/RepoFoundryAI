@@ -34,6 +34,19 @@ CONFIG_VERSION = 1
 DEFAULT_ARCHITECTURE_ROOT = "docs/adr"
 ADR_REVISION_ROOT = Path("docs/.epctl/adr-revisions")
 ADR_REVISION_MAX_BYTES = 1024 * 1024
+DECISION_VIEW_REGISTRY = Path("docs/.epctl/decision-views.json")
+DECISION_VIEW_ROOT = Path("docs/decision-views")
+DECISION_VIEW_INDEX = Path("docs/DECISION-VIEWS.md")
+DECISION_VIEW_SCHEMA_VERSION = 1
+DECISION_CAPSULE_SCHEMA_VERSION = 1
+DECISION_CAPSULE_DEFAULT_BUDGET_BYTES = 32 * 1024
+ADR_HEALTH_SCHEMA_VERSION = 1
+ADR_CONSOLIDATION_SCHEMA_VERSION = 1
+ADR_HEALTH_EFFECTIVE_TARGET = 24
+ADR_HEALTH_COMPONENT_TARGET = 12
+ADR_HEALTH_ACTIVE_PLAN_TARGET = 12
+ADR_HEALTH_ACTIVE_PLAN_CONSTRAINT_TARGET = 96
+ADR_HEALTH_PARTIAL_AMENDMENT_TARGET = 8
 
 INIT_DIRECTORIES = (
     "docs/.epctl",
@@ -42,6 +55,7 @@ INIT_DIRECTORIES = (
     "docs/research/active",
     "docs/research/completed",
     "docs/adr",
+    "docs/decision-views",
     "docs/bugfixes/active",
     "docs/bugfixes/completed",
 )
@@ -49,8 +63,17 @@ INIT_FILE_ASSETS = (
     ("docs/PLANS.md", "plans-index.md"),
     ("docs/RESEARCH.md", "research-index.md"),
     ("docs/DECISIONS.md", "decisions-index.md"),
+    ("docs/DECISION-VIEWS.md", "decision-views-index.md"),
+    ("docs/.epctl/decision-views.json", "decision-views-registry.json"),
+    ("docs/decision-views/.gitkeep", "decision-views-gitkeep"),
     ("docs/BUGFIXES.md", "bugfixes-index.md"),
     ("docs/exec-plans/tech-debt-tracker.md", "tech-debt-tracker.md"),
+)
+UPGRADE_ADDITIVE_DIRECTORIES = ("docs/decision-views",)
+UPGRADE_ADDITIVE_FILE_ASSETS = (
+    ("docs/DECISION-VIEWS.md", "decision-views-index.md"),
+    ("docs/.epctl/decision-views.json", "decision-views-registry.json"),
+    ("docs/decision-views/.gitkeep", "decision-views-gitkeep"),
 )
 
 EXECPLAN_SECTIONS = (
@@ -470,6 +493,134 @@ def save_config(repo: Path, data: dict[str, object]) -> None:
         config_path(repo),
         json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
     )
+
+
+def decision_view_registry_path(repo: Path) -> Path:
+    return repo / DECISION_VIEW_REGISTRY
+
+
+def decision_view_index_path(repo: Path) -> Path:
+    return repo / DECISION_VIEW_INDEX
+
+
+def decision_view_path(repo: Path, view_id: str) -> Path:
+    validate_slug(view_id)
+    return repo / DECISION_VIEW_ROOT / f"{view_id}.md"
+
+
+def empty_decision_view_registry() -> dict[str, object]:
+    return {"version": DECISION_VIEW_SCHEMA_VERSION, "views": []}
+
+
+def normalize_decision_view_record(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {"id", "title", "adr_refs"}:
+        raise EpctlError(
+            "Decision View records must contain exactly id, title, and adr_refs"
+        )
+    view_id = value.get("id")
+    title = value.get("title")
+    raw_refs = value.get("adr_refs")
+    if not isinstance(view_id, str):
+        raise EpctlError("Decision View id must be a string")
+    validate_slug(view_id)
+    if not isinstance(title, str) or not inline_text(title):
+        raise EpctlError(f"Decision View {view_id} title must be non-empty")
+    normalized_title = inline_text(title)
+    if title != normalized_title:
+        raise EpctlError(
+            f"Decision View {view_id} title must be a single normalized line"
+        )
+    if (
+        not isinstance(raw_refs, list)
+        or not raw_refs
+        or not all(isinstance(item, str) for item in raw_refs)
+    ):
+        raise EpctlError(
+            f"Decision View {view_id} adr_refs must be a non-empty string array"
+        )
+    normalized_refs = normalize_reference_ids(raw_refs, "ADR")
+    if len(normalized_refs) != len(raw_refs):
+        raise EpctlError(f"Decision View {view_id} adr_refs contains duplicates")
+    normalized_refs.sort()
+    if raw_refs != normalized_refs:
+        raise EpctlError(
+            f"Decision View {view_id} adr_refs must be canonical and sorted"
+        )
+    return {"id": view_id, "title": title, "adr_refs": normalized_refs}
+
+
+def load_decision_view_registry(repo: Path) -> dict[str, object]:
+    path = decision_view_registry_path(repo)
+    if not path.exists():
+        return empty_decision_view_registry()
+    reject_symlink_path(repo, path)
+    if not path.is_file():
+        raise EpctlError(f"Decision View registry must be a regular file: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EpctlError(f"Invalid Decision View registry {path}: {exc}") from exc
+    if (
+        not isinstance(data, dict)
+        or set(data) != {"version", "views"}
+        or data.get("version") != DECISION_VIEW_SCHEMA_VERSION
+        or not isinstance(data.get("views"), list)
+    ):
+        raise EpctlError(f"Unsupported Decision View registry in {path}")
+    normalized = [
+        normalize_decision_view_record(item) for item in data["views"]
+    ]
+    view_ids = [str(item["id"]) for item in normalized]
+    if len(set(view_ids)) != len(view_ids):
+        raise EpctlError(f"Decision View registry contains duplicate ids: {path}")
+    if view_ids != sorted(view_ids):
+        raise EpctlError(f"Decision View registry must be sorted by id: {path}")
+    return {"version": DECISION_VIEW_SCHEMA_VERSION, "views": normalized}
+
+
+def save_decision_view_registry(repo: Path, data: dict[str, object]) -> None:
+    views = data.get("views")
+    if not isinstance(views, list):
+        raise EpctlError("Decision View registry views must be an array")
+    normalized = [normalize_decision_view_record(item) for item in views]
+    normalized.sort(key=lambda item: str(item["id"]))
+    atomic_write(
+        decision_view_registry_path(repo),
+        json.dumps(
+            {"version": DECISION_VIEW_SCHEMA_VERSION, "views": normalized},
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+    )
+
+
+def find_decision_view(repo: Path, view_id: str) -> dict[str, object]:
+    validate_slug(view_id)
+    registry = load_decision_view_registry(repo)
+    views = registry["views"]
+    assert isinstance(views, list)
+    for item in views:
+        assert isinstance(item, dict)
+        if item.get("id") == view_id:
+            return item
+    raise EpctlError(f"Decision View does not exist: {view_id}")
+
+
+def require_decision_view_infrastructure(repo: Path) -> None:
+    required = (
+        decision_view_registry_path(repo),
+        decision_view_index_path(repo),
+        repo / DECISION_VIEW_ROOT,
+    )
+    for path in required:
+        reject_symlink_path(repo, path)
+    if not required[0].is_file() or not required[1].is_file() or not required[2].is_dir():
+        raise EpctlError(
+            "Decision View infrastructure is missing; run epctl init or an "
+            "explicit RepoFoundry Harness upgrade"
+        )
 
 
 def architecture_roots(repo: Path, *, existing_only: bool = False) -> tuple[Path, ...]:
@@ -977,6 +1128,53 @@ def markdown_section_spans(text: str) -> list[tuple[str, int, int, int]]:
         end = headings[index + 1][1] if index + 1 < len(headings) else len(text)
         result.append((heading, start, body_start, end))
     return result
+
+
+def markdown_section_source(text: str, heading: str) -> str:
+    matches = [
+        span for span in markdown_section_spans(text) if span[0] == heading
+    ]
+    if len(matches) != 1:
+        raise EpctlError(
+            f"Expected exactly one ## {heading}, found {len(matches)}"
+        )
+    _, start, _, end = matches[0]
+    return text[start:end]
+
+
+def adr_constraint_source_rows(
+    text: str,
+    adr_id: str,
+) -> tuple[list[str], list[dict[str, object]]]:
+    source = markdown_section_source(text, "Normative Constraints")
+    header_lines: list[str] = []
+    rows: list[dict[str, object]] = []
+    for line in source.splitlines(keepends=True):
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = split_table_row(line)
+        if not cells:
+            continue
+        if cells[0].lower() == "id" or set(cells[0]) == {"-"}:
+            header_lines.append(line)
+            continue
+        match = LOCAL_CONSTRAINT_RE.fullmatch(cells[0].upper())
+        if not match:
+            continue
+        constraint_id = f"C-{int(match.group(1)):03d}"
+        rows.append(
+            {
+                "ref": f"{adr_id}#{constraint_id}",
+                "constraint_id": constraint_id,
+                "line": line,
+                "cells": cells,
+            }
+        )
+    if len(header_lines) < 2:
+        raise EpctlError(
+            f"{adr_id} Normative Constraints table has no exact header/divider"
+        )
+    return header_lines[:2], rows
 
 
 def replace_section(text: str, heading: str, body: str) -> str:
@@ -1867,23 +2065,27 @@ def rebuild_adr_index_text(
     return updated
 
 
-def managed_index_snapshots(repo: Path) -> dict[Path, str]:
+def managed_index_snapshots(repo: Path) -> dict[Path, str | None]:
+    paths = {
+        repo / "docs" / "PLANS.md",
+        repo / "docs" / "RESEARCH.md",
+        repo / "docs" / "DECISIONS.md",
+        repo / "docs" / "DECISION-VIEWS.md",
+        repo / "docs" / "BUGFIXES.md",
+        repo / "docs" / ".epctl" / "state.json",
+        decision_view_registry_path(repo),
+    }
+    view_root = repo / DECISION_VIEW_ROOT
+    if view_root.is_dir() and not view_root.is_symlink():
+        paths.update(view_root.glob("*.md"))
     return {
-        path: path.read_text(encoding="utf-8")
-        for path in (
-            repo / "docs" / "PLANS.md",
-            repo / "docs" / "RESEARCH.md",
-            repo / "docs" / "DECISIONS.md",
-            repo / "docs" / "BUGFIXES.md",
-            repo / "docs" / ".epctl" / "state.json",
-        )
-        if path.exists()
+        path: path.read_text(encoding="utf-8") if path.is_file() else None
+        for path in paths
     }
 
 
-def restore_managed_indexes(snapshots: dict[Path, str]) -> None:
-    for path, text in snapshots.items():
-        atomic_write(path, text)
+def restore_managed_indexes(snapshots: dict[Path, str | None]) -> None:
+    restore_file_snapshots(snapshots)
 
 
 def rebuild_indexes(repo: Path) -> dict[str, int]:
@@ -1952,6 +2154,8 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
     )
     atomic_write(bugfix_index, bugfix_text)
 
+    decision_views = rebuild_decision_views(repo)
+
     state = load_state(repo)
     high_water = state["high_water"]
     assert isinstance(high_water, dict)
@@ -1965,6 +2169,7 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
         "plans": len(active_plans) + len(completed_plans),
         "research": len(active_research) + len(completed_research),
         "adrs": len(adrs),
+        "decision_views": len(decision_views),
         "bugfixes": len(active_bugfixes) + len(completed_bugfixes),
     }
 
@@ -2100,14 +2305,18 @@ def find_adr(repo: Path, adr_id: str) -> Path:
     target_number = int(id_match.group(1)) if id_match else -1
     matches: list[Path] = []
     for path in adr_files(repo):
+        path_number = path_id_number(path, "ADR")
+        if path.is_symlink():
+            if path_number == target_number:
+                reject_symlink_path(repo, path)
+            continue
         try:
-            data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+            data, _ = adr_document_data(path)
         except EpctlError:
             data = {}
-        path_numbers = {
-            int(number) for number in ID_RE["ADR"].findall(path.as_posix())
-        }
+        path_numbers = {path_number} if path_number is not None else set()
         if data.get("id", "").upper() == target or target_number in path_numbers:
+            reject_symlink_path(repo, path)
             matches.append(path)
     if len(matches) != 1:
         raise EpctlError(f"Expected one {target} ADR, found {len(matches)}")
@@ -2954,6 +3163,1429 @@ def adr_input_closure(
                     + "; ".join(reasons)
                 )
     return ordered, data_by_id
+
+
+def resolve_decision_context(
+    repo: Path,
+    adr_values: Iterable[str],
+) -> dict[str, object]:
+    raw_values = list(adr_values)
+    direct_adrs = normalize_reference_ids(raw_values, "ADR")
+    if not direct_adrs:
+        raise EpctlError("Decision context requires at least one ADR")
+    if len(direct_adrs) != len(raw_values):
+        raise EpctlError("Decision context contains duplicate ADR references")
+
+    closure, data_by_id = adr_input_closure(repo, direct_adrs)
+    resolved = set(closure)
+    corpus = adr_corpus_data(repo)
+
+    while True:
+        structured_refs: set[str] = set()
+        for adr_id in sorted(resolved):
+            path = find_adr(repo, adr_id)
+            structured_refs.update(
+                adr_constraint_refs(path.read_text(encoding="utf-8"), adr_id)
+            )
+        amendment_candidates: list[str] = []
+        for candidate_id, candidate in corpus.items():
+            if candidate_id in resolved or candidate.get("status") != "accepted":
+                continue
+            current, _ = adr_currentness(
+                repo,
+                candidate_id,
+                data_by_id=corpus,
+            )
+            if not current:
+                continue
+            amended_adrs = set(
+                parse_inline_ids(candidate.get("amends", ""), "ADR")
+            )
+            amended_constraints = set(
+                parse_adr_constraint_array(
+                    candidate.get("amends_constraints", "[]"),
+                    "amends_constraints",
+                )
+            )
+            if amended_adrs & resolved or amended_constraints & structured_refs:
+                amendment_candidates.append(candidate_id)
+        if not amendment_candidates:
+            break
+        for candidate_id in sorted(amendment_candidates):
+            candidate_closure, candidate_data = adr_input_closure(
+                repo,
+                (candidate_id,),
+            )
+            resolved.update(candidate_closure)
+            data_by_id.update(candidate_data)
+
+    ordered_adrs = sorted(resolved)
+    projection = {
+        str(item["id"]): item for item in adr_effect_projection(repo)
+    }
+    sources: list[dict[str, object]] = []
+    all_constraint_refs: list[str] = []
+    amendment_targets: dict[str, list[str]] = {}
+    for adr_id in ordered_adrs:
+        path = find_adr(repo, adr_id)
+        raw_source = path.read_bytes()
+        try:
+            text = raw_source.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise EpctlError(f"{adr_id} source is not UTF-8: {path}") from exc
+        item_errors, _, data = validate_adr(path)
+        if item_errors:
+            raise EpctlError(
+                f"{adr_id} is not valid for a Decision context:\n- "
+                + "\n- ".join(item_errors)
+            )
+        if data.get("status") != "accepted":
+            raise EpctlError(
+                f"{adr_id} must be accepted and current for a Decision context"
+            )
+        current, reasons = adr_currentness(
+            repo,
+            adr_id,
+            data_by_id=corpus,
+        )
+        if not current:
+            raise EpctlError(
+                f"{adr_id} must be current for a Decision context: "
+                + "; ".join(reasons)
+            )
+        normalized_text = text.replace("\r\n", "\n").replace("\r", "\n")
+        _, strict = adr_document_data_from_text(path, normalized_text)
+        structured = strict and data.get("schema_version") in {
+            "1.2",
+            "1.3",
+            "1.4",
+        }
+        decision_source = ""
+        constraint_headers: list[str] = []
+        constraint_rows: list[dict[str, object]] = []
+        if structured:
+            decision_source = markdown_section_source(text, "Decision Statement")
+            constraint_headers, constraint_rows = adr_constraint_source_rows(
+                text,
+                adr_id,
+            )
+            all_constraint_refs.extend(
+                str(row["ref"]) for row in constraint_rows
+            )
+        amended_constraints = parse_adr_constraint_array(
+            data.get("amends_constraints", "[]"),
+            "amends_constraints",
+        )
+        for target in amended_constraints:
+            amendment_targets.setdefault(target, []).append(adr_id)
+        document_sha256 = hashlib.sha256(raw_source).hexdigest()
+        payload_digest = inline_text(data.get("payload_sha256", ""))
+        sources.append(
+            {
+                "id": adr_id,
+                "title": data.get("title", ""),
+                "path": path.relative_to(repo).as_posix(),
+                "text": text,
+                "data": data,
+                "contract": "strict-structured" if structured else "whole-document",
+                "document_sha256": document_sha256,
+                "payload_sha256": payload_digest,
+                "decision_source": decision_source,
+                "constraint_headers": constraint_headers,
+                "constraint_rows": constraint_rows,
+                "effect": projection.get(adr_id, {}).get("effect", "current"),
+                "amended_by": projection.get(adr_id, {}).get("amended_by", []),
+            }
+        )
+    for values in amendment_targets.values():
+        values.sort()
+    return {
+        "direct_adrs": sorted(direct_adrs),
+        "resolved_adrs": ordered_adrs,
+        "sources": sources,
+        "constraint_refs": sorted(all_constraint_refs),
+        "amendment_targets": dict(sorted(amendment_targets.items())),
+    }
+
+
+def decision_context_source_by_id(
+    context: dict[str, object],
+) -> dict[str, dict[str, object]]:
+    sources = context.get("sources", [])
+    assert isinstance(sources, list)
+    return {
+        str(source["id"]): source
+        for source in sources
+        if isinstance(source, dict)
+    }
+
+
+def expanded_decision_constraint_refs(
+    context: dict[str, object],
+    constraint_values: Iterable[str],
+) -> tuple[list[str], list[str]]:
+    raw_values = list(constraint_values)
+    requested = normalize_adr_constraint_refs(
+        raw_values,
+        "constraint selection",
+    )
+    if len(requested) != len(raw_values):
+        raise EpctlError("Decision capsule constraint selection contains duplicates")
+    available = {
+        str(value) for value in context.get("constraint_refs", [])
+    }
+    if not requested:
+        return [], sorted(available)
+    missing = sorted(set(requested) - available)
+    if missing:
+        raise EpctlError(
+            "Decision capsule constraints are outside the resolved context: "
+            + ", ".join(missing)
+        )
+    selected = set(requested)
+    amendment_targets = context.get("amendment_targets", {})
+    assert isinstance(amendment_targets, dict)
+    source_by_id = decision_context_source_by_id(context)
+    changed = True
+    while changed:
+        changed = False
+        for reference in list(selected):
+            for amender_id in amendment_targets.get(reference, []):
+                amender = source_by_id.get(str(amender_id))
+                if not amender:
+                    continue
+                for row in amender.get("constraint_rows", []):
+                    assert isinstance(row, dict)
+                    target = str(row["ref"])
+                    if target not in selected:
+                        selected.add(target)
+                        changed = True
+            source_id = reference.split("#", 1)[0]
+            source = source_by_id.get(source_id)
+            if not source:
+                continue
+            data = source.get("data", {})
+            assert isinstance(data, dict)
+            for target in parse_adr_constraint_array(
+                str(data.get("amends_constraints", "[]")),
+                "amends_constraints",
+            ):
+                if target in available and target not in selected:
+                    selected.add(target)
+                    changed = True
+    return sorted(requested), sorted(selected)
+
+
+def compile_decision_capsule(
+    context: dict[str, object],
+    constraint_values: Iterable[str] = (),
+    *,
+    budget_bytes: int | None = DECISION_CAPSULE_DEFAULT_BUDGET_BYTES,
+    budget_reason: str = "",
+) -> dict[str, object]:
+    if budget_bytes is not None:
+        if not isinstance(budget_bytes, int) or budget_bytes <= 0:
+            raise EpctlError("Decision capsule budget must be a positive integer")
+        if (
+            budget_bytes > DECISION_CAPSULE_DEFAULT_BUDGET_BYTES
+            and not inline_text(budget_reason)
+        ):
+            raise EpctlError(
+                "A Decision capsule budget above 32768 bytes requires "
+                "--budget-reason"
+            )
+    requested_constraints, selected_constraints = (
+        expanded_decision_constraint_refs(context, constraint_values)
+    )
+    selected_set = set(selected_constraints)
+    direct_adrs = [str(value) for value in context.get("direct_adrs", [])]
+    resolved_adrs = [str(value) for value in context.get("resolved_adrs", [])]
+    amendment_targets = context.get("amendment_targets", {})
+    assert isinstance(amendment_targets, dict)
+    chunks = [
+        "# ADR Decision Context Capsule\n\n",
+        f"Protocol: `{DECISION_CAPSULE_SCHEMA_VERSION}`\n\n",
+        "This is a non-normative retrieval projection. ADR source documents, "
+        "their seals, and explicit lifecycle authority remain normative. "
+        "Source text inside the marked blocks is exact and digest-verified; it "
+        "has not been summarized or truncated.\n\n",
+        "- Direct ADRs: "
+        + (", ".join(f"`{item}`" for item in direct_adrs) or "none")
+        + "\n",
+        "- Resolved current ADRs: "
+        + (", ".join(f"`{item}`" for item in resolved_adrs) or "none")
+        + "\n",
+        "- Requested constraints: "
+        + (
+            ", ".join(f"`{item}`" for item in requested_constraints)
+            if requested_constraints
+            else "all structured constraints in the resolved context"
+        )
+        + "\n",
+        "- Exact selected constraints after amendment expansion: "
+        + (", ".join(f"`{item}`" for item in selected_constraints) or "none")
+        + "\n",
+    ]
+    source_costs: list[dict[str, object]] = []
+    sources = context.get("sources", [])
+    assert isinstance(sources, list)
+    for source in sources:
+        assert isinstance(source, dict)
+        adr_id = str(source["id"])
+        title = str(source.get("title", ""))
+        path = str(source["path"])
+        contract = str(source["contract"])
+        metadata = (
+            f"\n\n## {adr_id}: {title}\n\n"
+            f"- Source: `{path}`\n"
+            f"- Contract: `{contract}`\n"
+            f"- Document SHA-256: `{source['document_sha256']}`\n"
+        )
+        payload_digest = str(source.get("payload_sha256", ""))
+        if payload_digest:
+            metadata += f"- Decision payload SHA-256: `{payload_digest}`\n"
+        if contract == "whole-document":
+            exact = str(source["text"])
+            source_chunk = (
+                metadata
+                + f"\n--- BEGIN EXACT WHOLE ADR {adr_id} ---\n"
+                + exact
+                + ("" if exact.endswith("\n") else "\n")
+                + f"--- END EXACT WHOLE ADR {adr_id} ---\n"
+            )
+        else:
+            decision_source = str(source["decision_source"])
+            source_chunk = (
+                metadata
+                + f"\n--- BEGIN EXACT DECISION STATEMENT {adr_id} ---\n"
+                + decision_source
+                + ("" if decision_source.endswith("\n") else "\n")
+                + f"--- END EXACT DECISION STATEMENT {adr_id} ---\n"
+            )
+            rows = [
+                row
+                for row in source.get("constraint_rows", [])
+                if isinstance(row, dict) and str(row["ref"]) in selected_set
+            ]
+            if rows:
+                source_chunk += (
+                    f"\n--- BEGIN EXACT SELECTED CONSTRAINTS {adr_id} ---\n"
+                    "## Normative Constraints\n\n"
+                )
+                for line in source.get("constraint_headers", []):
+                    exact_line = str(line)
+                    source_chunk += exact_line
+                    if not exact_line.endswith(("\n", "\r")):
+                        source_chunk += "\n"
+                for row in rows:
+                    reference = str(row["ref"])
+                    amenders = amendment_targets.get(reference, [])
+                    if amenders:
+                        source_chunk += (
+                            "<!-- Current amendment: "
+                            + ", ".join(str(item) for item in amenders)
+                            + " -->\n"
+                        )
+                    exact_line = str(row["line"])
+                    source_chunk += exact_line
+                    if not exact_line.endswith(("\n", "\r")):
+                        source_chunk += "\n"
+                source_chunk += f"--- END EXACT SELECTED CONSTRAINTS {adr_id} ---\n"
+        source_bytes = len(source_chunk.encode("utf-8"))
+        source_costs.append(
+            {
+                "adr_id": adr_id,
+                "bytes": source_bytes,
+                "contract": contract,
+            }
+        )
+        chunks.append(source_chunk)
+    capsule = "".join(chunks)
+    capsule_bytes = len(capsule.encode("utf-8"))
+    capsule_sha256 = hashlib.sha256(capsule.encode("utf-8")).hexdigest()
+    if budget_bytes is not None and capsule_bytes > budget_bytes:
+        cost_text = ", ".join(
+            f"{item['adr_id']}:{item['bytes']}"
+            for item in source_costs
+        ) or "none"
+        raise EpctlError(
+            "DECISION_CONTEXT_BUDGET_EXCEEDED: "
+            f"capsule is {capsule_bytes} bytes; budget is {budget_bytes}; "
+            f"source_bytes={cost_text}; narrow ADRs or stable constraints, "
+            "partition the task, migrate whole-document legacy ADRs, or raise "
+            "the reviewed budget with --budget-reason"
+        )
+    return {
+        "schema_version": DECISION_CAPSULE_SCHEMA_VERSION,
+        "non_normative": True,
+        "direct_adrs": direct_adrs,
+        "resolved_adrs": resolved_adrs,
+        "requested_constraints": requested_constraints,
+        "selected_constraints": selected_constraints,
+        "sources": [
+            {
+                "adr_id": str(source["id"]),
+                "path": str(source["path"]),
+                "contract": str(source["contract"]),
+                "document_sha256": str(source["document_sha256"]),
+                "payload_sha256": str(source.get("payload_sha256", "")),
+            }
+            for source in sources
+            if isinstance(source, dict)
+        ],
+        "source_costs": source_costs,
+        "budget_bytes": budget_bytes,
+        "budget_reason": inline_text(budget_reason),
+        "bytes": capsule_bytes,
+        "sha256": capsule_sha256,
+        "context": capsule,
+    }
+
+
+def normalized_repository_error(repo: Path, exc: Exception) -> str:
+    return str(exc).replace(str(repo) + os.sep, "")
+
+
+def decision_view_projection(
+    repo: Path,
+    view: dict[str, object],
+) -> tuple[str, dict[str, object]]:
+    view_id = str(view["id"])
+    title = str(view["title"])
+    direct_adrs = [str(item) for item in view["adr_refs"]]
+    try:
+        context = resolve_decision_context(repo, direct_adrs)
+        capsule = compile_decision_capsule(context, budget_bytes=None)
+        status = "current"
+        error = ""
+    except (EpctlError, OSError, UnicodeDecodeError) as exc:
+        context = {
+            "direct_adrs": direct_adrs,
+            "resolved_adrs": [],
+            "sources": [],
+            "constraint_refs": [],
+            "amendment_targets": {},
+        }
+        capsule = {"bytes": 0}
+        status = "review_required"
+        error = normalized_repository_error(repo, exc)
+    resolved_adrs = [str(item) for item in context["resolved_adrs"]]
+    constraint_refs = [str(item) for item in context["constraint_refs"]]
+    amendment_targets = context["amendment_targets"]
+    assert isinstance(amendment_targets, dict)
+    lines = [
+        f"# {title}\n\n",
+        "Generated by `epctl` from repository ADR sources. Do not edit this "
+        "projection directly. It is non-normative; source ADRs and explicit "
+        "lifecycle authority remain normative.\n\n",
+        f"- View: `{view_id}`\n",
+        f"- Status: `{status}`\n",
+        "- Direct ADRs: "
+        + (", ".join(f"`{item}`" for item in direct_adrs) or "none")
+        + "\n",
+        "- Resolved current ADRs: "
+        + (", ".join(f"`{item}`" for item in resolved_adrs) or "none")
+        + "\n",
+        f"- Structured constraints: {len(constraint_refs)}\n",
+        f"- Full exact capsule bytes: {capsule['bytes']}\n",
+    ]
+    if error:
+        lines.extend(
+            [
+                "\n## Review required\n\n",
+                f"`{md_cell(error)}`\n",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "\n## Current source manifest\n\n",
+                "| ADR | Title | Effect | Contract | Constraints | Document SHA-256 | Source |\n",
+                "|---|---|---|---|---|---|---|\n",
+            ]
+        )
+        sources = context["sources"]
+        assert isinstance(sources, list)
+        for source in sources:
+            assert isinstance(source, dict)
+            source_rows = source.get("constraint_rows", [])
+            path = str(source["path"])
+            relative_link = os.path.relpath(
+                repo / path,
+                decision_view_path(repo, view_id).parent,
+            )
+            lines.append(
+                f"| {source['id']} | {md_cell(str(source['title']))} | "
+                f"{source['effect']} | {source['contract']} | "
+                f"{len(source_rows) if isinstance(source_rows, list) else 0} | "
+                f"`{source['document_sha256']}` | [ADR]({relative_link}) |\n"
+            )
+        lines.extend(["\n## Exact Decision Statements\n\n"])
+        for source in sources:
+            assert isinstance(source, dict)
+            if source["contract"] == "whole-document":
+                lines.append(
+                    f"### {source['id']}: {source['title']}\n\n"
+                    "Whole-document context is required because this ADR has no "
+                    "strict machine-verifiable Decision Statement/constraint "
+                    "boundary. Use `decision-capsule` to load its exact bytes.\n\n"
+                )
+                continue
+            lines.append(
+                f"### {source['id']}: {source['title']}\n\n"
+                f"<!-- Exact source: {source['path']} -->\n"
+                + str(source["decision_source"])
+                + ("" if str(source["decision_source"]).endswith("\n") else "\n")
+            )
+        lines.extend(
+            [
+                "\n## Structured constraint catalog\n\n",
+                "| Constraint | Current amendment ADRs |\n",
+                "|---|---|\n",
+            ]
+        )
+        for reference in constraint_refs:
+            amenders = amendment_targets.get(reference, [])
+            lines.append(
+                f"| {reference} | "
+                + (", ".join(str(item) for item in amenders) or "—")
+                + " |\n"
+            )
+    document = "".join(lines)
+    details = {
+        "id": view_id,
+        "title": title,
+        "status": status,
+        "error": error,
+        "direct_adrs": direct_adrs,
+        "resolved_adrs": resolved_adrs,
+        "constraints": len(constraint_refs),
+        "capsule_bytes": int(capsule["bytes"]),
+        "path": decision_view_path(repo, view_id).relative_to(repo).as_posix(),
+    }
+    return document, details
+
+
+def render_decision_view_index(
+    text: str,
+    projections: Iterable[dict[str, object]],
+) -> str:
+    start = "<!-- ADRCTX:VIEWS:START -->"
+    end = "<!-- ADRCTX:VIEWS:END -->"
+    if text.count(start) != 1 or text.count(end) != 1:
+        raise EpctlError("Malformed Decision View index markers")
+    start_index = text.index(start) + len(start)
+    end_index = text.index(end)
+    rows = [
+        "| View | Title | Status | Direct ADRs | Resolved ADRs | Constraints | Capsule bytes | Path |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for item in sorted(projections, key=lambda value: str(value["id"])):
+        relative = Path(str(item["path"])).relative_to("docs").as_posix()
+        rows.append(
+            f"| {item['id']} | {md_cell(str(item['title']))} | "
+            f"{item['status']} | {len(item['direct_adrs'])} | "
+            f"{len(item['resolved_adrs'])} | {item['constraints']} | "
+            f"{item['capsule_bytes']} | [view]({relative}) |"
+        )
+    body = "\n" + "\n".join(rows) + "\n"
+    return text[:start_index] + body + text[end_index:]
+
+
+def rebuild_decision_views(
+    repo: Path,
+    registry: dict[str, object] | None = None,
+) -> list[dict[str, object]]:
+    require_decision_view_infrastructure(repo)
+    selected = registry if registry is not None else load_decision_view_registry(repo)
+    views = selected.get("views")
+    if not isinstance(views, list):
+        raise EpctlError("Decision View registry views must be an array")
+    projections: list[dict[str, object]] = []
+    for view in views:
+        assert isinstance(view, dict)
+        document, details = decision_view_projection(repo, view)
+        path = decision_view_path(repo, str(view["id"]))
+        reject_symlink_path(repo, path)
+        atomic_write(path, document)
+        projections.append(details)
+    index = decision_view_index_path(repo)
+    reject_symlink_path(repo, index)
+    if not index.is_file():
+        raise EpctlError(f"Decision View index is missing; run init: {index}")
+    atomic_write(
+        index,
+        render_decision_view_index(index.read_text(encoding="utf-8"), projections),
+    )
+    return projections
+
+
+def decision_view_file_snapshots(
+    repo: Path,
+    view_ids: Iterable[str],
+) -> dict[Path, str | None]:
+    paths = {
+        decision_view_registry_path(repo),
+        decision_view_index_path(repo),
+        *(decision_view_path(repo, view_id) for view_id in view_ids),
+    }
+    for path in paths:
+        reject_symlink_path(repo, path)
+    return {
+        path: path.read_text(encoding="utf-8") if path.is_file() else None
+        for path in paths
+    }
+
+
+def restore_file_snapshots(snapshots: dict[Path, str | None]) -> None:
+    for path, content in snapshots.items():
+        if content is None:
+            if path.exists() and path.is_file() and not path.is_symlink():
+                path.unlink()
+        else:
+            atomic_write(path, content)
+
+
+def decision_view_changes(
+    repo: Path,
+    registry: dict[str, object],
+) -> tuple[list[dict[str, object]], list[str]]:
+    projections: list[dict[str, object]] = []
+    changes: list[str] = []
+    views = registry["views"]
+    assert isinstance(views, list)
+    for view in views:
+        assert isinstance(view, dict)
+        document, details = decision_view_projection(repo, view)
+        path = decision_view_path(repo, str(view["id"]))
+        reject_symlink_path(repo, path)
+        existing = path.read_text(encoding="utf-8") if path.is_file() else None
+        if existing != document:
+            changes.append(path.relative_to(repo).as_posix())
+        projections.append(details)
+    index = decision_view_index_path(repo)
+    reject_symlink_path(repo, index)
+    if index.is_file():
+        expected_index = render_decision_view_index(
+            index.read_text(encoding="utf-8"),
+            projections,
+        )
+        if index.read_text(encoding="utf-8") != expected_index:
+            changes.append(index.relative_to(repo).as_posix())
+    else:
+        changes.append(index.relative_to(repo).as_posix())
+    rendered_registry = (
+        json.dumps(registry, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
+    registry_path = decision_view_registry_path(repo)
+    existing_registry = (
+        registry_path.read_text(encoding="utf-8")
+        if registry_path.is_file()
+        else None
+    )
+    if existing_registry != rendered_registry:
+        changes.append(registry_path.relative_to(repo).as_posix())
+    return projections, sorted(set(changes))
+
+
+def set_decision_view(
+    repo: Path,
+    view_id: str,
+    title: str,
+    adr_values: Iterable[str],
+    apply: bool,
+) -> dict[str, object]:
+    validate_slug(view_id)
+    normalized_title = inline_text(title)
+    if not normalized_title:
+        raise EpctlError("Decision View title must be non-empty")
+    raw_adrs = list(adr_values)
+    direct_adrs = normalize_reference_ids(raw_adrs, "ADR")
+    if not direct_adrs:
+        raise EpctlError("set-decision-view requires at least one --adr")
+    if len(direct_adrs) != len(raw_adrs):
+        raise EpctlError("set-decision-view contains duplicate --adr values")
+    direct_adrs.sort()
+    context = resolve_decision_context(repo, direct_adrs)
+    registry = load_decision_view_registry(repo)
+    views = registry["views"]
+    assert isinstance(views, list)
+    record = {"id": view_id, "title": normalized_title, "adr_refs": direct_adrs}
+    candidate_views = [
+        item
+        for item in views
+        if isinstance(item, dict) and item.get("id") != view_id
+    ]
+    candidate_views.append(record)
+    candidate_views.sort(key=lambda item: str(item["id"]))
+    candidate = {
+        "version": DECISION_VIEW_SCHEMA_VERSION,
+        "views": candidate_views,
+    }
+    projections, changes = decision_view_changes(repo, candidate)
+    payload = {
+        "operation": "set-decision-view",
+        "mode": "apply" if apply else "preview",
+        "applied": False,
+        "view": record,
+        "registry_before": registry,
+        "registry_after": candidate,
+        "resolved_adrs": context["resolved_adrs"],
+        "constraint_refs": context["constraint_refs"],
+        "changes": changes,
+        "projections": projections,
+    }
+    if not apply:
+        return payload
+    require_decision_view_infrastructure(repo)
+    with repo_lock(repo):
+        require_decision_view_infrastructure(repo)
+        locked_context = resolve_decision_context(repo, direct_adrs)
+        locked_registry = load_decision_view_registry(repo)
+        if locked_registry != registry:
+            raise EpctlError(
+                "Decision View preflight changed while acquiring the lock; "
+                "rerun the preview"
+            )
+        locked_views = locked_registry["views"]
+        assert isinstance(locked_views, list)
+        locked_candidate_views = [
+            item
+            for item in locked_views
+            if isinstance(item, dict) and item.get("id") != view_id
+        ]
+        locked_candidate_views.append(record)
+        locked_candidate_views.sort(key=lambda item: str(item["id"]))
+        locked_candidate = {
+            "version": DECISION_VIEW_SCHEMA_VERSION,
+            "views": locked_candidate_views,
+        }
+        view_ids = [str(item["id"]) for item in locked_candidate_views]
+        snapshots = decision_view_file_snapshots(repo, view_ids)
+        try:
+            save_decision_view_registry(repo, locked_candidate)
+            locked_projections = rebuild_decision_views(repo, locked_candidate)
+            view_errors, _ = validate_decision_views(repo)
+            if view_errors:
+                raise EpctlError(
+                    "Decision View apply validation failed:\n- "
+                    + "\n- ".join(view_errors)
+                )
+        except Exception:
+            restore_file_snapshots(snapshots)
+            raise
+    payload["applied"] = True
+    payload["resolved_adrs"] = locked_context["resolved_adrs"]
+    payload["constraint_refs"] = locked_context["constraint_refs"]
+    payload["registry_before"] = locked_registry
+    payload["registry_after"] = locked_candidate
+    payload["projections"] = locked_projections
+    return payload
+
+
+def remove_decision_view(
+    repo: Path,
+    view_id: str,
+    apply: bool,
+) -> dict[str, object]:
+    validate_slug(view_id)
+    registry = load_decision_view_registry(repo)
+    views = registry["views"]
+    assert isinstance(views, list)
+    if not any(
+        isinstance(item, dict) and item.get("id") == view_id for item in views
+    ):
+        raise EpctlError(f"Decision View does not exist: {view_id}")
+    candidate_views = [
+        item
+        for item in views
+        if isinstance(item, dict) and item.get("id") != view_id
+    ]
+    candidate = {
+        "version": DECISION_VIEW_SCHEMA_VERSION,
+        "views": candidate_views,
+    }
+    _, changes = decision_view_changes(repo, candidate)
+    target = decision_view_path(repo, view_id)
+    reject_symlink_path(repo, target)
+    if target.is_file():
+        changes.append(target.relative_to(repo).as_posix())
+    payload = {
+        "operation": "remove-decision-view",
+        "mode": "apply" if apply else "preview",
+        "applied": False,
+        "view_id": view_id,
+        "registry_before": registry,
+        "registry_after": candidate,
+        "changes": sorted(set(changes)),
+    }
+    if not apply:
+        return payload
+    require_decision_view_infrastructure(repo)
+    with repo_lock(repo):
+        require_decision_view_infrastructure(repo)
+        locked = load_decision_view_registry(repo)
+        if locked != registry:
+            raise EpctlError(
+                "Decision View preflight changed while acquiring the lock; "
+                "rerun the preview"
+            )
+        locked_views = locked["views"]
+        assert isinstance(locked_views, list)
+        if not any(
+            isinstance(item, dict) and item.get("id") == view_id
+            for item in locked_views
+        ):
+            raise EpctlError(f"Decision View does not exist: {view_id}")
+        locked_candidate_views = [
+            item
+            for item in locked_views
+            if isinstance(item, dict) and item.get("id") != view_id
+        ]
+        locked_candidate = {
+            "version": DECISION_VIEW_SCHEMA_VERSION,
+            "views": locked_candidate_views,
+        }
+        view_ids = [
+            view_id,
+            *(str(item["id"]) for item in locked_candidate_views),
+        ]
+        snapshots = decision_view_file_snapshots(repo, view_ids)
+        try:
+            save_decision_view_registry(repo, locked_candidate)
+            rebuild_decision_views(repo, locked_candidate)
+            reject_symlink_path(repo, target)
+            if target.exists():
+                if not target.is_file():
+                    raise EpctlError(
+                        f"Decision View projection is not a regular file: {target}"
+                    )
+                target.unlink()
+            view_errors, _ = validate_decision_views(repo)
+            if view_errors:
+                raise EpctlError(
+                    "Decision View removal validation failed:\n- "
+                    + "\n- ".join(view_errors)
+                )
+        except Exception:
+            restore_file_snapshots(snapshots)
+            raise
+    payload["applied"] = True
+    payload["registry_before"] = locked
+    payload["registry_after"] = locked_candidate
+    return payload
+
+
+def validate_decision_views(repo: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    registry_path = decision_view_registry_path(repo)
+    index_path = decision_view_index_path(repo)
+    view_root = repo / DECISION_VIEW_ROOT
+
+    for path, label in (
+        (registry_path, "Decision View registry"),
+        (index_path, "Decision View index"),
+    ):
+        if path.is_symlink():
+            errors.append(f"{path}: symbolic links are not supported")
+        elif not path.is_file():
+            errors.append(f"{path}: missing {label}; run init")
+    if view_root.is_symlink():
+        errors.append(f"{view_root}: symbolic links are not supported")
+    elif not view_root.is_dir():
+        errors.append(f"{view_root}: missing Decision View directory; run init")
+
+    if errors:
+        return errors, warnings
+    try:
+        registry = load_decision_view_registry(repo)
+    except EpctlError as exc:
+        errors.append(str(exc))
+        return errors, warnings
+
+    views = registry["views"]
+    assert isinstance(views, list)
+    projections: list[dict[str, object]] = []
+    expected_paths: set[Path] = set()
+    for view in views:
+        assert isinstance(view, dict)
+        path = decision_view_path(repo, str(view["id"]))
+        expected_paths.add(path)
+        if path.is_symlink():
+            errors.append(f"{path}: symbolic links are not supported")
+            continue
+        expected, details = decision_view_projection(repo, view)
+        projections.append(details)
+        if details["status"] == "review_required":
+            warnings.append(
+                f"{path}: Decision View requires owner review: "
+                f"{details['error']}"
+            )
+        if not path.is_file():
+            errors.append(f"{path}: missing generated Decision View; run reindex")
+        elif path.read_text(encoding="utf-8") != expected:
+            errors.append(f"{path}: generated Decision View drift; run reindex")
+
+    if view_root.is_dir() and not view_root.is_symlink():
+        for path in sorted(view_root.glob("*.md")):
+            if path.is_symlink():
+                errors.append(f"{path}: symbolic links are not supported")
+            elif path not in expected_paths:
+                errors.append(
+                    f"{path}: unregistered Decision View projection; "
+                    "remove it or register the view"
+                )
+
+    if index_path.is_file() and not index_path.is_symlink():
+        try:
+            current_index = index_path.read_text(encoding="utf-8")
+            expected_index = render_decision_view_index(
+                current_index,
+                projections,
+            )
+        except (EpctlError, OSError, UnicodeDecodeError) as exc:
+            errors.append(f"{index_path}: {exc}")
+        else:
+            if current_index != expected_index:
+                errors.append(
+                    f"{index_path}: Decision View index drift; run reindex"
+                )
+    return errors, warnings
+
+
+def decision_selection_context(
+    repo: Path,
+    view_id: str,
+    adr_values: Iterable[str],
+) -> tuple[dict[str, object], dict[str, object]]:
+    raw_adrs = list(adr_values)
+    if bool(view_id) == bool(raw_adrs):
+        raise EpctlError("Select exactly one --view or one or more --adr values")
+    if view_id:
+        view = find_decision_view(repo, view_id)
+        seeds = view["adr_refs"]
+        assert isinstance(seeds, list)
+        selection = {
+            "kind": "view",
+            "view_id": str(view["id"]),
+            "title": str(view["title"]),
+        }
+        return resolve_decision_context(repo, seeds), selection
+    return resolve_decision_context(repo, raw_adrs), {
+        "kind": "explicit_adrs",
+        "view_id": "",
+        "title": "",
+    }
+
+
+def adr_graph_metrics(
+    current_ids: set[str],
+    data_by_id: dict[str, dict[str, str]],
+) -> dict[str, object]:
+    all_edges: set[tuple[str, str, str]] = set()
+    current_edges: set[tuple[str, str, str]] = set()
+    adjacency = {adr_id: set() for adr_id in current_ids}
+    for adr_id, data in data_by_id.items():
+        for field in ("depends_on", "amends", "supersedes"):
+            for target in parse_inline_ids(data.get(field, ""), "ADR"):
+                edge = (adr_id, field, target)
+                all_edges.add(edge)
+                if adr_id in current_ids and target in current_ids:
+                    current_edges.add(edge)
+                    adjacency[adr_id].add(target)
+                    adjacency[target].add(adr_id)
+    components: list[list[str]] = []
+    remaining = set(current_ids)
+    while remaining:
+        root = min(remaining)
+        stack = [root]
+        component: set[str] = set()
+        while stack:
+            item = stack.pop()
+            if item in component:
+                continue
+            component.add(item)
+            stack.extend(sorted(adjacency.get(item, set()) - component))
+        remaining -= component
+        components.append(sorted(component))
+    components.sort(key=lambda value: (-len(value), value))
+    return {
+        "typed_edges": len(all_edges),
+        "effective_typed_edges": len(current_edges),
+        "connected_components": len(components),
+        "largest_component": len(components[0]) if components else 0,
+        "component_sizes": [len(component) for component in components],
+    }
+
+
+def health_signal(
+    dimension: str,
+    value: int,
+    threshold: int,
+    explanation: str,
+) -> dict[str, object]:
+    return {
+        "dimension": dimension,
+        "value": value,
+        "review_threshold": threshold,
+        "state": "review_recommended" if value > threshold else "within_target",
+        "explanation": explanation,
+    }
+
+
+def adr_health(repo: Path) -> dict[str, object]:
+    rows = status_rows(repo)
+    adrs = rows["adrs"]
+    plans = rows["plans"]
+    data_by_id = adr_corpus_data(repo)
+    current_ids = {
+        str(item["id"])
+        for item in adrs
+        if bool(item.get("current"))
+    }
+    total_lines = 0
+    total_bytes = 0
+    structured_total = 0
+    whole_document_total = 0
+    structured_constraints_total = 0
+    structured_current = 0
+    legacy_current = 0
+    current_constraints = 0
+    for item in adrs:
+        path = repo / str(item["path"])
+        text = path.read_text(encoding="utf-8")
+        total_lines += len(text.splitlines())
+        total_bytes += len(text.encode("utf-8"))
+        data = data_by_id.get(str(item["id"]), {})
+        structured = data.get("schema_version") in {"1.2", "1.3", "1.4"}
+        constraints = item.get("constraints", [])
+        if structured:
+            structured_total += 1
+            if isinstance(constraints, list):
+                structured_constraints_total += len(constraints)
+        else:
+            whole_document_total += 1
+        if not bool(item.get("current")):
+            continue
+        if structured:
+            structured_current += 1
+            if isinstance(constraints, list):
+                current_constraints += len(constraints)
+        else:
+            legacy_current += 1
+
+    graph = adr_graph_metrics(current_ids, data_by_id)
+    partially_amended = [
+        str(item["id"])
+        for item in adrs
+        if bool(item.get("current")) and bool(item.get("amended_by"))
+    ]
+    current_amenders = [
+        str(item["id"])
+        for item in adrs
+        if bool(item.get("current")) and bool(item.get("amends"))
+    ]
+    amended_constraint_refs: set[str] = set()
+    for adr_id in current_amenders:
+        amended_constraint_refs.update(
+            parse_adr_constraint_array(
+                data_by_id[adr_id].get("amends_constraints", "[]"),
+                "amends_constraints",
+            )
+        )
+
+    active_plan_rows: list[dict[str, object]] = []
+    for plan in plans:
+        if str(plan.get("status")) not in PLAN_ACTIVE_STATUSES:
+            continue
+        adr_refs = [str(value) for value in plan.get("adr_refs", [])]
+        constraint_refs = [
+            str(value) for value in plan.get("adr_constraint_refs", [])
+        ]
+        active_plan_rows.append(
+            {
+                "id": str(plan["id"]),
+                "adr_refs": len(adr_refs),
+                "constraint_refs": len(constraint_refs),
+                "architecture_review_required": bool(
+                    plan.get("architecture_review_required")
+                ),
+            }
+        )
+    active_plan_rows.sort(key=lambda value: str(value["id"]))
+    max_plan_adrs = max(
+        (int(item["adr_refs"]) for item in active_plan_rows),
+        default=0,
+    )
+    max_plan_constraints = max(
+        (int(item["constraint_refs"]) for item in active_plan_rows),
+        default=0,
+    )
+
+    registry = load_decision_view_registry(repo)
+    views = registry["views"]
+    assert isinstance(views, list)
+    view_rows: list[dict[str, object]] = []
+    covered_current: set[str] = set()
+    for view in views:
+        assert isinstance(view, dict)
+        _, details = decision_view_projection(repo, view)
+        resolved = {str(value) for value in details["resolved_adrs"]}
+        if details["status"] == "current":
+            covered_current.update(resolved & current_ids)
+        view_rows.append(
+            {
+                "id": str(details["id"]),
+                "status": str(details["status"]),
+                "direct_adrs": len(details["direct_adrs"]),
+                "resolved_adrs": len(details["resolved_adrs"]),
+                "constraints": int(details["constraints"]),
+                "estimated_full_capsule_bytes": int(details["capsule_bytes"]),
+            }
+        )
+    max_view_bytes = max(
+        (int(item["estimated_full_capsule_bytes"]) for item in view_rows),
+        default=0,
+    )
+    uncovered = sorted(current_ids - covered_current)
+    signals = [
+        health_signal(
+            "effective_adrs",
+            len(current_ids),
+            ADR_HEALTH_EFFECTIVE_TARGET,
+            "Review view taxonomy when the current ADR set exceeds the "
+            f"navigation target of {ADR_HEALTH_EFFECTIVE_TARGET}.",
+        ),
+        health_signal(
+            "largest_component",
+            int(graph["largest_component"]),
+            ADR_HEALTH_COMPONENT_TARGET,
+            "A large weakly connected current graph usually needs narrower "
+            f"task capsules; target is {ADR_HEALTH_COMPONENT_TARGET} ADRs.",
+        ),
+        health_signal(
+            "max_active_plan_adr_refs",
+            max_plan_adrs,
+            ADR_HEALTH_ACTIVE_PLAN_TARGET,
+            "An active plan above this ADR input target should be partitioned "
+            "or use stable constraint selection.",
+        ),
+        health_signal(
+            "max_active_plan_constraint_refs",
+            max_plan_constraints,
+            ADR_HEALTH_ACTIVE_PLAN_CONSTRAINT_TARGET,
+            "A plan above this structured-constraint input target should use "
+            "task-specific selection or narrower implementation milestones.",
+        ),
+        health_signal(
+            "partially_amended_adrs",
+            len(partially_amended),
+            ADR_HEALTH_PARTIAL_AMENDMENT_TARGET,
+            "A high partially-amended count warrants owner review for possible "
+            "new atomic consolidation ADRs; it never triggers automatic merge.",
+        ),
+        health_signal(
+            "legacy_current_adrs",
+            legacy_current,
+            0,
+            "Each current legacy ADR requires whole-document capsule context.",
+        ),
+        health_signal(
+            "uncovered_current_adrs",
+            len(uncovered),
+            0,
+            "Current ADRs outside every healthy view remain discoverable but "
+            "lack persistent domain navigation.",
+        ),
+        health_signal(
+            "max_view_capsule_bytes",
+            max_view_bytes,
+            DECISION_CAPSULE_DEFAULT_BUDGET_BYTES,
+            "A complete view above the default capsule budget requires a "
+            "narrower task selection or a reviewed budget reason.",
+        ),
+    ]
+    return {
+        "schema_version": ADR_HEALTH_SCHEMA_VERSION,
+        "non_normative": True,
+        "corpus": {
+            "total_adrs": len(adrs),
+            "total_lines": total_lines,
+            "total_bytes": total_bytes,
+            "effective_adrs": len(current_ids),
+            "historical_or_review_adrs": len(adrs) - len(current_ids),
+        },
+        "contracts": {
+            "structured_adrs": structured_total,
+            "whole_document_adrs": whole_document_total,
+            "structured_current_adrs": structured_current,
+            "whole_document_current_adrs": legacy_current,
+        },
+        "graph": graph,
+        "constraints": {
+            "structured_constraints": structured_constraints_total,
+            "structured_current_constraints": current_constraints,
+        },
+        "amendments": {
+            "current_amending_adrs": len(current_amenders),
+            "partially_amended_adrs": len(partially_amended),
+            "amended_constraint_refs": len(amended_constraint_refs),
+            "partially_amended_ids": partially_amended,
+        },
+        "active_plans": {
+            "count": len(active_plan_rows),
+            "max_adr_refs": max_plan_adrs,
+            "max_constraint_refs": max_plan_constraints,
+            "plans": active_plan_rows,
+        },
+        "views": {
+            "count": len(view_rows),
+            "current_count": sum(
+                item["status"] == "current" for item in view_rows
+            ),
+            "covered_current_adrs": len(covered_current),
+            "uncovered_current_adrs": uncovered,
+            "coverage_ratio": (
+                round(len(covered_current) / len(current_ids), 4)
+                if current_ids
+                else 1.0
+            ),
+            "max_estimated_full_capsule_bytes": max_view_bytes,
+            "items": view_rows,
+        },
+        "signals": signals,
+    }
+
+
+def print_adr_health(payload: dict[str, object]) -> None:
+    print("ADR health is a non-normative, read-only projection; no aggregate score is used.")
+    print()
+    corpus = payload["corpus"]
+    contracts = payload["contracts"]
+    graph = payload["graph"]
+    constraints = payload["constraints"]
+    amendments = payload["amendments"]
+    active_plans = payload["active_plans"]
+    views = payload["views"]
+    for item in (
+        corpus,
+        contracts,
+        graph,
+        constraints,
+        amendments,
+        active_plans,
+        views,
+    ):
+        assert isinstance(item, dict)
+    metrics = (
+        ("corpus", "total_adrs", corpus["total_adrs"]),
+        ("corpus", "effective_adrs", corpus["effective_adrs"]),
+        ("corpus", "total_lines", corpus["total_lines"]),
+        ("corpus", "total_bytes", corpus["total_bytes"]),
+        ("contracts", "structured_current_adrs", contracts["structured_current_adrs"]),
+        ("contracts", "whole_document_current_adrs", contracts["whole_document_current_adrs"]),
+        ("graph", "typed_edges", graph["typed_edges"]),
+        ("graph", "connected_components", graph["connected_components"]),
+        ("graph", "largest_component", graph["largest_component"]),
+        ("constraints", "structured_current_constraints", constraints["structured_current_constraints"]),
+        ("amendments", "current_amending_adrs", amendments["current_amending_adrs"]),
+        ("amendments", "partially_amended_adrs", amendments["partially_amended_adrs"]),
+        ("active_plans", "count", active_plans["count"]),
+        ("active_plans", "max_adr_refs", active_plans["max_adr_refs"]),
+        ("active_plans", "max_constraint_refs", active_plans["max_constraint_refs"]),
+        ("views", "count", views["count"]),
+        ("views", "covered_current_adrs", views["covered_current_adrs"]),
+        ("views", "coverage_ratio", views["coverage_ratio"]),
+        ("views", "max_estimated_full_capsule_bytes", views["max_estimated_full_capsule_bytes"]),
+    )
+    print("| Dimension | Metric | Value |")
+    print("|---|---|---:|")
+    for dimension, metric, value in metrics:
+        print(f"| {dimension} | {metric} | {value} |")
+    print()
+    print("| Dimension | Value | Review threshold | State | Explanation |")
+    print("|---|---:|---:|---|---|")
+    signals = payload["signals"]
+    assert isinstance(signals, list)
+    for item in signals:
+        assert isinstance(item, dict)
+        print(
+            f"| {item['dimension']} | {item['value']} | "
+            f"{item['review_threshold']} | {item['state']} | "
+            f"{md_cell(str(item['explanation']))} |"
+        )
+
+
+def amendment_chain_paths(
+    edges: Iterable[dict[str, str]],
+) -> list[list[str]]:
+    targets_by_amender: dict[str, list[str]] = {}
+    all_targets: set[str] = set()
+    for edge in edges:
+        amender = edge["amender"]
+        target = edge["target"]
+        targets_by_amender.setdefault(amender, []).append(target)
+        all_targets.add(target)
+    for targets in targets_by_amender.values():
+        targets.sort()
+    roots = sorted(set(targets_by_amender) - all_targets)
+    if not roots:
+        roots = sorted(targets_by_amender)
+    chains: list[list[str]] = []
+
+    def walk(item: str, path: list[str]) -> None:
+        targets = targets_by_amender.get(item, [])
+        if not targets:
+            if len(path) > 1:
+                chains.append(path)
+            return
+        for target in targets:
+            if target in path:
+                continue
+            walk(target, [*path, target])
+
+    for root in roots:
+        walk(root, [root])
+    return sorted(chains)
+
+
+def adr_consolidation_plan(
+    repo: Path,
+    view_id: str,
+    adr_values: Iterable[str],
+) -> dict[str, object]:
+    context, selection = decision_selection_context(repo, view_id, adr_values)
+    resolved = {str(value) for value in context["resolved_adrs"]}
+    source_by_id = decision_context_source_by_id(context)
+    amendment_edges: list[dict[str, str]] = []
+    for adr_id in sorted(resolved):
+        source = source_by_id[adr_id]
+        data = source["data"]
+        assert isinstance(data, dict)
+        for target in parse_inline_ids(str(data.get("amends", "")), "ADR"):
+            if target in resolved:
+                amendment_edges.append({"amender": adr_id, "target": target})
+
+    rows = status_rows(repo)
+    active_plan_impact: list[dict[str, object]] = []
+    for plan in rows["plans"]:
+        if str(plan.get("status")) not in PLAN_ACTIVE_STATUSES:
+            continue
+        intersection = sorted(
+            resolved & {str(value) for value in plan.get("adr_refs", [])}
+        )
+        if intersection:
+            active_plan_impact.append(
+                {"id": str(plan["id"]), "adr_refs": intersection}
+            )
+
+    selected_constraints = {
+        str(value) for value in context.get("constraint_refs", [])
+    }
+    proposed_overlap: list[dict[str, object]] = []
+    data_by_id = adr_corpus_data(repo)
+    for adr_id, data in sorted(data_by_id.items()):
+        if data.get("status") != "proposed":
+            continue
+        relation_overlap = sorted(
+            resolved
+            & set(parse_inline_ids(data.get("depends_on", ""), "ADR"))
+            | resolved
+            & set(parse_inline_ids(data.get("amends", ""), "ADR"))
+        )
+        constraint_overlap = sorted(
+            selected_constraints
+            & set(
+                parse_adr_constraint_array(
+                    data.get("amends_constraints", "[]"),
+                    "amends_constraints",
+                )
+            )
+        )
+        if relation_overlap or constraint_overlap:
+            proposed_overlap.append(
+                {
+                    "id": adr_id,
+                    "related_adrs": relation_overlap,
+                    "constraint_refs": constraint_overlap,
+                }
+            )
+
+    legacy = sorted(
+        adr_id
+        for adr_id, source in source_by_id.items()
+        if source.get("contract") == "whole-document"
+    )
+    partial = sorted(
+        adr_id
+        for adr_id, source in source_by_id.items()
+        if bool(source.get("amended_by"))
+    )
+    recommendation = (
+        "defer_while_active_or_proposed_work_depends_on_context"
+        if active_plan_impact or proposed_overlap
+        else "decision_owner_review_required"
+    )
+    source_digests = [
+        {
+            "adr_id": adr_id,
+            "document_sha256": str(source_by_id[adr_id]["document_sha256"]),
+            "payload_sha256": str(source_by_id[adr_id].get("payload_sha256", "")),
+        }
+        for adr_id in sorted(resolved)
+    ]
+    return {
+        "schema_version": ADR_CONSOLIDATION_SCHEMA_VERSION,
+        "non_normative": True,
+        "preview_only": True,
+        "selection": selection,
+        "direct_adrs": context["direct_adrs"],
+        "resolved_adrs": sorted(resolved),
+        "amendment_edges": amendment_edges,
+        "amendment_chains": amendment_chain_paths(amendment_edges),
+        "partially_amended_adrs": partial,
+        "whole_document_legacy_adrs": legacy,
+        "active_plan_impact": active_plan_impact,
+        "proposed_overlap": proposed_overlap,
+        "source_digests": source_digests,
+        "recommendation": recommendation,
+        "required_next_step": (
+            "If semantic consolidation remains desirable, author one new atomic "
+            "proposed ADR, obtain explicit Decision Owner acceptance, implement "
+            "migration, then use authorized effect transitions."
+        ),
+        "forbidden_mutations": [
+            "merge",
+            "accept",
+            "retire",
+            "supersede",
+            "rewrite",
+            "delete",
+        ],
+    }
+
+
+def print_adr_consolidation_plan(payload: dict[str, object]) -> None:
+    print("ADR consolidation analysis is non-normative and preview-only.")
+    print(f"Recommendation: {payload['recommendation']}")
+    print(f"Resolved ADRs: {', '.join(payload['resolved_adrs'])}")
+    print()
+    print("| Impact | Count | Items |")
+    print("|---|---:|---|")
+    for key in (
+        "amendment_edges",
+        "amendment_chains",
+        "partially_amended_adrs",
+        "whole_document_legacy_adrs",
+        "active_plan_impact",
+        "proposed_overlap",
+    ):
+        value = payload[key]
+        assert isinstance(value, list)
+        print(f"| {key} | {len(value)} | {md_cell(json.dumps(value, ensure_ascii=False))} |")
+    print()
+    print(str(payload["required_next_step"]))
 
 
 def task_files(plan_path: Path) -> list[Path]:
@@ -6657,15 +8289,25 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                 "exec-plans" in path.parts
                 or "research" in path.parts
                 or "adr" in path.parts
+                or "decision-views" in path.parts
                 or "bugfixes" in path.parts
                 or ".epctl" in path.parts
                 or path.name
-                in {"PLANS.md", "RESEARCH.md", "DECISIONS.md", "BUGFIXES.md"}
+                in {
+                    "PLANS.md",
+                    "RESEARCH.md",
+                    "DECISIONS.md",
+                    "DECISION-VIEWS.md",
+                    "BUGFIXES.md",
+                }
             ):
                 errors.append(f"{path}: symbolic links are not supported")
     revision_errors, revision_warnings = validate_adr_revision_store(repo)
     errors.extend(revision_errors)
     warnings.extend(revision_warnings)
+    view_errors, view_warnings = validate_decision_views(repo)
+    errors.extend(view_errors)
+    warnings.extend(view_warnings)
     plans_index = repo / "docs" / "PLANS.md"
     research_index = repo / "docs" / "RESEARCH.md"
     decision_index = repo / "docs" / "DECISIONS.md"
@@ -8236,6 +9878,86 @@ def build_parser() -> argparse.ArgumentParser:
         help="Apply the previewed supersession atomically",
     )
 
+    sub.add_parser(
+        "adr-health",
+        help="Report independent, non-normative ADR corpus pressure dimensions",
+    ).add_argument("--json", action="store_true", dest="as_json")
+
+    set_view = sub.add_parser(
+        "set-decision-view",
+        help="Preview or apply a persistent non-normative Decision View",
+    )
+    set_view.add_argument("view_id", metavar="VIEW")
+    set_view.add_argument("--title", required=True)
+    set_view.add_argument(
+        "--adr",
+        action="append",
+        required=True,
+        metavar="ADR-NNN",
+        help="Current accepted ADR seed; repeat for multiple seeds",
+    )
+    set_view.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the previewed registry and projection changes atomically",
+    )
+
+    remove_view = sub.add_parser(
+        "remove-decision-view",
+        help="Preview or apply removal of a Decision View",
+    )
+    remove_view.add_argument("view_id", metavar="VIEW")
+    remove_view.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the previewed registry and projection removal atomically",
+    )
+
+    capsule = sub.add_parser(
+        "decision-capsule",
+        help="Compile exact digest-verifiable ADR task context",
+    )
+    capsule_selection = capsule.add_mutually_exclusive_group(required=True)
+    capsule_selection.add_argument("--view", default="", metavar="VIEW")
+    capsule_selection.add_argument(
+        "--adr",
+        action="append",
+        default=[],
+        metavar="ADR-NNN",
+        help="Current accepted ADR seed; repeat for multiple seeds",
+    )
+    capsule.add_argument(
+        "--constraint",
+        action="append",
+        default=[],
+        metavar="ADR-NNN#C-NNN",
+        help="Exact stable constraint selection; repeat for multiple rows",
+    )
+    capsule.add_argument(
+        "--budget-bytes",
+        type=int,
+        default=DECISION_CAPSULE_DEFAULT_BUDGET_BYTES,
+    )
+    capsule.add_argument("--budget-reason", default="")
+    capsule.add_argument("--json", action="store_true", dest="as_json")
+
+    consolidation = sub.add_parser(
+        "adr-consolidation-plan",
+        help="Preview semantic-consolidation impact without changing ADRs",
+    )
+    consolidation_selection = consolidation.add_mutually_exclusive_group(
+        required=True
+    )
+    consolidation_selection.add_argument("--view", default="", metavar="VIEW")
+    consolidation_selection.add_argument(
+        "--adr",
+        action="append",
+        default=[],
+        metavar="ADR-NNN",
+        help="Current accepted ADR seed; repeat for multiple seeds",
+    )
+    consolidation.add_argument("--json", action="store_true", dest="as_json")
+
     register_revision = sub.add_parser(
         "register-adr-revision",
         help="Preview or store immutable historical ADR evidence",
@@ -8497,6 +10219,52 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
+        elif args.command == "adr-health":
+            payload = adr_health(repo)
+            if args.as_json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print_adr_health(payload)
+        elif args.command == "set-decision-view":
+            print(
+                json.dumps(
+                    set_decision_view(
+                        repo,
+                        args.view_id,
+                        args.title,
+                        args.adr,
+                        args.apply,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        elif args.command == "remove-decision-view":
+            print(
+                json.dumps(
+                    remove_decision_view(repo, args.view_id, args.apply),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        elif args.command == "decision-capsule":
+            context, _ = decision_selection_context(repo, args.view, args.adr)
+            payload = compile_decision_capsule(
+                context,
+                args.constraint,
+                budget_bytes=args.budget_bytes,
+                budget_reason=args.budget_reason,
+            )
+            if args.as_json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print(payload["context"], end="")
+        elif args.command == "adr-consolidation-plan":
+            payload = adr_consolidation_plan(repo, args.view, args.adr)
+            if args.as_json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print_adr_consolidation_plan(payload)
         elif args.command == "register-adr-revision":
             print(
                 json.dumps(

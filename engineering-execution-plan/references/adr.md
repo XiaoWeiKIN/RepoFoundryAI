@@ -120,6 +120,73 @@ accepted 和 rejected schema 1.1/1.2/1.3/1.4 ADR 的正文、Research/ADR/Design
 分离；`status`、`effect_changed_*`、`effect_reason` 和 replacement 链不进入决定
 摘要。旧 schema 的 effect transition 也保持原摘要不变。
 
+## 大型 corpus 的 lossless 上下文压缩
+
+ADR 数量不是 retirement 条件。仍然有效的决定必须继续保留 current effect；检索成本
+通过非规范投影处理，而不是删除历史、自动生成语义摘要或把多个决定拼成 mega ADR。
+
+```mermaid
+flowchart LR
+    A["ADR source + seal + lifecycle"] --> R["current-effect resolver"]
+    R --> V["Decision View<br/>持久领域导航"]
+    R --> C["Decision Capsule<br/>临时精确上下文"]
+    R --> H["ADR Health<br/>独立压力维度"]
+    R --> P["Consolidation Plan<br/>只读影响预览"]
+    V -.->|"non-normative"| A
+    C -.->|"non-normative"| A
+```
+
+`adr-health` 分别报告 corpus、strict/whole-document contract、typed graph、stable
+constraints、amendment、active ExecPlan、View coverage 与预计 capsule bytes。每个
+signal 给出 value、review threshold、state 和解释；不得合并成不透明分数，也不得据此
+自动 transition ADR。
+
+Decision View registry 为 `docs/.epctl/decision-views.json` schema 1。每项只包含稳定
+kebab-case `id`、单行 `title` 与排序后的显式 current ADR `adr_refs`。配置是唯一持久
+事实；`docs/decision-views/<id>.md` 与 `docs/DECISION-VIEWS.md` 都是可重建投影。
+
+```bash
+# preview：不得创建目录、lock、registry 或投影
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  set-decision-view oql --title "OQL decisions" \
+  --adr ADR-049 --adr ADR-056
+
+# apply：repository lock + snapshot + validation + rollback
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  set-decision-view oql --title "OQL decisions" \
+  --adr ADR-049 --adr ADR-056 --apply
+
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  remove-decision-view oql --apply
+```
+
+Resolver 只接受 current `accepted` seeds，展开 `depends_on` / `amends` 传递闭包，
+再用 fixed point 加入 current scoped amendments。unknown、duplicate、cycle 或传递
+non-current 输入失败关闭。被 amendment 指向的原 constraint 仍保留并标注当前
+amender，不能假定每个 amendment 都是完整替换。
+
+Decision Capsule 是临时 Architecture Input 辅助，不落盘：
+
+```bash
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  decision-capsule --view oql --constraint ADR-056#C-003 --json
+```
+
+- strict schema 1.2+ ADR 复制原文 `Decision Statement` 与选中 table row；先验证 sealed
+  payload，再报告 document/payload digest；
+- linked legacy 或没有安全结构边界的 strict 旧 ADR 只能复制完整源文档；
+- source 片段和 row 不得总结、改写或截断；capsule 自身报告 UTF-8 bytes 与 SHA-256；
+- 默认预算 32768 bytes；超限错误同时报告总量和各 source cost。更大预算必须带已评审
+  的 `--budget-reason`，但仍不允许截断；
+- optional constraint selection 只能引用 resolved context 内 stable IDs，并自动带入
+  解释该 constraint 所必需的 current amendment constraints。
+
+`adr-consolidation-plan` 始终为 `preview_only`。它可以指出 amendment chains、
+partially amended ADR、whole-document legacy、active EP consumers 与 proposed overlap，
+但不能 merge、accept、retire、supersede、rewrite 或 delete。若确需减少规范决定数量，
+必须创建新的原子 proposed ADR，由 Decision Owner 明确接受，再按迁移和 effect transition
+契约处理旧决定。运行 preview 前后 ADR/EP bytes 必须一致。
+
 ## 可执行的规范约束
 
 新 ADR 使用 schema 1.4。`Decision Statement` 用一句话说明被接受或拒绝的完整

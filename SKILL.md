@@ -1,7 +1,7 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、项目级 RepoFoundry Skill、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex、Claude Code 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、把 RepoFoundry Skills 注册到当前项目、选择一个或全部 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Design、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-design 与 engineering-execution-plan 初始化。
+  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、项目级 RepoFoundry Skill、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex、Claude Code 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、把 RepoFoundry Skills 注册到当前项目、选择一个或全部 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、处理 ADR 过多与上下文压缩、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Design、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-design 与 engineering-execution-plan 初始化。
 ---
 
 # RepoFoundry AI
@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.7.1
+  upgrade --to 0.8.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.7.1
+  upgrade --to 0.8.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.7.1 --apply
+  upgrade --to 0.8.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -140,6 +140,11 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 合并。`legacy-unversioned` seed 保持原字节，除非它已经与当前模板完全一致。apply
 后必须报告更新路径和验证结果；验证失败由 CLI 回滚。详细兼容矩阵见
 [Bootstrap 契约](references/bootstrap.md#版本与-harness-升级)。
+
+0.8.0 的显式升级还会补齐空的 Decision View registry、索引和投影目录。它不会
+创建领域 View、修改 ADR、推断 retirement 或执行语义合并。大型 ADR corpus 的
+健康度、View、exact capsule 与 consolidation preview 后续路由到
+`engineering-execution-plan`。
 
 ## 管理 Engineering Specs
 
