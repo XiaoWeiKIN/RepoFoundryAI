@@ -24,6 +24,10 @@ Date: 2026-09-01
 - `designctl validate` — 0 errors and one pre-existing legacy draft warning.
 - Two consecutive `epctl reindex` runs produced the same working-tree status digest:
   `c31b1b805d5fd8a7aa530e67625568fba9148496f18ddb1d5413bf4ffab92ab6`.
+- PR #37's first Python 3.10 run exposed that Git omits an empty projection directory
+  from clean checkouts. A tracked `.gitkeep` seed was added to bootstrap and upgrade;
+  focused initialization/migration tests and local repository validation pass after
+  the correction. The replacement CI run is required before merge.
 
 ## Remaining release evidence
 

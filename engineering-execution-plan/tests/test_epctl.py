@@ -3406,6 +3406,7 @@ updated: 2026-07-28
 
         registry.unlink()
         (self.repo / "docs/DECISION-VIEWS.md").unlink()
+        (self.repo / "docs/decision-views/.gitkeep").unlink()
         (self.repo / "docs/decision-views").rmdir()
         missing_preview = json.loads(
             self.run_cli(

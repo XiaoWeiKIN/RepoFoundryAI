@@ -65,6 +65,7 @@ INIT_FILE_ASSETS = (
     ("docs/DECISIONS.md", "decisions-index.md"),
     ("docs/DECISION-VIEWS.md", "decision-views-index.md"),
     ("docs/.epctl/decision-views.json", "decision-views-registry.json"),
+    ("docs/decision-views/.gitkeep", "decision-views-gitkeep"),
     ("docs/BUGFIXES.md", "bugfixes-index.md"),
     ("docs/exec-plans/tech-debt-tracker.md", "tech-debt-tracker.md"),
 )
@@ -72,6 +73,7 @@ UPGRADE_ADDITIVE_DIRECTORIES = ("docs/decision-views",)
 UPGRADE_ADDITIVE_FILE_ASSETS = (
     ("docs/DECISION-VIEWS.md", "decision-views-index.md"),
     ("docs/.epctl/decision-views.json", "decision-views-registry.json"),
+    ("docs/decision-views/.gitkeep", "decision-views-gitkeep"),
 )
 
 EXECPLAN_SECTIONS = (

@@ -320,6 +320,10 @@ alter authority. Do not use destructive Git commands or remove user worktree cha
 - Lowercase legacy ADR filenames were discoverable but `find_adr` used a case-sensitive
   filename fallback and strict frontmatter parser. It now uses the shared legacy parser
   and case-insensitive path identity while rejecting matching symlink paths.
+- Git does not preserve an empty projection directory in a clean checkout. The
+  initialized and upgraded infrastructure now includes a repository-neutral `.gitkeep`
+  marker so `docs/decision-views/` remains present after clone and validation remains
+  reproducible.
 
 ## Decision Log
 

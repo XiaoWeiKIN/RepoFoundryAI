@@ -795,8 +795,10 @@ class FoundryctlTestCase(unittest.TestCase):
         registry = self.repo / "docs/.epctl/decision-views.json"
         index = self.repo / "docs/DECISION-VIEWS.md"
         view_root = self.repo / "docs/decision-views"
+        view_marker = view_root / ".gitkeep"
         registry.unlink()
         index.unlink()
+        view_marker.unlink()
         view_root.rmdir()
         adr = self.repo / "docs/adr/adr-900_existing-source.md"
         adr.write_text(
@@ -830,6 +832,7 @@ class FoundryctlTestCase(unittest.TestCase):
             create_paths,
             {
                 "docs/decision-views/",
+                "docs/decision-views/.gitkeep",
                 "docs/DECISION-VIEWS.md",
                 "docs/.epctl/decision-views.json",
             },
@@ -850,6 +853,7 @@ class FoundryctlTestCase(unittest.TestCase):
             set(applied["created"]),
             {
                 "docs/decision-views/",
+                "docs/decision-views/.gitkeep",
                 "docs/DECISION-VIEWS.md",
                 "docs/.epctl/decision-views.json",
             },
@@ -860,6 +864,7 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertTrue(index.is_file())
         self.assertTrue(view_root.is_dir())
+        self.assertTrue(view_marker.is_file())
         self.assertEqual(adr.read_bytes(), adr_before)
         migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(
