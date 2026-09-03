@@ -616,7 +616,7 @@
     {
       "id": 27,
       "prompt": "仓库已有 50 多份 ADR，部分是 current amendment，active EP 还引用其中很多。我想压缩 Agent 上下文并整理领域入口；不要因为数量多就自动退役或合并 ADR。",
-      "expected_output": "先运行 adr-health 查看独立压力维度，再由 owner 明确 current ADR seeds，以 preview/apply 建立非规范 Decision Views；任务通过 exact decision-capsule 在预算内选取 verified source bytes。可运行 preview-only consolidation impact，但任何语义合并仍需新 proposed ADR、Decision Owner acceptance 与正常 effect transition。",
+      "expected_output": "先运行 adr-health 查看独立压力维度，再由 owner 明确 current ADR seeds，以 preview/apply 建立非规范 Decision Views。complete capsule 保持默认完整解释 frame；若仍超预算，则显式给出 stable constraints、focused materialization 与 focus reason，在验证完整 current-effect closure 后只物化 requested rows 和递归向下的 scoped amendments，并声明 focused_partial、closure digest 与省略边界。legacy 或 broad unscoped amendment 失败关闭，绝不自动回退、摘要或截断。可运行 preview-only consolidation impact，但任何语义合并仍需新 proposed ADR、Decision Owner acceptance 与正常 effect transition。",
       "files": [],
       "assertions": [
         {
@@ -629,7 +629,7 @@
         },
         {
           "name": "compiles_exact_bounded_context",
-          "description": "strict 片段和 legacy 全文保持精确并带 digest；超预算失败而不是摘要或截断"
+          "description": "complete 保持默认兼容；focused 必须显式选 stable constraints/reason、验证完整 closure、只沿下游 scoped amendment 物化精确字节并暴露 digest/omission；歧义或超预算失败"
         },
         {
           "name": "preserves_decision_authority",

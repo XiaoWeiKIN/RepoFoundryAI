@@ -190,6 +190,10 @@ python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
   --title "Runtime decisions" --adr ADR-004 --adr ADR-005 --apply
 python3 <skill-dir>/scripts/epctl.py --repo . decision-capsule \
   --view runtime --constraint ADR-005#C-002 --json
+python3 <skill-dir>/scripts/epctl.py --repo . decision-capsule \
+  --view runtime --constraint ADR-005#C-002 \
+  --materialization focused --focus-reason "Implement the selected boundary" \
+  --json
 python3 <skill-dir>/scripts/epctl.py --repo . adr-consolidation-plan \
   --view runtime --json
 
@@ -308,11 +312,15 @@ amendment、active-plan、View coverage 与 context cost 各维度；输出没�
 `set-decision-view` 明确维护领域种子；工具每次从 current-effect 图重建依赖、
 amendment 和 constraint 身份。View 是持久导航，不是 ADR，也没有 accepted 状态。
 
-任务开始时用 `decision-capsule --view ...` 或显式 `--adr` 编译临时上下文。strict
-ADR 只复制原文 `Decision Statement` 和选中的 `Normative Constraints` 行并报告
-source/capsule SHA-256；legacy ADR 必须整篇复制。默认 32 KiB，超限失败并给出每个
-source 的 byte cost，绝不摘要或截断；提高预算必须写 `--budget-reason`。Capsule
-只辅助 Architecture Input 阅读，不替代 ExecPlan 的 Compliance Matrix。
+任务开始时用 `decision-capsule --view ...` 或显式 `--adr` 编译临时上下文。complete
+是默认模式：strict ADR 复制原文 `Decision Statement` 和选中的
+`Normative Constraints` 行，legacy ADR 整篇复制。只有显式给出 stable constraint、
+`--materialization focused` 与非空 `--focus-reason` 时，才可在完整 closure 验证后
+物化定向子图；输出必须声明 `focused_partial`、完整 closure digest 与省略边界。
+legacy focus 或缺少 scoped target 的 broad amendment 失败关闭。两种模式都报告
+source/capsule SHA-256；默认 32 KiB，超限给出 materialized source byte cost，绝不
+摘要、截断或自动切换模式。提高预算必须写 `--budget-reason`。Capsule 只辅助
+Architecture Input 阅读，不替代 ExecPlan 的 Compliance Matrix。
 
 `adr-consolidation-plan` 只报告 amendment chain、legacy contract、proposed overlap
 和 active EP impact，并始终声明 `preview_only: true`。语义合并必须另起一份原子

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -3632,6 +3633,422 @@ updated: 2026-07-28
             {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in source_hashes},
         )
 
+    def test_complete_capsule_matches_frozen_080_contract(self) -> None:
+        module_name = "epctl_complete_compatibility_test"
+        spec = importlib.util.spec_from_file_location(module_name, SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        epctl = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = epctl
+        spec.loader.exec_module(epctl)
+
+        headers = [
+            "| ID | Constraint | Confirmation |\r\n",
+            "|---|---|---|\r\n",
+        ]
+        context = {
+            "direct_adrs": ["ADR-001"],
+            "resolved_adrs": ["ADR-001", "ADR-002"],
+            "constraint_refs": ["ADR-001#C-001", "ADR-002#C-001"],
+            "amendment_targets": {"ADR-001#C-001": ["ADR-002"]},
+            "sources": [
+                {
+                    "id": "ADR-001",
+                    "title": "Base",
+                    "path": "docs/adr/adr-001_base.md",
+                    "text": "",
+                    "data": {
+                        "depends_on": "[]",
+                        "amends": "[]",
+                        "amends_constraints": "[]",
+                    },
+                    "contract": "strict-structured",
+                    "document_sha256": "a" * 64,
+                    "payload_sha256": "b" * 64,
+                    "decision_source": (
+                        "## Decision Statement\r\n\r\nBase exact.\r\n"
+                    ),
+                    "constraint_headers": headers,
+                    "constraint_rows": [
+                        {
+                            "ref": "ADR-001#C-001",
+                            "line": (
+                                "| C-001 | Preserve base. | Verify base. |\r\n"
+                            ),
+                        }
+                    ],
+                },
+                {
+                    "id": "ADR-002",
+                    "title": "Amender",
+                    "path": "docs/adr/adr-002_amender.md",
+                    "text": "",
+                    "data": {
+                        "depends_on": "[]",
+                        "amends": '["ADR-001"]',
+                        "amends_constraints": '["ADR-001#C-001"]',
+                    },
+                    "contract": "strict-structured",
+                    "document_sha256": "c" * 64,
+                    "payload_sha256": "d" * 64,
+                    "decision_source": (
+                        "## Decision Statement\n\nAmender exact.\n"
+                    ),
+                    "constraint_headers": [
+                        "| ID | Constraint | Confirmation |\n",
+                        "|---|---|---|\n",
+                    ],
+                    "constraint_rows": [
+                        {
+                            "ref": "ADR-002#C-001",
+                            "line": (
+                                "| C-001 | Preserve amendment. | "
+                                "Verify amendment. |\n"
+                            ),
+                        }
+                    ],
+                },
+            ],
+        }
+
+        default = epctl.compile_decision_capsule(
+            context,
+            ["ADR-001#C-001"],
+            budget_bytes=None,
+        )
+        explicit = epctl.compile_decision_capsule(
+            context,
+            ["ADR-001#C-001"],
+            budget_bytes=None,
+            materialization="complete",
+        )
+        self.assertEqual(default, explicit)
+        self.assertNotIn("focus", default)
+        self.assertNotIn("validated_sources", default)
+        self.assertEqual(default["bytes"], 1776)
+        self.assertEqual(
+            default["sha256"],
+            "b4f7437d33cbae4234154abe437c7b10acf662be2ca9b93250019bc58aa51b6c",
+        )
+        self.assertEqual(
+            hashlib.sha256(
+                json.dumps(
+                    default,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest(),
+            "95eb91ab322551c5d1e8540e8055f7a5bd94e33c3585153d9243d90c3fb3c496",
+        )
+
+    def test_focused_capsule_is_directional_exact_and_auditable(self) -> None:
+        self.init()
+        research = self.new_research("focused-capsule")
+        self.conclude_research(research)
+
+        origin = self.new_adr("historical-origin")
+        self.complete_all_placeholders(origin)
+        self.replace_section_body(
+            origin,
+            "Decision Statement",
+            "Historical origin must stay outside the focused body.",
+        )
+        self.run_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "accepted",
+            "--decision-maker",
+            "Test Decision Owner",
+        )
+
+        def scoped_adr(
+            slug: str,
+            adr_id: str,
+            target: str,
+            decision: str,
+            constraints: list[tuple[str, str]],
+        ) -> Path:
+            path = Path(
+                self.run_cli(
+                    "new-adr",
+                    "--slug",
+                    slug,
+                    "--title",
+                    slug.replace("-", " ").title(),
+                    "--research",
+                    "R-001",
+                    "--amends",
+                    target.split("#", 1)[0],
+                    "--amends-constraint",
+                    target,
+                ).stdout.strip()
+            )
+            self.complete_all_placeholders(path)
+            self.replace_section_body(path, "Decision Statement", decision)
+            rows = [
+                "| ID | Strength | Scope | Constraint | Confirmation |",
+                "|---|---|---|---|---|",
+                *[
+                    f"| {constraint_id} | must | task boundary | {text} | "
+                    f"Verify {constraint_id}. |"
+                    for constraint_id, text in constraints
+                ],
+            ]
+            self.replace_section_body(path, "Normative Constraints", "\n".join(rows))
+            self.run_cli(
+                "decide-adr",
+                adr_id,
+                "--outcome",
+                "accepted",
+                "--decision-maker",
+                "Test Decision Owner",
+            )
+            return path
+
+        base = scoped_adr(
+            "focused-base",
+            "ADR-002",
+            "ADR-001#C-001",
+            "Focused base decision preserves exact UTF-8 字节。",
+            [
+                ("C-001", "Selected base constraint."),
+                ("C-002", "Unselected base constraint."),
+            ],
+        )
+        base.write_bytes(base.read_bytes().replace(b"\n", b"\r\n"))
+        first_amender = scoped_adr(
+            "focused-amender",
+            "ADR-003",
+            "ADR-002#C-001",
+            "First downstream amendment.",
+            [
+                ("C-001", "First downstream constraint."),
+                ("C-002", "Second downstream constraint."),
+            ],
+        )
+        second_amender = scoped_adr(
+            "focused-recursive-amender",
+            "ADR-004",
+            "ADR-003#C-002",
+            "Recursive downstream amendment.",
+            [("C-001", "Recursive downstream constraint.")],
+        )
+        source_paths = (origin, base, first_amender, second_amender)
+        source_hashes = {
+            path: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in source_paths
+        }
+
+        focused = json.loads(
+            self.run_cli(
+                "decision-capsule",
+                "--adr",
+                "ADR-002",
+                "--constraint",
+                "ADR-002#C-001",
+                "--materialization",
+                "focused",
+                "--focus-reason",
+                "Implement only the selected request boundary.",
+                "--json",
+            ).stdout
+        )
+        complete = json.loads(
+            self.run_cli(
+                "decision-capsule",
+                "--adr",
+                "ADR-002",
+                "--constraint",
+                "ADR-002#C-001",
+                "--json",
+            ).stdout
+        )
+        self.assertEqual(
+            focused["resolved_adrs"],
+            ["ADR-001", "ADR-002", "ADR-003", "ADR-004"],
+        )
+        self.assertEqual(focused["resolved_adrs"], complete["resolved_adrs"])
+        self.assertEqual(focused["validated_sources"], complete["sources"])
+        self.assertEqual(
+            focused["selected_constraints"],
+            [
+                "ADR-002#C-001",
+                "ADR-003#C-001",
+                "ADR-003#C-002",
+                "ADR-004#C-001",
+            ],
+        )
+        self.assertEqual(
+            focused["focus"]["materialized_adrs"],
+            ["ADR-002", "ADR-003", "ADR-004"],
+        )
+        self.assertEqual(focused["focus"]["omitted_adrs"], ["ADR-001"])
+        self.assertEqual(
+            focused["focus"]["unmaterialized_relation_refs"],
+            ["ADR-002 amends_constraint ADR-001#C-001"],
+        )
+        self.assertEqual(
+            [source["adr_id"] for source in focused["sources"]],
+            ["ADR-002", "ADR-003", "ADR-004"],
+        )
+        self.assertEqual(
+            [source["adr_id"] for source in focused["validated_sources"]],
+            ["ADR-001", "ADR-002", "ADR-003", "ADR-004"],
+        )
+        self.assertEqual(
+            focused["focus"]["context_completeness"],
+            "focused_partial",
+        )
+        self.assertIn("Materialization: `focused_partial`", focused["context"])
+        self.assertIn("not a complete Architecture Input Set", focused["context"])
+        self.assertNotIn(
+            "Historical origin must stay outside the focused body.",
+            focused["context"],
+        )
+        self.assertNotIn("Unselected base constraint.", focused["context"])
+        self.assertIn("First downstream constraint.", focused["context"])
+        self.assertIn("Second downstream constraint.", focused["context"])
+        self.assertIn("Recursive downstream constraint.", focused["context"])
+        exact_base_line = next(
+            line
+            for line in base.read_bytes().decode("utf-8").splitlines(keepends=True)
+            if "Selected base constraint." in line
+        )
+        self.assertTrue(exact_base_line.endswith("\r\n"))
+        self.assertIn(exact_base_line, focused["context"])
+        self.assertEqual(
+            hashlib.sha256(focused["context"].encode("utf-8")).hexdigest(),
+            focused["sha256"],
+        )
+        closure_manifest = {
+            "direct_adrs": focused["direct_adrs"],
+            "resolved_adrs": focused["resolved_adrs"],
+            "sources": [
+                {
+                    "adr_id": source["adr_id"],
+                    "path": source["path"],
+                    "document_sha256": source["document_sha256"],
+                    "payload_sha256": source["payload_sha256"],
+                }
+                for source in focused["validated_sources"]
+            ],
+        }
+        closure_bytes = json.dumps(
+            closure_manifest,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        self.assertEqual(
+            hashlib.sha256(closure_bytes).hexdigest(),
+            focused["focus"]["validated_closure_sha256"],
+        )
+        changed_manifest = json.loads(closure_bytes)
+        changed_manifest["sources"][0]["document_sha256"] = "0" * 64
+        changed_digest = hashlib.sha256(
+            json.dumps(
+                changed_manifest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        self.assertNotEqual(
+            changed_digest,
+            focused["focus"]["validated_closure_sha256"],
+        )
+
+        missing_reason = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-002",
+            "--constraint",
+            "ADR-002#C-001",
+            "--materialization",
+            "focused",
+            expected=2,
+        )
+        self.assertIn("requires --focus-reason", missing_reason.stderr)
+        missing_constraint = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-002",
+            "--materialization",
+            "focused",
+            "--focus-reason",
+            "A reviewed focus.",
+            expected=2,
+        )
+        self.assertIn("requires at least one --constraint", missing_constraint.stderr)
+        overflow = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-002",
+            "--constraint",
+            "ADR-002#C-001",
+            "--materialization",
+            "focused",
+            "--focus-reason",
+            "A reviewed focus.",
+            "--budget-bytes",
+            "1",
+            expected=2,
+        )
+        self.assertEqual(overflow.stdout, "")
+        self.assertIn("DECISION_CONTEXT_BUDGET_EXCEEDED", overflow.stderr)
+        self.assertEqual(
+            source_hashes,
+            {
+                path: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in source_paths
+            },
+        )
+
+    def test_focused_capsule_fails_closed_on_broad_amendment(self) -> None:
+        self.init()
+        research = self.new_research("broad-amendment")
+        self.conclude_research(research)
+        base = self.new_adr("broad-base")
+        self.accept_adr(base)
+        legacy = self.repo / "docs/adr/adr-010_broad-amendment.md"
+        legacy.write_text(
+            """---
+doc_type: adr
+title: Broad amendment
+status: accepted
+created: 2026-01-01
+last_verified: 2026-01-02
+depends_on: []
+amends: ["ADR-001"]
+---
+
+# ADR-010: Broad amendment
+
+This current whole-ADR amendment has no stable row-level scope.
+""",
+            encoding="utf-8",
+        )
+        self.run_cli("reindex")
+        result = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-001",
+            "--constraint",
+            "ADR-001#C-001",
+            "--materialization",
+            "focused",
+            "--focus-reason",
+            "Test an ambiguous boundary.",
+            expected=2,
+        )
+        self.assertEqual(result.stdout, "")
+        self.assertIn(
+            "FOCUSED_CONTEXT_AMENDMENT_SCOPE_UNPROVABLE",
+            result.stderr,
+        )
+
     def test_legacy_capsule_health_and_consolidation_are_lossless(self) -> None:
         self.init()
         legacy = self.repo / "docs/adr/adr-010_legacy-runtime.md"
@@ -3663,6 +4080,20 @@ The whole legacy document is normative, including this unique sentence.
         )
         self.assertEqual(capsule["sources"][0]["contract"], "whole-document")
         self.assertIn(legacy_text, capsule["context"])
+        focused = self.run_cli(
+            "decision-capsule",
+            "--adr",
+            "ADR-010",
+            "--constraint",
+            "ADR-010#C-001",
+            "--materialization",
+            "focused",
+            "--focus-reason",
+            "Test a legacy boundary.",
+            expected=2,
+        )
+        self.assertEqual(focused.stdout, "")
+        self.assertIn("FOCUSED_CONTEXT_LEGACY_BOUNDARY", focused.stderr)
         health = json.loads(self.run_cli("adr-health", "--json").stdout)
         self.assertEqual(health["contracts"]["whole_document_current_adrs"], 1)
         self.assertNotIn("score", json.dumps(health))

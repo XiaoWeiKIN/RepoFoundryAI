@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.0
+  upgrade --to 0.8.1
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.0
+  upgrade --to 0.8.1
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.0 --apply
+  upgrade --to 0.8.1 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -141,7 +141,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 后必须报告更新路径和验证结果；验证失败由 CLI 回滚。详细兼容矩阵见
 [Bootstrap 契约](references/bootstrap.md#版本与-harness-升级)。
 
-0.8.0 的显式升级还会补齐空的 Decision View registry、索引和投影目录。它不会
+0.8.0 及以上的显式升级还会补齐空的 Decision View registry、索引和投影目录。它不会
 创建领域 View、修改 ADR、推断 retirement 或执行语义合并。大型 ADR corpus 的
 健康度、View、exact capsule 与 consolidation preview 后续路由到
 `engineering-execution-plan`。
