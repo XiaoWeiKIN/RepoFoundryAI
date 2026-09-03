@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-095
 title: "Implement lossless terminal ADR history packs"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -20,9 +20,9 @@ architecture_decision_gate_reason: ""
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:7c0ad6630e49e6518db17b10c04d0af850d85c36"
+verification_evidence: ["docs/exec-plans/completed/ep-095_implement-lossless-terminal-adr-history-packs/artifacts/canonical-check.txt", "docs/exec-plans/completed/ep-095_implement-lossless-terminal-adr-history-packs/artifacts/release-install.txt", "docs/exec-plans/completed/ep-095_implement-lossless-terminal-adr-history-packs/artifacts/datafox-preflight.txt", "docs/exec-plans/completed/ep-095_implement-lossless-terminal-adr-history-packs/artifacts/datafox-pack.txt", "docs/exec-plans/completed/ep-095_implement-lossless-terminal-adr-history-packs/artifacts/transaction-tests.txt"]
+archive_sha256: 9ce8e845d7dfe49db084d8cd0b87ab9768bd8695c4e1050c2814dd2ed9796704
 created: 2026-09-03
 updated: 2026-09-03
 author: "Codex"
@@ -51,14 +51,14 @@ returns the governed tree to its prior byte state.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 4, release and verified DataFox compaction.
-- Current state: the unified resolver, strict codec, pack/unpack transactions,
-  observability, documentation, and rollback/regression tests are implemented;
-  0.8.4 is published and installed. Its first real DataFox migration exposed that
-  the changed Core project Skill had retained version 1.5.0, so 0.8.5 now bumps the
-  template identity to 1.5.1 and carries a 0.8.4 migration regression.
-- Next action: publish and install the 0.8.5 migration correction, upgrade the
-  DataFox Harness, then preview/apply the authorized ADR-051..ADR-054 pack.
+- Current milestone: Milestone 4 complete; ready for archival.
+- Current state: RepoFoundry 0.8.5/Core 1.5.1 is published and installed from the
+  verified release commit. DataFox was upgraded without automatic packing, then
+  ADR-051 through ADR-054 were losslessly replaced by one verified History Pack in
+  clean commit `e1470a45`; all 51 logical ADRs remain resolvable while physical ADR
+  source files fall from 51 to 48.
+- Next action: archive this completed ExecPlan with the release, preflight, and
+  DataFox pack evidence below.
 - Open questions: none that change the approved route. Implementation probes may
   refine private function boundaries but cannot weaken the pack schema or
   transaction contract.
@@ -319,20 +319,20 @@ From the RepoFoundry worktree root:
 - [x] From the RepoFoundry root, run the Engineering Execution Plan unittest suite;
   expect exit 0 with pack codec, mixed-source, transaction, health, and regression
   cases passing. Evidence: concise transcript or
-  `docs/exec-plans/active/ep-095_implement-lossless-terminal-adr-history-packs/artifacts/epctl-tests.txt`.
+  `docs/exec-plans/completed/ep-095_implement-lossless-terminal-adr-history-packs/artifacts/epctl-tests.txt`.
 - [x] Run targeted preview/apply fault injections; expect previews to create no
   paths, candidate validation to occur before deletion, and every failure/round trip
   to preserve exact before-state hashes. Evidence: `artifacts/transaction-tests.txt`.
 - [x] Run `python3 -B scripts/check.py`; expect exit 0 across metadata, links, all
   Skill suites, package portability, release, and end-to-end checks. Evidence:
   `artifacts/canonical-check.txt`.
-- [ ] Install the exact 0.8.5 release and run version plus clean fixture Harness
+- [x] Install the exact 0.8.5 release and run version plus clean fixture Harness
   upgrade/validation; expect no automatic pack and no customized-file overwrite.
   Evidence: `artifacts/release-install.txt`.
-- [ ] In DataFox, validate the 0.8.5 Harness and logical corpus before packing;
+- [x] In DataFox, validate the 0.8.5 Harness and logical corpus before packing;
   expect no new error relative to the unchanged pre-pack baseline. Evidence:
   `artifacts/datafox-preflight.txt`.
-- [ ] Preview/apply the explicit ADR-051..ADR-054 pack; expect one self-verified pack,
+- [x] Preview/apply the explicit ADR-051..ADR-054 pack; expect one self-verified pack,
   unchanged logical document/payload digests, four absent live files, net physical
   reduction 3, preserved relations/evidence/indexes/capsules, and a successful
   unpack preview. Evidence: `artifacts/datafox-pack.txt`.
@@ -380,10 +380,19 @@ No release or Harness upgrade automatically packs DataFox.
 - [x] (2026-09-03T10:21:10Z) Completed Milestone 3 documentation, 0.8.4 metadata,
   77-test EP regression, installer/Harness fixtures, and canonical repository check.
 - [x] (2026-09-03T10:28:36Z) Published and installed 0.8.4 from commit `0f1262b`.
-- [x] (2026-09-03T11:00:00Z) Reproduced its DataFox migration failure, bumped the
+- [x] (2026-09-03T10:40:00Z) Reproduced its DataFox migration failure, bumped the
   changed Core template contract from 1.5.0 to 1.5.1 for 0.8.5, and added a fixture
   proving an authentic 0.8.4 manifest can preview/apply the correction.
-- [ ] Complete Milestone 4 release and DataFox integration.
+- [x] (2026-09-03T10:51:00Z) Published RepoFoundry 0.8.5 from `7c0ad66`, installed
+  the exact GitHub Release locally, and verified its commit and archive/package
+  digests from the installer state.
+- [x] (2026-09-03T11:36:00Z) Upgraded an isolated DataFox baseline to distribution
+  0.8.5/Core 1.5.1, preserved the strict profile and custom seeds, and obtained zero
+  Harness or EP validation errors before packing.
+- [x] (2026-09-03T11:51:00Z) Superseded ADR-051 by accepted ADR-055, packed
+  ADR-051..ADR-054 into one self-addressed container, verified exact embedded
+  digests, zero clean-tree errors, net physical reduction 3, and recovery preview;
+  clean DataFox commit `e1470a45` completes Milestone 4.
 
 ## Surprises & Discoveries
 
@@ -403,6 +412,11 @@ No release or Harness upgrade automatically packs DataFox.
   they did not expose that the Core project Skill bytes changed while its component
   version remained 1.5.0. DataFox's real 0.8.3/1.5.0 manifest correctly failed
   closed. Core 1.5.1 restores immutable template identity and unlocks safe migration.
+- DataFox's active checkout contained unrelated staged DD-008 and OQL work whose
+  pre-existing validation failures made it unsuitable as final evidence. Performing
+  the governed migration in a clean sibling worktree separated pack correctness
+  from concurrent work; the exact primary pack changes were then mirrored into the
+  active checkout without disturbing its staged file.
 
 ## Decision Log
 
@@ -416,6 +430,9 @@ No release or Harness upgrade automatically packs DataFox.
   already-packed source without mutation instead of reporting a successful no-op.
 - 2026-09-03, Codex: issue 0.8.5 as a migration-only patch and advance Harness Core
   to 1.5.1; do not weaken template hash validation or edit DataFox's manifest by hand.
+- 2026-09-03, Codex: use clean DataFox commits `f61ee89a` and `e1470a45` as the
+  release integration evidence, while preserving unrelated active-checkout WIP and
+  reporting that checkout's validation debt separately.
 
 ## Blockers
 
@@ -424,7 +441,23 @@ No release or Harness upgrade automatically packs DataFox.
 
 ## Outcomes & Retrospective
 
-Pending implementation and verified release.
+RepoFoundry now treats terminal ADR compaction as a reversible storage operation,
+not as deletion or semantic consolidation. Release 0.8.5 reads live and packed ADRs
+through the same offline resolver, validates a candidate before deletion, rolls back
+late failures, and can preview exact restoration before removing a pack.
+
+The DataFox integration proved the intended scale behavior on a real 51-ADR corpus:
+ADR-051 through ADR-054 remain byte-exact logical records inside one content-addressed
+pack, ADR-055 remains the current decision, and the physical source count falls by
+three. Clean EP validation finishes with 0 errors/216 warnings and Harness validation
+with 0 errors/7 warnings; the warnings are existing review/bootstrap guidance rather
+than pack failures. The pack identity is
+`9cdff4e8e7585f8253543f8e02825174c386bf5aea9c32e80bf0327d0cc40156`.
+
+The corrective 0.8.5 release also exposed a useful distribution invariant: any
+changed Core template bytes require a new component version even when the Harness
+schema is unchanged. A regression now begins from an authentic 0.8.4 manifest so
+future migration tests cannot accidentally generate both sides from one template.
 
 ### Knowledge promotion candidates
 
@@ -455,7 +488,7 @@ newer until unpacked.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-095_implement-lossless-terminal-adr-history-packs/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-095_implement-lossless-terminal-adr-history-packs/EXECPLAN.md`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -466,3 +499,6 @@ newer until unpacked.
   recovery behavior.
 - 2026-09-03T11:00:00Z — Recorded the 0.8.4 real-project migration defect and the
   0.8.5/Core 1.5.1 corrective release gate.
+- 2026-09-03T11:55:00Z — Recorded the verified 0.8.5 installation, clean DataFox
+  preflight, lossless four-to-one History Pack, recovery preview, and completion
+  evidence for archival.

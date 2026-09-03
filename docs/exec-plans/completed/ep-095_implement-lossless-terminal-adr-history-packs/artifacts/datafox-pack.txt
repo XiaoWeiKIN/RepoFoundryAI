@@ -1,0 +1,56 @@
+DataFox lossless ADR History Pack evidence
+Date: 2026-09-03
+Result: PASS
+
+Operation:
+- Clean integration commit: e1470a45 (docs: pack superseded span attribute ADRs)
+- Packed by: Wangxiaowei1
+- Reason: Superseded by accepted ADR-055
+- Pack identity:
+  9cdff4e8e7585f8253543f8e02825174c386bf5aea9c32e80bf0327d0cc40156
+- Pack path:
+  docs/.epctl/adr-packs/sha256-9cdff4e8e7585f8253543f8e02825174c386bf5aea9c32e80bf0327d0cc40156.json
+- Preview was mutation-free and apply removed the four original live paths only
+  after candidate validation.
+
+Exact embedded source evidence:
+- ADR-051: 9906 bytes; document SHA-256
+  c7f6a9cb3cd18f350f3881f899af309d6469d87e206c496df277b2b8d91a5c24;
+  payload SHA-256 baeb6812e149d641dcb86ad23e4b0c499999e3e738a6bff10085b67b1273c9a9.
+- ADR-052: 7113 bytes; document SHA-256
+  89fa8c57f1e271644c3da5f538fa177bf18450e6865fa23d3a088a17b2a32af6;
+  payload SHA-256 87fb7ce3cf32384aab60355bbe901c2e1a9303ea548726a2bad3f4fcc0e25c05.
+- ADR-053: 7592 bytes; document SHA-256
+  878231de00825383f7b1e73fc700406d06e22c7934a9797d4e6247a0af3b30f0;
+  payload SHA-256 4129c2ab0ca5f5b409288939e8c38f0bed44091cc4c9f0b427e244defcf41b6a.
+- ADR-054: 9147 bytes; document SHA-256
+  181b0b70fea578f0ee62a7ea8a5e76ba27ff9e7b3b240756c4a7c141ff291b83;
+  payload SHA-256 fa2bd9ceb4f12fb07603fb25d894079790a0d3a75132e868467e919e433eac5d.
+
+Post-apply state:
+- Logical ADRs: 51 (unchanged)
+- Effective ADRs: 43
+- Live ADR files: 47
+- History Packs: 1
+- Packed entries: 4
+- Physical source files: 48
+- Net physical reduction: 3
+- ADR-051..ADR-054 resolve as packed, terminal sources.
+- ADR-055 resolves as the live accepted/current replacement.
+- The four original live paths are absent and DECISIONS.md links them to the pack.
+- Complete EP validation: 0 errors, 216 warnings.
+- Harness validation: 0 errors, 7 warnings.
+- `git diff --check`: passed.
+
+Recovery proof:
+- `unpack-adr-history-pack` preview reported `candidate_validated: true`.
+- It would restore all four exact original paths and document/payload hashes,
+  remove the single pack only after materialized validation, return live files to
+  51, and return net physical reduction to 0.
+- Preview applied no mutation; the integration worktree remained clean.
+
+Active-checkout exception:
+- The exact primary Harness/pack/index changes were also mirrored into the active
+  DataFox checkout without touching its staged DD-008 preview.
+- That checkout retains unrelated concurrent DD-008/OQL validation debt and is not
+  used as clean proof for this operation.

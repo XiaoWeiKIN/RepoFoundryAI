@@ -1,0 +1,29 @@
+DataFox 0.8.5 Harness and ADR preflight evidence
+Date: 2026-09-03
+Result: PASS
+
+Evidence boundary:
+- Repository: /Users/wangxiaowei1/x-otel/datafox
+- Clean integration branch: codex/datafox-adr-pack
+- Restored governance baseline commit: f61ee89a
+- Final pack commit: e1470a45
+- The active DataFox checkout contained unrelated DD-008/OQL work, so the clean
+  sibling worktree is the authoritative pack verification environment.
+
+Harness migration:
+- Distribution: 0.8.3 -> 0.8.5
+- Harness Core: 1.5.0 -> 1.5.1
+- Governance profile: strict, unchanged
+- Customized seeds: preserved
+- Automatic ADR packs: 0
+- Harness validation after upgrade: 0 errors, 7 warnings
+
+ADR preflight:
+- ADR-052, ADR-053, and ADR-054 were already superseded by accepted ADR-055.
+- ADR-051 was explicitly superseded by ADR-055 under Wangxiaowei1 authority before
+  packing; ADR-055 lists ADR-051..ADR-054 in its supersession chain.
+- Reindex and complete EP validation before packing: 0 errors, 216 warnings.
+- Warnings are existing legacy-document, unpublished-design, checkpoint-size,
+  owner-review, and bootstrap guidance; no pack or resolver error was present.
+- Specification router audit: passed with no activated specifications, no activated
+  requirements, no uncovered paths, and no audit errors.

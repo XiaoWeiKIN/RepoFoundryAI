@@ -1,0 +1,32 @@
+RepoFoundry AI 0.8.5 release and installation evidence
+Date: 2026-09-03
+Result: PASS
+
+Release:
+- Tag: v0.8.5
+- Commit: 7c0ad6630e49e6518db17b10c04d0af850d85c36
+- URL: https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.8.5
+- Distribution version: 0.8.5
+- Harness Core template version: 1.5.1
+
+Local installation:
+- `repofoundry --version`: RepoFoundry AI 0.8.5
+- Release directory: releases/0.8.5-7c0ad6630e49
+- Codex Skill link resolves through the installed `current` release.
+- Installer state source kind: GitHub Release
+- Installer state commit: 7c0ad6630e49e6518db17b10c04d0af850d85c36
+- Downloaded archive SHA-256:
+  4de9f1e2cbc924438dedb1bc3e6aaa00ae7136739a265d102655ff8adc428bab
+- Installed package SHA-256:
+  e539b462dfa74b32f025fd10610a28fbca2fd45d8b16747b7975b3c2655b4ff5
+
+Verification:
+- RepoFoundry controller suite: 53 tests passed.
+- Installer suite: 15 tests passed.
+- Repository contract suite: 16 tests passed.
+- Engineering Execution Plan suite: 77 tests passed.
+- Canonical `python3 -B scripts/check.py`: exit 0.
+- The authentic 0.8.4-manifest regression previewed and applied the 0.8.5/Core
+  1.5.1 migration without weakening template hash checks.
+- The DataFox upgrade retained its strict governance profile, preserved customized
+  seeds, and created no History Pack automatically.
