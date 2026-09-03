@@ -53,9 +53,11 @@ returns the governed tree to its prior byte state.
 - Latest checkpoint: none.
 - Current milestone: Milestone 4, release and verified DataFox compaction.
 - Current state: the unified resolver, strict codec, pack/unpack transactions,
-  observability, documentation, 0.8.4 metadata, and rollback/regression tests are
-  implemented; 77 EP tests and the canonical repository check pass.
-- Next action: commit and publish 0.8.4, install the exact release, upgrade the
+  observability, documentation, and rollback/regression tests are implemented;
+  0.8.4 is published and installed. Its first real DataFox migration exposed that
+  the changed Core project Skill had retained version 1.5.0, so 0.8.5 now bumps the
+  template identity to 1.5.1 and carries a 0.8.4 migration regression.
+- Next action: publish and install the 0.8.5 migration correction, upgrade the
   DataFox Harness, then preview/apply the authorized ADR-051..ADR-054 pack.
 - Open questions: none that change the approved route. Implementation probes may
   refine private function boundaries but cannot weaken the pack schema or
@@ -257,17 +259,19 @@ filesystem diff after every failed transaction or completed round trip.
 
 Validation, relations, evidence, indexes, views, capsules, health, and lifecycle
 diagnostics work for mixed corpora. Documentation and every distributed RepoFoundry
-Skill copy describe History Packs and the unpack-before-downgrade boundary. Version
-and release metadata identify 0.8.4; canonical checks and clean-install/Harness
-upgrade fixtures pass.
+Skill copy describe History Packs and the unpack-before-downgrade boundary. History
+Packs shipped in 0.8.4; the 0.8.5 patch gives the changed Core template a new 1.5.1
+identity so an actual 0.8.4 Harness can enter the upgrade planner. Canonical checks
+and clean-install/Harness upgrade fixtures pass.
 
 Run `python3 -B scripts/check.py`; expect exit 0 and deterministic reindex with no
 unexplained diff.
 
 ### Milestone 4: Release and verified DataFox compaction
 
-Publish and install the verified 0.8.4 release, preview/apply the DataFox Harness
-upgrade, and validate before changing ADR storage. After ADR-051 through ADR-054 are
+Publish and install the verified 0.8.5 patch after the 0.8.4 release exposed its
+Core template-version defect, preview/apply the DataFox Harness upgrade, and validate
+before changing ADR storage. After ADR-051 through ADR-054 are
 confirmed terminal, preview and apply their single History Pack. Expect 51 logical
 ADRs to remain resolvable, four live files to become one pack, and physical file
 count to fall by three. Run DataFox canonical validation and unpack preview; any
@@ -291,12 +295,13 @@ From the RepoFoundry worktree root:
        python3 -B scripts/check.py
 
    Expect exit 0.
-4. Use the repository's existing release workflow to publish 0.8.4, then install
-   that exact release with the reviewed installer and verify `repofoundry --version`.
+4. Use the repository's existing release workflow to publish 0.8.4, then publish and
+   install the 0.8.5 Core-template migration correction with the reviewed installer;
+   verify `repofoundry --version`.
 5. From the sibling DataFox checkout, preview before every mutation:
 
-       repofoundry --repo . upgrade --to 0.8.4
-       repofoundry --repo . upgrade --to 0.8.4 --apply
+       repofoundry --repo . upgrade --to 0.8.5
+       repofoundry --repo . upgrade --to 0.8.5 --apply
        repofoundry --repo . reindex
        repofoundry --repo . validate --harness
        python3 <installed-repo-foundry-dir>/engineering-execution-plan/scripts/epctl.py \
@@ -306,7 +311,7 @@ From the RepoFoundry worktree root:
 
    Review the exact candidate digest and deletion set, repeat with `--apply`, then
    rerun Harness and EP validation plus DataFox's canonical repository check. Exact
-   installed command spelling will be reconciled with the generated 0.8.4 CLI help
+   installed command spelling will be reconciled with the generated 0.8.5 CLI help
    before the integration step.
 
 ## Validation and Acceptance
@@ -321,10 +326,10 @@ From the RepoFoundry worktree root:
 - [x] Run `python3 -B scripts/check.py`; expect exit 0 across metadata, links, all
   Skill suites, package portability, release, and end-to-end checks. Evidence:
   `artifacts/canonical-check.txt`.
-- [ ] Install the exact 0.8.4 release and run version plus clean fixture Harness
+- [ ] Install the exact 0.8.5 release and run version plus clean fixture Harness
   upgrade/validation; expect no automatic pack and no customized-file overwrite.
   Evidence: `artifacts/release-install.txt`.
-- [ ] In DataFox, validate the 0.8.4 Harness and logical corpus before packing;
+- [ ] In DataFox, validate the 0.8.5 Harness and logical corpus before packing;
   expect no new error relative to the unchanged pre-pack baseline. Evidence:
   `artifacts/datafox-preflight.txt`.
 - [ ] Preview/apply the explicit ADR-051..ADR-054 pack; expect one self-verified pack,
@@ -374,6 +379,10 @@ No release or Harness upgrade automatically packs DataFox.
   post-materialization validation, and rollback fault injection.
 - [x] (2026-09-03T10:21:10Z) Completed Milestone 3 documentation, 0.8.4 metadata,
   77-test EP regression, installer/Harness fixtures, and canonical repository check.
+- [x] (2026-09-03T10:28:36Z) Published and installed 0.8.4 from commit `0f1262b`.
+- [x] (2026-09-03T11:00:00Z) Reproduced its DataFox migration failure, bumped the
+  changed Core template contract from 1.5.0 to 1.5.1 for 0.8.5, and added a fixture
+  proving an authentic 0.8.4 manifest can preview/apply the correction.
 - [ ] Complete Milestone 4 release and DataFox integration.
 
 ## Surprises & Discoveries
@@ -390,6 +399,10 @@ No release or Harness upgrade automatically packs DataFox.
   accepted ADR-060#C-001 explicitly requires already-packed sources to be rejected.
   The implementation follows the normative ADR: the repeat fails closed with no
   byte change.
+- The 0.8.4 unit fixtures always generated a Harness from the current template, so
+  they did not expose that the Core project Skill bytes changed while its component
+  version remained 1.5.0. DataFox's real 0.8.3/1.5.0 manifest correctly failed
+  closed. Core 1.5.1 restores immutable template identity and unlocks safe migration.
 
 ## Decision Log
 
@@ -401,6 +414,8 @@ No release or Harness upgrade automatically packs DataFox.
   exact terminal packing with validation-before-delete and unpack recovery.
 - 2026-09-03, Codex: follow ADR-060#C-001 for repeated apply and reject an
   already-packed source without mutation instead of reporting a successful no-op.
+- 2026-09-03, Codex: issue 0.8.5 as a migration-only patch and advance Harness Core
+  to 1.5.1; do not weaken template hash validation or edit DataFox's manifest by hand.
 
 ## Blockers
 
@@ -449,3 +464,5 @@ newer until unpacked.
 - 2026-09-03T09:48:00Z — Added the approved architecture summary, exact constraint
   mapping, four implementation/release milestones, validation evidence, and atomic
   recovery behavior.
+- 2026-09-03T11:00:00Z — Recorded the 0.8.4 real-project migration defect and the
+  0.8.5/Core 1.5.1 corrective release gate.
