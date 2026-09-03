@@ -21,7 +21,7 @@ RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and gene
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The current distribution is `0.8.2`. It writes Harness schema `3`, Core
+The current distribution is `0.8.3`. It writes Harness schema `3`, Core
 `1.5.0`, Codex adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter
 `1.3.0`, governance policy schema `1`, and activation protocol `2`.
 Engineering Specifications keep their independent Catalog version and lock
@@ -32,7 +32,7 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.8.2` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| RepoFoundry distribution | `0.8.3` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
 | Harness Core | `1.5.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and mode-aware activation behavior |
 | Codex adapter | `2.4.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
@@ -44,6 +44,15 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 No plane inherits another plane's version. A Spec update does not migrate the
 Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
+
+Release `0.8.3` permits an accepted replacement ADR to be superseded later
+without flattening or rewriting the earlier relationship. Validation preserves
+every immediate `superseded_by` / `supersedes` backlink, accepts only
+accepted-origin lifecycle states along the chain, and rejects supersession
+cycles. Current Decision contexts still require an accepted/current terminal
+ADR, so historical View anchors become `review_required` until their owner
+explicitly retargets them. Harness schema, Core, adapters, governance policy and
+activation protocol do not change.
 
 Release `0.8.2` adds Git-proven recovery for schema-1.2 checkpoint seals that
 were invalid in the commit introducing their exact path. Registration is
@@ -137,7 +146,7 @@ the new derived Requirement index without selecting another Catalog.
 
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.8.2"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.8.3"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
     U --> C["Harness Core 1.5.0"]

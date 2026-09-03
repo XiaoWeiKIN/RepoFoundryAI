@@ -54,13 +54,14 @@ will still fail closed.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 2 — publish the portable 0.8.2 contract.
-- Current state: The CLI, receipt store, offline resolver, documentation and
-  0.8.2 version contract are implemented. All 72 ExecPlan tests and the full
-  canonical check pass. A read-only DataFox preview satisfies the exact Git
-  introduction proof without changing that repository.
-- Next action: commit and push this branch, open the 0.8.2 implementation PR,
-  wait for required CI, merge it, then create and verify release tag `v0.8.2`.
+- Current milestone: Milestone 3 — finish the authorized DataFox ADR transitions.
+- Current state: RepoFoundry 0.8.2 is released and installed; DataFox is upgraded,
+  CP-001 has a verified recovery receipt, EP-092 is structurally valid, ADR-038
+  is accepted, and ADR-052/053/054 are superseded by ADR-055. ADR-051 apply
+  rolled back atomically because the validator did not support the existing
+  `ADR-010 -> ADR-051 -> ADR-055` supersession chain.
+- Next action: publish the additive 0.8.3 chain-validation fix, upgrade DataFox,
+  supersede ADR-051, and retarget the storage Decision View to ADR-055.
 - Open questions: none that can change the route; file naming and JSON field
   names remain bounded implementation details and will be fixed by tests.
 
@@ -185,6 +186,12 @@ structural blocker fields without overwriting unrelated work, accept ADR-038,
 and preview/apply ADR-055 supersession of ADR-051 through ADR-054. Rebuild
 Decision Views and run DataFox validation after each lifecycle stage.
 
+During the DataFox apply, preserve chained supersession instead of flattening
+history. Permit an immediate replacement to have any accepted-origin lifecycle
+status, require every backlink, reject cycles, and keep current contexts anchored
+only at an accepted/current terminal ADR. Publish this additive validator fix as
+0.8.3 before retrying the rolled-back ADR-051 transition.
+
 ## Milestones
 
 ### Milestone 1: Register and validate exact born-invalid evidence
@@ -203,7 +210,7 @@ documentation identify the additive 0.8.2 capability. Focused suites and
 
 ### Milestone 3: Apply the recovery and ADR transitions in DataFox
 
-The installed 0.8.2 distribution upgrades DataFox. A committed receipt makes
+The installed 0.8.3 distribution upgrades DataFox. A committed receipt makes
 EP-091 CP-001 valid offline. EP-092 is structurally valid, ADR-038 is accepted
 by Wangxiaowei1, and ADR-051 through ADR-054 are superseded by current accepted
 ADR-055 with no active-plan consumer left stale. DataFox's source checkpoint
@@ -244,9 +251,12 @@ unrelated validation findings remain visible until separately corrected.
   cases to pass. Evidence: `docs/exec-plans/active/ep-094_recover-born-invalid-checkpoint-seals/artifacts/focused-tests.txt`.
 - [x] Run `python3 -B scripts/check.py`; expect zero errors and unchanged
   generated projections after regeneration. Evidence: `artifacts/repository-check.txt`.
-- [ ] Publish and reinstall RepoFoundry AI 0.8.2; expect the release tag to
+- [x] Publish and reinstall RepoFoundry AI 0.8.2; expect the release tag to
   resolve to the merged source commit and the immutable local `current` link to
   select 0.8.2. Evidence: `artifacts/release-notes.md`.
+- [ ] Publish and reinstall RepoFoundry AI 0.8.3; expect chained supersession and
+  cycle tests plus the canonical check to pass. Evidence:
+  `artifacts/release-notes-0.8.3.md`.
 - [ ] In DataFox, preview/apply the EP-091/CP-001 receipt and validate once with
   Git available and once from a copied tree without `.git`; expect no checkpoint
   seal error and no checkpoint byte diff. Evidence: `artifacts/datafox-compatibility.txt`.
@@ -273,7 +283,7 @@ modify checkpoints and can be reviewed as ordinary Git changes.
 
 If implementation validation fails, revert only this branch's source and EP
 changes; do not touch the dirty DataFox workspace. If release or installation
-fails, the immutable 0.8.1 release and current symlink remain the rollback
+fails, the immutable 0.8.2 release and current symlink remain the rollback
 point. If DataFox apply fails, the command must remove the newly created receipt
 and leave the checkpoint unchanged. ADR lifecycle commands retain their
 existing preview/snapshot/rollback behavior and are applied one old ADR at a
@@ -284,8 +294,11 @@ time so a failed transition has an exact boundary.
 - [x] (2026-09-03T07:24:46Z) Plan created and routed through existing immutable-history architecture inputs.
 - [x] (2026-09-03T07:24:59Z) Reproduced the DataFox birth-time digest mismatch and selected the EP-057 repository-owned evidence pattern.
 - [x] (2026-09-03T07:48:22Z) Implemented and verified the recovery receipt contract; 72 ExecPlan tests and the canonical repository check pass.
-- [ ] Publish and install RepoFoundry AI 0.8.2.
-- [ ] Upgrade DataFox, recover CP-001, and apply the authorized ADR transitions.
+- [x] (2026-09-03) Published and installed RepoFoundry AI 0.8.2.
+- [x] (2026-09-03) Upgraded DataFox, registered CP-001 recovery,
+  repaired EP-092, accepted ADR-038, and superseded ADR-052/053/054.
+- [ ] Publish and install RepoFoundry AI 0.8.3, then complete ADR-051 and the
+  Decision View retargeting.
 
 ## Surprises & Discoveries
 
@@ -293,6 +306,9 @@ time so a failed transition has an exact boundary.
   `e73ac75fe5c4e566a3c3d65a3b18bb4f75e243e1` with the same bytes present now;
   every RepoFoundry version computes the same different canonical digest. This
   is producer-invalid history, not later tampering or a 0.8.1 regression.
+- 2026-09-03 — ADR-051 already supersedes legacy ADR-010. Attempting to
+  supersede ADR-051 by ADR-055 exposed a one-level validator assumption; the
+  atomic command restored ADR-051, ADR-055 and generated indexes exactly.
 
 ## Decision Log
 
@@ -307,6 +323,10 @@ time so a failed transition has an exact boundary.
   digest rather than its current active/completed path. This preserves offline
   validation when a recovered plan is later archived while retaining the
   original Git path as introduction evidence.
+- 2026-09-03 — Preserve every immediate supersession edge rather than rewriting
+  ADR-010 to point directly at ADR-055. Accepted-origin historical states remain
+  structurally valid, cycles fail closed, and only the terminal accepted/current
+  ADR can seed new Decision contexts.
 
 ## Blockers
 

@@ -284,6 +284,13 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
 结构有效，但暴露 `architecture_review_required` 并禁止 completed 归档，直到引用、
 路线和执行约束同步更新；cancelled 仍可用于明确终止工作。
 
+replacement ADR 后续也可以被另一个 accepted/current ADR supersede。每一跳继续保留
+原始 `superseded_by` / `supersedes` 双向证据，形成不可改写且无环的历史链；验证器不会
+把旧 ADR 直接重连到最新终点。Decision context、ExecPlan 和 Decision View 只把链尾的
+accepted/current ADR 作为当前输入；仍锚定历史节点的 View 会进入 `review_required`，由
+owner 显式重定向到当前 ADR。replacement 后续进入 `under_review` 或 `retired` 也不会
+破坏历史链，但它和上游历史节点都不能作为新的当前输入。
+
 ## Review、reaffirm 与 retirement
 
 发现已落实的 ADR 不合理时，不编辑或删除历史正文。先预览：

@@ -9516,9 +9516,10 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
             target = adr_data_by_id.get(superseded_by)
             if not target:
                 errors.append(f"{item_id}: superseding ADR {superseded_by} is missing")
-            elif target.get("status") != "accepted":
+            elif target.get("status") not in ADR_ACCEPTED_ORIGIN_STATUSES:
                 errors.append(
-                    f"{item_id}: superseding ADR {superseded_by} must be accepted"
+                    f"{item_id}: superseding ADR {superseded_by} must have "
+                    "an accepted-origin status"
                 )
             elif item_id not in parse_inline_ids(
                 target.get("supersedes", ""),
@@ -9584,6 +9585,33 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                         f"{relation} ADR {related_id} is "
                         f"{related.get('status')!r}"
                     )
+
+    supersession_visited: set[str] = set()
+    supersession_visiting: list[str] = []
+
+    def visit_supersession(item_id: str) -> None:
+        if item_id in supersession_visited:
+            return
+        if item_id in supersession_visiting:
+            cycle = " -> ".join(
+                (
+                    *supersession_visiting[
+                        supersession_visiting.index(item_id) :
+                    ],
+                    item_id,
+                )
+            )
+            errors.append(f"ADR supersession cycle: {cycle}")
+            return
+        supersession_visiting.append(item_id)
+        replacement = adr_data_by_id[item_id].get("superseded_by", "")
+        if replacement in adr_data_by_id:
+            visit_supersession(replacement)
+        supersession_visiting.pop()
+        supersession_visited.add(item_id)
+
+    for item_id in sorted(adr_data_by_id):
+        visit_supersession(item_id)
 
     adr_graph: dict[str, list[str]] = {}
     for item_id, data in adr_data_by_id.items():
