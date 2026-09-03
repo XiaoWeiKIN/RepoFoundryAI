@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-093
 title: "Implement focused ADR context materialization"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -20,9 +20,9 @@ architecture_decision_gate_reason: ""
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:6d0529f42e8cd9f5ee040eadfd6749f5ca475bc1"
+verification_evidence: ["local: python3 -B scripts/check.py; 69 EP tests and 119 RepoFoundry/Harness/installer/spec tests passed", "github-pr: https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/39", "github-ci: https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/33721414909", "github-release: https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.8.1", "install: package sha256 ce7804d287fe29211484e4f3689a7aa002e09595b2fc7c3b6e99c36006c10295; archive sha256 a292f1ddc16313371469b321795dbe220975ae1c6888dc70b3510ab59dd9362b", "datafox: producer 0.8.1; four focused capsules validate 29 ADRs in 3828-8509 bytes; 51-source manifest sha256 77574e40438c808a855b7064aa527f875fc3f542883bd1a3ceead7eb33f59ed5; Decision Views 0 errors/0 warnings"]
+archive_sha256: 1238efa9d741e94167e17cbfddb5b9e24b4fd741961e7797fe48094450768259
 created: 2026-09-03
 updated: 2026-09-03
 author: "Codex"
@@ -50,13 +50,12 @@ DataFox ADR lifecycle or source byte changes.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 3 — publish and install RepoFoundry 0.8.1.
-- Current state: the focused compiler, CLI, compatibility fixture, failure tests,
-  public documentation and 0.8.1 version surfaces are implemented. The full
-  repository check passes, and a read-only DataFox preflight keeps all four OQL
-  focuses below 32 KiB while validating the same 29-ADR closure.
-- Next action: commit the verified implementation, merge it through the repository
-  review path, then tag and publish v0.8.1.
+- Current milestone: all implementation and rollout milestones are complete.
+- Current state: RepoFoundry 0.8.1 is merged, released, installed into Codex, and
+  applied to DataFox. Four released focused capsules stay below 32 KiB while
+  validating the same 29-ADR closure; DataFox ADR bytes are unchanged.
+- Next action: run final repository validation and archive EP-093 against the
+  verified release revision.
 - Open questions: none that can change the approved route.
 
 ## Context and Orientation
@@ -260,14 +259,14 @@ only to already documented unrelated warnings/errors.
 - [x] Run `python3 -B scripts/check.py`; expect every suite and repository validator
   to pass with no errors.
 - [x] Run `git diff --check`; expect no whitespace errors.
-- [ ] Run `repofoundry --version`; expect `0.8.1` from the released immutable install.
-- [ ] Preview and apply the DataFox 0.8.1 Harness upgrade; expect no conflict and
+- [x] Run `repofoundry --version`; expect `0.8.1` from the released immutable install.
+- [x] Preview and apply the DataFox 0.8.1 Harness upgrade; expect no conflict and
   `producer_version: 0.8.1` while Harness schema remains compatible.
-- [ ] Run four DataFox focused OQL capsules; expect 29 validated ADRs, one or two
+- [x] Run four DataFox focused OQL capsules; expect 29 validated ADRs, one or two
   materialized ADRs, each context below 32,768 bytes, and deterministic digests.
-- [ ] Compare DataFox ADR source/lifecycle digest manifests before and after; expect
+- [x] Compare DataFox ADR source/lifecycle digest manifests before and after; expect
   exact equality and no additional retirement/supersession.
-- [ ] Run DataFox RepoFoundry Harness and Decision View validation; expect no new
+- [x] Run DataFox RepoFoundry Harness and Decision View validation; expect no new
   error attributable to the 0.8.1 upgrade.
 
 ### Required Benchmark Scenario Gates
@@ -305,8 +304,14 @@ access to the ephemeral focused flag and leaves all repository state readable.
 - [x] (2026-09-03T05:01:19Z) Ran the new compiler read-only against DataFox before
   release: all four focuses validated the same 29 ADRs and materialized one or two
   ADRs in 3,822–8,503 bytes.
-- [ ] Publish and install RepoFoundry 0.8.1.
-- [ ] Upgrade and verify DataFox.
+- [x] (2026-09-03T06:08:51Z) Merged PR #39 at release revision `6d0529f`, observed
+  passing Python 3.10, Python 3.14 and aggregate CI gates, and published v0.8.1.
+- [x] (2026-09-03) Installed the immutable GitHub Release into Codex;
+  `repofoundry --version` reports 0.8.1 and the active package SHA-256 is
+  `ce7804d287fe29211484e4f3689a7aa002e09595b2fc7c3b6e99c36006c10295`.
+- [x] (2026-09-03T06:15:04Z) Upgraded DataFox from producer 0.8.0 to 0.8.1 with
+  only `docs/.engineering/harness.json` changed, replayed all four focuses, and
+  completed the project Engineering Specifications audit.
 
 ## Surprises & Discoveries
 
@@ -334,7 +339,23 @@ access to the ephemeral focused flag and leaves all repository state readable.
 
 ## Outcomes & Retrospective
 
-To be completed after release and DataFox verification.
+RepoFoundry 0.8.1 now separates complete current-effect validation from explicit
+focused materialization. The default complete output remains frozen to the 0.8.0
+contract. Focused output is exact, partial, digest-bound and fail-closed; it adds no
+persistent schema or ADR lifecycle authority.
+
+The production-scale DataFox result confirms that file count was not the right
+compression target. Its OQL View still validates all 29 current ADRs, while the four
+representative tasks materialize only ADR-049 alone or ADR-049 with one downstream
+amender. Final capsules are 3,828–8,509 bytes instead of the 112,668-byte selected
+complete context. All seven Decision Views validate with zero errors and warnings.
+
+DataFox's complete `epctl validate` still reports six unrelated pre-existing errors:
+one changed EP-091 checkpoint seal and five EP-092 blocker/status errors. The 0.8.1
+upgrade introduced none of them; Harness validation has zero errors, and the
+51-source ADR byte manifest stayed exactly
+`77574e40438c808a855b7064aa527f875fc3f542883bd1a3ceead7eb33f59ed5` before and
+after migration.
 
 ### Knowledge promotion candidates
 
@@ -358,16 +379,26 @@ To be completed after release and DataFox verification.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-093_implement-focused-adr-context-materialization/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-093_implement-focused-adr-context-materialization/EXECPLAN.md`
 - Approved design: `DD-012@rev:2@sha256:a15abeda142891ecd63f218a629532725a85d1c492d0a662b700bf7abe5e6fab`
 - Accepted decision: `ADR-059@sha256:9feddb44011fafc361b77f59ced5242fa6c53f3c90612179a2fb8db50288adbc`
 - Release notes: `artifacts/release-notes.md`.
-- Pre-release DataFox probe: C-001 = 3,822 bytes / ADR-049; C-003 = 8,313 bytes /
-  ADR-049 + ADR-057; C-009 = 8,503 bytes / ADR-049 + ADR-056; C-010 + C-011 =
-  8,188 bytes / ADR-049 + ADR-050. Every result validated 29 ADRs with closure
-  SHA-256 `79fd2f7c1ddde7140d51bd9c83fe4a9a3fc1763937d20796432d7aa03fe8dc87`.
-- Full logs, release URLs and integration evidence will be recorded here as concise
-  transcripts; large outputs belong under `artifacts/` only if needed.
+- Pull request: `https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/39`.
+- CI: `https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/33721414909`.
+- Release: `https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.8.1`, tag
+  and target commit `6d0529f42e8cd9f5ee040eadfd6749f5ca475bc1`.
+- Install: GitHub Release archive SHA-256
+  `a292f1ddc16313371469b321795dbe220975ae1c6888dc70b3510ab59dd9362b`;
+  package SHA-256
+  `ce7804d287fe29211484e4f3689a7aa002e09595b2fc7c3b6e99c36006c10295`.
+- Released DataFox capsules: C-001 = 3,828 bytes / SHA-256 `9faaa66f33940d18` /
+  ADR-049; C-003 = 8,319 / `e0fbc17493b945e5` / ADR-049 + ADR-057; C-009 =
+  8,509 / `35fca63121c3f820` / ADR-049 + ADR-056; C-010 + C-011 = 8,194 /
+  `9a10004dc5f97933` / ADR-049 + ADR-050. All validate 29 ADRs with closure SHA-256
+  `79fd2f7c1ddde7140d51bd9c83fe4a9a3fc1763937d20796432d7aa03fe8dc87`.
+- DataFox project Spec audit: one covered changed path,
+  `docs/.engineering/harness.json`; zero errors, zero uncovered paths, and all five
+  Governed handoff labels present.
 
 ## Revision Notes
 
@@ -376,3 +407,6 @@ To be completed after release and DataFox verification.
   DataFox integration contract before production code changes.
 - 2026-09-03T05:01:19Z — Completed compiler/docs/test implementation and recorded
   the passing repository suite plus bounded DataFox pre-release measurements.
+- 2026-09-03T06:15:04Z — Recorded the merged release, immutable installation,
+  DataFox migration, focused capsule measurements, ADR byte equality and explicit
+  pre-existing validation exceptions; all acceptance items are satisfied.
