@@ -98,6 +98,14 @@ completed/cancelled EP 中的 `adr_evidence` 同样属于 sealed 历史。当前
 来源，但 registry 文件必须进入仓库；这样 clone、源码包和无 Git snapshot 都能
 执行同一个离线 canonical check。
 
+schema 1.2 Checkpoint 若在首次引入其精确路径的 ancestor commit 中已经包含错误
+seal，也不能改写 checkpoint。`register-checkpoint-recovery` 只在显式登记时读取
+Git，并要求该 payload mismatch 是唯一错误、父 commit 不含该路径、commit blob 与
+当前原始 bytes 完全一致。apply 把自带 digest 的 receipt 写入
+`docs/.epctl/checkpoint-recoveries/`；后续 canonical check 只读仓库文件，并且只对
+相同 plan/checkpoint/document/stored/computed digest 的 mismatch 生效。receipt 或
+checkpoint 任一 drift 都恢复为 hard failure。
+
 ## 平台适配
 
 | 平台 | 薄适配器 | 合并侧强制 |

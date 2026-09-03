@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.1
+  upgrade --to 0.8.2
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.1
+  upgrade --to 0.8.2
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.1 --apply
+  upgrade --to 0.8.2 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -145,6 +145,10 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 创建领域 View、修改 ADR、推断 retirement 或执行语义合并。大型 ADR corpus 的
 健康度、View、exact capsule 与 consolidation preview 后续路由到
 `engineering-execution-plan`。
+
+0.8.2 为 schema 1.2 Checkpoint 增加 preview-first 的出生缺陷 seal 恢复：Git 只在
+显式登记时证明 ancestor commit 首次引入精确路径与 bytes，随后把自校验 receipt
+写入仓库；正常验证保持离线，并且只豁免该精确 payload mismatch，不改写 checkpoint。
 
 ## 管理 Engineering Specs
 

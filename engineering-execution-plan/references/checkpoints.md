@@ -113,3 +113,47 @@ checkpoint 不能成为恢复工作的必读前置。只有调查历史原因或
 3. 运行 `validate`，再建立第一个 checkpoint。
 
 `checkpoint` 使用仓库锁、编号高水位和原子文件替换。普通失败会回滚根文档和索引；若进程在索引更新前崩溃，制品仍是事实源，运行 `validate --fix-index` 恢复投影。
+
+## 出生即错误的 seal 恢复
+
+历史 Checkpoint 不能因为早期 producer 写错 `payload_sha256` 就被就地修补。只有
+Git 历史能够证明错误 bytes 在该精确 checkpoint 路径首次出现时就已存在，才可
+登记外部恢复凭据：
+
+```mermaid
+flowchart LR
+    C["schema 1.2 Checkpoint\n唯一错误是 seal mismatch"] --> G["祖先 commit\n首次引入精确路径"]
+    G --> B{"commit blob = 当前原始 bytes?"}
+    B -->|"否"| F["失败关闭"]
+    B -->|"是"| R["repository-owned\ncontent-addressed receipt"]
+    R --> V["离线 validate\n只豁免该精确 mismatch"]
+```
+
+先预览，再应用：
+
+```bash
+python3 <skill-dir>/scripts/epctl.py --repo . \
+  register-checkpoint-recovery EP-023 CP-001 \
+  --from-git-commit <full-ancestor-commit> \
+  --attested-by "<explicit actor>" \
+  --reason "<why this seal was invalid at introduction>"
+
+# 审查 plan/checkpoint、stored/computed digest、commit/blob/path 和目标后：
+python3 <skill-dir>/scripts/epctl.py --repo . \
+  register-checkpoint-recovery EP-023 CP-001 \
+  --from-git-commit <full-ancestor-commit> \
+  --attested-by "<explicit actor>" \
+  --reason "<why this seal was invalid at introduction>" --apply
+```
+
+默认使用 checkpoint 当前路径；若计划已经从 `active` 归档到 `completed`，可用
+`--git-path` 指向 introduction commit 中的历史仓库相对路径。receipt 写入
+`docs/.epctl/checkpoint-recoveries/EP-NNN/CP-NNN/sha256-<document>.json`，记录原始
+document SHA-256、错误/正确 payload digest、Git commit/blob/path/commit time、
+attesting actor、reason 与自身 digest。Git 只在登记时读取；clone、源码包和无 `.git` snapshot
+的正常验证只消费仓库内 receipt。
+
+以下情况一律不能恢复：schema 不是 1.2、还有其他结构错误、commit 不是 `HEAD`
+祖先、任一父 commit 已含该路径、Git bytes 与当前 bytes 不同、receipt 被改写、
+或 checkpoint 后续发生任何 byte change。恢复不改变 Checkpoint bytes，也不把错误
+seal 视为正确；`validate` 会保留一条明确 warning，指出使用了出生缺陷凭据。

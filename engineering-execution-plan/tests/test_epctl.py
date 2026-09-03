@@ -60,6 +60,53 @@ class EpctlTestCase(unittest.TestCase):
     def init(self) -> None:
         self.run_cli("init")
 
+    def init_git(self) -> None:
+        subprocess.run(
+            ["git", "init", "-q", str(self.repo)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.repo), "config", "user.name", "Test User"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.repo),
+                "config",
+                "user.email",
+                "test@example.com",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def commit_all(self, message: str) -> str:
+        subprocess.run(
+            ["git", "-C", str(self.repo), "add", "--all"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.repo), "commit", "-q", "-m", message],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
     def new_ep(self, slug: str = "sample-plan") -> Path:
         result = self.run_cli(
             "new-ep",
@@ -3201,6 +3248,266 @@ updated: 2026-07-28
         self.replace_frontmatter(checkpoint, "author", '"Tampered Writer"')
         metadata_result = self.run_cli("validate", expected=1)
         self.assertIn("sealed checkpoint payload changed", metadata_result.stderr)
+
+    def test_register_checkpoint_recovery_is_preview_first_and_offline(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        payload = json.loads(
+            self.run_cli(
+                "checkpoint",
+                "EP-001",
+                "--slug",
+                "born-invalid",
+                "--title",
+                "Born invalid checkpoint",
+                "--current-milestone",
+                "Milestone 2",
+                "--summary",
+                "Milestone 1 is complete.",
+                "--next-action",
+                "Implement Milestone 2.",
+                *CHECKPOINT_REVISION_ARGS,
+            ).stdout
+        )
+        checkpoint = self.repo / payload["path"]
+        self.replace_frontmatter(checkpoint, "payload_sha256", "0" * 64)
+        checkpoint_bytes = checkpoint.read_bytes()
+        mismatch = self.run_cli("validate", expected=1)
+        self.assertIn("sealed checkpoint payload changed", mismatch.stderr)
+
+        self.init_git()
+        introducing_commit = self.commit_all("introduce invalid checkpoint")
+        recovery_root = self.repo / "docs/.epctl/checkpoint-recoveries"
+        preview = json.loads(
+            self.run_cli(
+                "register-checkpoint-recovery",
+                "EP-001",
+                "CP-001",
+                "--from-git-commit",
+                introducing_commit,
+                "--attested-by",
+                "Test Repository Owner",
+                "--reason",
+                "The checkpoint was introduced with the invalid seal.",
+            ).stdout
+        )
+        target = self.repo / preview["target"]
+        self.assertEqual(preview["action"], "create")
+        self.assertFalse(preview["applied"])
+        self.assertFalse(recovery_root.exists())
+        self.assertFalse(target.exists())
+        self.assertEqual(checkpoint.read_bytes(), checkpoint_bytes)
+        self.assertEqual(preview["source"]["commit"], introducing_commit)
+        self.assertRegex(preview["source"]["blob"], r"^[0-9a-f]{40}$")
+
+        applied = json.loads(
+            self.run_cli(
+                "register-checkpoint-recovery",
+                "EP-001",
+                "CP-001",
+                "--from-git-commit",
+                introducing_commit,
+                "--attested-by",
+                "Test Repository Owner",
+                "--reason",
+                "The checkpoint was introduced with the invalid seal.",
+                "--apply",
+            ).stdout
+        )
+        self.assertTrue(applied["applied"])
+        self.assertEqual(applied["receipt_sha256"], preview["receipt_sha256"])
+        self.assertTrue(target.is_file())
+        self.assertEqual(checkpoint.read_bytes(), checkpoint_bytes)
+        receipt_bytes = target.read_bytes()
+
+        validated = self.run_cli("validate")
+        self.assertIn('"errors": 0', validated.stdout)
+        self.assertIn("registered birth-time recovery", validated.stderr)
+        environment = os.environ.copy()
+        environment["PATH"] = ""
+        offline = self.run_cli("validate", env=environment)
+        self.assertIn('"errors": 0', offline.stdout)
+
+        preserved = json.loads(
+            self.run_cli(
+                "register-checkpoint-recovery",
+                "EP-001",
+                "CP-001",
+                "--from-git-commit",
+                introducing_commit,
+                "--attested-by",
+                "Test Repository Owner",
+                "--reason",
+                "The checkpoint was introduced with the invalid seal.",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(preserved["action"], "preserve")
+        self.assertEqual(target.read_bytes(), receipt_bytes)
+
+        plan_text = plan.read_text(encoding="utf-8")
+        plan_text = plan_text.replace("- [ ]", "- [x]")
+        plan_text = plan_text.replace(
+            "| BLK-002 | open | 2026-07-28 |  |",
+            "| BLK-002 | resolved | 2026-07-28 | 2026-09-03 |",
+        )
+        plan.write_text(plan_text, encoding="utf-8")
+        self.replace_frontmatter(plan, "status", "active")
+        archived = Path(
+            self.run_cli(
+                "archive-ep",
+                "EP-001",
+                *COMPLETION_ATTESTATION_ARGS,
+            ).stdout.strip()
+        )
+        checkpoint = archived.parent / "history" / checkpoint.name
+        self.assertTrue(checkpoint.is_file())
+        archived_validation = self.run_cli("validate")
+        self.assertIn('"errors": 0', archived_validation.stdout)
+
+        receipt = json.loads(target.read_text(encoding="utf-8"))
+        receipt["reason"] = "Tampered reason"
+        target.write_text(
+            json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        tampered_receipt = self.run_cli("validate", expected=1)
+        self.assertIn("receipt_sha256 mismatch", tampered_receipt.stderr)
+        self.assertIn("sealed checkpoint payload changed", tampered_receipt.stderr)
+        target.write_bytes(receipt_bytes)
+
+        checkpoint.write_bytes(checkpoint_bytes + b"\nLater change.\n")
+        changed_checkpoint = self.run_cli("validate", expected=1)
+        self.assertIn("checkpoint document_sha256", changed_checkpoint.stderr)
+        self.assertIn("sealed checkpoint payload changed", changed_checkpoint.stderr)
+
+    def test_register_checkpoint_recovery_rejects_later_or_unrelated_git_evidence(
+        self,
+    ) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        payload = json.loads(
+            self.run_cli(
+                "checkpoint",
+                "EP-001",
+                "--slug",
+                "later-corruption",
+                "--title",
+                "Later corruption",
+                "--current-milestone",
+                "Milestone 2",
+                "--summary",
+                "Milestone 1 is complete.",
+                "--next-action",
+                "Implement Milestone 2.",
+                *CHECKPOINT_REVISION_ARGS,
+            ).stdout
+        )
+        checkpoint = self.repo / payload["path"]
+        self.init_git()
+        original_commit = self.commit_all("introduce valid checkpoint")
+        self.replace_frontmatter(checkpoint, "payload_sha256", "0" * 64)
+        later_commit = self.commit_all("corrupt existing checkpoint")
+
+        later = self.run_cli(
+            "register-checkpoint-recovery",
+            "EP-001",
+            "CP-001",
+            "--from-git-commit",
+            later_commit,
+            "--attested-by",
+            "Test Repository Owner",
+            "--reason",
+            "This is not actually a birth-time defect.",
+            expected=2,
+        )
+        self.assertIn("did not introduce checkpoint path", later.stderr)
+        wrong_bytes = self.run_cli(
+            "register-checkpoint-recovery",
+            "EP-001",
+            "CP-001",
+            "--from-git-commit",
+            original_commit,
+            "--attested-by",
+            "Test Repository Owner",
+            "--reason",
+            "The original bytes do not match.",
+            expected=2,
+        )
+        self.assertIn("do not match current checkpoint bytes", wrong_bytes.stderr)
+
+        tree = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD^{tree}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        orphan = subprocess.run(
+            ["git", "-C", str(self.repo), "commit-tree", tree, "-m", "orphan"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        non_ancestor = self.run_cli(
+            "register-checkpoint-recovery",
+            "EP-001",
+            "CP-001",
+            "--from-git-commit",
+            orphan,
+            "--attested-by",
+            "Test Repository Owner",
+            "--reason",
+            "An unrelated commit cannot authorize recovery.",
+            expected=2,
+        )
+        self.assertIn("is not an ancestor of HEAD", non_ancestor.stderr)
+
+    def test_register_checkpoint_recovery_requires_seal_mismatch_as_only_error(
+        self,
+    ) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        payload = json.loads(
+            self.run_cli(
+                "checkpoint",
+                "EP-001",
+                "--slug",
+                "structurally-invalid",
+                "--title",
+                "Structurally invalid checkpoint",
+                "--current-milestone",
+                "Milestone 2",
+                "--summary",
+                "Milestone 1 is complete.",
+                "--next-action",
+                "Implement Milestone 2.",
+                *CHECKPOINT_REVISION_ARGS,
+            ).stdout
+        )
+        checkpoint = self.repo / payload["path"]
+        self.replace_frontmatter(checkpoint, "payload_sha256", "0" * 64)
+        self.replace_frontmatter(checkpoint, "status", "open")
+        self.init_git()
+        introducing_commit = self.commit_all("introduce invalid checkpoint")
+
+        result = self.run_cli(
+            "register-checkpoint-recovery",
+            "EP-001",
+            "CP-001",
+            "--from-git-commit",
+            introducing_commit,
+            "--attested-by",
+            "Test Repository Owner",
+            "--reason",
+            "A receipt cannot hide structural errors.",
+            expected=2,
+        )
+
+        self.assertIn("only validation error is its payload mismatch", result.stderr)
+        self.assertIn("checkpoint status must be sealed", result.stderr)
 
     def test_checkpoint_refuses_unresolved_template(self) -> None:
         self.init()

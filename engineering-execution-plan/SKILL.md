@@ -115,9 +115,12 @@ docs/
 │   ├── state.json
 │   ├── config.json          # 可选：注册既有 architecture roots
 │   ├── decision-views.json  # schema 1：显式 View 种子；非规范
-│   └── adr-revisions/       # 可选：completed/cancelled EP 的历史 ADR payload
-│       └── ADR-NNN/
-│           └── sha256-<payload>.md
+│   ├── adr-revisions/       # 可选：completed/cancelled EP 的历史 ADR payload
+│   │   └── ADR-NNN/
+│   │       └── sha256-<payload>.md
+│   └── checkpoint-recoveries/ # 可选：出生即错误的 checkpoint seal 恢复凭据
+│       └── EP-NNN/CP-NNN/
+│           └── sha256-<document>.json
 ├── RESEARCH.md
 ├── DECISIONS.md
 ├── DECISION-VIEWS.md        # 可重建 View 索引
@@ -183,6 +186,17 @@ python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
 python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
   --from-file evidence/adr-001-historical.md --apply
 
+python3 <skill-dir>/scripts/epctl.py --repo . \
+  register-checkpoint-recovery EP-001 CP-001 \
+  --from-git-commit <full-ancestor-commit> \
+  --attested-by "<explicit actor>" \
+  --reason "<why the seal was invalid when introduced>"
+python3 <skill-dir>/scripts/epctl.py --repo . \
+  register-checkpoint-recovery EP-001 CP-001 \
+  --from-git-commit <full-ancestor-commit> \
+  --attested-by "<explicit actor>" \
+  --reason "<why the seal was invalid when introduced>" --apply
+
 python3 <skill-dir>/scripts/epctl.py --repo . adr-health --json
 python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
   --title "Runtime decisions" --adr ADR-004 --adr ADR-005
@@ -233,6 +247,11 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   `register-adr-revision` 预览，再以 `--apply` 写入 digest-addressed 的不可变
   repository evidence。也可以显式使用 `--from-git-blob <full-object-id>` 恢复
   Git blob；正常 `validate` 只读仓库文件，不依赖 Git。
+- schema 1.2 Checkpoint 的 seal 若在首次引入该精确路径的 Git commit 中就已错误，
+  不得改写历史文件。使用 `register-checkpoint-recovery` 预览并登记
+  content-addressed receipt；工具只接受唯一错误为 payload mismatch、commit 为
+  `HEAD` 祖先、父 commit 不含该路径且 commit blob 与当前原始字节完全一致的
+  checkpoint。正常 `validate` 离线验证 receipt 与当前字节，不重新调用 Git。
 - `validate --fix-index` 只修复派生索引，不改事实制品。
 - 升级 RepoFoundry 后先运行 `reindex`；它会把旧 `Proposed` / `Decided` ADR 索引
   转为 Proposed / Effective / Review Required / Historical，并保留受管区域之外的
@@ -406,6 +425,11 @@ Benchmark Gate Set、Plan、Milestones、Validation、Recovery、Interfaces。
 7. 只读根 `EXECPLAN.md` 做一次恢复检查。
 
 Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
+
+既有 schema 1.2 Checkpoint 若出生时已经带有错误 `payload_sha256`，先读取
+`references/checkpoints.md` 的恢复契约。凭据只能豁免该精确文档的已证明 mismatch；
+结构错误、receipt drift、不同 document bytes 或无法证明路径首次引入仍失败关闭。
+不得为了让验证通过而直接重算历史 seal。
 
 文档规模只决定是否压缩历史，不决定是否归档。一个 active EP 超过 5 个里程碑或
 10 个未完成 Task 时复核它是否仍有单一完成边界；超过 8 个里程碑或 15 个未完成
