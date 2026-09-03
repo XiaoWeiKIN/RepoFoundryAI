@@ -250,19 +250,19 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.8.3` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.8.4` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.8.3
-repofoundry --repo . upgrade --to 0.8.3 --apply
+repofoundry --repo . upgrade --to 0.8.4
+repofoundry --repo . upgrade --to 0.8.4 --apply
 repofoundry --repo . validate
 ```
 
 ### 保留 ADR 历史，只压缩工作上下文
 
-RepoFoundry 0.8.3 继续把原子 ADR 文件与显式生命周期授权作为规范历史，并在其上
-生成更小的非规范检索面。升级只会创建空 View registry、索引和投影目录；不会自动
-退役 ADR，也不会猜测领域分类。
+RepoFoundry 0.8.4 继续把 ADR 生命周期授权和逻辑源字节作为规范历史，并在其上
+生成更小的非规范检索面。升级只会创建 additive 空基础设施；不会自动退役或打包
+ADR，也不会猜测领域分类。
 
 replacement ADR 后续仍可被新的 accepted/current ADR supersede。RepoFoundry 会把
 每一跳 `superseded_by` / `supersedes` 双向证据保留为无环历史链；当前 Decision
@@ -294,6 +294,41 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . decision-caps
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
   adr-consolidation-plan --view runtime --json
 ```
+
+语义生命周期处理完成后，可以把显式选择的 strict 终态 ADR（`rejected`、`retired`
+或 `superseded`）从多个 Markdown 文件物理替换为一个无损、content-addressed History
+Pack。它只改变存储：逻辑 ADR 数量、精确字节、seal、关系、历史 evidence、索引和
+current effect 都继续由离线 resolver 解析。
+
+```mermaid
+flowchart LR
+    A["strict 终态 ADR 文件"] -->|"preview + 候选验证"| P["History Pack"]
+    P -->|"apply：加锁、复验、删除、再验证"| R["更少物理文件"]
+    R -->|"精确、全有或全无的 unpack"| A
+```
+
+```bash
+# preview 不创建文件或 lock
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  pack-historical-adrs ADR-051 ADR-052 \
+  --packed-by Wangxiaowei1 --reason "Superseded by ADR-055" --json
+
+# 审查 pack digest 与删除集合后再 apply
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  pack-historical-adrs ADR-051 ADR-052 \
+  --packed-by Wangxiaowei1 --reason "Superseded by ADR-055" --apply --json
+
+# 恢复或降级前先 preview 精确还原
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  unpack-adr-history-pack sha256-<pack>.json \
+  --unpacked-by Wangxiaowei1 --reason "Prepare downgrade" --json
+```
+
+打包会整批拒绝 current、proposed、under-review、legacy、malformed、symlink、duplicate
+或已打包输入。apply 在删源前验证完整候选，物化后再次验证仓库；任一失败都会按字节
+恢复 pack、源文件和生成索引。packed ADR 必须先 unpack 才能做 lifecycle mutation。
+降级到不理解 History Pack 的版本前，必须 unpack 所有 pack，并确认 `adr-health` 的
+`history_packs` 与 `packed_entries` 都为 0。
 
 Capsule 复制经过验证的 Decision Statement 与选中 constraint 原文；linked legacy
 ADR 必须整篇进入 complete 上下文。complete 仍是默认模式，并保持 0.8.0 输出契约。
@@ -426,9 +461,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.8.3
-repofoundry --repo . upgrade --to 0.8.3 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.8.3 --apply
+repofoundry --repo . upgrade --to 0.8.4
+repofoundry --repo . upgrade --to 0.8.4 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.8.4 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -469,10 +504,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.8.3` 使用 Harness schema `3`、Harness Core `1.5.0`、Codex
+RepoFoundry `0.8.4` 使用 Harness schema `3`、Harness Core `1.5.0`、Codex
 adapter `2.4.0`、Claude adapter `1.3.0`、Portable adapter `1.3.0` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.8.3 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.8.4 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持

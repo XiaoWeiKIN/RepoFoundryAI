@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.3
+  upgrade --to 0.8.4
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.3
+  upgrade --to 0.8.4
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.3 --apply
+  upgrade --to 0.8.4 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -153,6 +153,12 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 0.8.3 允许 accepted replacement 后续继续被新的 accepted/current ADR supersede，
 保留每一跳双向证据并拒绝 supersession cycle。Decision context 仍只消费链尾的
 accepted/current ADR；旧 Decision View 进入 `review_required`，等待 owner 显式换锚点。
+
+0.8.4 增加显式、无损、可逆的终态 ADR History Pack。只有 strict 且状态为
+`rejected`、`retired` 或 `superseded` 的 live ADR 才能被选择；preview 先验证完整
+候选 corpus，apply 才在锁内生成 content-addressed pack、删除已验证源文件并再次
+全量验证，任何失败回滚原字节。逻辑 ADR、关系、证据和索引保持可解析；生命周期
+修改或降级到不识别 pack 的版本前必须先完整 unpack。升级本身不会自动打包任何 ADR。
 
 ## 管理 Engineering Specs
 

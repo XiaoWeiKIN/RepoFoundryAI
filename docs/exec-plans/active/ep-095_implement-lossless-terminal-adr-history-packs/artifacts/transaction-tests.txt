@@ -1,0 +1,15 @@
+Command: python3 -m unittest \
+  engineering-execution-plan.tests.test_epctl.EpctlTestCase.test_history_pack_preview_apply_and_exact_unpack_round_trip \
+  engineering-execution-plan.tests.test_epctl.EpctlTestCase.test_history_pack_rejects_ineligible_conflicts_and_tampering \
+  engineering-execution-plan.tests.test_epctl.EpctlTestCase.test_history_pack_apply_rolls_back_exact_bytes_on_failure
+Date: 2026-09-03
+Result: PASS
+Summary: Ran 3 tests in 3.622s; OK.
+
+The preview left the repository file/hash map unchanged. Apply replaced two terminal
+ADR files with one content-addressed pack, retained two logical ADRs, and reported a
+net physical reduction of one. Unpack restored both files byte-for-byte, including
+CRLF source bytes. Existing destinations, a modified container digest, and lifecycle
+mutation against a packed source all failed closed. A mocked reindex failure after
+pack materialization restored source and generated-index bytes and removed the new
+pack target.

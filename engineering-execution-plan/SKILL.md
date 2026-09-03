@@ -1,7 +1,7 @@
 ---
 name: engineering-execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务；为大型 ADR corpus 生成 lossless Decision View、精确有界 capsule、独立健康度与只读合并影响预览；并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、ADR 太多、整理或压缩 ADR 上下文、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务；为大型 ADR corpus 生成 lossless Decision View、精确有界 capsule、独立健康度与只读合并影响预览，并把显式选择的 strict 终态 ADR 无损打包为可逆 History Pack；并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、ADR 太多、整理或压缩 ADR 上下文、历史 ADR 打包或恢复、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Engineering Execution Plan
@@ -118,6 +118,8 @@ docs/
 │   ├── adr-revisions/       # 可选：completed/cancelled EP 的历史 ADR payload
 │   │   └── ADR-NNN/
 │   │       └── sha256-<payload>.md
+│   ├── adr-packs/           # 可选：无损 strict 终态 ADR 历史包
+│   │   └── sha256-<pack>.json
 │   └── checkpoint-recoveries/ # 可选：出生即错误的 checkpoint seal 恢复凭据
 │       └── EP-NNN/CP-NNN/
 │           └── sha256-<document>.json
@@ -210,6 +212,15 @@ python3 <skill-dir>/scripts/epctl.py --repo . decision-capsule \
   --json
 python3 <skill-dir>/scripts/epctl.py --repo . adr-consolidation-plan \
   --view runtime --json
+python3 <skill-dir>/scripts/epctl.py --repo . pack-historical-adrs \
+  ADR-051 ADR-052 --packed-by "<explicit actor>" \
+  --reason "<why these terminal files should be compacted>"
+python3 <skill-dir>/scripts/epctl.py --repo . pack-historical-adrs \
+  ADR-051 ADR-052 --packed-by "<explicit actor>" \
+  --reason "<why these terminal files should be compacted>" --apply
+python3 <skill-dir>/scripts/epctl.py --repo . unpack-adr-history-pack \
+  sha256-<pack>.json --unpacked-by "<explicit actor>" \
+  --reason "<recovery or downgrade reason>"
 
 python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
   --slug implement-cache --title "Implement cache topology" \
@@ -345,6 +356,25 @@ Architecture Input 阅读，不替代 ExecPlan 的 Compliance Matrix。
 和 active EP impact，并始终声明 `preview_only: true`。语义合并必须另起一份原子
 proposed ADR，取得明确 Decision Owner acceptance，完成迁移后再走授权的
 supersede/retire 流程。该命令本身无权修改、接受、退役、替代或删除任何 ADR。
+
+终态历史的物理文件压缩只使用 `pack-historical-adrs`，它与语义合并严格分离：
+
+- 只接受显式列出的 `docs/adr/` strict live ADR，且状态必须是 `rejected`、
+  `retired` 或 `superseded`；accepted/current、under-review、proposed、legacy、已打包、
+  symlink 或未通过 seal 验证的输入会使整个操作失败。
+- preview 不创建目录、lock、pack 或索引；它先用 logical candidate corpus 完成验证，
+  报告 pack SHA-256、删除集合与净物理文件减少量。只有审查后才加 `--apply`。
+- apply 在 repository lock 内重新预检，写入
+  `docs/.epctl/adr-packs/sha256-<digest>.json`，再删除源文件、重建索引并全量验证；
+  任一失败恢复 pack、源文件和受管索引的原字节。
+- pack 保存原路径、完整 UTF-8 bytes 的 canonical Base64、document/payload digest、
+  ID/title/status 和操作 provenance。normal validation、关系、历史 evidence、索引、
+  status 与 health 通过统一离线 resolver 把 entry 当作同一 logical ADR。
+- packed ADR 不能直接执行 lifecycle mutation；先用 `unpack-adr-history-pack` preview，
+  确认所有目标路径无冲突后 `--apply`。unpack 全量恢复精确 bytes、验证后才删除 pack。
+- 降级到不理解 History Pack 的 RepoFoundry 版本前，必须 unpack 所有 pack，并以
+  `adr-health` 确认 `packed_entries` 和 `history_packs` 都为 0。Harness upgrade 与安装
+  永远不会自动打包或解包。
 
 一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
 

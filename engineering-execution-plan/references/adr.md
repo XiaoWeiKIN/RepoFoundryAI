@@ -127,7 +127,9 @@ ADR 数量不是 retirement 条件。仍然有效的决定必须继续保留 cur
 
 ```mermaid
 flowchart LR
-    A["ADR source + seal + lifecycle"] --> R["current-effect resolver"]
+    L["Live ADR file"] --> R["unified logical resolver"]
+    P["Lossless terminal History Pack"] --> R
+    R --> A["ADR source + seal + lifecycle"]
     R --> V["Decision View<br/>持久领域导航"]
     R --> C["Decision Capsule<br/>临时精确上下文"]
     R --> H["ADR Health<br/>独立压力维度"]
@@ -197,6 +199,44 @@ partially amended ADR、whole-document legacy、active EP consumers 与 proposed
 但不能 merge、accept、retire、supersede、rewrite 或 delete。若确需减少规范决定数量，
 必须创建新的原子 proposed ADR，由 Decision Owner 明确接受，再按迁移和 effect transition
 契约处理旧决定。运行 preview 前后 ADR/EP bytes 必须一致。
+
+History Pack 只减少 strict 终态 ADR 的物理文件数，不减少 logical ADR，也不改变
+decision outcome、effect、relation 或 payload。唯一可打包状态是 `rejected`、`retired`
+和 `superseded`；输入必须是显式 ID、位于 `docs/adr/`、非 symlink、可独立验证且已有
+有效 payload seal。legacy、current 或已打包来源不可再次打包。
+
+```bash
+# preview：先验证候选 corpus，零写入
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  pack-historical-adrs ADR-051 ADR-052 \
+  --packed-by Wangxiaowei1 --reason "Superseded by ADR-055" --json
+
+# apply：锁内复验、写 pack、删源、reindex、全量验证；失败恢复全部原字节
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  pack-historical-adrs ADR-051 ADR-052 \
+  --packed-by Wangxiaowei1 --reason "Superseded by ADR-055" --apply --json
+
+# unpack 同样先 preview；目标冲突时不覆盖任何文件
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  unpack-adr-history-pack sha256-<pack>.json \
+  --unpacked-by Wangxiaowei1 --reason "Prepare downgrade" --json
+```
+
+pack 是 canonical、content-addressed JSON，entry 保存原 repository-relative path、
+exact UTF-8 bytes 的 canonical Base64、ID/title/status、document/payload digest；container
+保存 actor 与 reason。loader 必须验证 JSON 字段、ordering/self digest、filename、Base64、
+embedded ADR identity/seal、路径 confinement、case collision、symlink 和资源上限，任何
+异常 fail closed。正常 resolver 不依赖 Git。
+
+apply 在删除源文件前验证 in-memory candidate；物化后再次执行完整 repository
+validation。pack、source、受管 index 全部按 byte snapshot 回滚。unpack 恢复 pack 中
+所有 entry 的原路径和原字节，验证成功后才删除 container，不支持部分恢复。
+
+`adr-health` 的 corpus/effective 维度继续按 logical ADR 统计，storage 另报
+`live_adr_files`、`history_packs`、`packed_entries`、`physical_source_files` 和
+`net_physical_reduction`。直接修改 packed ADR lifecycle 或降级到 pack-unaware 版本前，
+必须先完整 unpack，并确认 pack 数量为 0。安装、Harness upgrade、reindex 与 health
+都不得自动创建 History Pack。
 
 ## 可执行的规范约束
 

@@ -4683,6 +4683,265 @@ The whole legacy document is normative, including this unique sentence.
         )
         self.assertIn("Refusing to manage symbolic link", rejected_preview.stderr)
 
+    def rejected_adr_fixture(self, count: int = 2) -> list[Path]:
+        self.init()
+        research = self.new_research("history-pack-fixture")
+        self.conclude_research(research)
+        paths: list[Path] = []
+        for index in range(1, count + 1):
+            adr = self.new_adr(f"history-pack-{index}")
+            self.complete_all_placeholders(adr)
+            self.run_cli(
+                "decide-adr",
+                f"ADR-{index:03d}",
+                "--outcome",
+                "rejected",
+                "--decision-maker",
+                "Test Decision Owner",
+            )
+            paths.append(adr)
+        return paths
+
+    def test_history_pack_preview_apply_and_exact_unpack_round_trip(self) -> None:
+        sources = self.rejected_adr_fixture(2)
+        sources[0].write_bytes(sources[0].read_bytes().replace(b"\n", b"\r\n"))
+        original_bytes = {path: path.read_bytes() for path in sources}
+        before_files = {
+            path.relative_to(self.repo).as_posix(): hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
+            for path in self.repo.rglob("*")
+            if path.is_file()
+        }
+
+        preview = json.loads(
+            self.run_cli(
+                "pack-historical-adrs",
+                "ADR-002",
+                "ADR-001",
+                "--packed-by",
+                "Test Archivist",
+                "--reason",
+                "Terminal fixture compaction.",
+                "--json",
+            ).stdout
+        )
+        self.assertFalse(preview["applied"])
+        self.assertTrue(preview["candidate_validated"])
+        self.assertEqual(preview["net_physical_reduction"], 1)
+        self.assertEqual(
+            [entry["adr_id"] for entry in preview["entries"]],
+            ["ADR-001", "ADR-002"],
+        )
+        self.assertEqual(
+            before_files,
+            {
+                path.relative_to(self.repo).as_posix(): hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+                for path in self.repo.rglob("*")
+                if path.is_file()
+            },
+        )
+
+        applied = json.loads(
+            self.run_cli(
+                "pack-historical-adrs",
+                "ADR-002",
+                "ADR-001",
+                "--packed-by",
+                "Test Archivist",
+                "--reason",
+                "Terminal fixture compaction.",
+                "--apply",
+                "--json",
+            ).stdout
+        )
+        self.assertTrue(applied["applied"])
+        pack_path = self.repo / applied["pack_path"]
+        self.assertTrue(pack_path.is_file())
+        self.assertTrue(all(not path.exists() for path in sources))
+        self.run_cli("validate")
+        health = json.loads(self.run_cli("adr-health", "--json").stdout)
+        self.assertEqual(health["corpus"]["logical_adrs"], 2)
+        self.assertEqual(health["storage"]["live_adr_files"], 0)
+        self.assertEqual(health["storage"]["history_packs"], 1)
+        self.assertEqual(health["storage"]["packed_entries"], 2)
+        self.assertEqual(health["storage"]["net_physical_reduction"], 1)
+        decisions = (self.repo / "docs/DECISIONS.md").read_text(encoding="utf-8")
+        decisions_pack_link = applied["pack_path"].removeprefix("docs/")
+        self.assertIn(decisions_pack_link, decisions)
+
+        unpack_preview = json.loads(
+            self.run_cli(
+                "unpack-adr-history-pack",
+                applied["pack_sha256"],
+                "--unpacked-by",
+                "Test Archivist",
+                "--reason",
+                "Verify exact restoration.",
+                "--json",
+            ).stdout
+        )
+        self.assertFalse(unpack_preview["applied"])
+        self.assertTrue(pack_path.is_file())
+        unpacked = json.loads(
+            self.run_cli(
+                "unpack-adr-history-pack",
+                applied["pack_sha256"],
+                "--unpacked-by",
+                "Test Archivist",
+                "--reason",
+                "Verify exact restoration.",
+                "--apply",
+                "--json",
+            ).stdout
+        )
+        self.assertTrue(unpacked["applied"])
+        self.assertFalse(pack_path.exists())
+        self.assertEqual(original_bytes, {path: path.read_bytes() for path in sources})
+        self.run_cli("validate")
+        decisions = (self.repo / "docs/DECISIONS.md").read_text(encoding="utf-8")
+        self.assertNotIn(decisions_pack_link, decisions)
+        for path in sources:
+            self.assertIn(
+                path.relative_to(self.repo.resolve() / "docs").as_posix(),
+                decisions,
+            )
+
+    def test_history_pack_rejects_ineligible_conflicts_and_tampering(self) -> None:
+        sources = self.rejected_adr_fixture(2)
+        accepted = self.new_adr("history-pack-current")
+        self.accept_adr(accepted, "ADR-003")
+        ineligible = self.run_cli(
+            "pack-historical-adrs",
+            "ADR-003",
+            "--packed-by",
+            "Test Archivist",
+            "--reason",
+            "Must remain live.",
+            expected=2,
+        )
+        self.assertIn("is not packable", ineligible.stderr)
+        self.assertTrue(accepted.is_file())
+
+        outside_pack_root = self.repo / "outside-pack-root"
+        outside_pack_root.mkdir()
+        pack_root = self.repo / "docs/.epctl/adr-packs"
+        pack_root.symlink_to(outside_pack_root, target_is_directory=True)
+        symlinked = self.run_cli(
+            "pack-historical-adrs",
+            "ADR-001",
+            "ADR-002",
+            "--packed-by",
+            "Test Archivist",
+            "--reason",
+            "Symlink safety fixture.",
+            expected=2,
+        )
+        self.assertIn("symbolic link", symlinked.stderr)
+        self.assertEqual(list(outside_pack_root.iterdir()), [])
+        pack_root.unlink()
+
+        original = sources[0].read_bytes()
+        applied = json.loads(
+            self.run_cli(
+                "pack-historical-adrs",
+                "ADR-001",
+                "ADR-002",
+                "--packed-by",
+                "Test Archivist",
+                "--reason",
+                "Terminal fixture compaction.",
+                "--apply",
+                "--json",
+            ).stdout
+        )
+        pack_path = self.repo / applied["pack_path"]
+        packed_mutation = self.run_cli(
+            "transition-adr",
+            "ADR-001",
+            "--to",
+            "accepted",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "Packed mutation must fail.",
+            expected=2,
+        )
+        self.assertIn("unpack", packed_mutation.stderr.lower())
+        sources[0].write_bytes(original)
+        conflict = self.run_cli(
+            "unpack-adr-history-pack",
+            applied["pack_sha256"],
+            "--unpacked-by",
+            "Test Archivist",
+            "--reason",
+            "Conflict test.",
+            expected=2,
+        )
+        self.assertIn("destination conflicts", conflict.stderr)
+        self.assertEqual(sources[0].read_bytes(), original)
+        sources[0].unlink()
+
+        payload = json.loads(pack_path.read_text(encoding="utf-8"))
+        payload["reason"] = "Tampered reason."
+        pack_path.write_text(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        tampered = self.run_cli("validate", expected=2)
+        self.assertIn("History Pack digest changed", tampered.stderr)
+
+    def test_history_pack_apply_rolls_back_exact_bytes_on_failure(self) -> None:
+        sources = self.rejected_adr_fixture(2)
+        original_bytes = {path: path.read_bytes() for path in sources}
+        index_paths = (
+            self.repo / "docs/DECISIONS.md",
+            self.repo / "docs/PLANS.md",
+            self.repo / "docs/RESEARCH.md",
+        )
+        original_indexes = {path: path.read_bytes() for path in index_paths}
+
+        module_name = "epctl_history_pack_rollback_test"
+        spec = importlib.util.spec_from_file_location(module_name, SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        epctl = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = epctl
+        spec.loader.exec_module(epctl)
+        original_rebuild = epctl.rebuild_indexes
+
+        def fail_rebuild(repo: Path) -> dict[str, str]:
+            raise epctl.EpctlError("injected index failure")
+
+        epctl.rebuild_indexes = fail_rebuild
+        try:
+            with self.assertRaisesRegex(epctl.EpctlError, "injected index failure"):
+                epctl.pack_historical_adrs(
+                    self.repo.resolve(),
+                    ["ADR-001", "ADR-002"],
+                    "Test Archivist",
+                    "Rollback fixture.",
+                    True,
+                )
+        finally:
+            epctl.rebuild_indexes = original_rebuild
+
+        self.assertEqual(original_bytes, {path: path.read_bytes() for path in sources})
+        self.assertEqual(
+            original_indexes,
+            {path: path.read_bytes() for path in index_paths},
+        )
+        pack_root = self.repo / "docs/.epctl/adr-packs"
+        self.assertTrue(not pack_root.exists() or not any(pack_root.iterdir()))
+        self.run_cli("validate")
+
 
 if __name__ == "__main__":
     unittest.main()

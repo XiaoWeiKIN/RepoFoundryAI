@@ -30,6 +30,7 @@ INDEX_PATHS = (
     Path("docs/BUGFIXES.md"),
 )
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+SUITE_TIMEOUT_SECONDS = 600
 
 
 class CheckError(RuntimeError):
@@ -46,7 +47,7 @@ def run(label: str, command: list[str], cwd: Path = ROOT) -> None:
         env=environment,
         text=True,
         capture_output=True,
-        timeout=300,
+        timeout=SUITE_TIMEOUT_SECONDS,
     )
     if result.stdout:
         print(result.stdout, end="")

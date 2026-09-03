@@ -270,21 +270,21 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.8.3`
+distribution upgrade, run this in each existing project and replace `0.8.4`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.8.3
-repofoundry --repo . upgrade --to 0.8.3 --apply
+repofoundry --repo . upgrade --to 0.8.4
+repofoundry --repo . upgrade --to 0.8.4 --apply
 repofoundry --repo . validate
 ```
 
 ### Compact ADR working context without deleting history
 
-RepoFoundry 0.8.3 keeps atomic ADR files and lifecycle authority as the normative
-history, then derives smaller non-normative retrieval surfaces above them. An
-upgrade creates only an empty registry, index, and projection directory; it never
-retires an ADR or invents domain membership.
+RepoFoundry 0.8.4 keeps ADR lifecycle authority and logical source bytes normative,
+then derives smaller non-normative retrieval surfaces above them. An upgrade creates
+only additive empty infrastructure; it never retires or packs an ADR or invents
+domain membership.
 
 A replacement ADR may itself later be superseded. RepoFoundry preserves every
 immediate `superseded_by` / `supersedes` backlink as an acyclic history chain;
@@ -315,6 +315,44 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . decision-caps
   --focus-reason "Implement the selected runtime boundary" --json
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-consolidation-plan --view runtime --json
 ```
+
+After semantic lifecycle work is complete, explicitly selected strict terminal
+ADRs (`rejected`, `retired`, or `superseded`) may be replaced physically by one
+lossless, content-addressed History Pack. This changes storage only: logical ADR
+count, exact bytes, seals, relations, historical evidence, indexes, and current
+effect remain resolvable offline.
+
+```mermaid
+flowchart LR
+    A["Strict terminal ADR files"] -->|"preview + candidate validation"| P["History Pack"]
+    P -->|"apply: lock + verify + delete + revalidate"| R["Fewer physical files"]
+    R -->|"exact all-or-nothing unpack"| A
+```
+
+```bash
+# Preview first; this creates no files or locks.
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  pack-historical-adrs ADR-051 ADR-052 \
+  --packed-by Wangxiaowei1 --reason "Superseded by ADR-055" --json
+
+# Apply only after reviewing the exact pack digest and deletion set.
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  pack-historical-adrs ADR-051 ADR-052 \
+  --packed-by Wangxiaowei1 --reason "Superseded by ADR-055" --apply --json
+
+# Preview exact restoration before recovery or downgrade.
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  unpack-adr-history-pack sha256-<pack>.json \
+  --unpacked-by Wangxiaowei1 --reason "Prepare downgrade" --json
+```
+
+Packing rejects current, proposed, under-review, legacy, malformed, symlinked,
+duplicate, or already-packed inputs as one operation. Apply validates the complete
+candidate before deletion, validates the materialized repository again, and rolls
+back the pack, source files, and generated indexes byte-for-byte after any failure.
+Packed ADRs must be unpacked before lifecycle mutation. Before downgrading to a
+pack-unaware RepoFoundry release, unpack every History Pack and confirm
+`adr-health` reports zero `history_packs` and `packed_entries`.
 
 Capsules copy exact verified Decision Statements and selected constraint rows. A
 linked legacy ADR uses its exact whole document. Complete materialization remains
@@ -460,9 +498,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.8.3
-repofoundry --repo . upgrade --to 0.8.3 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.8.3 --apply
+repofoundry --repo . upgrade --to 0.8.4
+repofoundry --repo . upgrade --to 0.8.4 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.8.4 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -506,12 +544,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.8.3` uses Harness schema `3`, Harness Core `1.5.0`, Codex
+RepoFoundry `0.8.4` uses Harness schema `3`, Harness Core `1.5.0`, Codex
 adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.8.3 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.8.4 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the

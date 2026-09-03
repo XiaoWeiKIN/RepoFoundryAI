@@ -17,5 +17,5 @@ guidance outside the generated markers.
 | DD-009 | Risk-adaptive Agent governance | current | single | legacy | [design-docs/risk-adaptive-agent-governance.md](design-docs/risk-adaptive-agent-governance.md) |
 | DD-010 | Reversible ADR effect and immutable decision history | current | single | legacy | [design-docs/reversible-adr-effect.md](design-docs/reversible-adr-effect.md) |
 | DD-011 | First-class technical Design Documents | draft | single | legacy | [design-docs/first-class-technical-design-documents.md](design-docs/first-class-technical-design-documents.md) |
-| DD-012 | Lossless ADR context compaction | current | single | 2 | [design-docs/dd-012_lossless-adr-context-compaction.md](design-docs/dd-012_lossless-adr-context-compaction.md) |
+| DD-012 | Lossless ADR context compaction | current | single | 3 | [design-docs/dd-012_lossless-adr-context-compaction.md](design-docs/dd-012_lossless-adr-context-compaction.md) |
 <!-- DESIGNCTL:INDEX:END -->

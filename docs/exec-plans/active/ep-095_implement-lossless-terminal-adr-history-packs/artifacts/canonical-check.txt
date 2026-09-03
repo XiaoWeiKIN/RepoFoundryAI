@@ -1,0 +1,17 @@
+Command: python3 -B scripts/check.py
+Date: 2026-09-03
+Result: PASS
+
+Verified suites and gates:
+- Engineering Research: 35 tests passed.
+- Engineering Benchmark: 9 tests passed.
+- Engineering Design: 16 tests passed.
+- Engineering Execution Plan: 77 tests passed.
+- RepoFoundry AI, installer, repository, Spec manager, and Spec router: 119 tests passed.
+- Research, EP, and Design repository validation: zero errors.
+- Research, Design, and execution-artifact index projections: deterministic.
+- Markdown links, package metadata/portability, eval catalogs, external Spec
+  ownership, Git whitespace, and CI canonical-entry contracts: passed.
+
+The existing repository emitted five EP warnings and one Design warning for
+pre-existing active/unpublished artifacts. No validation error was present.

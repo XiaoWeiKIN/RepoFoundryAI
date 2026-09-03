@@ -43,8 +43,9 @@ and superseded states so history remains auditable.
 | ADR-015 | Adopt risk-adaptive Agent governance modes | accepted | current | depends on ADR-004; depends on ADR-012 | 2026-08-13 | [] | [ADR](adr/adr-015_risk-adaptive-agent-governance.md) |
 | ADR-016 | Separate ADR history from current decision effect | accepted | current | amends ADR-014 | 2026-08-13 | [] | [ADR](adr/adr-016_reversible-decision-effect.md) |
 | ADR-018 | Make technical Design Docs a first-class governed artifact | accepted | current | depends on ADR-001; depends on ADR-004; depends on ADR-014 | 2026-08-17 | [] | [ADR](adr/adr-018_first-class-technical-design-documents.md) |
-| ADR-058 | Separate ADR history from lossless decision working context | accepted | partially amended | depends on ADR-014; depends on ADR-016; amended by ADR-059 | 2026-09-01 | [] | [ADR](adr/adr-058_lossless-adr-context-compaction.md) |
+| ADR-058 | Separate ADR history from lossless decision working context | accepted | partially amended | depends on ADR-014; depends on ADR-016; amended by ADR-059; amended by ADR-060 | 2026-09-01 | [] | [ADR](adr/adr-058_lossless-adr-context-compaction.md) |
 | ADR-059 | Add explicit focused materialization to ADR task capsules | accepted | current | amends ADR-058 | 2026-09-03 | [] | [ADR](adr/adr-059_focused-adr-context-materialization.md) |
+| ADR-060 | Physically compact terminal ADRs into lossless history packs | accepted | current | amends ADR-058 | 2026-09-03 | [] | [ADR](adr/adr-060_lossless-terminal-adr-history-packs.md) |
 <!-- ADRCTL:CURRENT:END -->
 
 ## Current constraint amendments
@@ -54,7 +55,10 @@ and superseded states so history remains auditable.
 |---|---|---|---|
 | ADR-014#C-001 | ADR-016 | Separate ADR history from current decision effect | [ADR](adr/adr-016_reversible-decision-effect.md) |
 | ADR-014#C-004 | ADR-016 | Separate ADR history from current decision effect | [ADR](adr/adr-016_reversible-decision-effect.md) |
+| ADR-058#C-001 | ADR-060 | Physically compact terminal ADRs into lossless history packs | [ADR](adr/adr-060_lossless-terminal-adr-history-packs.md) |
 | ADR-058#C-006 | ADR-059 | Add explicit focused materialization to ADR task capsules | [ADR](adr/adr-059_focused-adr-context-materialization.md) |
+| ADR-058#C-008 | ADR-060 | Physically compact terminal ADRs into lossless history packs | [ADR](adr/adr-060_lossless-terminal-adr-history-packs.md) |
+| ADR-058#C-009 | ADR-060 | Physically compact terminal ADRs into lossless history packs | [ADR](adr/adr-060_lossless-terminal-adr-history-packs.md) |
 <!-- ADRCTL:AMENDMENTS:END -->
 
 ## Review required

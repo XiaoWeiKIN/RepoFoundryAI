@@ -55,6 +55,10 @@ do not depend on a user-home installation path.
   Design Package, ADR, ExecPlan, and sealed Benchmark only when their trigger
   applies. Research establishes evidence; Design specifies how the system works;
   ADR authorizes durable choices; ExecPlan governs delivery.
+- Route ADR corpus reduction to the Engineering Execution Plan workflow. Semantic
+  consolidation remains an authorized ADR lifecycle change; physical compaction
+  may only use its explicit lossless terminal History Pack preview/apply and exact
+  unpack contract. A Harness upgrade never packs ADRs automatically.
 - Use the case-study workflow only after implementation evidence exists.
 
 Authority, destructive or external actions, security, data integrity, locked

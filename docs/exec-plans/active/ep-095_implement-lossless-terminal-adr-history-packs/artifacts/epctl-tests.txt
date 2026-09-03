@@ -1,0 +1,14 @@
+Command: python3 -B -m unittest discover -s engineering-execution-plan/tests -p 'test_*.py' -v
+Date: 2026-09-03
+Result: PASS
+Summary: Ran 77 tests in 55.416s; OK.
+
+History Pack coverage includes:
+- preview purity and deterministic ordering;
+- candidate validation before source deletion;
+- CRLF exact-byte pack/unpack round trip;
+- logical resolver, index, health, and validation behavior;
+- ineligible current ADR and packed lifecycle mutation rejection;
+- unpack destination collision rejection;
+- container digest tamper detection; and
+- injected post-materialization failure with exact source/index rollback.

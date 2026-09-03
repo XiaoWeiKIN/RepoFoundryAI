@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import contextlib
+import contextvars
 import datetime as dt
 import hashlib
 import json
@@ -13,7 +16,8 @@ import re
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 try:
@@ -34,6 +38,13 @@ CONFIG_VERSION = 1
 DEFAULT_ARCHITECTURE_ROOT = "docs/adr"
 ADR_REVISION_ROOT = Path("docs/.epctl/adr-revisions")
 ADR_REVISION_MAX_BYTES = 1024 * 1024
+ADR_HISTORY_PACK_ROOT = Path("docs/.epctl/adr-packs")
+ADR_HISTORY_PACK_SCHEMA_VERSION = "1"
+ADR_HISTORY_PACK_MAX_ENTRIES = 256
+ADR_HISTORY_PACK_ENTRY_MAX_BYTES = 16 * 1024 * 1024
+ADR_HISTORY_PACK_DECODED_MAX_BYTES = 64 * 1024 * 1024
+ADR_HISTORY_PACK_FILE_MAX_BYTES = 96 * 1024 * 1024
+ADR_HISTORY_PACK_STATUSES = {"rejected", "retired", "superseded"}
 CHECKPOINT_RECOVERY_ROOT = Path("docs/.epctl/checkpoint-recoveries")
 CHECKPOINT_RECOVERY_SCHEMA_VERSION = "1"
 CHECKPOINT_RECOVERY_MAX_BYTES = 64 * 1024
@@ -257,6 +268,7 @@ DESIGN_EVIDENCE_RE = re.compile(
     re.IGNORECASE,
 )
 ADR_REVISION_FILE_RE = re.compile(r"^sha256-([0-9a-f]{64})\.md$")
+ADR_HISTORY_PACK_FILE_RE = re.compile(r"^sha256-([0-9a-f]{64})\.json$")
 CHECKPOINT_RECOVERY_FILE_RE = re.compile(r"^sha256-([0-9a-f]{64})\.json$")
 GIT_OBJECT_ID_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.IGNORECASE)
 ADR_CONSTRAINT_STRENGTHS = {"must", "must_not", "should", "may"}
@@ -265,6 +277,41 @@ CURRENT_METADATA_SCHEMA = "1"
 
 class EpctlError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class AdrSource:
+    """One logical ADR document independent of its physical representation."""
+
+    path: Path
+    raw_bytes: bytes
+    text: str
+    data: dict[str, str]
+    strict: bool
+    physical_kind: str
+    container_path: Path
+    pack_sha256: str = ""
+
+    @property
+    def validation_text(self) -> str:
+        """Match Path.read_text universal-newline semantics for governed parsing."""
+
+        return self.text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+@dataclass(frozen=True)
+class HistoryPackOperationPlan:
+    public: dict[str, object]
+    pack_path: Path
+    pack_text: str
+    pack_payload: dict[str, object]
+    selected_sources: tuple[AdrSource, ...]
+    candidate_sources: tuple[AdrSource, ...]
+
+
+_ADR_SOURCE_OVERRIDE: contextvars.ContextVar[
+    tuple[Path, tuple[AdrSource, ...]] | None
+] = contextvars.ContextVar("epctl_adr_source_override", default=None)
 
 
 def utc_now() -> dt.datetime:
@@ -356,6 +403,29 @@ def atomic_write(path: Path, text: str) -> None:
         "w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
     ) as handle:
         handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+        temp_name = handle.name
+    try:
+        os.replace(temp_name, path)
+        if hasattr(os, "O_DIRECTORY"):
+            descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    finally:
+        if temp_name and os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def atomic_write_bytes(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name = ""
+    with tempfile.NamedTemporaryFile(
+        "wb", dir=path.parent, prefix=f".{path.name}.", delete=False
+    ) as handle:
+        handle.write(content)
         handle.flush()
         os.fsync(handle.fileno())
         temp_name = handle.name
@@ -748,7 +818,11 @@ def id_roots(repo: Path, prefix: str, scope: Path | None = None) -> tuple[Path, 
     if prefix == "R":
         return (repo / "docs" / "research", repo / "docs" / "RESEARCH.md")
     if prefix == "ADR":
-        return (*architecture_roots(repo), repo / "docs" / "DECISIONS.md")
+        return (
+            *architecture_roots(repo),
+            repo / ADR_HISTORY_PACK_ROOT,
+            repo / "docs" / "DECISIONS.md",
+        )
     if prefix == "BF":
         return (repo / "docs" / "bugfixes", repo / "docs" / "BUGFIXES.md")
     if prefix == "TD":
@@ -1428,9 +1502,9 @@ def render_architecture_compliance_rows(
     structured_refs: list[str] = []
     row_refs: list[str] = []
     for adr_id in adr_refs:
-        adr_path = find_adr(repo, adr_id)
+        adr_source = find_adr_source(repo, adr_id)
         constraints = adr_constraint_refs(
-            adr_path.read_text(encoding="utf-8"),
+            adr_source.validation_text,
             adr_id,
         )
         if constraints:
@@ -1489,8 +1563,8 @@ def current_constraint_amendments(
     corpus = adr_corpus_data(repo)
     if not applicable:
         return amendments
-    for path in adr_files(repo):
-        data, _ = adr_document_data(path)
+    for source in adr_sources(repo):
+        data = source.data
         if data.get("status") != "accepted":
             continue
         current, _ = adr_currentness(
@@ -1891,17 +1965,17 @@ def research_index_row(repo: Path, path: Path) -> str:
 
 def adr_effect_projection(
     repo: Path,
-    paths: Iterable[Path] | None = None,
+    sources: Iterable[AdrSource] | None = None,
 ) -> list[dict[str, object]]:
-    adr_paths = list(paths) if paths is not None else adr_files(repo)
+    adr_source_values = list(sources) if sources is not None else adr_sources(repo)
     corpus: dict[str, dict[str, str]] = {}
-    paths_by_id: dict[str, Path] = {}
-    for path in adr_paths:
-        data = artifact_metadata(path, "ADR")
+    sources_by_id: dict[str, AdrSource] = {}
+    for source in adr_source_values:
+        data = source.data
         item_id = data.get("id", "")
         if item_id:
             corpus[item_id] = data
-            paths_by_id[item_id] = path
+            sources_by_id[item_id] = source
 
     currentness: dict[str, tuple[bool, list[str]]] = {}
     currentness_memo: dict[str, tuple[bool, list[str]]] = {}
@@ -1928,7 +2002,7 @@ def adr_effect_projection(
     projection: list[dict[str, object]] = []
     for item_id in sorted(corpus):
         data = corpus[item_id]
-        path = paths_by_id[item_id]
+        source = sources_by_id[item_id]
         status = data.get("status", "")
         current, review_reasons = currentness[item_id]
         amended_by = current_amenders.get(item_id, [])
@@ -1971,7 +2045,8 @@ def adr_effect_projection(
             {
                 "id": item_id,
                 "data": data,
-                "path": path,
+                "path": source.path,
+                "source": source,
                 "table": table,
                 "projection": projection_name,
                 "effect": effect,
@@ -1986,11 +2061,12 @@ def adr_effect_projection(
 
 def adr_index_row(repo: Path, item: dict[str, object]) -> str:
     data = item["data"]
-    path = item["path"]
+    source = item["source"]
     assert isinstance(data, dict)
-    assert isinstance(path, Path)
+    assert isinstance(source, AdrSource)
     item_id = str(item["id"])
-    relative = path.relative_to(repo / "docs").as_posix()
+    relative = source.container_path.relative_to(repo / "docs").as_posix()
+    link_label = "ADR pack" if source.physical_kind == "packed" else "ADR"
     decision = adr_decision_outcome(data) or "pending"
     related = item.get("related", [])
     assert isinstance(related, list)
@@ -2000,7 +2076,7 @@ def adr_index_row(repo: Path, item: dict[str, object]) -> str:
         f"{md_cell(str(item.get('effect', '')).replace('_', ' '))} | "
         f"{md_cell('; '.join(str(value) for value in related) or '—')} | "
         f"{md_cell(data.get('updated', ''))} | "
-        f"{md_cell(data.get('research_refs', ''))} | [ADR]({relative}) |"
+        f"{md_cell(data.get('research_refs', ''))} | [{link_label}]({relative}) |"
     )
 
 
@@ -2013,9 +2089,9 @@ def adr_amendment_index_rows(
         if item.get("table") != "CURRENT":
             continue
         data = item["data"]
-        path = item["path"]
+        source = item["source"]
         assert isinstance(data, dict)
-        assert isinstance(path, Path)
+        assert isinstance(source, AdrSource)
         try:
             constraints = parse_adr_constraint_array(
                 data.get("amends_constraints", "[]"),
@@ -2023,12 +2099,13 @@ def adr_amendment_index_rows(
             )
         except EpctlError:
             constraints = []
-        relative = path.relative_to(repo / "docs").as_posix()
+        relative = source.container_path.relative_to(repo / "docs").as_posix()
+        link_label = "ADR pack" if source.physical_kind == "packed" else "ADR"
         for constraint_ref in constraints:
             rows.append(
                 f"| {constraint_ref} | {item['id']} | "
                 f"{md_cell(data.get('title', str(item['id'])))} | "
-                f"[ADR]({relative}) |"
+                f"[{link_label}]({relative}) |"
             )
     return rows
 
@@ -2036,9 +2113,9 @@ def adr_amendment_index_rows(
 def rebuild_adr_index_text(
     repo: Path,
     text: str,
-    paths: Iterable[Path] | None = None,
+    sources: Iterable[AdrSource] | None = None,
 ) -> str:
-    projection = adr_effect_projection(repo, paths)
+    projection = adr_effect_projection(repo, sources)
     updated = text
     for table in ("ACTIVE", "CURRENT"):
         updated = replace_index_rows(
@@ -2104,7 +2181,7 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
     completed_plans = plan_files(repo, "completed")
     active_research = research_files(repo, "active")
     completed_research = research_files(repo, "completed")
-    adrs = adr_files(repo)
+    adrs = adr_sources(repo)
     active_bugfixes = bugfix_files(repo, "active")
     completed_bugfixes = bugfix_files(repo, "completed")
 
@@ -2231,6 +2308,1089 @@ def adr_files(repo: Path) -> list[Path]:
     return sorted(found)
 
 
+def strict_json_loads(text: str, path: Path) -> object:
+    def reject_duplicate_keys(
+        pairs: list[tuple[str, object]],
+    ) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key {key!r}")
+            result[key] = value
+        return result
+
+    try:
+        return json.loads(text, object_pairs_hook=reject_duplicate_keys)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise EpctlError(f"{path}: invalid History Pack JSON: {exc}") from exc
+
+
+def canonical_history_pack_text(payload: dict[str, object]) -> str:
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def history_pack_digest(payload: dict[str, object]) -> str:
+    digest_payload = dict(payload)
+    digest_payload["pack_sha256"] = ""
+    return hashlib.sha256(
+        canonical_history_pack_text(digest_payload).encode("utf-8")
+    ).hexdigest()
+
+
+def normalize_history_pack_original_path(repo: Path, value: object) -> Path:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise EpctlError("History Pack original_path must be a non-empty canonical string")
+    if "\\" in value or "\x00" in value:
+        raise EpctlError(f"History Pack original_path is unsafe: {value!r}")
+    pure = PurePosixPath(value)
+    if (
+        pure.is_absolute()
+        or value != pure.as_posix()
+        or any(part in {"", ".", ".."} for part in pure.parts)
+        or len(pure.parts) < 3
+        or pure.parts[:2] != ("docs", "adr")
+        or pure.suffix.lower() != ".md"
+    ):
+        raise EpctlError(
+            "History Pack original_path must be a canonical Markdown path "
+            f"strictly beneath docs/adr/: {value!r}"
+        )
+    path = repo.joinpath(*pure.parts)
+    docs_adr = (repo / "docs" / "adr").resolve()
+    try:
+        path.resolve(strict=False).relative_to(docs_adr)
+    except ValueError as exc:
+        raise EpctlError(
+            f"History Pack original_path escapes docs/adr/: {value!r}"
+        ) from exc
+    reject_symlink_path(repo, path)
+    return path
+
+
+def adr_source_from_live(repo: Path, path: Path) -> AdrSource:
+    reject_symlink_path(repo, path)
+    if not path.is_file():
+        raise EpctlError(f"ADR source is not a regular file: {path}")
+    raw_bytes = path.read_bytes()
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise EpctlError(f"ADR source is not UTF-8: {path}") from exc
+    normalized_text = text.replace("\r\n", "\n").replace("\r", "\n")
+    try:
+        data, strict = adr_document_data_from_text(path, normalized_text)
+    except EpctlError:
+        data, strict = {}, False
+    try:
+        path.relative_to(repo / "docs" / "adr")
+        canonical_root = True
+    except ValueError:
+        canonical_root = False
+    physical_kind = "live" if strict and canonical_root else "legacy"
+    return AdrSource(
+        path=path,
+        raw_bytes=raw_bytes,
+        text=text,
+        data=data,
+        strict=strict,
+        physical_kind=physical_kind,
+        container_path=path,
+    )
+
+
+def validate_history_pack_text(
+    repo: Path,
+    pack_path: Path,
+    text: str,
+) -> tuple[dict[str, object], list[AdrSource]]:
+    try:
+        raw_pack = text.encode("utf-8")
+    except UnicodeEncodeError as exc:  # pragma: no cover - Python str invariant
+        raise EpctlError(f"{pack_path}: History Pack is not UTF-8") from exc
+    if len(raw_pack) > ADR_HISTORY_PACK_FILE_MAX_BYTES:
+        raise EpctlError(
+            f"{pack_path}: History Pack exceeds "
+            f"{ADR_HISTORY_PACK_FILE_MAX_BYTES} encoded bytes"
+        )
+    parsed = strict_json_loads(text, pack_path)
+    if not isinstance(parsed, dict):
+        raise EpctlError(f"{pack_path}: History Pack root must be an object")
+    payload = parsed
+    expected_keys = {
+        "artifact_type",
+        "schema_version",
+        "pack_sha256",
+        "packed_by",
+        "reason",
+        "entries",
+    }
+    if set(payload) != expected_keys:
+        raise EpctlError(
+            f"{pack_path}: History Pack fields must be exactly "
+            + ", ".join(sorted(expected_keys))
+        )
+    if payload.get("artifact_type") != "adr-history-pack":
+        raise EpctlError(
+            f"{pack_path}: artifact_type must be 'adr-history-pack'"
+        )
+    if payload.get("schema_version") != ADR_HISTORY_PACK_SCHEMA_VERSION:
+        raise EpctlError(
+            f"{pack_path}: unsupported History Pack schema_version "
+            f"{payload.get('schema_version')!r}"
+        )
+    for field in ("packed_by", "reason"):
+        value = payload.get(field)
+        if not isinstance(value, str) or not inline_text(value) or value != inline_text(value):
+            raise EpctlError(
+                f"{pack_path}: History Pack {field} must be a non-empty single line"
+            )
+    pack_sha256 = payload.get("pack_sha256")
+    if not isinstance(pack_sha256, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", pack_sha256
+    ):
+        raise EpctlError(f"{pack_path}: invalid History Pack pack_sha256")
+    computed_pack_sha256 = history_pack_digest(payload)
+    if pack_sha256 != computed_pack_sha256:
+        raise EpctlError(
+            f"{pack_path}: History Pack digest changed "
+            f"(expected {pack_sha256}, got {computed_pack_sha256})"
+        )
+    filename_match = ADR_HISTORY_PACK_FILE_RE.fullmatch(pack_path.name)
+    if not filename_match or filename_match.group(1) != pack_sha256:
+        raise EpctlError(
+            f"{pack_path}: History Pack filename must be "
+            f"sha256-{pack_sha256}.json"
+        )
+    canonical = canonical_history_pack_text(payload)
+    if text != canonical:
+        raise EpctlError(f"{pack_path}: History Pack JSON is not canonical")
+
+    entries = payload.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise EpctlError(f"{pack_path}: History Pack entries must be a non-empty array")
+    if len(entries) > ADR_HISTORY_PACK_MAX_ENTRIES:
+        raise EpctlError(
+            f"{pack_path}: History Pack exceeds {ADR_HISTORY_PACK_MAX_ENTRIES} entries"
+        )
+    entry_keys = {
+        "adr_id",
+        "title",
+        "status",
+        "original_path",
+        "document_sha256",
+        "payload_sha256",
+        "source_base64",
+    }
+    sources: list[AdrSource] = []
+    seen_ids: set[str] = set()
+    seen_paths: set[str] = set()
+    decoded_total = 0
+    ordering: list[tuple[int, str]] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or set(entry) != entry_keys:
+            raise EpctlError(
+                f"{pack_path}: entry {index} fields must be exactly "
+                + ", ".join(sorted(entry_keys))
+            )
+        adr_id = entry.get("adr_id")
+        if not isinstance(adr_id, str) or not ID_RE["ADR"].fullmatch(adr_id):
+            raise EpctlError(f"{pack_path}: entry {index} has invalid adr_id")
+        canonical_id = normalize_reference_ids((adr_id,), "ADR")[0]
+        if adr_id != canonical_id or adr_id in seen_ids:
+            raise EpctlError(
+                f"{pack_path}: duplicate or non-canonical ADR id {adr_id!r}"
+            )
+        logical_path = normalize_history_pack_original_path(
+            repo, entry.get("original_path")
+        )
+        relative_path = logical_path.relative_to(repo).as_posix()
+        folded_path = relative_path.casefold()
+        if folded_path in seen_paths:
+            raise EpctlError(
+                f"{pack_path}: duplicate or case-colliding original_path "
+                f"{relative_path!r}"
+            )
+        source_base64 = entry.get("source_base64")
+        if not isinstance(source_base64, str) or len(source_base64) > (
+            ((ADR_HISTORY_PACK_ENTRY_MAX_BYTES + 2) // 3) * 4
+        ):
+            raise EpctlError(
+                f"{pack_path}: {adr_id} source_base64 exceeds the entry limit"
+            )
+        try:
+            raw_source = base64.b64decode(source_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise EpctlError(
+                f"{pack_path}: {adr_id} source_base64 is invalid"
+            ) from exc
+        if base64.b64encode(raw_source).decode("ascii") != source_base64:
+            raise EpctlError(
+                f"{pack_path}: {adr_id} source_base64 is not canonical"
+            )
+        if len(raw_source) > ADR_HISTORY_PACK_ENTRY_MAX_BYTES:
+            raise EpctlError(
+                f"{pack_path}: {adr_id} exceeds "
+                f"{ADR_HISTORY_PACK_ENTRY_MAX_BYTES} decoded bytes"
+            )
+        decoded_total += len(raw_source)
+        if decoded_total > ADR_HISTORY_PACK_DECODED_MAX_BYTES:
+            raise EpctlError(
+                f"{pack_path}: decoded entries exceed "
+                f"{ADR_HISTORY_PACK_DECODED_MAX_BYTES} bytes"
+            )
+        try:
+            source_text = raw_source.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise EpctlError(f"{pack_path}: {adr_id} source is not UTF-8") from exc
+        document_sha256 = entry.get("document_sha256")
+        actual_document_sha256 = hashlib.sha256(raw_source).hexdigest()
+        if document_sha256 != actual_document_sha256:
+            raise EpctlError(
+                f"{pack_path}: {adr_id} document digest changed "
+                f"(expected {document_sha256}, got {actual_document_sha256})"
+            )
+        try:
+            normalized_source_text = source_text.replace("\r\n", "\n").replace(
+                "\r", "\n"
+            )
+            data, strict = adr_document_data_from_text(
+                logical_path,
+                normalized_source_text,
+            )
+        except EpctlError as exc:
+            raise EpctlError(f"{pack_path}: {adr_id} embedded ADR is invalid: {exc}") from exc
+        if not strict:
+            raise EpctlError(f"{pack_path}: {adr_id} must be a strict ADR")
+        if data.get("id") != adr_id:
+            raise EpctlError(
+                f"{pack_path}: {adr_id} manifest/frontmatter identity mismatch"
+            )
+        if entry.get("title") != data.get("title"):
+            raise EpctlError(f"{pack_path}: {adr_id} title mismatch")
+        status = entry.get("status")
+        if status != data.get("status") or status not in ADR_HISTORY_PACK_STATUSES:
+            raise EpctlError(
+                f"{pack_path}: {adr_id} must contain a terminal ADR status"
+            )
+        payload_sha256 = entry.get("payload_sha256")
+        if (
+            not isinstance(payload_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", payload_sha256)
+            or data.get("payload_sha256") != payload_sha256
+            or adr_payload_sha256(normalized_source_text, data) != payload_sha256
+        ):
+            raise EpctlError(f"{pack_path}: {adr_id} payload seal mismatch")
+        path_number = path_id_number(logical_path, "ADR")
+        if path_number != int(adr_id.split("-", 1)[1]):
+            raise EpctlError(
+                f"{pack_path}: {adr_id} does not match original_path {relative_path}"
+            )
+        seen_ids.add(adr_id)
+        seen_paths.add(folded_path)
+        ordering.append((int(adr_id.split("-", 1)[1]), relative_path))
+        sources.append(
+            AdrSource(
+                path=logical_path,
+                raw_bytes=raw_source,
+                text=source_text,
+                data=data,
+                strict=True,
+                physical_kind="packed",
+                container_path=pack_path,
+                pack_sha256=pack_sha256,
+            )
+        )
+    if ordering != sorted(ordering):
+        raise EpctlError(f"{pack_path}: History Pack entries are not canonically ordered")
+    return payload, sources
+
+
+def history_pack_sources(repo: Path, pack_path: Path) -> tuple[dict[str, object], list[AdrSource]]:
+    reject_symlink_path(repo, pack_path)
+    if not pack_path.is_file():
+        raise EpctlError(f"History Pack is not a regular file: {pack_path}")
+    if pack_path.stat().st_size > ADR_HISTORY_PACK_FILE_MAX_BYTES:
+        raise EpctlError(
+            f"{pack_path}: History Pack exceeds "
+            f"{ADR_HISTORY_PACK_FILE_MAX_BYTES} encoded bytes"
+        )
+    raw = pack_path.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise EpctlError(f"{pack_path}: History Pack is not UTF-8") from exc
+    return validate_history_pack_text(repo, pack_path, text)
+
+
+def validate_unique_adr_sources(repo: Path, sources: Iterable[AdrSource]) -> list[AdrSource]:
+    ordered = sorted(
+        sources,
+        key=lambda source: (
+            source.data.get("id", ""),
+            source.path.relative_to(repo).as_posix(),
+        ),
+    )
+    by_id: dict[str, AdrSource] = {}
+    by_path: dict[str, AdrSource] = {}
+    for source in ordered:
+        relative = source.path.relative_to(repo).as_posix()
+        folded = relative.casefold()
+        previous_path = by_path.get(folded)
+        if previous_path is not None:
+            raise EpctlError(
+                f"duplicate or case-colliding logical ADR path {relative}; "
+                f"already provided by {previous_path.container_path}"
+            )
+        by_path[folded] = source
+        adr_id = source.data.get("id", "")
+        if adr_id:
+            previous_id = by_id.get(adr_id)
+            if previous_id is not None and (
+                previous_id.physical_kind == "packed"
+                or source.physical_kind == "packed"
+            ):
+                raise EpctlError(
+                    f"duplicate logical ADR id {adr_id}: "
+                    f"{previous_id.container_path} and {source.container_path}"
+                )
+            by_id[adr_id] = source
+    return ordered
+
+
+def adr_sources(repo: Path) -> list[AdrSource]:
+    normalized_repo = repo.resolve()
+    override = _ADR_SOURCE_OVERRIDE.get()
+    if override is not None and override[0] == normalized_repo:
+        return list(override[1])
+    sources = [adr_source_from_live(repo, path) for path in adr_files(repo)]
+    root = repo / ADR_HISTORY_PACK_ROOT
+    if root.exists():
+        reject_symlink_path(repo, root)
+        if not root.is_dir():
+            raise EpctlError(f"History Pack root is not a directory: {root}")
+        for path in sorted(root.iterdir()):
+            if path.is_symlink() or not path.is_file():
+                raise EpctlError(f"Invalid History Pack store entry: {path}")
+            if not ADR_HISTORY_PACK_FILE_RE.fullmatch(path.name):
+                raise EpctlError(f"Unexpected file in History Pack store: {path}")
+            _, packed = history_pack_sources(repo, path)
+            sources.extend(packed)
+    return validate_unique_adr_sources(repo, sources)
+
+
+@contextlib.contextmanager
+def use_adr_sources(repo: Path, sources: Iterable[AdrSource]):
+    checked = tuple(validate_unique_adr_sources(repo, sources))
+    token = _ADR_SOURCE_OVERRIDE.set((repo.resolve(), checked))
+    try:
+        yield checked
+    finally:
+        _ADR_SOURCE_OVERRIDE.reset(token)
+
+
+def find_adr_source(repo: Path, adr_id: str) -> AdrSource:
+    target = adr_id.upper()
+    id_match = ID_RE["ADR"].fullmatch(target)
+    target_number = int(id_match.group(1)) if id_match else -1
+    matches: list[AdrSource] = []
+    for source in adr_sources(repo):
+        path_number = path_id_number(source.path, "ADR")
+        path_numbers = {path_number} if path_number is not None else set()
+        if source.data.get("id", "").upper() == target or target_number in path_numbers:
+            matches.append(source)
+    if len(matches) != 1:
+        raise EpctlError(f"Expected one {target} ADR, found {len(matches)}")
+    return matches[0]
+
+
+def validate_adr_source(
+    source: AdrSource,
+    *,
+    historical: bool = False,
+) -> tuple[list[str], list[str], dict[str, str]]:
+    return validate_adr(
+        source.path,
+        historical=historical,
+        document_text=source.validation_text,
+    )
+
+
+def validate_candidate_adr_sources(
+    repo: Path,
+    sources: Iterable[AdrSource],
+) -> list[str]:
+    with use_adr_sources(repo, sources):
+        errors, warnings = validate_repo(repo, check_adr_index=False)
+    if errors:
+        raise EpctlError(
+            "History Pack candidate repository validation failed:\n- "
+            + "\n- ".join(errors)
+        )
+    return warnings
+
+
+def history_pack_index_delta(
+    repo: Path,
+    sources: Iterable[AdrSource],
+) -> dict[str, object]:
+    path = repo / "docs" / "DECISIONS.md"
+    before = path.read_text(encoding="utf-8")
+    after = rebuild_adr_index_text(repo, before, sources)
+    return {
+        "path": path.relative_to(repo).as_posix(),
+        "changed": before != after,
+        "before_sha256": hashlib.sha256(before.encode("utf-8")).hexdigest(),
+        "after_sha256": hashlib.sha256(after.encode("utf-8")).hexdigest(),
+    }
+
+
+def history_pack_validation_plan(operation: str) -> list[dict[str, str]]:
+    stages = [
+        {
+            "stage": "candidate_overlay",
+            "contract": "complete repository validation before source relocation",
+        },
+        {
+            "stage": "locked_preflight",
+            "contract": "repeat eligibility and identity checks under repository lock",
+        },
+        {
+            "stage": "materialized_repository",
+            "contract": "reindex and complete validation before transaction commit",
+        },
+    ]
+    if operation == "unpack":
+        stages[-1]["contract"] = (
+            "validate exact restored live sources before removing the History Pack"
+        )
+    return stages
+
+
+def build_history_pack_candidate(
+    repo: Path,
+    selected_sources: Iterable[AdrSource],
+    packed_by: str,
+    reason: str,
+) -> tuple[Path, str, dict[str, object], list[AdrSource]]:
+    actor = inline_text(packed_by)
+    rationale = inline_text(reason)
+    if not actor:
+        raise EpctlError("History Pack requires --packed-by")
+    if not rationale:
+        raise EpctlError("History Pack requires --reason")
+    ordered = sorted(
+        selected_sources,
+        key=lambda source: (
+            int(source.data["id"].split("-", 1)[1]),
+            source.path.relative_to(repo).as_posix(),
+        ),
+    )
+    entries: list[dict[str, object]] = []
+    decoded_total = 0
+    for source in ordered:
+        decoded_total += len(source.raw_bytes)
+        if len(source.raw_bytes) > ADR_HISTORY_PACK_ENTRY_MAX_BYTES:
+            raise EpctlError(
+                f"{source.data['id']} exceeds "
+                f"{ADR_HISTORY_PACK_ENTRY_MAX_BYTES} decoded bytes"
+            )
+        if decoded_total > ADR_HISTORY_PACK_DECODED_MAX_BYTES:
+            raise EpctlError(
+                "Selected ADRs exceed the History Pack decoded-byte limit of "
+                f"{ADR_HISTORY_PACK_DECODED_MAX_BYTES}"
+            )
+        entries.append(
+            {
+                "adr_id": source.data["id"],
+                "title": source.data["title"],
+                "status": source.data["status"],
+                "original_path": source.path.relative_to(repo).as_posix(),
+                "document_sha256": hashlib.sha256(source.raw_bytes).hexdigest(),
+                "payload_sha256": source.data["payload_sha256"],
+                "source_base64": base64.b64encode(source.raw_bytes).decode("ascii"),
+            }
+        )
+    payload: dict[str, object] = {
+        "artifact_type": "adr-history-pack",
+        "schema_version": ADR_HISTORY_PACK_SCHEMA_VERSION,
+        "pack_sha256": "",
+        "packed_by": actor,
+        "reason": rationale,
+        "entries": entries,
+    }
+    payload["pack_sha256"] = history_pack_digest(payload)
+    pack_path = (
+        repo
+        / ADR_HISTORY_PACK_ROOT
+        / f"sha256-{payload['pack_sha256']}.json"
+    )
+    pack_text = canonical_history_pack_text(payload)
+    parsed_payload, packed_sources = validate_history_pack_text(
+        repo,
+        pack_path,
+        pack_text,
+    )
+    return pack_path, pack_text, parsed_payload, packed_sources
+
+
+def prepare_history_pack(
+    repo: Path,
+    adr_values: Iterable[str],
+    packed_by: str,
+    reason: str,
+) -> HistoryPackOperationPlan:
+    raw_ids = list(adr_values)
+    adr_ids = normalize_reference_ids(raw_ids, "ADR")
+    if not adr_ids:
+        raise EpctlError("pack-historical-adrs requires at least one ADR")
+    if len(adr_ids) != len(raw_ids):
+        raise EpctlError("pack-historical-adrs contains duplicate ADR IDs")
+    if len(adr_ids) > ADR_HISTORY_PACK_MAX_ENTRIES:
+        raise EpctlError(
+            f"A History Pack supports at most {ADR_HISTORY_PACK_MAX_ENTRIES} entries"
+        )
+    all_sources = adr_sources(repo)
+    with use_adr_sources(repo, all_sources):
+        selected: list[AdrSource] = []
+        for adr_id in adr_ids:
+            source = find_adr_source(repo, adr_id)
+            if source.physical_kind == "packed":
+                raise EpctlError(f"{adr_id} is already stored in a History Pack")
+            if source.physical_kind != "live" or not source.strict:
+                raise EpctlError(
+                    f"{adr_id} is not a live strict ADR beneath docs/adr/"
+                )
+            if source.path.is_symlink() or not source.path.is_file():
+                raise EpctlError(f"{adr_id} source must be a regular non-symlink file")
+            if source.data.get("status") not in ADR_HISTORY_PACK_STATUSES:
+                raise EpctlError(
+                    f"{adr_id} status {source.data.get('status')!r} is not packable; "
+                    "expected rejected, retired, or superseded"
+                )
+            item_errors, _, item_data = validate_adr_source(
+                source,
+                historical=True,
+            )
+            if item_errors:
+                raise EpctlError(
+                    f"{adr_id} is not a valid terminal ADR:\n- "
+                    + "\n- ".join(item_errors)
+                )
+            if not re.fullmatch(
+                r"[0-9a-f]{64}", item_data.get("payload_sha256", "")
+            ):
+                raise EpctlError(f"{adr_id} has no valid sealed payload digest")
+            selected.append(source)
+    pack_path, pack_text, pack_payload, packed_sources = build_history_pack_candidate(
+        repo,
+        selected,
+        packed_by,
+        reason,
+    )
+    if pack_path.exists():
+        raise EpctlError(f"History Pack destination already exists: {pack_path}")
+    selected_paths = {source.path for source in selected}
+    candidate_sources = [
+        source for source in all_sources if source.path not in selected_paths
+    ]
+    candidate_sources.extend(packed_sources)
+    warnings = validate_candidate_adr_sources(repo, candidate_sources)
+    live_before = sum(source.physical_kind != "packed" for source in all_sources)
+    packs_before = len(
+        {
+            source.container_path
+            for source in all_sources
+            if source.physical_kind == "packed"
+        }
+    )
+    entries = pack_payload["entries"]
+    assert isinstance(entries, list)
+    public_entries = [
+        {
+            key: entry[key]
+            for key in (
+                "adr_id",
+                "title",
+                "status",
+                "original_path",
+                "document_sha256",
+                "payload_sha256",
+            )
+        }
+        | {"bytes": len(source.raw_bytes)}
+        for entry, source in zip(entries, packed_sources)
+        if isinstance(entry, dict)
+    ]
+    effective_adrs = sum(
+        item.get("table") == "CURRENT"
+        for item in adr_effect_projection(repo, all_sources)
+    )
+    packed_before = sum(
+        source.physical_kind == "packed" for source in all_sources
+    )
+    public: dict[str, object] = {
+        "operation": "pack-historical-adrs",
+        "mode": "preview",
+        "applied": False,
+        "candidate_validated": True,
+        "pack_sha256": pack_payload["pack_sha256"],
+        "pack_path": pack_path.relative_to(repo).as_posix(),
+        "packed_by": pack_payload["packed_by"],
+        "reason": pack_payload["reason"],
+        "entries": public_entries,
+        "source_paths_to_remove": [
+            source.path.relative_to(repo).as_posix() for source in selected
+        ],
+        "generated_index_deltas": [
+            history_pack_index_delta(repo, candidate_sources)
+        ],
+        "validation_plan": history_pack_validation_plan("pack"),
+        "logical_adrs": len(all_sources),
+        "effective_adrs": effective_adrs,
+        "live_adr_files_before": live_before,
+        "live_adr_files_after": live_before - len(selected),
+        "history_packs_before": packs_before,
+        "history_packs_after": packs_before + 1,
+        "packed_entries_before": packed_before,
+        "packed_entries_after": packed_before + len(selected),
+        "physical_source_files_before": live_before + packs_before,
+        "physical_source_files_after": (
+            live_before - len(selected) + packs_before + 1
+        ),
+        "operation_physical_file_reduction": len(selected) - 1,
+        "net_physical_reduction_before": packed_before - packs_before,
+        "net_physical_reduction": (
+            packed_before + len(selected) - packs_before - 1
+        ),
+        "warnings": [
+            *warnings,
+            *(
+                ["Packing one ADR produces zero net physical file reduction."]
+                if len(selected) == 1
+                else []
+            ),
+        ],
+    }
+    return HistoryPackOperationPlan(
+        public=public,
+        pack_path=pack_path,
+        pack_text=pack_text,
+        pack_payload=pack_payload,
+        selected_sources=tuple(selected),
+        candidate_sources=tuple(candidate_sources),
+    )
+
+
+def byte_file_snapshots(paths: Iterable[Path]) -> dict[Path, bytes | None]:
+    snapshots: dict[Path, bytes | None] = {}
+    for path in sorted(set(paths)):
+        if path.is_symlink():
+            raise EpctlError(f"Cannot snapshot symbolic link: {path}")
+        if path.exists() and not path.is_file():
+            raise EpctlError(f"Cannot snapshot non-file path: {path}")
+        snapshots[path] = path.read_bytes() if path.is_file() else None
+    return snapshots
+
+
+def restore_byte_file_snapshots(snapshots: dict[Path, bytes | None]) -> None:
+    for path, content in snapshots.items():
+        if content is None:
+            if path.exists():
+                if path.is_symlink() or not path.is_file():
+                    raise EpctlError(f"Cannot remove rollback target: {path}")
+                path.unlink()
+        else:
+            if path.is_symlink() or (path.exists() and not path.is_file()):
+                raise EpctlError(f"Cannot restore rollback target: {path}")
+            atomic_write_bytes(path, content)
+
+
+def history_pack_snapshot_paths(
+    repo: Path,
+    plan: HistoryPackOperationPlan,
+) -> set[Path]:
+    return {
+        plan.pack_path,
+        *(source.path for source in plan.selected_sources),
+        *managed_index_snapshots(repo).keys(),
+    }
+
+
+def pack_historical_adrs(
+    repo: Path,
+    adr_values: Iterable[str],
+    packed_by: str,
+    reason: str,
+    apply: bool,
+) -> dict[str, object]:
+    preview = prepare_history_pack(repo, adr_values, packed_by, reason)
+    if not apply:
+        return preview.public
+    with repo_lock(repo):
+        locked = prepare_history_pack(repo, adr_values, packed_by, reason)
+        if locked.pack_text != preview.pack_text or [
+            source.raw_bytes for source in locked.selected_sources
+        ] != [source.raw_bytes for source in preview.selected_sources]:
+            raise EpctlError(
+                "History Pack preflight changed while acquiring the lock; "
+                "rerun preview"
+            )
+        reject_symlink_path(repo, locked.pack_path)
+        for source in locked.selected_sources:
+            reject_symlink_path(repo, source.path)
+        snapshots = byte_file_snapshots(history_pack_snapshot_paths(repo, locked))
+        try:
+            reject_symlink_path(repo, locked.pack_path)
+            if locked.pack_path.exists():
+                raise EpctlError(
+                    f"History Pack destination appeared: {locked.pack_path}"
+                )
+            atomic_write(locked.pack_path, locked.pack_text)
+            for source in locked.selected_sources:
+                reject_symlink_path(repo, source.path)
+                if (
+                    source.path.is_symlink()
+                    or not source.path.is_file()
+                    or source.path.read_bytes() != source.raw_bytes
+                ):
+                    raise EpctlError(
+                        f"ADR source changed before deletion: {source.path}"
+                    )
+                source.path.unlink()
+            rebuild_indexes(repo)
+            errors, warnings = validate_repo(repo)
+            if errors:
+                raise EpctlError(
+                    "History Pack materialized repository validation failed:\n- "
+                    + "\n- ".join(errors)
+                )
+        except Exception as primary:
+            try:
+                restore_byte_file_snapshots(snapshots)
+                root = repo / ADR_HISTORY_PACK_ROOT
+                if root.is_dir() and not any(root.iterdir()):
+                    root.rmdir()
+            except Exception as rollback_error:
+                raise EpctlError(
+                    f"History Pack apply failed: {primary}; rollback failed: "
+                    f"{rollback_error}"
+                ) from primary
+            raise
+    result = dict(locked.public)
+    result.update(
+        {
+            "mode": "apply",
+            "applied": True,
+            "warnings": warnings,
+        }
+    )
+    return result
+
+
+def resolve_history_pack_path(repo: Path, value: str) -> Path:
+    candidate = inline_text(value)
+    if re.fullmatch(r"[0-9a-f]{64}", candidate):
+        candidate = f"sha256-{candidate}.json"
+    elif re.fullmatch(r"sha256-[0-9a-f]{64}", candidate):
+        candidate += ".json"
+    if ADR_HISTORY_PACK_FILE_RE.fullmatch(candidate):
+        path = repo / ADR_HISTORY_PACK_ROOT / candidate
+    else:
+        pure = PurePosixPath(candidate)
+        if (
+            pure.is_absolute()
+            or candidate != pure.as_posix()
+            or pure.parts[:3] != ("docs", ".epctl", "adr-packs")
+            or len(pure.parts) != 4
+            or not ADR_HISTORY_PACK_FILE_RE.fullmatch(pure.name)
+        ):
+            raise EpctlError(
+                "History Pack must be a sha256 digest, pack filename, or canonical "
+                "repository-relative path beneath docs/.epctl/adr-packs"
+            )
+        path = repo.joinpath(*pure.parts)
+    reject_symlink_path(repo, path)
+    return path
+
+
+def unpack_destination_case_conflicts(repo: Path, destinations: Iterable[Path]) -> list[str]:
+    root = repo / "docs" / "adr"
+    existing: dict[str, Path] = {}
+    if root.is_dir() and not root.is_symlink():
+        for path in root.rglob("*"):
+            if path.exists():
+                existing[path.relative_to(repo).as_posix().casefold()] = path
+    conflicts: list[str] = []
+    seen: set[str] = set()
+    for path in destinations:
+        relative = path.relative_to(repo).as_posix()
+        folded = relative.casefold()
+        if folded in seen or folded in existing:
+            conflicts.append(relative)
+        seen.add(folded)
+    return sorted(set(conflicts))
+
+
+def prepare_history_unpack(
+    repo: Path,
+    pack_value: str,
+    unpacked_by: str,
+    reason: str,
+) -> HistoryPackOperationPlan:
+    actor = inline_text(unpacked_by)
+    rationale = inline_text(reason)
+    if not actor:
+        raise EpctlError("History Pack unpack requires --unpacked-by")
+    if not rationale:
+        raise EpctlError("History Pack unpack requires --reason")
+    pack_path = resolve_history_pack_path(repo, pack_value)
+    pack_payload, packed_sources = history_pack_sources(repo, pack_path)
+    destinations = [source.path for source in packed_sources]
+    conflicts = [
+        path.relative_to(repo).as_posix()
+        for path in destinations
+        if path.exists()
+    ]
+    conflicts.extend(unpack_destination_case_conflicts(repo, destinations))
+    if conflicts:
+        raise EpctlError(
+            "History Pack unpack destination conflicts: "
+            + ", ".join(sorted(set(conflicts)))
+        )
+    all_sources = adr_sources(repo)
+    selected = [
+        source
+        for source in all_sources
+        if source.physical_kind == "packed" and source.container_path == pack_path
+    ]
+    if len(selected) != len(packed_sources):
+        raise EpctlError(f"History Pack logical entries are incomplete: {pack_path}")
+    restored_sources = [
+        AdrSource(
+            path=source.path,
+            raw_bytes=source.raw_bytes,
+            text=source.text,
+            data=source.data,
+            strict=source.strict,
+            physical_kind="live",
+            container_path=source.path,
+        )
+        for source in selected
+    ]
+    candidate_sources = [
+        source for source in all_sources if source.container_path != pack_path
+    ]
+    candidate_sources.extend(restored_sources)
+    warnings = validate_candidate_adr_sources(repo, candidate_sources)
+    live_before = sum(source.physical_kind != "packed" for source in all_sources)
+    packed_before = sum(
+        source.physical_kind == "packed" for source in all_sources
+    )
+    packs_before = len(
+        {
+            source.container_path
+            for source in all_sources
+            if source.physical_kind == "packed"
+        }
+    )
+    effective_adrs = sum(
+        item.get("table") == "CURRENT"
+        for item in adr_effect_projection(repo, all_sources)
+    )
+    public: dict[str, object] = {
+        "operation": "unpack-adr-history-pack",
+        "mode": "preview",
+        "applied": False,
+        "candidate_validated": True,
+        "pack_sha256": pack_payload["pack_sha256"],
+        "pack_path": pack_path.relative_to(repo).as_posix(),
+        "unpacked_by": actor,
+        "reason": rationale,
+        "adr_ids": [source.data["id"] for source in selected],
+        "restore_paths": [path.relative_to(repo).as_posix() for path in destinations],
+        "restore_entries": [
+            {
+                "adr_id": source.data["id"],
+                "original_path": source.path.relative_to(repo).as_posix(),
+                "bytes": len(source.raw_bytes),
+                "document_sha256": hashlib.sha256(source.raw_bytes).hexdigest(),
+                "payload_sha256": source.data["payload_sha256"],
+            }
+            for source in selected
+        ],
+        "generated_index_deltas": [
+            history_pack_index_delta(repo, candidate_sources)
+        ],
+        "validation_plan": history_pack_validation_plan("unpack"),
+        "logical_adrs": len(all_sources),
+        "effective_adrs": effective_adrs,
+        "live_adr_files_before": live_before,
+        "live_adr_files_after": live_before + len(selected),
+        "history_packs_before": packs_before,
+        "history_packs_after": packs_before - 1,
+        "packed_entries_before": packed_before,
+        "packed_entries_after": packed_before - len(selected),
+        "physical_source_files_before": live_before + packs_before,
+        "physical_source_files_after": (
+            live_before + len(selected) + packs_before - 1
+        ),
+        "net_physical_reduction_before": packed_before - packs_before,
+        "net_physical_reduction_after": (
+            packed_before
+            - len(selected)
+            - (packs_before - 1)
+        ),
+        "warnings": warnings,
+    }
+    return HistoryPackOperationPlan(
+        public=public,
+        pack_path=pack_path,
+        pack_text=canonical_history_pack_text(pack_payload),
+        pack_payload=pack_payload,
+        selected_sources=tuple(selected),
+        candidate_sources=tuple(candidate_sources),
+    )
+
+
+def unpack_adr_history_pack(
+    repo: Path,
+    pack_value: str,
+    unpacked_by: str,
+    reason: str,
+    apply: bool,
+) -> dict[str, object]:
+    preview = prepare_history_unpack(repo, pack_value, unpacked_by, reason)
+    if not apply:
+        return preview.public
+    with repo_lock(repo):
+        locked = prepare_history_unpack(repo, pack_value, unpacked_by, reason)
+        if locked.pack_text != preview.pack_text:
+            raise EpctlError(
+                "History Pack changed while acquiring the lock; rerun preview"
+            )
+        reject_symlink_path(repo, locked.pack_path)
+        for source in locked.selected_sources:
+            reject_symlink_path(repo, source.path)
+        snapshots = byte_file_snapshots(history_pack_snapshot_paths(repo, locked))
+        try:
+            for source in locked.selected_sources:
+                reject_symlink_path(repo, source.path)
+                if source.path.exists() or source.path.is_symlink():
+                    raise EpctlError(
+                        f"History Pack unpack destination appeared: {source.path}"
+                    )
+                atomic_write_bytes(source.path, source.raw_bytes)
+            restored = [
+                adr_source_from_live(repo, source.path)
+                for source in locked.selected_sources
+            ]
+            restored_paths = {source.path for source in restored}
+            actual_candidate = [
+                source
+                for source in locked.candidate_sources
+                if source.path not in restored_paths
+            ]
+            actual_candidate.extend(restored)
+            validate_candidate_adr_sources(repo, actual_candidate)
+            reject_symlink_path(repo, locked.pack_path)
+            if (
+                not locked.pack_path.is_file()
+                or locked.pack_path.read_text(encoding="utf-8") != locked.pack_text
+            ):
+                raise EpctlError(
+                    f"History Pack changed before removal: {locked.pack_path}"
+                )
+            locked.pack_path.unlink()
+            rebuild_indexes(repo)
+            errors, warnings = validate_repo(repo)
+            if errors:
+                raise EpctlError(
+                    "History Pack unpack materialized validation failed:\n- "
+                    + "\n- ".join(errors)
+                )
+        except Exception as primary:
+            try:
+                restore_byte_file_snapshots(snapshots)
+            except Exception as rollback_error:
+                raise EpctlError(
+                    f"History Pack unpack failed: {primary}; rollback failed: "
+                    f"{rollback_error}"
+                ) from primary
+            raise
+    result = dict(locked.public)
+    result.update(
+        {
+            "mode": "apply",
+            "applied": True,
+            "warnings": warnings,
+        }
+    )
+    return result
+
+
+def print_history_pack_operation(payload: dict[str, object]) -> None:
+    print(
+        f"{payload['operation']} {payload['mode']}: "
+        f"{payload['pack_path']} ({payload['pack_sha256']})"
+    )
+    print(f"Applied: {'yes' if payload['applied'] else 'no'}")
+    print(f"Candidate validated: {'yes' if payload['candidate_validated'] else 'no'}")
+    print("\n| Storage dimension | Before | After |")
+    print("|---|---:|---:|")
+    print(
+        f"| Logical ADRs | {payload['logical_adrs']} | "
+        f"{payload['logical_adrs']} |"
+    )
+    print(
+        f"| Effective ADRs | {payload['effective_adrs']} | "
+        f"{payload['effective_adrs']} |"
+    )
+    for label, field in (
+        ("Live ADR files", "live_adr_files"),
+        ("History Packs", "history_packs"),
+        ("Packed entries", "packed_entries"),
+        ("Physical source files", "physical_source_files"),
+        ("Net physical reduction", "net_physical_reduction"),
+    ):
+        print(
+            f"| {label} | {payload[f'{field}_before']} | "
+            f"{payload.get(f'{field}_after', payload.get(field))} |"
+        )
+    if payload["operation"] == "pack-historical-adrs":
+        print(
+            "Operation physical file reduction: "
+            f"{payload['operation_physical_file_reduction']}"
+        )
+        print("\n| ADR | Status | Original path | Document SHA-256 |")
+        print("|---|---|---|---|")
+        entries = payload.get("entries", [])
+        assert isinstance(entries, list)
+        for entry in entries:
+            assert isinstance(entry, dict)
+            print(
+                f"| {entry['adr_id']} | {entry['status']} | "
+                f"{entry['original_path']} | {entry['document_sha256']} |"
+            )
+    else:
+        print("\n| ADR | Restored path |")
+        print("|---|---|")
+        for adr_id, path in zip(
+            payload.get("adr_ids", []),
+            payload.get("restore_paths", []),
+        ):
+            print(f"| {adr_id} | {path} |")
+    warnings = payload.get("warnings", [])
+    if isinstance(warnings, list) and warnings:
+        print("\nWarnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+
+
 def bugfix_files(repo: Path, state: str | None = None) -> list[Path]:
     roots = (
         [repo / "docs" / "bugfixes" / state]
@@ -2306,27 +3466,15 @@ def find_research(repo: Path, research_id: str, state: str | None = None) -> Pat
 
 
 def find_adr(repo: Path, adr_id: str) -> Path:
-    target = adr_id.upper()
-    id_match = ID_RE["ADR"].fullmatch(target)
-    target_number = int(id_match.group(1)) if id_match else -1
-    matches: list[Path] = []
-    for path in adr_files(repo):
-        path_number = path_id_number(path, "ADR")
-        if path.is_symlink():
-            if path_number == target_number:
-                reject_symlink_path(repo, path)
-            continue
-        try:
-            data, _ = adr_document_data(path)
-        except EpctlError:
-            data = {}
-        path_numbers = {path_number} if path_number is not None else set()
-        if data.get("id", "").upper() == target or target_number in path_numbers:
-            reject_symlink_path(repo, path)
-            matches.append(path)
-    if len(matches) != 1:
-        raise EpctlError(f"Expected one {target} ADR, found {len(matches)}")
-    return matches[0]
+    source = find_adr_source(repo, adr_id)
+    if source.physical_kind == "packed":
+        raise EpctlError(
+            f"{source.data.get('id', adr_id.upper())} is stored in History Pack "
+            f"{source.container_path.relative_to(repo).as_posix()}; unpack the "
+            "pack before a command that edits ADR lifecycle or content"
+        )
+    reject_symlink_path(repo, source.path)
+    return source.path
 
 
 def find_checkpoint(repo: Path, plan_id: str, checkpoint_id: str) -> Path:
@@ -3781,11 +4929,8 @@ def adr_decision_outcome(data: dict[str, str]) -> str:
 
 def adr_corpus_data(repo: Path) -> dict[str, dict[str, str]]:
     corpus: dict[str, dict[str, str]] = {}
-    for path in adr_files(repo):
-        try:
-            data, _ = adr_document_data(path)
-        except (EpctlError, OSError, UnicodeDecodeError):
-            continue
+    for source in adr_sources(repo):
+        data = source.data
         adr_id = data.get("id", "")
         if adr_id:
             corpus[adr_id] = data
@@ -3881,8 +5026,11 @@ def adr_input_closure(
             adr_errors: list[str] = []
             data = data_overrides[adr_id]
         else:
-            path = find_adr(repo, adr_id)
-            adr_errors, _, data = validate_adr(path, historical=historical)
+            source = find_adr_source(repo, adr_id)
+            adr_errors, _, data = validate_adr_source(
+                source,
+                historical=historical,
+            )
         if adr_errors or data.get("status") not in valid_statuses:
             details = "; ".join(adr_errors) if adr_errors else data.get("status", "")
             if valid_statuses == {"accepted"} and not historical:
@@ -3938,9 +5086,9 @@ def resolve_decision_context(
     while True:
         structured_refs: set[str] = set()
         for adr_id in sorted(resolved):
-            path = find_adr(repo, adr_id)
+            source = find_adr_source(repo, adr_id)
             structured_refs.update(
-                adr_constraint_refs(path.read_text(encoding="utf-8"), adr_id)
+                adr_constraint_refs(source.validation_text, adr_id)
             )
         amendment_candidates: list[str] = []
         for candidate_id, candidate in corpus.items():
@@ -3982,13 +5130,11 @@ def resolve_decision_context(
     all_constraint_refs: list[str] = []
     amendment_targets: dict[str, list[str]] = {}
     for adr_id in ordered_adrs:
-        path = find_adr(repo, adr_id)
-        raw_source = path.read_bytes()
-        try:
-            text = raw_source.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise EpctlError(f"{adr_id} source is not UTF-8: {path}") from exc
-        item_errors, _, data = validate_adr(path)
+        source = find_adr_source(repo, adr_id)
+        path = source.path
+        raw_source = source.raw_bytes
+        text = source.text
+        item_errors, _, data = validate_adr_source(source)
         if item_errors:
             raise EpctlError(
                 f"{adr_id} is not valid for a Decision context:\n- "
@@ -4040,6 +5186,8 @@ def resolve_decision_context(
                 "id": adr_id,
                 "title": data.get("title", ""),
                 "path": path.relative_to(repo).as_posix(),
+                "physical_kind": source.physical_kind,
+                "container_path": source.container_path.relative_to(repo).as_posix(),
                 "text": text,
                 "data": data,
                 "contract": "strict-structured" if structured else "whole-document",
@@ -5173,6 +6321,12 @@ def adr_health(repo: Path) -> dict[str, object]:
     adrs = rows["adrs"]
     plans = rows["plans"]
     data_by_id = adr_corpus_data(repo)
+    source_values = adr_sources(repo)
+    source_by_id = {
+        source.data.get("id", ""): source
+        for source in source_values
+        if source.data.get("id", "")
+    }
     current_ids = {
         str(item["id"])
         for item in adrs
@@ -5187,10 +6341,10 @@ def adr_health(repo: Path) -> dict[str, object]:
     legacy_current = 0
     current_constraints = 0
     for item in adrs:
-        path = repo / str(item["path"])
-        text = path.read_text(encoding="utf-8")
+        source = source_by_id[str(item["id"])]
+        text = source.text
         total_lines += len(text.splitlines())
-        total_bytes += len(text.encode("utf-8"))
+        total_bytes += len(source.raw_bytes)
         data = data_by_id.get(str(item["id"]), {})
         structured = data.get("schema_version") in {"1.2", "1.3", "1.4"}
         constraints = item.get("constraints", [])
@@ -5340,15 +6494,37 @@ def adr_health(repo: Path) -> dict[str, object]:
             "narrower task selection or a reviewed budget reason.",
         ),
     ]
+    live_adr_files = sum(
+        source.physical_kind != "packed" for source in source_values
+    )
+    packed_entries = sum(
+        source.physical_kind == "packed" for source in source_values
+    )
+    history_pack_paths = {
+        source.container_path
+        for source in source_values
+        if source.physical_kind == "packed"
+    }
+    history_packs = len(history_pack_paths)
+    physical_source_files = live_adr_files + history_packs
+    net_physical_reduction = packed_entries - history_packs
     return {
         "schema_version": ADR_HEALTH_SCHEMA_VERSION,
         "non_normative": True,
         "corpus": {
             "total_adrs": len(adrs),
+            "logical_adrs": len(adrs),
             "total_lines": total_lines,
             "total_bytes": total_bytes,
             "effective_adrs": len(current_ids),
             "historical_or_review_adrs": len(adrs) - len(current_ids),
+        },
+        "storage": {
+            "live_adr_files": live_adr_files,
+            "history_packs": history_packs,
+            "packed_entries": packed_entries,
+            "physical_source_files": physical_source_files,
+            "net_physical_reduction": net_physical_reduction,
         },
         "contracts": {
             "structured_adrs": structured_total,
@@ -5396,6 +6572,7 @@ def print_adr_health(payload: dict[str, object]) -> None:
     print("ADR health is a non-normative, read-only projection; no aggregate score is used.")
     print()
     corpus = payload["corpus"]
+    storage = payload["storage"]
     contracts = payload["contracts"]
     graph = payload["graph"]
     constraints = payload["constraints"]
@@ -5404,6 +6581,7 @@ def print_adr_health(payload: dict[str, object]) -> None:
     views = payload["views"]
     for item in (
         corpus,
+        storage,
         contracts,
         graph,
         constraints,
@@ -5417,6 +6595,11 @@ def print_adr_health(payload: dict[str, object]) -> None:
         ("corpus", "effective_adrs", corpus["effective_adrs"]),
         ("corpus", "total_lines", corpus["total_lines"]),
         ("corpus", "total_bytes", corpus["total_bytes"]),
+        ("storage", "live_adr_files", storage["live_adr_files"]),
+        ("storage", "history_packs", storage["history_packs"]),
+        ("storage", "packed_entries", storage["packed_entries"]),
+        ("storage", "physical_source_files", storage["physical_source_files"]),
+        ("storage", "net_physical_reduction", storage["net_physical_reduction"]),
         ("contracts", "structured_current_adrs", contracts["structured_current_adrs"]),
         ("contracts", "whole_document_current_adrs", contracts["whole_document_current_adrs"]),
         ("graph", "typed_edges", graph["typed_edges"]),
@@ -7717,8 +8900,8 @@ def validate_adr(
     relation_statuses = ADR_ACCEPTED_ORIGIN_STATUSES
     for related_id in (*depends_on, *amends):
         try:
-            related_path = find_adr(repo, related_id)
-            related_data, _ = adr_document_data(related_path)
+            related_source = find_adr_source(repo, related_id)
+            related_data = related_source.data
         except EpctlError:
             errors.append(f"{path}: related ADR {related_id} is missing")
             continue
@@ -7796,12 +8979,12 @@ def validate_adr(
         for constraint_ref in amends_constraints:
             related_id = constraint_ref.split("#", 1)[0]
             try:
-                related_path = find_adr(repo, related_id)
+                related_source = find_adr_source(repo, related_id)
             except EpctlError:
                 continue
             available = set(
                 adr_constraint_refs(
-                    related_path.read_text(encoding="utf-8"),
+                    related_source.validation_text,
                     related_id,
                 )
             )
@@ -8013,12 +9196,12 @@ def resolve_adr_evidence(
     normalized_id = normalize_reference_ids((adr_id,), "ADR")[0]
     normalized_digest = digest.lower()
     try:
-        current_path = find_adr(repo, normalized_id)
+        current_source = find_adr_source(repo, normalized_id)
     except EpctlError:
-        current_path = None
-    if current_path is not None:
-        current_errors, _, current_data = validate_adr(
-            current_path,
+        current_source = None
+    if current_source is not None:
+        current_errors, _, current_data = validate_adr_source(
+            current_source,
             historical=True,
         )
         if (
@@ -8028,8 +9211,8 @@ def resolve_adr_evidence(
             == normalized_digest
         ):
             return (
-                current_path,
-                current_path.read_text(encoding="utf-8"),
+                current_source.path,
+                current_source.validation_text,
                 current_data,
             )
     revision_path = adr_revision_path(repo, normalized_id, normalized_digest)
@@ -8596,8 +9779,9 @@ def validate_plan(
                     adr_resolution_failures.add(adr_id)
             if adr_path is None:
                 try:
-                    adr_path = find_adr(repo, adr_id)
-                    adr_text = adr_path.read_text(encoding="utf-8")
+                    adr_source = find_adr_source(repo, adr_id)
+                    adr_path = adr_source.path
+                    adr_text = adr_source.validation_text
                 except EpctlError:
                     errors.append(f"{path}: missing accepted ADR {adr_id}")
                     continue
@@ -9316,9 +10500,14 @@ def validate_bugfix(
     return errors, warnings
 
 
-def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
+def validate_repo(
+    repo: Path,
+    *,
+    check_adr_index: bool = True,
+) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
+    logical_adr_sources = adr_sources(repo)
     try:
         load_config(repo)
         configured_roots = architecture_roots(repo)
@@ -9380,7 +10569,7 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
             warnings.append(message)
     if not decision_index.is_file():
         message = f"{decision_index}: missing; run init"
-        if adr_files(repo):
+        if logical_adr_sources:
             errors.append(message)
         else:
             warnings.append(message)
@@ -9495,8 +10684,9 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
         if decision_index.exists()
         else ""
     )
-    for path in adr_files(repo):
-        item_errors, item_warnings, data = validate_adr(path)
+    for source in logical_adr_sources:
+        path = source.path
+        item_errors, item_warnings, data = validate_adr_source(source)
         errors.extend(item_errors)
         warnings.extend(item_warnings)
         item_id = data.get("id", "")
@@ -9507,7 +10697,7 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
             adr_data_by_id[item_id] = data
             table = "ACTIVE" if data.get("status") == "proposed" else "COMPLETED"
             adr_ids_by_table[table].add(item_id)
-            adr_paths_by_table[table][item_id] = path.relative_to(
+            adr_paths_by_table[table][item_id] = source.container_path.relative_to(
                 repo / "docs"
             ).as_posix()
     for item_id, data in adr_data_by_id.items():
@@ -9652,7 +10842,7 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
         has_all_effect_markers = all(
             marker in decision_text for marker in effect_markers
         )
-        if has_all_effect_markers:
+        if has_all_effect_markers and check_adr_index:
             projection = adr_effect_projection(repo)
             for table in ("ACTIVE", "CURRENT", "REVIEW", "COMPLETED"):
                 expected_items = [
@@ -9697,12 +10887,12 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
                     f"{decision_index}: stale current constraint amendment "
                     "projection; run reindex"
                 )
-        elif has_any_effect_markers:
+        elif has_any_effect_markers and not has_all_effect_markers:
             errors.append(
                 f"{decision_index}: incomplete ADR effect projection markers; "
                 "run reindex after restoring the managed layout"
             )
-        else:
+        elif check_adr_index:
             for table in ("ACTIVE", "COMPLETED"):
                 body = managed_index_body(decision_text, "ADR", table)
                 indexed = managed_table_ids(decision_text, "ADR", table)
@@ -10037,10 +11227,10 @@ def adr_effect_impact(
     constraints: set[str] = set()
     for item_id in affected:
         try:
-            path = find_adr(repo, item_id)
+            source = find_adr_source(repo, item_id)
             constraints.update(
                 adr_constraint_refs(
-                    path.read_text(encoding="utf-8"),
+                    source.validation_text,
                     item_id,
                 )
             )
@@ -10535,10 +11725,11 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
         str(item["id"]): item for item in adr_effect_projection(repo)
     }
     adrs: list[dict[str, object]] = []
-    for path in adr_files(repo):
+    for source in adr_sources(repo):
         try:
-            text = path.read_text(encoding="utf-8")
-            data, strict = adr_document_data(path)
+            text = source.validation_text
+            data = source.data
+            strict = source.strict
         except EpctlError:
             continue
         projected = adr_projection_by_id.get(data.get("id", ""), {})
@@ -10575,7 +11766,9 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
                 "amended_by": projected.get("amended_by", []),
                 "review_reasons": projected.get("review_reasons", []),
                 "last_activity": last_activity(text, data),
-                "path": path.relative_to(repo).as_posix(),
+                "path": source.path.relative_to(repo).as_posix(),
+                "physical_kind": source.physical_kind,
+                "container_path": source.container_path.relative_to(repo).as_posix(),
             }
         )
     plans: list[dict[str, object]] = []
@@ -10963,6 +12156,38 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Apply the previewed supersession atomically",
     )
+
+    pack = sub.add_parser(
+        "pack-historical-adrs",
+        help="Preview or atomically pack terminal ADR files into a lossless archive",
+    )
+    pack.add_argument("adr_ids", nargs="+", metavar="ADR-NNN")
+    pack.add_argument("--packed-by", required=True)
+    pack.add_argument("--reason", required=True)
+    pack.add_argument(
+        "--apply",
+        action="store_true",
+        help="Materialize the validated pack and remove the source ADR files",
+    )
+    pack.add_argument("--json", action="store_true", dest="as_json")
+
+    unpack = sub.add_parser(
+        "unpack-adr-history-pack",
+        help="Preview or atomically restore every ADR from a lossless History Pack",
+    )
+    unpack.add_argument(
+        "pack_id",
+        metavar="PACK",
+        help="Pack SHA-256, filename, or canonical repository-relative path",
+    )
+    unpack.add_argument("--unpacked-by", required=True)
+    unpack.add_argument("--reason", required=True)
+    unpack.add_argument(
+        "--apply",
+        action="store_true",
+        help="Restore exact ADR bytes and remove the validated pack",
+    )
+    unpack.add_argument("--json", action="store_true", dest="as_json")
 
     sub.add_parser(
         "adr-health",
@@ -11358,6 +12583,30 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
+        elif args.command == "pack-historical-adrs":
+            payload = pack_historical_adrs(
+                repo,
+                args.adr_ids,
+                args.packed_by,
+                args.reason,
+                args.apply,
+            )
+            if args.as_json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print_history_pack_operation(payload)
+        elif args.command == "unpack-adr-history-pack":
+            payload = unpack_adr_history_pack(
+                repo,
+                args.pack_id,
+                args.unpacked_by,
+                args.reason,
+                args.apply,
+            )
+            if args.as_json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print_history_pack_operation(payload)
         elif args.command == "adr-health":
             payload = adr_health(repo)
             if args.as_json:
