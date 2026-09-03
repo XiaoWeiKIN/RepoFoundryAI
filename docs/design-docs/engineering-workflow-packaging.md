@@ -10,7 +10,7 @@ adr_refs: ["ADR-004", "ADR-005", "ADR-011", "ADR-012", "ADR-018"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-07-30
-updated: 2026-08-17
+updated: 2026-09-03
 ---
 
 # EngineeringWorkflow Skill Packaging
@@ -109,6 +109,7 @@ engineering-execution-plan/scripts/epctl.py
   init
   register-architecture-root
   register-adr-revision [--from-file | --from-git-blob] [--apply]
+  register-checkpoint-recovery --from-git-commit [--git-path] [--apply]
   new-adr / decide-adr / new-ep / ...
   validate / reindex / status
 

@@ -1,0 +1,24 @@
+2026-09-03 DataFox read-only compatibility preview
+
+RepoFoundry source:
+  /Users/wangxiaowei1/x-otel/EngineeringPlan-checkpoint-recovery
+
+Command shape:
+  epctl --repo /Users/wangxiaowei1/x-otel/datafox \
+    register-checkpoint-recovery EP-091 CP-001 \
+    --from-git-commit e73ac75fe5c4e566a3c3d65a3b18bb4f75e243e1 \
+    --attested-by Wangxiaowei1 \
+    --reason "CP-001 was introduced with this invalid seal and has not changed"
+
+Preview result:
+  action: create
+  applied: false
+  document_sha256: fb91b9090a05c2dc6def68005f14935e6b583f221510c2bc4707dd15338b7917
+  stored_payload_sha256: 2f34ff8ca03f6e1cd406ad2a3fdef73727671b4ef4311c028bfe6df8df2b0439
+  computed_payload_sha256: 3f1bcb25273243559c6626cbb48e6fc7dfdc38294f980e71636bda9b0db817d2
+  git_blob: 68cadfa586882690fccf7d44fd733d7418ca3ac3
+  git_committed_at: 2026-08-27T15:30:52+09:00
+  receipt_sha256: d6346d58d1208bc0127f57e51fe9c8e98e83272b307abd953812289f209ed762
+  target: docs/.epctl/checkpoint-recoveries/EP-091/CP-001/sha256-fb91b9090a05c2dc6def68005f14935e6b583f221510c2bc4707dd15338b7917.json
+
+The preview created no DataFox receipt and changed no DataFox file.

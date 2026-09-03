@@ -250,17 +250,17 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.8.1` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.8.2` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.8.1
-repofoundry --repo . upgrade --to 0.8.1 --apply
+repofoundry --repo . upgrade --to 0.8.2
+repofoundry --repo . upgrade --to 0.8.2 --apply
 repofoundry --repo . validate
 ```
 
 ### 保留 ADR 历史，只压缩工作上下文
 
-RepoFoundry 0.8.1 继续把原子 ADR 文件与显式生命周期授权作为规范历史，并在其上
+RepoFoundry 0.8.2 继续把原子 ADR 文件与显式生命周期授权作为规范历史，并在其上
 生成更小的非规范检索面。升级只会创建空 View registry、索引和投影目录；不会自动
 退役 ADR，也不会猜测领域分类。
 
@@ -298,6 +298,33 @@ scoped amendments；它会声明 `focused_partial`、记录 closure digest 与�
 legacy 或 broad unscoped amendment 失败关闭。默认预算为 32 KiB，超限会报告各来源
 成本并失败，不会摘要、截断或切换模式；提高预算必须提供 `--budget-reason`。合并预览
 无权 merge、accept、retire、supersede、rewrite 或 delete ADR。
+
+### 恢复出生即错误的 Checkpoint seal
+
+RepoFoundry 0.8.2 可以保留 schema 1.2 Checkpoint 的原始历史，同时恢复一个在首次
+引入其精确路径的 Git commit 中就已错误的 digest。工具不会修改 Checkpoint；登记时
+证明 commit 是祖先、所有 parent 都不含该路径、commit blob 与当前原始 bytes 完全
+一致，apply 再写入可离线验证的 content-addressed receipt。
+
+```mermaid
+flowchart LR
+    G["首次引入的 Git commit"] --> P["只读预览证据"]
+    P --> R["仓库内恢复 receipt"]
+    R --> V["离线验证"]
+    V -->|"receipt 或 bytes 漂移"| F["失败关闭"]
+```
+
+```bash
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  register-checkpoint-recovery EP-091 CP-001 \
+  --from-git-commit <完整祖先 commit> \
+  --attested-by "Repository Owner" \
+  --reason "该 Checkpoint 在引入时就带有错误 seal"
+# 审查后重复命令并增加 --apply。
+```
+
+payload mismatch 必须是唯一验证错误。receipt 篡改、Checkpoint bytes 变化、后续才
+改坏、非祖先 commit 或 parent 已存在该路径时仍然 hard fail。
 
 随时可以检查当前安装和可用 adapter：
 
@@ -395,9 +422,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.8.1
-repofoundry --repo . upgrade --to 0.8.1 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.8.1 --apply
+repofoundry --repo . upgrade --to 0.8.2
+repofoundry --repo . upgrade --to 0.8.2 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.8.2 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -414,27 +441,34 @@ python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
   --from-file evidence/adr-018-historical.md
 python3 "$EPCTL" --repo . register-adr-revision ADR-018 \
   --from-file evidence/adr-018-historical.md --apply
+python3 "$EPCTL" --repo . register-checkpoint-recovery EP-091 CP-001 \
+  --from-git-commit <完整祖先-commit> \
+  --attested-by "Repository Owner" --reason "引入时 seal 已错误"
 ```
 
 新建或同步后的当前 Research package 会把 `notes/README.md` 作为 manifest 阅读
 入口，解决专题文档增多后的导航问题。工具确定性维护自动目录，同时保留人工编排的
 阅读地图。
 
-最后两条命令用于恢复 sealed completed/cancelled ExecPlan 引用的历史 ADR payload。
+两条 `register-adr-revision` 命令用于恢复 sealed completed/cancelled ExecPlan 引用的历史 ADR payload。
 默认只预览；`--apply` 把有效 strict ADR 文档写入
 `docs/.epctl/adr-revisions/` 的 digest-addressed 路径，正常验证保持离线且不依赖
 Git。如果旧字节只存在于本地 Git blob，把 `--from-file` 换成
 `--from-git-blob <完整对象 ID>`。active ExecPlan 从不使用该回退，仍必须匹配当前
 accepted ADR。
 
+最后一条命令预览出生即错误的 Checkpoint seal 恢复；审查后重复命令并增加
+`--apply`。receipt 写入 `docs/.epctl/checkpoint-recoveries/`，正常验证保持离线，
+原 Checkpoint bytes 不变。
+
 Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创建缺失路径，
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.8.1` 使用 Harness schema `3`、Harness Core `1.5.0`、Codex
+RepoFoundry `0.8.2` 使用 Harness schema `3`、Harness Core `1.5.0`、Codex
 adapter `2.4.0`、Claude adapter `1.3.0`、Portable adapter `1.3.0` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.8.1 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.8.2 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持

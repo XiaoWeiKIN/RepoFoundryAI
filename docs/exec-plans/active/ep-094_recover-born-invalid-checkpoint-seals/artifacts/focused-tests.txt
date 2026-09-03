@@ -1,0 +1,13 @@
+2026-09-03 checkpoint recovery verification
+
+Command:
+  python3 -B -m unittest engineering-execution-plan.tests.test_epctl
+
+Result:
+  Ran 72 tests in 42.305s
+  OK
+
+Recovery coverage includes preview without writes, exact Git introduction
+proof, ancestor/path/blob checks, apply and idempotence, receipt tampering,
+checkpoint-byte drift, mismatch-only eligibility, offline validation, and
+validation after the parent ExecPlan moves from active to completed.

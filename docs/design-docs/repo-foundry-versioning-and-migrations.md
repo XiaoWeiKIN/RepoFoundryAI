@@ -10,7 +10,7 @@ adr_refs: ["ADR-011", "ADR-012", "ADR-015", "ADR-058"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-03
-updated: 2026-09-01
+updated: 2026-09-03
 ---
 
 # RepoFoundry Versioning and Harness Migrations
@@ -21,7 +21,7 @@ RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and gene
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The current distribution is `0.8.1`. It writes Harness schema `3`, Core
+The current distribution is `0.8.2`. It writes Harness schema `3`, Core
 `1.5.0`, Codex adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter
 `1.3.0`, governance policy schema `1`, and activation protocol `2`.
 Engineering Specifications keep their independent Catalog version and lock
@@ -32,7 +32,7 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.8.1` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| RepoFoundry distribution | `0.8.2` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
 | Harness Core | `1.5.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and mode-aware activation behavior |
 | Codex adapter | `2.4.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
@@ -44,6 +44,15 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 No plane inherits another plane's version. A Spec update does not migrate the
 Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
+
+Release `0.8.2` adds Git-proven recovery for schema-1.2 checkpoint seals that
+were invalid in the commit introducing their exact path. Registration is
+preview-first and writes a content-addressed, self-digested receipt under
+`docs/.epctl/checkpoint-recoveries/`; normal validation remains offline and
+accepts only the exact recorded document and payload mismatch. Checkpoint bytes,
+Harness schema, Core, adapters, governance policy and activation protocol do not
+change. Downgrading to 0.8.1 leaves checkpoints intact but cannot consume the
+recovery receipt, so the original mismatch becomes visible again.
 
 Release `0.8.0` added lossless ADR context compaction. Explicit Harness upgrade
 creates only an empty Decision View registry, generated index, and projection
@@ -128,7 +137,7 @@ the new derived Requirement index without selecting another Catalog.
 
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.8.1"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.8.2"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
     U --> C["Harness Core 1.5.0"]

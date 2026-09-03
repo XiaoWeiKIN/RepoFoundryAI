@@ -1,0 +1,17 @@
+2026-09-03 RepoFoundry canonical verification
+
+Command:
+  python3 -B scripts/check.py
+
+Result:
+  35 Engineering Research tests passed.
+  9 Engineering Benchmark tests passed.
+  16 Engineering Design tests passed.
+  72 Engineering Execution Plan tests passed.
+  119 RepoFoundry, installer, Harness, repository-contract and router tests passed.
+  Research, ExecPlan and Design repository validators reported zero errors.
+  Index regeneration and all tracked/staged/working-tree whitespace checks passed.
+  Final line: [check] all integrity checks passed
+
+Existing repository warnings for EP-006, draft DD-011/EP-058, and the active
+EP-094 completion placeholder remain non-error baseline state.

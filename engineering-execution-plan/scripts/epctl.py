@@ -34,6 +34,10 @@ CONFIG_VERSION = 1
 DEFAULT_ARCHITECTURE_ROOT = "docs/adr"
 ADR_REVISION_ROOT = Path("docs/.epctl/adr-revisions")
 ADR_REVISION_MAX_BYTES = 1024 * 1024
+CHECKPOINT_RECOVERY_ROOT = Path("docs/.epctl/checkpoint-recoveries")
+CHECKPOINT_RECOVERY_SCHEMA_VERSION = "1"
+CHECKPOINT_RECOVERY_MAX_BYTES = 64 * 1024
+CHECKPOINT_RECOVERY_DOCUMENT_MAX_BYTES = 4 * 1024 * 1024
 DECISION_VIEW_REGISTRY = Path("docs/.epctl/decision-views.json")
 DECISION_VIEW_ROOT = Path("docs/decision-views")
 DECISION_VIEW_INDEX = Path("docs/DECISION-VIEWS.md")
@@ -253,6 +257,7 @@ DESIGN_EVIDENCE_RE = re.compile(
     re.IGNORECASE,
 )
 ADR_REVISION_FILE_RE = re.compile(r"^sha256-([0-9a-f]{64})\.md$")
+CHECKPOINT_RECOVERY_FILE_RE = re.compile(r"^sha256-([0-9a-f]{64})\.json$")
 GIT_OBJECT_ID_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", re.IGNORECASE)
 ADR_CONSTRAINT_STRENGTHS = {"must", "must_not", "should", "may"}
 CURRENT_METADATA_SCHEMA = "1"
@@ -2324,6 +2329,27 @@ def find_adr(repo: Path, adr_id: str) -> Path:
     return matches[0]
 
 
+def find_checkpoint(repo: Path, plan_id: str, checkpoint_id: str) -> Path:
+    normalized_plan_id = normalize_reference_ids((plan_id,), "EP")[0]
+    normalized_checkpoint_id = normalize_reference_ids((checkpoint_id,), "CP")[0]
+    plan = find_plan(repo, normalized_plan_id)
+    matches: list[Path] = []
+    for path in checkpoint_files(plan):
+        reject_symlink_path(repo, path)
+        try:
+            data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, EpctlError):
+            data = {}
+        if data.get("id", "").upper() == normalized_checkpoint_id:
+            matches.append(path)
+    if len(matches) != 1:
+        raise EpctlError(
+            f"Expected one {normalized_checkpoint_id} checkpoint in "
+            f"{normalized_plan_id}, found {len(matches)}"
+        )
+    return matches[0]
+
+
 def adr_revision_root(repo: Path) -> Path:
     return repo / ADR_REVISION_ROOT
 
@@ -2412,6 +2438,734 @@ def git_blob(repo: Path, object_id: str) -> tuple[str, str]:
         details = content.stderr.decode("utf-8", errors="replace").strip()
         raise EpctlError(f"Cannot read Git blob {normalized}: {details}")
     return normalized_utf8_document(content.stdout, normalized), normalized
+
+
+def checkpoint_recovery_root(repo: Path) -> Path:
+    return repo / CHECKPOINT_RECOVERY_ROOT
+
+
+def checkpoint_recovery_path(
+    repo: Path,
+    plan_id: str,
+    checkpoint_id: str,
+    document_digest: str,
+) -> Path:
+    normalized_plan_id = normalize_reference_ids((plan_id,), "EP")[0]
+    normalized_checkpoint_id = normalize_reference_ids((checkpoint_id,), "CP")[0]
+    normalized_digest = document_digest.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", normalized_digest):
+        raise EpctlError(
+            "Checkpoint recovery document digest must be 64 lowercase "
+            "hexadecimal characters"
+        )
+    return (
+        checkpoint_recovery_root(repo)
+        / normalized_plan_id
+        / normalized_checkpoint_id
+        / f"sha256-{normalized_digest}.json"
+    )
+
+
+def checkpoint_recovery_receipt_sha256(data: dict[str, object]) -> str:
+    payload = json.loads(json.dumps(data))
+    payload["receipt_sha256"] = ""
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def checkpoint_recovery_source_path(
+    repo: Path,
+    value: str,
+    plan_id: str = "",
+    checkpoint_id: str = "",
+) -> str:
+    relative, _ = repository_relative_path(
+        repo,
+        value,
+        "Checkpoint recovery Git path",
+    )
+    parts = Path(relative).parts
+    if (
+        len(parts) < 6
+        or parts[:2] != ("docs", "exec-plans")
+        or parts[2] not in {"active", "completed"}
+        or parts[-2] != "history"
+        or not parts[-1].lower().startswith("cp-")
+        or not parts[-1].lower().endswith(".md")
+    ):
+        raise EpctlError(
+            "Checkpoint recovery Git path must identify a checkpoint under "
+            "docs/exec-plans/{active|completed}/.../history/"
+        )
+    if plan_id:
+        normalized_plan_id = normalize_reference_ids((plan_id,), "EP")[0]
+        expected_plan_number = int(normalized_plan_id.split("-", 1)[1])
+        if path_id_number(Path(parts[-3]), "EP") != expected_plan_number:
+            raise EpctlError(
+                f"Checkpoint recovery Git path does not identify {normalized_plan_id}"
+            )
+    if checkpoint_id:
+        normalized_checkpoint_id = normalize_reference_ids(
+            (checkpoint_id,),
+            "CP",
+        )[0]
+        expected_checkpoint_number = int(
+            normalized_checkpoint_id.split("-", 1)[1]
+        )
+        if path_id_number(Path(parts[-1]), "CP") != expected_checkpoint_number:
+            raise EpctlError(
+                "Checkpoint recovery Git path does not identify "
+                f"{normalized_checkpoint_id}"
+            )
+    return relative
+
+
+def git_checkpoint_introduction(
+    repo: Path,
+    commit_id: str,
+    source_path: str,
+    current_bytes: bytes,
+) -> dict[str, str]:
+    normalized_commit = commit_id.strip().lower()
+    if not GIT_OBJECT_ID_RE.fullmatch(normalized_commit):
+        raise EpctlError(
+            "--from-git-commit requires a full 40- or 64-character "
+            "hexadecimal commit ID"
+        )
+
+    def run_git(
+        *arguments: str,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(repo), *arguments],
+                capture_output=True,
+                text=text,
+                timeout=30,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            raise EpctlError(
+                "Git is unavailable; checkpoint recovery registration requires "
+                "the repository Git history"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise EpctlError(
+                f"Git timed out while verifying commit {normalized_commit}"
+            ) from exc
+
+    object_type = run_git("cat-file", "-t", normalized_commit)
+    if object_type.returncode != 0:
+        details = object_type.stderr.strip() or "object not found"
+        raise EpctlError(
+            f"Cannot read Git commit {normalized_commit}: {details}"
+        )
+    if object_type.stdout.strip() != "commit":
+        raise EpctlError(f"Git object {normalized_commit} is not a commit")
+
+    ancestor = run_git("merge-base", "--is-ancestor", normalized_commit, "HEAD")
+    if ancestor.returncode == 1:
+        raise EpctlError(
+            f"Git commit {normalized_commit} is not an ancestor of HEAD"
+        )
+    if ancestor.returncode != 0:
+        details = ancestor.stderr.strip() or "cannot compare commit ancestry"
+        raise EpctlError(
+            f"Cannot verify Git ancestry for {normalized_commit}: {details}"
+        )
+
+    object_spec = f"{normalized_commit}:{source_path}"
+    blob_result = run_git("rev-parse", "--verify", object_spec)
+    if blob_result.returncode != 0:
+        details = blob_result.stderr.strip() or "path not found in commit"
+        raise EpctlError(
+            f"Cannot read checkpoint path {source_path!r} at Git commit "
+            f"{normalized_commit}: {details}"
+        )
+    blob_id = blob_result.stdout.strip().lower()
+    if not GIT_OBJECT_ID_RE.fullmatch(blob_id):
+        raise EpctlError(
+            f"Git path {source_path!r} did not resolve to a full object ID"
+        )
+    blob_type = run_git("cat-file", "-t", blob_id)
+    if blob_type.returncode != 0 or blob_type.stdout.strip() != "blob":
+        raise EpctlError(
+            f"Git path {source_path!r} at {normalized_commit} is not a blob"
+        )
+    blob_size = run_git("cat-file", "-s", blob_id)
+    try:
+        size = int(blob_size.stdout.strip()) if blob_size.returncode == 0 else -1
+    except ValueError:
+        size = -1
+    if size < 0:
+        details = blob_size.stderr.strip() or "invalid object size"
+        raise EpctlError(f"Cannot size Git blob {blob_id}: {details}")
+    if size > CHECKPOINT_RECOVERY_DOCUMENT_MAX_BYTES:
+        raise EpctlError(
+            "Checkpoint recovery source exceeds "
+            f"{CHECKPOINT_RECOVERY_DOCUMENT_MAX_BYTES} bytes: {blob_id}"
+        )
+    blob_content = run_git("cat-file", "blob", blob_id, text=False)
+    if blob_content.returncode != 0:
+        details = blob_content.stderr.decode(
+            "utf-8", errors="replace"
+        ).strip() or "cannot read blob"
+        raise EpctlError(f"Cannot read Git blob {blob_id}: {details}")
+    if blob_content.stdout != current_bytes:
+        raise EpctlError(
+            f"Git bytes at {normalized_commit}:{source_path} do not match "
+            "current checkpoint bytes"
+        )
+
+    parents_result = run_git("rev-list", "--parents", "-n", "1", normalized_commit)
+    if parents_result.returncode != 0:
+        details = parents_result.stderr.strip() or "cannot read commit parents"
+        raise EpctlError(
+            f"Cannot inspect parents of Git commit {normalized_commit}: {details}"
+        )
+    tokens = parents_result.stdout.strip().split()
+    if not tokens or tokens[0].lower() != normalized_commit:
+        raise EpctlError(
+            f"Git returned inconsistent parent data for {normalized_commit}"
+        )
+    for parent in tokens[1:]:
+        parent_path = run_git("cat-file", "-e", f"{parent}:{source_path}")
+        if parent_path.returncode == 0:
+            raise EpctlError(
+                f"Git commit {normalized_commit} did not introduce checkpoint "
+                f"path {source_path!r}; it already exists in parent {parent}"
+            )
+
+    committed_at_result = run_git(
+        "show",
+        "-s",
+        "--format=%cI",
+        normalized_commit,
+    )
+    if committed_at_result.returncode != 0:
+        details = committed_at_result.stderr.strip() or "cannot read commit time"
+        raise EpctlError(
+            f"Cannot read Git commit time for {normalized_commit}: {details}"
+        )
+    committed_at = committed_at_result.stdout.strip()
+    try:
+        dt.datetime.fromisoformat(committed_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise EpctlError(
+            f"Git commit {normalized_commit} has invalid commit time {committed_at!r}"
+        ) from exc
+
+    return {
+        "commit": normalized_commit,
+        "blob": blob_id,
+        "path": source_path,
+        "committed_at": committed_at,
+    }
+
+
+def validate_registered_checkpoint_recovery(
+    repo: Path,
+    path: Path,
+    *,
+    receipt_text: str | None = None,
+) -> tuple[list[str], list[str], dict[str, object]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    root = checkpoint_recovery_root(repo)
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return [f"{path}: checkpoint recovery escapes {root}"], warnings, {}
+
+    path_plan_id = ""
+    path_checkpoint_id = ""
+    filename_digest = ""
+    if len(relative.parts) != 3:
+        errors.append(
+            f"{path}: checkpoint recovery path must use "
+            "EP-NNN/CP-NNN/sha256-<document>.json"
+        )
+    else:
+        path_plan_id, path_checkpoint_id, filename = relative.parts
+        filename_match = CHECKPOINT_RECOVERY_FILE_RE.fullmatch(filename)
+        filename_digest = filename_match.group(1) if filename_match else ""
+        if (
+            not ID_RE["EP"].fullmatch(path_plan_id)
+            or path_plan_id != path_plan_id.upper()
+        ):
+            errors.append(
+                f"{path}: checkpoint recovery plan directory must use EP-NNN"
+            )
+        if (
+            not ID_RE["CP"].fullmatch(path_checkpoint_id)
+            or path_checkpoint_id != path_checkpoint_id.upper()
+        ):
+            errors.append(
+                f"{path}: checkpoint recovery directory must use CP-NNN"
+            )
+        if not filename_match:
+            errors.append(
+                f"{path}: checkpoint recovery filename must use "
+                "sha256-<64-hex>.json"
+            )
+
+    if receipt_text is None:
+        if path.is_symlink() or not path.is_file():
+            return [*errors, f"{path}: checkpoint recovery must be a regular file"], warnings, {}
+        if path.stat().st_size > CHECKPOINT_RECOVERY_MAX_BYTES:
+            return [
+                *errors,
+                f"{path}: checkpoint recovery exceeds "
+                f"{CHECKPOINT_RECOVERY_MAX_BYTES} bytes",
+            ], warnings, {}
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            return [*errors, f"{path}: cannot read checkpoint recovery: {exc}"], warnings, {}
+    else:
+        text = receipt_text
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return [*errors, f"{path}: invalid checkpoint recovery JSON: {exc}"], warnings, {}
+
+    expected_fields = {
+        "schema_version",
+        "artifact_type",
+        "plan_id",
+        "checkpoint_id",
+        "document_sha256",
+        "stored_payload_sha256",
+        "computed_payload_sha256",
+        "git_commit",
+        "git_blob",
+        "git_path",
+        "git_committed_at",
+        "attested_by",
+        "reason",
+        "receipt_sha256",
+    }
+    if not isinstance(data, dict) or set(data) != expected_fields:
+        errors.append(
+            f"{path}: checkpoint recovery must contain exactly "
+            + ", ".join(sorted(expected_fields))
+        )
+        return errors, warnings, data if isinstance(data, dict) else {}
+    if not all(isinstance(value, str) for value in data.values()):
+        errors.append(f"{path}: checkpoint recovery fields must all be strings")
+        return errors, warnings, data
+
+    if data["schema_version"] != CHECKPOINT_RECOVERY_SCHEMA_VERSION:
+        errors.append(
+            f"{path}: checkpoint recovery schema_version must be "
+            f"{CHECKPOINT_RECOVERY_SCHEMA_VERSION!r}"
+        )
+    if data["artifact_type"] != "checkpoint-seal-recovery":
+        errors.append(
+            f"{path}: checkpoint recovery artifact_type must be "
+            "'checkpoint-seal-recovery'"
+        )
+    plan_id = str(data["plan_id"])
+    checkpoint_id = str(data["checkpoint_id"])
+    if path_plan_id and plan_id != path_plan_id:
+        errors.append(
+            f"{path}: recovery plan_id {plan_id!r} does not match {path_plan_id}"
+        )
+    if path_checkpoint_id and checkpoint_id != path_checkpoint_id:
+        errors.append(
+            f"{path}: recovery checkpoint_id {checkpoint_id!r} does not match "
+            f"{path_checkpoint_id}"
+        )
+    for field in (
+        "document_sha256",
+        "stored_payload_sha256",
+        "computed_payload_sha256",
+        "receipt_sha256",
+    ):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(data[field])):
+            errors.append(f"{path}: invalid {field}")
+    if filename_digest and data["document_sha256"] != filename_digest:
+        errors.append(
+            f"{path}: document_sha256 does not match recovery filename"
+        )
+    if data["stored_payload_sha256"] == data["computed_payload_sha256"]:
+        errors.append(
+            f"{path}: checkpoint recovery requires different stored and "
+            "computed payload digests"
+        )
+    for field in ("git_commit", "git_blob"):
+        if not GIT_OBJECT_ID_RE.fullmatch(str(data[field])):
+            errors.append(f"{path}: invalid {field}")
+    try:
+        normalized_git_path = checkpoint_recovery_source_path(
+            repo,
+            str(data["git_path"]),
+            plan_id,
+            checkpoint_id,
+        )
+    except EpctlError as exc:
+        errors.append(f"{path}: {exc}")
+    else:
+        if normalized_git_path != data["git_path"]:
+            errors.append(f"{path}: git_path must be normalized")
+    for field in ("attested_by", "reason"):
+        value = str(data[field])
+        if not inline_text(value) or inline_text(value) != value:
+            errors.append(
+                f"{path}: {field} must be a non-empty normalized single line"
+            )
+    try:
+        dt.datetime.fromisoformat(
+            str(data["git_committed_at"]).replace("Z", "+00:00")
+        )
+    except ValueError:
+        errors.append(f"{path}: git_committed_at must be an ISO timestamp")
+    if re.fullmatch(r"[0-9a-f]{64}", str(data["receipt_sha256"])):
+        actual_receipt_digest = checkpoint_recovery_receipt_sha256(data)
+        if data["receipt_sha256"] != actual_receipt_digest:
+            errors.append(
+                f"{path}: receipt_sha256 mismatch "
+                f"(expected {data['receipt_sha256']}, got {actual_receipt_digest})"
+            )
+
+    if (
+        ID_RE["EP"].fullmatch(plan_id)
+        and ID_RE["CP"].fullmatch(checkpoint_id)
+    ):
+        try:
+            checkpoint = find_checkpoint(repo, plan_id, checkpoint_id)
+        except EpctlError as exc:
+            errors.append(f"{path}: {exc}")
+        else:
+            raw = checkpoint.read_bytes()
+            document_digest = hashlib.sha256(raw).hexdigest()
+            if document_digest != data["document_sha256"]:
+                errors.append(
+                    f"{path}: checkpoint document_sha256 mismatch "
+                    f"(expected {data['document_sha256']}, got {document_digest})"
+                )
+            checkpoint_errors, _, checkpoint_data = validate_checkpoint(
+                checkpoint,
+                plan_id,
+                allow_recovery=False,
+            )
+            mismatch_errors = [
+                error
+                for error in checkpoint_errors
+                if "sealed checkpoint payload changed" in error
+            ]
+            other_errors = [
+                error
+                for error in checkpoint_errors
+                if "sealed checkpoint payload changed" not in error
+            ]
+            if len(mismatch_errors) != 1 or other_errors:
+                details = "; ".join(checkpoint_errors) or "no payload mismatch"
+                errors.append(
+                    f"{path}: recovery requires the payload mismatch to be the "
+                    f"checkpoint's only validation error: {details}"
+                )
+            if checkpoint_data.get("schema_version") != "1.2":
+                errors.append(
+                    f"{path}: checkpoint recovery supports only schema 1.2"
+                )
+            if checkpoint_data.get("id") != checkpoint_id:
+                errors.append(
+                    f"{path}: checkpoint id does not match {checkpoint_id}"
+                )
+            if checkpoint_data.get("parent_id") != plan_id:
+                errors.append(f"{path}: checkpoint parent_id does not match {plan_id}")
+            stored_digest = checkpoint_data.get("payload_sha256", "")
+            try:
+                checkpoint_text = checkpoint.read_text(encoding="utf-8")
+                computed_digest = canonical_document_sha256(
+                    checkpoint_text,
+                    "payload_sha256",
+                )
+            except (OSError, UnicodeDecodeError, EpctlError) as exc:
+                errors.append(f"{path}: cannot compute checkpoint payload: {exc}")
+            else:
+                if stored_digest != data["stored_payload_sha256"]:
+                    errors.append(
+                        f"{path}: stored_payload_sha256 does not match checkpoint"
+                    )
+                if computed_digest != data["computed_payload_sha256"]:
+                    errors.append(
+                        f"{path}: computed_payload_sha256 does not match checkpoint"
+                    )
+    return errors, warnings, data
+
+
+def validate_checkpoint_recovery_store(
+    repo: Path,
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    root = checkpoint_recovery_root(repo)
+    if not root.exists():
+        return errors, warnings
+    if root.is_symlink() or not root.is_dir():
+        return [f"{root}: checkpoint recovery root must be a regular directory"], warnings
+    for plan_directory in sorted(root.iterdir()):
+        if plan_directory.is_symlink() or not plan_directory.is_dir():
+            errors.append(
+                f"{plan_directory}: checkpoint recovery entry must be an EP-NNN directory"
+            )
+            continue
+        if (
+            not ID_RE["EP"].fullmatch(plan_directory.name)
+            or plan_directory.name != plan_directory.name.upper()
+        ):
+            errors.append(
+                f"{plan_directory}: checkpoint recovery directory must use EP-NNN"
+            )
+            continue
+        checkpoint_directories = sorted(plan_directory.iterdir())
+        if not checkpoint_directories:
+            errors.append(f"{plan_directory}: empty checkpoint recovery plan directory")
+        for checkpoint_directory in checkpoint_directories:
+            if checkpoint_directory.is_symlink() or not checkpoint_directory.is_dir():
+                errors.append(
+                    f"{checkpoint_directory}: recovery entry must be a CP-NNN directory"
+                )
+                continue
+            if (
+                not ID_RE["CP"].fullmatch(checkpoint_directory.name)
+                or checkpoint_directory.name != checkpoint_directory.name.upper()
+            ):
+                errors.append(
+                    f"{checkpoint_directory}: recovery directory must use CP-NNN"
+                )
+                continue
+            receipts = sorted(checkpoint_directory.iterdir())
+            if not receipts:
+                errors.append(f"{checkpoint_directory}: empty checkpoint recovery directory")
+            for receipt in receipts:
+                item_errors, item_warnings, _ = (
+                    validate_registered_checkpoint_recovery(repo, receipt)
+                )
+                errors.extend(item_errors)
+                warnings.extend(item_warnings)
+    return errors, warnings
+
+
+def resolve_checkpoint_recovery(
+    repo: Path,
+    checkpoint: Path,
+    plan_id: str,
+    checkpoint_id: str,
+) -> Path | None:
+    document_digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    try:
+        receipt = checkpoint_recovery_path(
+            repo,
+            plan_id,
+            checkpoint_id,
+            document_digest,
+        )
+    except EpctlError:
+        return None
+    if receipt.is_symlink() or not receipt.is_file():
+        return None
+    receipt_errors, _, _ = validate_registered_checkpoint_recovery(repo, receipt)
+    return None if receipt_errors else receipt
+
+
+def register_checkpoint_recovery(
+    repo: Path,
+    plan_id: str,
+    checkpoint_id: str,
+    *,
+    git_commit: str,
+    git_path: str,
+    attested_by: str,
+    reason: str,
+    apply: bool,
+) -> dict[str, object]:
+    normalized_plan_id = normalize_reference_ids((plan_id,), "EP")[0]
+    normalized_checkpoint_id = normalize_reference_ids((checkpoint_id,), "CP")[0]
+    normalized_actor = inline_text(attested_by)
+    normalized_reason = inline_text(reason)
+    if not normalized_actor or normalized_actor != attested_by:
+        raise EpctlError(
+            "--attested-by must be a non-empty normalized single line"
+        )
+    if not normalized_reason or normalized_reason != reason:
+        raise EpctlError("--reason must be a non-empty normalized single line")
+
+    def build_registration() -> tuple[dict[str, object], Path, str]:
+        checkpoint = find_checkpoint(
+            repo,
+            normalized_plan_id,
+            normalized_checkpoint_id,
+        )
+        raw = checkpoint.read_bytes()
+        if len(raw) > CHECKPOINT_RECOVERY_DOCUMENT_MAX_BYTES:
+            raise EpctlError(
+                "Checkpoint exceeds recovery limit of "
+                f"{CHECKPOINT_RECOVERY_DOCUMENT_MAX_BYTES} bytes"
+            )
+        checkpoint_errors, _, checkpoint_data = validate_checkpoint(
+            checkpoint,
+            normalized_plan_id,
+            allow_recovery=False,
+        )
+        mismatch_errors = [
+            error
+            for error in checkpoint_errors
+            if "sealed checkpoint payload changed" in error
+        ]
+        other_errors = [
+            error
+            for error in checkpoint_errors
+            if "sealed checkpoint payload changed" not in error
+        ]
+        if len(mismatch_errors) != 1 or other_errors:
+            details = "; ".join(checkpoint_errors) or "no payload mismatch"
+            raise EpctlError(
+                "Checkpoint recovery requires a schema-1.2 checkpoint whose "
+                f"only validation error is its payload mismatch: {details}"
+            )
+        if checkpoint_data.get("schema_version") != "1.2":
+            raise EpctlError("Checkpoint recovery supports only schema 1.2")
+        try:
+            checkpoint_text = checkpoint.read_text(encoding="utf-8")
+            computed_digest = canonical_document_sha256(
+                checkpoint_text,
+                "payload_sha256",
+            )
+        except (OSError, UnicodeDecodeError, EpctlError) as exc:
+            raise EpctlError(f"Cannot compute checkpoint payload: {exc}") from exc
+        stored_digest = checkpoint_data.get("payload_sha256", "")
+        document_digest = hashlib.sha256(raw).hexdigest()
+        current_relative = checkpoint.relative_to(repo).as_posix()
+        source_path = checkpoint_recovery_source_path(
+            repo,
+            git_path or current_relative,
+            normalized_plan_id,
+            normalized_checkpoint_id,
+        )
+        source = git_checkpoint_introduction(
+            repo,
+            git_commit,
+            source_path,
+            raw,
+        )
+        target = checkpoint_recovery_path(
+            repo,
+            normalized_plan_id,
+            normalized_checkpoint_id,
+            document_digest,
+        )
+        receipt: dict[str, object] = {
+            "schema_version": CHECKPOINT_RECOVERY_SCHEMA_VERSION,
+            "artifact_type": "checkpoint-seal-recovery",
+            "plan_id": normalized_plan_id,
+            "checkpoint_id": normalized_checkpoint_id,
+            "document_sha256": document_digest,
+            "stored_payload_sha256": stored_digest,
+            "computed_payload_sha256": computed_digest,
+            "git_commit": source["commit"],
+            "git_blob": source["blob"],
+            "git_path": source["path"],
+            "git_committed_at": source["committed_at"],
+            "attested_by": normalized_actor,
+            "reason": normalized_reason,
+            "receipt_sha256": "",
+        }
+        receipt["receipt_sha256"] = checkpoint_recovery_receipt_sha256(receipt)
+        action = "create"
+        if target.exists():
+            reject_symlink_path(repo, target)
+            existing_text = target.read_text(encoding="utf-8")
+            existing_errors, _, existing = validate_registered_checkpoint_recovery(
+                repo,
+                target,
+            )
+            if existing_errors:
+                raise EpctlError(
+                    "Existing checkpoint recovery is invalid:\n- "
+                    + "\n- ".join(existing_errors)
+                )
+            immutable_fields = set(receipt) - {"receipt_sha256"}
+            if any(existing.get(field) != receipt[field] for field in immutable_fields):
+                raise EpctlError(
+                    f"Checkpoint recovery conflict at {target}: immutable evidence differs"
+                )
+            receipt = existing
+            receipt_text = existing_text
+            action = "preserve"
+        else:
+            receipt_text = (
+                json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True)
+                + "\n"
+            )
+            receipt_errors, _, _ = validate_registered_checkpoint_recovery(
+                repo,
+                target,
+                receipt_text=receipt_text,
+            )
+            if receipt_errors:
+                raise EpctlError(
+                    "Checkpoint recovery registration blocked:\n- "
+                    + "\n- ".join(receipt_errors)
+                )
+        result: dict[str, object] = {
+            "action": action,
+            "applied": apply,
+            "plan_id": normalized_plan_id,
+            "checkpoint_id": normalized_checkpoint_id,
+            "document_sha256": document_digest,
+            "stored_payload_sha256": stored_digest,
+            "computed_payload_sha256": computed_digest,
+            "source": source,
+            "attested_by": normalized_actor,
+            "reason": normalized_reason,
+            "receipt_sha256": receipt["receipt_sha256"],
+            "target": target.relative_to(repo).as_posix(),
+        }
+        return result, target, receipt_text
+
+    if not apply:
+        result, _, _ = build_registration()
+        return result
+    with repo_lock(repo):
+        result, target, receipt_text = build_registration()
+        created = False
+        if result["action"] == "create":
+            reject_symlink_path(repo, target)
+            atomic_write(target, receipt_text)
+            created = True
+        post_errors, _, _ = validate_registered_checkpoint_recovery(repo, target)
+        if not post_errors:
+            checkpoint = find_checkpoint(
+                repo,
+                normalized_plan_id,
+                normalized_checkpoint_id,
+            )
+            checkpoint_errors, _, _ = validate_checkpoint(
+                checkpoint,
+                normalized_plan_id,
+            )
+            post_errors.extend(checkpoint_errors)
+        if post_errors:
+            if created and target.is_file() and not target.is_symlink():
+                target.unlink()
+                root = checkpoint_recovery_root(repo)
+                for directory in (target.parent, target.parent.parent, root):
+                    if directory.is_dir() and not any(directory.iterdir()):
+                        directory.rmdir()
+            raise EpctlError(
+                "Checkpoint recovery registration failed post-write validation:\n- "
+                + "\n- ".join(post_errors)
+            )
+        return result
 
 
 def normalize_document_refs(
@@ -7453,6 +8207,8 @@ def validate_task(
 def validate_checkpoint(
     path: Path,
     plan_id: str,
+    *,
+    allow_recovery: bool = True,
 ) -> tuple[list[str], list[str], dict[str, str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -7523,10 +8279,29 @@ def validate_checkpoint(
     if not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
         errors.append(f"{path}: invalid payload_sha256")
     elif expected_digest != actual_digest:
-        errors.append(
-            f"{path}: sealed checkpoint payload changed "
-            f"(expected {expected_digest}, got {actual_digest})"
-        )
+        receipt = None
+        if allow_recovery and checkpoint_schema == "1.2" and checkpoint_id:
+            try:
+                repo = repository_from_artifact(path)
+                receipt = resolve_checkpoint_recovery(
+                    repo,
+                    path,
+                    plan_id,
+                    checkpoint_id,
+                )
+            except (EpctlError, OSError):
+                receipt = None
+        if receipt is None:
+            errors.append(
+                f"{path}: sealed checkpoint payload changed "
+                f"(expected {expected_digest}, got {actual_digest})"
+            )
+        else:
+            warnings.append(
+                f"{path}: sealed checkpoint payload mismatch uses registered "
+                "birth-time recovery "
+                f"{receipt.relative_to(repository_from_artifact(path)).as_posix()}"
+            )
     for heading in ("Handoff Summary", "Next Action At Checkpoint"):
         value = section(text, heading) or ""
         if is_empty_history_body(value):
@@ -8585,6 +9360,9 @@ def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
     revision_errors, revision_warnings = validate_adr_revision_store(repo)
     errors.extend(revision_errors)
     warnings.extend(revision_warnings)
+    recovery_errors, recovery_warnings = validate_checkpoint_recovery_store(repo)
+    errors.extend(recovery_errors)
+    warnings.extend(recovery_warnings)
     view_errors, view_warnings = validate_decision_views(repo)
     errors.extend(view_errors)
     warnings.extend(view_warnings)
@@ -10275,6 +11053,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write the previewed immutable revision into docs/.epctl",
     )
 
+    register_checkpoint_recovery_parser = sub.add_parser(
+        "register-checkpoint-recovery",
+        help="Preview or store Git-proven birth-time checkpoint seal recovery",
+    )
+    register_checkpoint_recovery_parser.add_argument(
+        "plan_id",
+        metavar="EP-NNN",
+    )
+    register_checkpoint_recovery_parser.add_argument(
+        "checkpoint_id",
+        metavar="CP-NNN",
+    )
+    register_checkpoint_recovery_parser.add_argument(
+        "--from-git-commit",
+        required=True,
+        metavar="COMMIT_ID",
+        help=(
+            "Full ancestor commit that introduced the exact checkpoint path "
+            "with the current bytes"
+        ),
+    )
+    register_checkpoint_recovery_parser.add_argument(
+        "--git-path",
+        default="",
+        metavar="PATH",
+        help=(
+            "Historical repository-relative checkpoint path; defaults to the "
+            "current path"
+        ),
+    )
+    register_checkpoint_recovery_parser.add_argument(
+        "--attested-by",
+        required=True,
+        help="Actor attesting that the birth-time seal is invalid",
+    )
+    register_checkpoint_recovery_parser.add_argument("--reason", required=True)
+    register_checkpoint_recovery_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the previewed immutable recovery receipt into docs/.epctl",
+    )
+
     ep = sub.add_parser(
         "new-ep",
         help="Create a gated v2.8 ExecPlan from architecture, Design and benchmark inputs",
@@ -10566,6 +11386,23 @@ def main(argv: list[str] | None = None) -> int:
                         args.adr_id,
                         source_file=args.from_file,
                         git_object_id=args.from_git_blob,
+                        apply=args.apply,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        elif args.command == "register-checkpoint-recovery":
+            print(
+                json.dumps(
+                    register_checkpoint_recovery(
+                        repo,
+                        args.plan_id,
+                        args.checkpoint_id,
+                        git_commit=args.from_git_commit,
+                        git_path=args.git_path,
+                        attested_by=args.attested_by,
+                        reason=args.reason,
                         apply=args.apply,
                     ),
                     ensure_ascii=False,
