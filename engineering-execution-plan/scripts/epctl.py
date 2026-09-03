@@ -39,6 +39,7 @@ DECISION_VIEW_ROOT = Path("docs/decision-views")
 DECISION_VIEW_INDEX = Path("docs/DECISION-VIEWS.md")
 DECISION_VIEW_SCHEMA_VERSION = 1
 DECISION_CAPSULE_SCHEMA_VERSION = 1
+DECISION_FOCUS_SCHEMA_VERSION = 1
 DECISION_CAPSULE_DEFAULT_BUDGET_BYTES = 32 * 1024
 ADR_HEALTH_SCHEMA_VERSION = 1
 ADR_CONSOLIDATION_SCHEMA_VERSION = 1
@@ -3376,13 +3377,228 @@ def expanded_decision_constraint_refs(
     return sorted(requested), sorted(selected)
 
 
+def decision_source_digest_metadata(
+    source: dict[str, object],
+) -> dict[str, str]:
+    return {
+        "adr_id": str(source["id"]),
+        "path": str(source["path"]),
+        "contract": str(source["contract"]),
+        "document_sha256": str(source["document_sha256"]),
+        "payload_sha256": str(source.get("payload_sha256", "")),
+    }
+
+
+def decision_validated_closure_manifest(
+    context: dict[str, object],
+) -> tuple[list[dict[str, str]], str]:
+    sources = context.get("sources", [])
+    assert isinstance(sources, list)
+    validated_sources = [
+        decision_source_digest_metadata(source)
+        for source in sources
+        if isinstance(source, dict)
+    ]
+    manifest = {
+        "direct_adrs": [
+            str(value) for value in context.get("direct_adrs", [])
+        ],
+        "resolved_adrs": [
+            str(value) for value in context.get("resolved_adrs", [])
+        ],
+        "sources": [
+            {
+                "adr_id": source["adr_id"],
+                "path": source["path"],
+                "document_sha256": source["document_sha256"],
+                "payload_sha256": source["payload_sha256"],
+            }
+            for source in validated_sources
+        ],
+    }
+    canonical = json.dumps(
+        manifest,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return validated_sources, hashlib.sha256(canonical).hexdigest()
+
+
+def focused_decision_constraint_refs(
+    context: dict[str, object],
+    constraint_values: Iterable[str],
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    raw_values = list(constraint_values)
+    requested = normalize_adr_constraint_refs(
+        raw_values,
+        "constraint selection",
+    )
+    if len(requested) != len(raw_values):
+        raise EpctlError("Decision capsule constraint selection contains duplicates")
+    if not requested:
+        raise EpctlError(
+            "Focused Decision capsule materialization requires at least one "
+            "--constraint"
+        )
+
+    available = {str(value) for value in context.get("constraint_refs", [])}
+    source_by_id = decision_context_source_by_id(context)
+    missing = sorted(set(requested) - available)
+    if missing:
+        legacy_owners = sorted(
+            {
+                reference.split("#", 1)[0]
+                for reference in missing
+                if source_by_id.get(reference.split("#", 1)[0], {}).get(
+                    "contract"
+                )
+                == "whole-document"
+            }
+        )
+        if legacy_owners:
+            raise EpctlError(
+                "FOCUSED_CONTEXT_LEGACY_BOUNDARY: focused materialization "
+                "requires structured constraints, but these ADRs use a "
+                "whole-document contract: "
+                + ", ".join(legacy_owners)
+            )
+        raise EpctlError(
+            "Decision capsule constraints are outside the resolved context: "
+            + ", ".join(missing)
+        )
+
+    selected = set(requested)
+    materialized = {
+        reference.split("#", 1)[0] for reference in requested
+    }
+    amendment_targets = context.get("amendment_targets", {})
+    assert isinstance(amendment_targets, dict)
+    changed = True
+    while changed:
+        changed = False
+        for reference in sorted(selected):
+            for amender_id in amendment_targets.get(reference, []):
+                normalized_id = str(amender_id)
+                amender = source_by_id.get(normalized_id)
+                if not amender or amender.get("contract") != "strict-structured":
+                    raise EpctlError(
+                        "FOCUSED_CONTEXT_LEGACY_BOUNDARY: scoped amendment "
+                        f"{normalized_id} has no safe structured focus boundary"
+                    )
+                materialized.add(normalized_id)
+                rows = amender.get("constraint_rows", [])
+                assert isinstance(rows, list)
+                if not rows:
+                    raise EpctlError(
+                        "FOCUSED_CONTEXT_LEGACY_BOUNDARY: scoped amendment "
+                        f"{normalized_id} has no structured constraint rows"
+                    )
+                for row in rows:
+                    assert isinstance(row, dict)
+                    target = str(row["ref"])
+                    if target not in selected:
+                        selected.add(target)
+                        changed = True
+
+    selected_owners = {
+        reference.split("#", 1)[0] for reference in selected
+    }
+    ambiguous: set[str] = set()
+    sources = context.get("sources", [])
+    assert isinstance(sources, list)
+    for source in sources:
+        assert isinstance(source, dict)
+        source_id = str(source["id"])
+        data = source.get("data", {})
+        assert isinstance(data, dict)
+        amended_adrs = set(
+            parse_inline_ids(str(data.get("amends", "")), "ADR")
+        )
+        scoped_targets = parse_adr_constraint_array(
+            str(data.get("amends_constraints", "[]")),
+            "amends_constraints",
+        )
+        scoped_owners = {
+            reference.split("#", 1)[0] for reference in scoped_targets
+        }
+        for owner in selected_owners & amended_adrs:
+            if owner not in scoped_owners:
+                ambiguous.add(f"{source_id}->{owner}")
+    if ambiguous:
+        raise EpctlError(
+            "FOCUSED_CONTEXT_AMENDMENT_SCOPE_UNPROVABLE: current "
+            "whole-ADR amendments could affect selected constraints without "
+            "stable scoped targets: "
+            + ", ".join(sorted(ambiguous))
+        )
+
+    unmaterialized_relations: set[str] = set()
+    for source_id in sorted(materialized):
+        source = source_by_id[source_id]
+        data = source.get("data", {})
+        assert isinstance(data, dict)
+        for dependency in parse_inline_ids(
+            str(data.get("depends_on", "")),
+            "ADR",
+        ):
+            if dependency not in materialized:
+                unmaterialized_relations.add(
+                    f"{source_id} depends_on {dependency}"
+                )
+        scoped_targets = parse_adr_constraint_array(
+            str(data.get("amends_constraints", "[]")),
+            "amends_constraints",
+        )
+        scoped_owners = {
+            reference.split("#", 1)[0] for reference in scoped_targets
+        }
+        for target in scoped_targets:
+            if target not in selected:
+                unmaterialized_relations.add(
+                    f"{source_id} amends_constraint {target}"
+                )
+        for target in parse_inline_ids(
+            str(data.get("amends", "")),
+            "ADR",
+        ):
+            if target not in materialized and target not in scoped_owners:
+                unmaterialized_relations.add(
+                    f"{source_id} amends {target}"
+                )
+
+    return (
+        sorted(requested),
+        sorted(selected),
+        sorted(materialized),
+        sorted(unmaterialized_relations),
+    )
+
+
 def compile_decision_capsule(
     context: dict[str, object],
     constraint_values: Iterable[str] = (),
     *,
     budget_bytes: int | None = DECISION_CAPSULE_DEFAULT_BUDGET_BYTES,
     budget_reason: str = "",
+    materialization: str = "complete",
+    focus_reason: str = "",
 ) -> dict[str, object]:
+    raw_constraints = list(constraint_values)
+    normalized_materialization = inline_text(materialization).lower()
+    if normalized_materialization not in {"complete", "focused"}:
+        raise EpctlError(
+            "Decision capsule materialization must be complete or focused"
+        )
+    normalized_focus_reason = inline_text(focus_reason)
+    if normalized_materialization == "focused" and not normalized_focus_reason:
+        raise EpctlError(
+            "Focused Decision capsule materialization requires --focus-reason"
+        )
+    if normalized_materialization == "complete" and normalized_focus_reason:
+        raise EpctlError(
+            "--focus-reason requires --materialization focused"
+        )
     if budget_bytes is not None:
         if not isinstance(budget_bytes, int) or budget_bytes <= 0:
             raise EpctlError("Decision capsule budget must be a positive integer")
@@ -3394,9 +3610,23 @@ def compile_decision_capsule(
                 "A Decision capsule budget above 32768 bytes requires "
                 "--budget-reason"
             )
-    requested_constraints, selected_constraints = (
-        expanded_decision_constraint_refs(context, constraint_values)
-    )
+    materialized_adrs: list[str]
+    unmaterialized_relations: list[str]
+    if normalized_materialization == "focused":
+        (
+            requested_constraints,
+            selected_constraints,
+            materialized_adrs,
+            unmaterialized_relations,
+        ) = focused_decision_constraint_refs(context, raw_constraints)
+    else:
+        requested_constraints, selected_constraints = (
+            expanded_decision_constraint_refs(context, raw_constraints)
+        )
+        materialized_adrs = [
+            str(value) for value in context.get("resolved_adrs", [])
+        ]
+        unmaterialized_relations = []
     selected_set = set(selected_constraints)
     direct_adrs = [str(value) for value in context.get("direct_adrs", [])]
     resolved_adrs = [str(value) for value in context.get("resolved_adrs", [])]
@@ -3426,10 +3656,54 @@ def compile_decision_capsule(
         + (", ".join(f"`{item}`" for item in selected_constraints) or "none")
         + "\n",
     ]
+    validated_sources: list[dict[str, str]] = []
+    validated_closure_sha256 = ""
+    omitted_adrs: list[str] = []
+    if normalized_materialization == "focused":
+        validated_sources, validated_closure_sha256 = (
+            decision_validated_closure_manifest(context)
+        )
+        materialized_set = set(materialized_adrs)
+        omitted_adrs = [
+            adr_id for adr_id in resolved_adrs if adr_id not in materialized_set
+        ]
+        chunks.extend(
+            [
+                "- Materialization: `focused_partial`\n",
+                f"- Focus reason: {normalized_focus_reason}\n",
+                "- Validated current ADRs: "
+                + (", ".join(f"`{item}`" for item in resolved_adrs) or "none")
+                + "\n",
+                "- Materialized ADRs: "
+                + (", ".join(f"`{item}`" for item in materialized_adrs) or "none")
+                + "\n",
+                "- Omitted but validated ADRs: "
+                + (", ".join(f"`{item}`" for item in omitted_adrs) or "none")
+                + "\n",
+                "- Unmaterialized relation references: "
+                + (
+                    "; ".join(f"`{item}`" for item in unmaterialized_relations)
+                    or "none"
+                )
+                + "\n",
+                f"- Validated closure SHA-256: `{validated_closure_sha256}`\n\n",
+                "This focused capsule is an exact but partial task-retrieval "
+                "projection. It is not a complete Architecture Input Set or "
+                "Compliance Matrix. Hydrate additional constraints or use "
+                "complete materialization when task scope crosses an omitted "
+                "ADR or relation.\n",
+            ]
+        )
     source_costs: list[dict[str, object]] = []
     sources = context.get("sources", [])
     assert isinstance(sources, list)
-    for source in sources:
+    materialized_set = set(materialized_adrs)
+    rendered_sources = [
+        source
+        for source in sources
+        if isinstance(source, dict) and str(source["id"]) in materialized_set
+    ]
+    for source in rendered_sources:
         assert isinstance(source, dict)
         adr_id = str(source["id"])
         title = str(source.get("title", ""))
@@ -3515,7 +3789,7 @@ def compile_decision_capsule(
             "partition the task, migrate whole-document legacy ADRs, or raise "
             "the reviewed budget with --budget-reason"
         )
-    return {
+    result: dict[str, object] = {
         "schema_version": DECISION_CAPSULE_SCHEMA_VERSION,
         "non_normative": True,
         "direct_adrs": direct_adrs,
@@ -3523,15 +3797,8 @@ def compile_decision_capsule(
         "requested_constraints": requested_constraints,
         "selected_constraints": selected_constraints,
         "sources": [
-            {
-                "adr_id": str(source["id"]),
-                "path": str(source["path"]),
-                "contract": str(source["contract"]),
-                "document_sha256": str(source["document_sha256"]),
-                "payload_sha256": str(source.get("payload_sha256", "")),
-            }
-            for source in sources
-            if isinstance(source, dict)
+            decision_source_digest_metadata(source)
+            for source in rendered_sources
         ],
         "source_costs": source_costs,
         "budget_bytes": budget_bytes,
@@ -3540,6 +3807,19 @@ def compile_decision_capsule(
         "sha256": capsule_sha256,
         "context": capsule,
     }
+    if normalized_materialization == "focused":
+        result["validated_sources"] = validated_sources
+        result["focus"] = {
+            "schema_version": DECISION_FOCUS_SCHEMA_VERSION,
+            "reason": normalized_focus_reason,
+            "context_completeness": "focused_partial",
+            "validated_adrs": resolved_adrs,
+            "materialized_adrs": materialized_adrs,
+            "omitted_adrs": omitted_adrs,
+            "unmaterialized_relation_refs": unmaterialized_relations,
+            "validated_closure_sha256": validated_closure_sha256,
+        }
+    return result
 
 
 def normalized_repository_error(repo: Path, exc: Exception) -> str:
@@ -9939,6 +10219,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=DECISION_CAPSULE_DEFAULT_BUDGET_BYTES,
     )
     capsule.add_argument("--budget-reason", default="")
+    capsule.add_argument(
+        "--materialization",
+        choices=("complete", "focused"),
+        default="complete",
+        help="Render the complete closure or an explicit focused partial projection",
+    )
+    capsule.add_argument(
+        "--focus-reason",
+        default="",
+        help="Required reviewed task boundary for focused materialization",
+    )
     capsule.add_argument("--json", action="store_true", dest="as_json")
 
     consolidation = sub.add_parser(
@@ -10254,6 +10545,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.constraint,
                 budget_bytes=args.budget_bytes,
                 budget_reason=args.budget_reason,
+                materialization=args.materialization,
+                focus_reason=args.focus_reason,
             )
             if args.as_json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))

@@ -655,7 +655,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 3)
         self.assertEqual(
             manifest["producer"],
-            {"name": "repo-foundry", "version": "0.8.0"},
+            {"name": "repo-foundry", "version": "0.8.1"},
         )
         self.assertEqual(
             manifest["core"],
@@ -779,7 +779,7 @@ class FoundryctlTestCase(unittest.TestCase):
     def test_cli_reports_the_distribution_version(self) -> None:
         result = self.run_cli("--version")
 
-        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.8.0")
+        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.8.1")
 
     def test_distribution_upgrade_adds_empty_decision_view_infrastructure(
         self,

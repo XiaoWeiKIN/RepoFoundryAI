@@ -270,18 +270,18 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.8.0`
+distribution upgrade, run this in each existing project and replace `0.8.1`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.8.0
-repofoundry --repo . upgrade --to 0.8.0 --apply
+repofoundry --repo . upgrade --to 0.8.1
+repofoundry --repo . upgrade --to 0.8.1 --apply
 repofoundry --repo . validate
 ```
 
 ### Compact ADR working context without deleting history
 
-RepoFoundry 0.8.0 keeps atomic ADR files and lifecycle authority as the normative
+RepoFoundry 0.8.1 keeps atomic ADR files and lifecycle authority as the normative
 history, then derives smaller non-normative retrieval surfaces above them. An
 upgrade creates only an empty registry, index, and projection directory; it never
 retires an ADR or invents domain membership.
@@ -306,14 +306,22 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . set-decision-
   --title "Runtime decisions" --adr ADR-012 --adr ADR-019 --apply
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . decision-capsule --view runtime \
   --constraint ADR-019#C-002 --json
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . decision-capsule --view runtime \
+  --constraint ADR-019#C-002 --materialization focused \
+  --focus-reason "Implement the selected runtime boundary" --json
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-consolidation-plan --view runtime --json
 ```
 
 Capsules copy exact verified Decision Statements and selected constraint rows. A
-linked legacy ADR uses its exact whole document. The default budget is 32 KiB;
-overflow fails with source costs instead of summarizing or truncating. A larger
-budget requires `--budget-reason`. Consolidation output cannot merge, accept,
-retire, supersede, rewrite, or delete ADRs.
+linked legacy ADR uses its exact whole document. Complete materialization remains
+the default and preserves the 0.8.0 output contract. Explicit focused
+materialization still validates the complete current-effect closure, then emits
+only requested rows and recursively downstream scoped amendments. It declares
+`focused_partial`, records the closure digest and omissions, and fails closed for
+legacy or broad unscoped amendment boundaries. The default budget is 32 KiB;
+overflow fails with source costs instead of summarizing, truncating, or changing
+mode. A larger budget requires `--budget-reason`. Consolidation output cannot
+merge, accept, retire, supersede, rewrite, or delete ADRs.
 
 Check the active installation and available adapters at any time:
 
@@ -419,9 +427,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.8.0
-repofoundry --repo . upgrade --to 0.8.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.8.0 --apply
+repofoundry --repo . upgrade --to 0.8.1
+repofoundry --repo . upgrade --to 0.8.1 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.8.1 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -457,12 +465,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.8.0` uses Harness schema `3`, Harness Core `1.5.0`, Codex
+RepoFoundry `0.8.1` uses Harness schema `3`, Harness Core `1.5.0`, Codex
 adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.8.0 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.8.1 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the

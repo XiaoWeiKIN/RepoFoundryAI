@@ -170,6 +170,10 @@ Decision Capsule 是临时 Architecture Input 辅助，不落盘：
 ```bash
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
   decision-capsule --view oql --constraint ADR-056#C-003 --json
+
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
+  decision-capsule --view oql --constraint ADR-056#C-003 \
+  --materialization focused --focus-reason "实现选中的 OQL 边界" --json
 ```
 
 - strict schema 1.2+ ADR 复制原文 `Decision Statement` 与选中 table row；先验证 sealed
@@ -178,8 +182,15 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
 - source 片段和 row 不得总结、改写或截断；capsule 自身报告 UTF-8 bytes 与 SHA-256；
 - 默认预算 32768 bytes；超限错误同时报告总量和各 source cost。更大预算必须带已评审
   的 `--budget-reason`，但仍不允许截断；
-- optional constraint selection 只能引用 resolved context 内 stable IDs，并自动带入
-  解释该 constraint 所必需的 current amendment constraints。
+- complete 是默认物化模式；optional constraint selection 只能引用 resolved context 内
+  stable IDs，并保留完整解释 frame；
+- focused 必须显式提供 constraint 与 `--focus-reason`，先验证 complete closure，再只沿
+  requested row -> current scoped amender rows 方向递归物化；不得从 amender 反向展开其
+  无关历史 targets；
+- focused 输出声明 `focused_partial`、validated/materialized/omitted ADR、未物化关系与
+  closure digest；跨越省略边界时必须补充 constraint 或改用 complete；
+- legacy focus 与可能影响选中行但缺少 stable scoped target 的 broad amendment 必须
+  失败关闭。
 
 `adr-consolidation-plan` 始终为 `preview_only`。它可以指出 amendment chains、
 partially amended ADR、whole-document legacy、active EP consumers 与 proposed overlap，

@@ -1,0 +1,29 @@
+{
+  "approval_ref": "conversation:2026-09-03-dd-012-revision-2",
+  "approved_at": "2026-09-03T04:37:04Z",
+  "approved_by": "Wangxiaowei1",
+  "artifact_type": "design-revision-manifest",
+  "author": "Codex",
+  "created": "2026-08-31",
+  "design_id": "DD-012",
+  "documents": [
+    {
+      "bytes": 29990,
+      "id": "DD-012",
+      "path": "DESIGN.md",
+      "role": "entrypoint",
+      "sha256": "9fa662cd2b6d46f2bb852e9cf0a7ba88f98e6f73f744f7ec9f564b45c7ca969e",
+      "title": "Lossless ADR context compaction"
+    }
+  ],
+  "entrypoint": "DESIGN.md",
+  "id": "DD-012-REV-002",
+  "layout": "single",
+  "metadata_schema": "1",
+  "owner": "Wangxiaowei1",
+  "revision": 2,
+  "schema_version": "1",
+  "status": "current",
+  "title": "Lossless ADR context compaction — approved revision 2",
+  "updated": "2026-09-03"
+}

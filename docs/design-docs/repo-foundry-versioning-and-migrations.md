@@ -21,7 +21,7 @@ RepoFoundry must be able to improve its Skill, scripts, Core, adapters, and gene
 files without treating an existing repository as disposable. Versioning is
 therefore part of the repository contract, not only release metadata.
 
-The current distribution is `0.8.0`. It writes Harness schema `3`, Core
+The current distribution is `0.8.1`. It writes Harness schema `3`, Core
 `1.5.0`, Codex adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter
 `1.3.0`, governance policy schema `1`, and activation protocol `2`.
 Engineering Specifications keep their independent Catalog version and lock
@@ -32,7 +32,7 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 
 | Plane | Current | Stored in | Meaning |
 |---|---:|---|---|
-| RepoFoundry distribution | `0.8.0` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
+| RepoFoundry distribution | `0.8.1` | `VERSION`, `producer.version` | Skill and CLI release that produced or last migrated the Harness |
 | Harness schema | `3` | `schema_version` | JSON state shape and validation contract |
 | Harness Core | `1.5.0` | `core.version`, Core file records | Product-neutral repository, project Skill, and mode-aware activation behavior |
 | Codex adapter | `2.4.0` | `adapters[]`, adapter file records | Codex instructions, Skills, Hooks, and event translation |
@@ -45,11 +45,18 @@ and adapters, and Codex profile `1.0.0` remain migration inputs.
 No plane inherits another plane's version. A Spec update does not migrate the
 Harness, and a RepoFoundry upgrade does not change the selected Spec Catalog.
 
-Release `0.8.0` adds lossless ADR context compaction. Explicit Harness upgrade
+Release `0.8.0` added lossless ADR context compaction. Explicit Harness upgrade
 creates only an empty Decision View registry, generated index, and projection
 directory; it does not create views or alter ADR sources. Decision Views remain
 non-normative, capsules copy exact verified source text under an explicit budget,
 and consolidation analysis is preview-only.
+
+Release `0.8.1` adds explicit focused ADR capsule materialization without changing
+Harness schema or persistent state. Complete mode preserves the 0.8.0 output
+contract. Focused mode validates the same full current-effect closure, materializes
+only requested rows and downstream scoped amendments, and exposes an auditable
+partial-context manifest. Downgrading to 0.8.0 leaves repository state readable;
+only the ephemeral focused CLI flags become unavailable.
 
 Release `0.7.1` fixes lifecycle writes for registered legacy ADRs whose YAML
 frontmatter uses block-style relationship lists. Preview and authority gates are
@@ -121,7 +128,7 @@ the new derived Requirement index without selecting another Catalog.
 
 ```mermaid
 flowchart LR
-    D["RepoFoundry distribution<br/>VERSION 0.8.0"] --> P["producer.version"]
+    D["RepoFoundry distribution<br/>VERSION 0.8.1"] --> P["producer.version"]
     D --> U["foundryctl upgrade"]
     U --> H["Harness schema 3"]
     U --> C["Harness Core 1.5.0"]
