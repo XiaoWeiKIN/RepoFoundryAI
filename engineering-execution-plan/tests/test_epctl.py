@@ -2235,6 +2235,136 @@ updated: 2026-07-28
         )
         self.assertIn("ep-001_current-decision", current.stdout)
 
+    def test_replacement_adr_can_itself_be_superseded(self) -> None:
+        self.init()
+        research = self.new_research("protocol-options")
+        self.conclude_research(research)
+        first = self.new_adr("protocol-v1")
+        self.accept_adr(first, "ADR-001")
+        second = self.new_adr("protocol-v2")
+        self.accept_adr(second, "ADR-002")
+        third = self.new_adr("protocol-v3")
+        self.accept_adr(third, "ADR-003")
+
+        self.run_cli(
+            "supersede-adr",
+            "ADR-001",
+            "--by",
+            "ADR-002",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "Protocol v2 replaces v1.",
+            "--apply",
+        )
+        preview = json.loads(
+            self.run_cli(
+                "supersede-adr",
+                "ADR-002",
+                "--by",
+                "ADR-003",
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "Protocol v3 replaces v2 while preserving the history chain.",
+            ).stdout
+        )
+        self.assertEqual(preview["mode"], "preview")
+        applied = json.loads(
+            self.run_cli(
+                "supersede-adr",
+                "ADR-002",
+                "--by",
+                "ADR-003",
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                "Protocol v3 replaces v2 while preserving the history chain.",
+                "--apply",
+            ).stdout
+        )
+        self.assertEqual(applied["mode"], "apply")
+
+        self.assertIn("superseded_by: ADR-002", first.read_text(encoding="utf-8"))
+        second_text = second.read_text(encoding="utf-8")
+        self.assertIn("status: superseded", second_text)
+        self.assertIn("superseded_by: ADR-003", second_text)
+        self.assertIn('supersedes: ["ADR-001"]', second_text)
+        third_text = third.read_text(encoding="utf-8")
+        self.assertIn("status: accepted", third_text)
+        self.assertIn('supersedes: ["ADR-002"]', third_text)
+        self.run_cli("validate")
+
+        decision_index = (self.repo / "docs" / "DECISIONS.md").read_text(
+            encoding="utf-8"
+        )
+        historical = self.managed_index_body(decision_index, "COMPLETED")
+        current_projection = self.managed_index_body(decision_index, "CURRENT")
+        self.assertIn("| ADR-001 |", historical)
+        self.assertIn("superseded by ADR-002", historical)
+        self.assertIn("| ADR-002 |", historical)
+        self.assertIn("superseded by ADR-003", historical)
+        self.assertIn("| ADR-003 |", current_projection)
+        self.assertIn("supersedes ADR-002", current_projection)
+
+        self.run_cli(
+            "transition-adr",
+            "ADR-003",
+            "--to",
+            "under_review",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "New evidence requires review of the terminal replacement.",
+            "--apply",
+        )
+        self.run_cli("validate")
+        self.run_cli(
+            "transition-adr",
+            "ADR-003",
+            "--to",
+            "retired",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "The reviewed replacement is no longer effective.",
+            "--apply",
+        )
+        self.run_cli("validate")
+
+    def test_supersession_cycle_fails_closed(self) -> None:
+        self.init()
+        research = self.new_research("protocol-options")
+        self.conclude_research(research)
+        first = self.new_adr("protocol-v1")
+        self.accept_adr(first, "ADR-001")
+        second = self.new_adr("protocol-v2")
+        self.accept_adr(second, "ADR-002")
+        third = self.new_adr("protocol-v3")
+        self.accept_adr(third, "ADR-003")
+        for old_id, new_id in (("ADR-001", "ADR-002"), ("ADR-002", "ADR-003")):
+            self.run_cli(
+                "supersede-adr",
+                old_id,
+                "--by",
+                new_id,
+                "--decision-maker",
+                "Test Decision Owner",
+                "--reason",
+                f"{new_id} replaces {old_id}.",
+                "--apply",
+            )
+
+        self.replace_frontmatter(first, "supersedes", '["ADR-003"]')
+        self.replace_frontmatter(third, "status", "superseded")
+        self.replace_frontmatter(third, "superseded_by", "ADR-001")
+        self.run_cli("reindex")
+        result = self.run_cli("validate", expected=1)
+        self.assertIn(
+            "ADR supersession cycle: ADR-001 -> ADR-002 -> ADR-003 -> ADR-001",
+            result.stderr,
+        )
+
     def test_current_adr_seals_metadata_typed_inputs_and_outcome(self) -> None:
         self.init()
         research = self.new_research("sealed-inputs")

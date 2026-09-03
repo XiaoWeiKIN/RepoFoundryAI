@@ -270,21 +270,25 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.8.2`
+distribution upgrade, run this in each existing project and replace `0.8.3`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.8.2
-repofoundry --repo . upgrade --to 0.8.2 --apply
+repofoundry --repo . upgrade --to 0.8.3
+repofoundry --repo . upgrade --to 0.8.3 --apply
 repofoundry --repo . validate
 ```
 
 ### Compact ADR working context without deleting history
 
-RepoFoundry 0.8.2 keeps atomic ADR files and lifecycle authority as the normative
+RepoFoundry 0.8.3 keeps atomic ADR files and lifecycle authority as the normative
 history, then derives smaller non-normative retrieval surfaces above them. An
 upgrade creates only an empty registry, index, and projection directory; it never
 retires an ADR or invents domain membership.
+
+A replacement ADR may itself later be superseded. RepoFoundry preserves every
+immediate `superseded_by` / `supersedes` backlink as an acyclic history chain;
+current Decision contexts anchor only at the terminal accepted/current ADR.
 
 ```mermaid
 flowchart LR
@@ -456,9 +460,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.8.2
-repofoundry --repo . upgrade --to 0.8.2 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.8.2 --apply
+repofoundry --repo . upgrade --to 0.8.3
+repofoundry --repo . upgrade --to 0.8.3 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.8.3 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -502,12 +506,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.8.2` uses Harness schema `3`, Harness Core `1.5.0`, Codex
+RepoFoundry `0.8.3` uses Harness schema `3`, Harness Core `1.5.0`, Codex
 adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.8.2 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.8.3 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the

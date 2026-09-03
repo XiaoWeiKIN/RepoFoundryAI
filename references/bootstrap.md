@@ -61,7 +61,7 @@ adapter ID 不得重复，生成路径不得发生 ownership collision。现有 
 - 同时传 `--profile` 与 `--adapter` 会失败；
 - 两者都省略时暂时默认 `codex`，并返回
   `HARNESS_ADAPTER_DEFAULT_DEPRECATED`；
-- schema 1/2 只读兼容，只有显式 `upgrade --to 0.8.2 --apply` 写 schema 3。
+- schema 1/2 只读兼容，只有显式 `upgrade --to 0.8.3 --apply` 写 schema 3。
 
 ## Core 与 adapter 的安装结构
 
@@ -164,7 +164,7 @@ adapter 能力由 `adapter list` 的结构化输出声明：
   "owner": "repo-foundry",
   "producer": {
     "name": "repo-foundry",
-    "version": "0.8.2"
+    "version": "0.8.3"
   },
   "core": {
     "version": "1.5.0"
@@ -204,13 +204,13 @@ protocol 与 Engineering Specifications Catalog 分别版本化。改变 Codex H
 
 ## 版本与 Harness 升级
 
-当前迁移目标为 `0.8.2`：
+当前迁移目标为 `0.8.3`：
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.2
+  upgrade --to 0.8.3
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.2 --apply
+  upgrade --to 0.8.3 --apply
 ```
 
 0.8.0 引入、并由后续版本保持的 migration 会以 additive 方式创建

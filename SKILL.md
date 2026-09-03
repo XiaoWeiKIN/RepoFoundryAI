@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.2
+  upgrade --to 0.8.3
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.2
+  upgrade --to 0.8.3
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.2 --apply
+  upgrade --to 0.8.3 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -149,6 +149,10 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 0.8.2 为 schema 1.2 Checkpoint 增加 preview-first 的出生缺陷 seal 恢复：Git 只在
 显式登记时证明 ancestor commit 首次引入精确路径与 bytes，随后把自校验 receipt
 写入仓库；正常验证保持离线，并且只豁免该精确 payload mismatch，不改写 checkpoint。
+
+0.8.3 允许 accepted replacement 后续继续被新的 accepted/current ADR supersede，
+保留每一跳双向证据并拒绝 supersession cycle。Decision context 仍只消费链尾的
+accepted/current ADR；旧 Decision View 进入 `review_required`，等待 owner 显式换锚点。
 
 ## 管理 Engineering Specs
 
