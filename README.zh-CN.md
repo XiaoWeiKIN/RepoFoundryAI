@@ -39,18 +39,19 @@ flowchart LR
 `Workflow` 描述某一项能力如何运行；RepoFoundry 提供承载、组合和验证这些流程的
 系统。
 
-## 六个 Skill 通过文件契约协作
+## 七个 Skill 通过清晰边界协作
 
 | Skill | 职责 | 持久制品 |
 |---|---|---|
 | [`repo-foundry-ai`](./SKILL.md) | 盘点、Bootstrap、同步 Specs、验证 Harness、路由工作 | `AGENTS.md`、架构与文档地图、Harness 与 Spec manifests |
+| [`detailed-design`](./detailed-design/SKILL.md) | 从仓库证据协作撰写和评审 Architecture、Internals、模块设计与实现合同 | 默认一份聚焦 Markdown；不创建 DD 治理制品 |
 | [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | 共同校准并执行可复现测量 | Suite、Scenario、Run、Result、sealed Evidence Manifest |
 | [`engineering-research`](./engineering-research/SKILL.md) | 共同引导未知并综合多文档证据 | Research controller、corpus Manifest、Rounds、topics、sealed Synthesis |
 | [`engineering-design`](./engineering-design/SKILL.md) | 探索取舍并把已建立的证据翻译成可评审设计 | 单文件或多文档 Design Package、阅读地图、manifest、已批准 revision 快照 |
 | [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | 共同权衡 ADR 并校准受治理实施 | ADR、ExecPlan、Task、Checkpoint、Bugfix、技术债务 |
 | [`engineering-case-study`](./engineering-case-study/SKILL.md) | 把已验证代码和过程证据写成可分享内容 | 中文、英文或中英双语工程案例 |
 
-五个专业 Skill 可以独立安装。它们通过版本化仓库文件交接，不依赖私有运行时
+六个专业 Skill 可以独立安装。它们通过版本化仓库文件交接，不依赖私有运行时
 导入。
 
 这些治理制品还共享一层语义元数据：稳定 type/ID、title/status、author/owner 与
@@ -440,6 +441,9 @@ adapter，并报告 create、preserve 和 conflict。只有预览无冲突时才
 路由专业工作：
 
 ```text
+使用 $detailed-design，从代码和现有文档建立系统 mental model，围绕真实流程、
+核心抽象、边界和源码映射撰写一份架构文档。
+
 使用 $engineering-benchmark，在执行容量测量前共同校准有代表性、可复现的 Scenario。
 
 使用 $engineering-research 共同校准缓存拓扑的研究问题和证据方向，
@@ -462,11 +466,12 @@ Design Package，明确边界、契约、失败语义和可评审 revision。
 ## Prompt 驱动的示例
 
 双语 [Prompt 示例目录](./examples/README.zh-CN.md)与
-[English catalog](./examples/README.md)覆盖六个 Skill 的独立入口和证据交接：
+[English catalog](./examples/README.md)覆盖受治理工作流的独立入口和证据交接：
 
 | 场景 | 首选 Skill |
 |---|---|
 | 初始化仓库或路由模糊请求 | `$repo-foundry-ai` |
+| 撰写或评审架构、Internals、模块设计或实现合同 | `$detailed-design` |
 | 产生可复现测量 | `$engineering-benchmark` |
 | 调研未知或接管现有 corpus | `$engineering-research` |
 | 创建或修订技术 Design Package | `$engineering-design` |
@@ -667,7 +672,7 @@ ExecPlan 和 sealed 校验产物保留当时真实使用的历史名称。
 python3 -B scripts/check.py
 ```
 
-该命令验证六个 Skill package 与五个 eval catalog，执行所有治理测试，检查本地
+该命令验证七个 Skill package 与六个 eval catalog，执行所有治理测试，检查本地
 Markdown 链接和独立安装，并验证仓库内 Research、Design 与 ExecPlan 状态。CI adapter
 只调用这一条命令。
 
@@ -685,6 +690,9 @@ RepoFoundry AI：
 
 专业能力：
 
+- [架构文档方法](./detailed-design/references/architecture.md)
+- [模块与实现合同方法](./detailed-design/references/module-contract.md)
+- [详细设计评审](./detailed-design/references/review.md)
 - [Benchmark 契约](./engineering-benchmark/references/contract.md)
 - [Benchmark Scenario 协作校准](./engineering-benchmark/references/collaboration.md)
 - [Research 方法](./engineering-research/references/research.md)

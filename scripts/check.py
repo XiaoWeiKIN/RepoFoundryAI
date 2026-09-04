@@ -155,6 +155,7 @@ def validate_skill_packages() -> None:
             ROOT / "engineering-execution-plan",
             "engineering-execution-plan",
         ),
+        (ROOT / "detailed-design", "detailed-design"),
         (ROOT / "engineering-research", "engineering-research"),
         (ROOT / "engineering-design", "engineering-design"),
         (ROOT / "engineering-benchmark", "engineering-benchmark"),
@@ -250,6 +251,8 @@ def validate_skill_packages() -> None:
         ),
         ROOT / "engineering-research" / "SKILL.md",
         *sorted((ROOT / "engineering-research" / "references").glob("*.md")),
+        ROOT / "detailed-design" / "SKILL.md",
+        *sorted((ROOT / "detailed-design" / "references").glob("*.md")),
         ROOT / "engineering-design" / "SKILL.md",
         *sorted((ROOT / "engineering-design" / "references").glob("*.md")),
         ROOT / "engineering-benchmark" / "SKILL.md",
@@ -350,6 +353,10 @@ def validate_eval_catalogs() -> None:
         (
             ROOT / "engineering-benchmark" / "evals" / "evals.json",
             "engineering-benchmark",
+        ),
+        (
+            ROOT / "detailed-design" / "evals" / "evals.json",
+            "detailed-design",
         ),
         (
             ROOT / "engineering-design" / "evals" / "evals.json",

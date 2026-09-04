@@ -120,8 +120,9 @@ active ExecPlan 是五个独立状态，授权也互不替代。
 
 ```text
 使用 $engineering-design，把 concluded R-012 转成 UModel 模块技术设计。
-把架构、公共契约、数据所有权、运维、迁移和验证分别组织为聚焦文档，
-但共享一个 DD-NNN 评审边界和阅读地图。
+用 DESIGN.md 承担架构总览，只把贡献者确实需要独立阅读的专题组织到
+how-it-works、core-concepts、subsystems、extension-points、deep-dives 或
+contributor-guide；它们共享一个 DD-NNN 评审边界和根 README 阅读地图。
 
 保留 Research 的结论、置信边界、反例和开放未知。共同批准的专题使用包内
 DOC-NNN 身份；如果子设计具有不同 owner 或发布生命周期，则分配独立 DD-NNN
@@ -132,11 +133,11 @@ DOC-NNN 身份；如果子设计具有不同 owner 或发布生命周期，则�
 
 ```mermaid
 flowchart TB
-    D["DD-NNN 模块 Design"] --> A["architecture/DOC-NNN"]
-    D --> I["contracts/DOC-NNN"]
-    D --> O["operations/DOC-NNN"]
-    D --> V["verification/DOC-NNN"]
-    D -.->|"独立生命周期"| X["另一个 DD-NNN"]
+    D["DD-NNN 模块 Design"] --> H["how-it-works/DOC-NNN"]
+    D --> C["core-concepts/DOC-NNN"]
+    D --> S["subsystems/DOC-NNN"]
+    D --> X["extension-points 或 deep-dives/DOC-NNN"]
+    D -.->|"独立生命周期"| N["另一个 DD-NNN"]
 ```
 
 预期边界：Research 仍是证据，Design Package 解释系统如何工作，ADR 授权保持

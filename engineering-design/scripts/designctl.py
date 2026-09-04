@@ -66,29 +66,64 @@ TERMINAL_STATUSES = {"abandoned", "superseded"}
 DEPENDENCY_TYPES = {"uses", "extends", "implements", "replaces"}
 MEMBER_ROLES = {
     "architecture",
+    "concept",
     "component",
+    "contributor-guide",
+    "deep-dive",
+    "extension",
     "interface",
     "data",
     "flow",
+    "subsystem",
     "security",
     "operations",
     "migration",
     "verification",
     "appendix",
 }
-ROLE_DIRECTORIES = {
+CURRENT_ROLE_DIRECTORIES = {
+    "architecture": "core-concepts",
+    "concept": "core-concepts",
+    "component": "subsystems",
+    "contributor-guide": "contributor-guide",
+    "deep-dive": "deep-dives",
+    "extension": "extension-points",
+    "interface": "core-concepts",
+    "data": "core-concepts",
+    "flow": "how-it-works",
+    "subsystem": "subsystems",
+    "security": "deep-dives",
+    "operations": "deep-dives",
+    "migration": "deep-dives",
+    "verification": "deep-dives",
+    "appendix": "deep-dives",
+}
+LEGACY_ROLE_DIRECTORIES = {
     "architecture": "architecture",
+    "concept": "architecture",
     "component": "architecture",
+    "contributor-guide": "docs",
+    "deep-dive": "docs",
+    "extension": "contracts",
     "interface": "contracts",
     "data": "data",
     "flow": "architecture",
+    "subsystem": "architecture",
     "security": "operations",
     "operations": "operations",
     "migration": "migration",
     "verification": "verification",
     "appendix": "docs",
 }
-MANAGED_DIRECTORIES = {
+CURRENT_MANAGED_DIRECTORIES = {
+    "how-it-works",
+    "core-concepts",
+    "subsystems",
+    "extension-points",
+    "deep-dives",
+    "contributor-guide",
+}
+LEGACY_MANAGED_DIRECTORIES = {
     "architecture",
     "contracts",
     "data",
@@ -97,27 +132,18 @@ MANAGED_DIRECTORIES = {
     "migration",
     "verification",
 }
+MANAGED_DIRECTORIES = CURRENT_MANAGED_DIRECTORIES | LEGACY_MANAGED_DIRECTORIES
+READING_MAP_PATHS = ("README.md", "docs/README.md")
 ROOT_SECTIONS = (
     "Design Summary",
     "Goals and Non-goals",
     "Research and Decision Inputs",
     "System Context and Invariants",
     "Proposed Architecture",
-    "Interfaces and Contracts",
-    "Data Model and State Ownership",
     "Control and Data Flows",
-    "Failure Semantics and Recovery",
-    "Compatibility, Migration, and Rollout",
-    "Security, Privacy, and Operations",
-    "Verification Strategy",
     "Alternatives, Open Questions, and Revisit Triggers",
 )
-RESEARCH_SUBSECTIONS = (
-    "Supported Findings and Confidence",
-    "Negative Evidence and Rejected Hypotheses",
-    "Remaining Unknowns and Validity Conditions",
-    "ADR Constraints",
-)
+RESEARCH_SUBSECTIONS: tuple[str, ...] = ()
 COMMON_METADATA_FIELDS = (
     "title",
     "status",
@@ -869,6 +895,9 @@ def validate_adr_reference(
 
 def managed_markdown_paths(record: DesignRecord) -> list[Path]:
     result: list[Path] = [record.path]
+    root_readme = record.package / "README.md"
+    if root_readme.is_file():
+        result.append(root_readme)
     for directory in sorted(MANAGED_DIRECTORIES):
         root = record.package / directory
         if not root.exists():
@@ -877,6 +906,26 @@ def managed_markdown_paths(record: DesignRecord) -> list[Path]:
             if "snapshots" not in path.relative_to(record.package).parts:
                 result.append(path)
     return unique_paths(result)
+
+
+def reading_map_relative_path(documents: list[dict[str, object]]) -> str:
+    matches = [
+        str(item["path"])
+        for item in documents
+        if item.get("role") == "reading-map"
+    ]
+    if len(matches) == 1 and matches[0] in READING_MAP_PATHS:
+        return matches[0]
+    return "README.md"
+
+
+def role_directory(record: DesignRecord, role: str) -> str:
+    mapping = (
+        CURRENT_ROLE_DIRECTORIES
+        if (record.package / "README.md").is_file()
+        else LEGACY_ROLE_DIRECTORIES
+    )
+    return mapping[role]
 
 
 def unique_paths(values: Iterable[Path]) -> list[Path]:
@@ -978,9 +1027,10 @@ def collect_package_documents(
         else 10**9,
     )
     reading = [item for item in documents if item["role"] == "reading-map"]
-    if len(reading) != 1 or reading[0].get("path") != "docs/README.md":
+    if len(reading) != 1 or reading[0].get("path") not in READING_MAP_PATHS:
         errors.append(
-            f"{record.package}: package must contain exactly one reading-map at docs/README.md"
+            f"{record.package}: package must contain exactly one reading-map at "
+            "README.md or legacy docs/README.md"
         )
     return documents, errors
 
@@ -1019,7 +1069,7 @@ def manifest_object(
         "working_revision": working,
         "published_revision": published,
         "entrypoint": "DESIGN.md",
-        "reading_map": "docs/README.md",
+        "reading_map": reading_map_relative_path(documents),
         "design_dependencies": dependencies,
         "documents": documents,
     }
@@ -1052,7 +1102,11 @@ def package_map_body(documents: list[dict[str, object]]) -> str:
     return "\n".join(rows)
 
 
-def reading_map_body(record: DesignRecord, documents: list[dict[str, object]]) -> str:
+def reading_map_body(
+    record: DesignRecord,
+    documents: list[dict[str, object]],
+    reading_path: Path,
+) -> str:
     rows = [
         "| Review route | Stable reference | Document |",
         "|---|---|---|",
@@ -1060,7 +1114,10 @@ def reading_map_body(record: DesignRecord, documents: list[dict[str, object]]) -
     for item in documents:
         if item["role"] in {"entrypoint", "reading-map"}:
             continue
-        target = "../" + str(item["path"])
+        target = os.path.relpath(
+            str(item["path"]),
+            start=reading_path.relative_to(record.package).parent.as_posix() or ".",
+        )
         rows.append(
             f"| {item['role']} | `{record.design_id}/{item['id']}` | "
             f"[{item['title']}]({target}) |"
@@ -1083,13 +1140,13 @@ def sync_package(repo: Path, record: DesignRecord, force: bool = False) -> list[
     if errors:
         raise DesignctlError("\n".join(errors))
 
-    reading_path = record.package / "docs" / "README.md"
+    reading_path = record.package / reading_map_relative_path(documents)
     reading_text = reading_path.read_text(encoding="utf-8")
     updated, managed = replace_generated_region(
         reading_text,
         READING_START,
         READING_END,
-        reading_map_body(record, documents),
+        reading_map_body(record, documents, reading_path),
     )
     if managed:
         if updated != reading_text:
@@ -1605,7 +1662,7 @@ def new_design(
     package_map = (
         f"{MAP_START}\nNo focused member documents yet.\n{MAP_END}"
         if layout == "package"
-        else "Single-file layout; every required concern is covered in this entrypoint."
+        else "Single-file layout; this entrypoint owns the complete architecture narrative."
     )
     values = {
         "DESIGN_ID": design_id,
@@ -1630,13 +1687,7 @@ def new_design(
         if package.exists():
             raise DesignctlError(f"Design package path already exists: {package}")
         for directory in (
-            "architecture",
-            "contracts",
-            "data",
-            "docs",
-            "operations",
-            "migration",
-            "verification",
+            *sorted(CURRENT_MANAGED_DIRECTORIES),
             "artifacts",
             "snapshots",
         ):
@@ -1653,7 +1704,7 @@ def new_design(
             "OWNER_JSON": json.dumps(owner_value, ensure_ascii=False),
             "DATE": today,
         }
-        atomic_write(package / "docs" / "README.md", render_asset("reading-map.md", reading_values))
+        atomic_write(package / "README.md", render_asset("reading-map.md", reading_values))
         record = DesignRecord(path, parse_frontmatter(path.read_text(encoding="utf-8")))
         sync_package(repo, record, force=True)
     reindex(repo)
@@ -1682,7 +1733,7 @@ def new_member(
     if record.data.get("status") not in {"draft", "revising"}:
         raise DesignctlError("Members can be added only while draft or revising")
     document_id = next_document_id(repo, record)
-    directory = ROLE_DIRECTORIES[role]
+    directory = role_directory(record, role)
     path = record.package / directory / f"{document_id.lower()}_{slug}.md"
     if path.exists():
         raise DesignctlError(f"Member path already exists: {path}")

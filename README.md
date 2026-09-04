@@ -43,18 +43,19 @@ flowchart LR
 `Workflow` describes how an individual capability runs. RepoFoundry is the
 system that makes those workflows composable and verifiable.
 
-## Six Skills share file contracts
+## Seven Skills collaborate through clear boundaries
 
 | Skill | Responsibility | Durable output |
 |---|---|---|
 | [`repo-foundry-ai`](./SKILL.md) | Inspect, Bootstrap, synchronize Specs, validate the Harness, and route work | `AGENTS.md`, architecture and docs maps, Harness and Spec manifests |
+| [`detailed-design`](./detailed-design/SKILL.md) | Co-author and review Architecture, Internals, module designs, and implementation contracts from repository evidence | One focused Markdown document by default; no DD lifecycle artifacts |
 | [`engineering-benchmark`](./engineering-benchmark/SKILL.md) | Collaboratively calibrate, then execute reproducible measurement | Suite, Scenario, Run, Result, sealed Evidence Manifest |
 | [`engineering-research`](./engineering-research/SKILL.md) | Collaboratively steer unknowns and synthesize multi-document evidence | Research controller, corpus Manifest, Rounds, topics, sealed Synthesis |
 | [`engineering-design`](./engineering-design/SKILL.md) | Explore trade-offs and translate established evidence into a reviewable design | Single-file or multi-document Design Package, reading map, manifest, approved revision snapshot |
 | [`engineering-execution-plan`](./engineering-execution-plan/SKILL.md) | Deliberate ADRs and align governed implementation | ADR, ExecPlan, Task, Checkpoint, Bugfix, technical debt |
 | [`engineering-case-study`](./engineering-case-study/SKILL.md) | Turn verified code and process evidence into a shareable narrative | Chinese, English, or bilingual engineering case study |
 
-The five professional Skills remain independently installable. They communicate
+The six professional Skills remain independently installable. They communicate
 through versioned repository files rather than private runtime imports.
 
 Governed artifacts also share one semantic metadata layer: stable type and ID,
@@ -475,6 +476,10 @@ Harness and local Specs.
 Route specialized work:
 
 ```text
+Use $detailed-design to build a system mental model from code and existing
+documents, then write one architecture document around real flows, core
+abstractions, boundaries, and source mappings.
+
 Use $engineering-benchmark to collaboratively calibrate a representative,
 reproducible capacity Scenario before running the measurement.
 
@@ -501,12 +506,13 @@ architecture must be specified.
 ## Prompt-driven examples
 
 The bilingual [Prompt example catalog](./examples/README.md) and
-[Chinese catalog](./examples/README.zh-CN.md) cover all six Skills as
+[Chinese catalog](./examples/README.zh-CN.md) cover the governed workflows as
 standalone entrypoints and as evidence handoffs:
 
 | Situation | First Skill |
 |---|---|
 | Initialize a repository or route an ambiguous request | `$repo-foundry-ai` |
+| Write or review Architecture, Internals, module design, or implementation contracts | `$detailed-design` |
 | Produce reproducible measurements | `$engineering-benchmark` |
 | Investigate unknowns or adopt an existing corpus | `$engineering-research` |
 | Create or revise a technical Design Package | `$engineering-design` |
@@ -740,7 +746,7 @@ Run the only canonical repository check:
 python3 -B scripts/check.py
 ```
 
-The command validates all six Skill packages and five eval catalogs, runs every
+The command validates all seven Skill packages and six eval catalogs, runs every
 governance test suite, checks local Markdown links and independent installation,
 and validates repository Research, Design, and ExecPlan state. CI adapters only invoke
 this command.
@@ -759,6 +765,9 @@ RepoFoundry AI:
 
 Professional capabilities:
 
+- [Architecture documentation method](./detailed-design/references/architecture.md)
+- [Module and implementation-contract method](./detailed-design/references/module-contract.md)
+- [Detailed design review](./detailed-design/references/review.md)
 - [Benchmark contract](./engineering-benchmark/references/contract.md)
 - [Benchmark Scenario collaboration](./engineering-benchmark/references/collaboration.md)
 - [Research method](./engineering-research/references/research.md)

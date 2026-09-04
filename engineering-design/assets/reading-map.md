@@ -16,7 +16,7 @@ updated: {{DATE}}
 
 # {{TITLE}}
 
-Start with <a href="../DESIGN.md"><code>DESIGN.md</code></a> for scope,
+Start with <a href="DESIGN.md"><code>DESIGN.md</code></a> for scope,
 invariants, input evidence, cross-document conclusions, and lifecycle state.
 Follow the generated routes below for specialist review.
 

@@ -14,7 +14,7 @@
   "working_revision": 1,
   "published_revision": 0,
   "entrypoint": "DESIGN.md",
-  "reading_map": "docs/README.md",
+  "reading_map": "README.md",
   "design_dependencies": [],
   "documents": []
 }
