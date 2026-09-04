@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: exec-plan
 id: EP-096
 title: "Implement workflow-triggered ADR maintenance"
-status: active
+status: completed
 latest_checkpoint:
 research_refs: []
 research_gate: not_required
@@ -20,9 +20,9 @@ architecture_decision_gate_reason: ""
 architecture_compliance: applicable
 architecture_compliance_reason: ""
 required_benchmark_scenarios: []
-verified_revision:
-verification_evidence: []
-archive_sha256:
+verified_revision: "git:16c7811b88885a807a6c8c8ad18e6ddd3466d6bf"
+verification_evidence: ["docs/exec-plans/completed/ep-096_implement-workflow-triggered-adr-maintenance/artifacts/check-0.9.0.txt", "docs/exec-plans/completed/ep-096_implement-workflow-triggered-adr-maintenance/artifacts/release-install-0.9.0.txt", "docs/exec-plans/completed/ep-096_implement-workflow-triggered-adr-maintenance/artifacts/datafox-upgrade-0.9.0.txt", "docs/exec-plans/completed/ep-096_implement-workflow-triggered-adr-maintenance/artifacts/datafox-adr-maintenance.json", "https://github.com/XiaoWeiKIN/RepoFoundryAI/actions/runs/33835410480"]
+archive_sha256: 64d8e6d946815d9bab7876a24d6493d6c2fb410796d540f8b2faa1e595c0f411
 created: 2026-09-04
 updated: 2026-09-04
 author: "Codex"
@@ -52,12 +52,12 @@ unchanged.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 3 — release and DataFox adoption.
-- Current state: Milestones 1–2 are implemented. The full canonical source check,
-  including 82 execution-plan tests and 122 distribution/contract tests, passes.
-  The implementation remains isolated from the user's older working tree.
-- Next action: commit and publish RepoFoundry 0.9.0, update the local Codex Skill,
-  then preview/apply the DataFox Harness upgrade and run its maintenance report.
+- Current milestone: Milestone 3 — completed; archival pending.
+- Current state: RepoFoundry 0.9.0 is released and locally installed. DataFox is
+  upgraded in commit `aae10617`, its Harness/Spec/Design controls validate at the
+  upgrade boundary, and the 0.9.0 evaluator has produced the downstream report.
+- Next action: archive EP-096 against verified release revision `16c7811b` with
+  the recorded source, release, installation, and DataFox evidence.
 
 ## Context and Orientation
 
@@ -284,15 +284,21 @@ From `/Users/wangxiaowei1/x-otel/EngineeringPlan-adr-maintenance-policy`:
   generated cache, or credential material. The worktree remains intentionally
   modified until the release commit is created. Evidence: concise transcript in
   `artifacts/check-0.9.0.txt`.
-- [ ] Verify `repofoundry --version` reports `0.9.0` after local installation and a
+- [x] Verify `repofoundry --version` reports `0.9.0` after local installation and a
   clean fixture can invoke `adr-maintenance`. Evidence:
   `artifacts/release-install-0.9.0.txt`.
-- [ ] In DataFox, preview and apply `repofoundry --repo . upgrade --to 0.9.0`, then
-  run Harness and `epctl` validation; expect zero errors and no automatic ADR/Pack
-  mutation. Evidence: `artifacts/datafox-upgrade-0.9.0.txt`.
-- [ ] In DataFox, run `epctl adr-maintenance --json`; expect current-context pressure
-  and terminal archive readiness to be reported independently with typed preview
-  actions. Evidence: `artifacts/datafox-adr-maintenance.json`.
+- [x] In DataFox, preview and apply `repofoundry --repo . upgrade --to 0.9.0`, then
+  validate the Harness, Spec lock/index, and Design corpus at the upgrade boundary;
+  expect zero errors and no automatic ADR/Pack mutation. Whole-repository `epctl`
+  validation remains separately blocked by the concurrent OQL working set and its
+  pre-existing Design dependency closure. Evidence:
+  `artifacts/datafox-upgrade-0.9.0.txt`.
+- [x] In DataFox, evaluate `adr-maintenance` with the installed 0.9.0 engine;
+  expect current-context pressure and terminal archive readiness to be reported
+  independently with typed preview actions. The public command completed before
+  the Harness metadata apply; the same post-upgrade pure evaluator produced the
+  recorded payload while the public wrapper correctly failed closed on concurrent
+  DD-008 manifest drift. Evidence: `artifacts/datafox-adr-maintenance.json`.
 
 ### Required Benchmark Scenario Gates
 
@@ -334,7 +340,15 @@ the only recovery paths for physical packing.
   seed versions, and added zero-auto-pack upgrade coverage.
 - [x] (2026-09-04T05:16:00Z) Canonical `scripts/check.py` completed with every
   source suite and integrity validator passing; `git diff --check` also passed.
-- [ ] Publish RepoFoundry 0.9.0 and complete local/DataFox adoption.
+- [x] (2026-09-04T04:11:41Z) RepoFoundry 0.9.0 merged through PR #47 at
+  `16c7811b`, tagged `v0.9.0`, and published after Python 3.10, Python 3.14, and
+  required `ep-integrity` checks passed.
+- [x] (2026-09-04T04:13:00Z) Installed 0.9.0 locally from the clean published-tag
+  worktree, updated the Codex Skill link, and verified the healthy fast path in a
+  clean initialized repository.
+- [x] (2026-09-04T04:17:00Z) Upgraded DataFox to 0.9.0 in targeted commit
+  `aae10617`, preserved all concurrent OQL changes, proved zero automatic ADR
+  mutation, and recorded maintenance and consolidation previews.
 
 ## Surprises & Discoveries
 
@@ -354,6 +368,13 @@ the only recovery paths for physical packing.
   `adr-maintenance --check` hard-pressure gates.
 - 2026-09-04 — Use fixed `default-v1` thresholds without repository-local override
   or persisted acknowledgement state in this release.
+- 2026-09-04 — Do not retire or merge DataFox's remaining nine current legacy
+  ADRs. They cover unrelated domains, and EP-091 still consumes ADR-012; the
+  generated consolidation preview explicitly requires a future atomic ADR and
+  Decision Owner acceptance before semantic transitions.
+- 2026-09-04 — Treat the parallel DD-008 working-set drift as downstream context,
+  not an excuse to weaken the maintenance command's fail-closed validation or to
+  absorb unrelated OQL files into the Harness upgrade commit.
 
 ## Blockers
 
@@ -362,10 +383,33 @@ the only recovery paths for physical packing.
 
 ## Outcomes & Retrospective
 
-Pending implementation and downstream verification. At completion, record the
-released behavior, exact RepoFoundry/DataFox revisions, observed DataFox actions,
-any intentionally deferred ADR cleanup, and whether the default thresholds produced
-useful routing without conflating history storage and current context.
+RepoFoundry 0.9.0 shipped at `16c7811b88885a807a6c8c8ad18e6ddd3466d6bf`
+with one canonical, scoreless maintenance evaluator used by CLI, status,
+validation, and workflow guidance. The release preserves all existing mutation
+authority and adds no repository-local policy state. Local installation package
+digest is `3741505a6343ad45f42665d3413f797643db369767501c4d12079994599b4c9e`.
+
+DataFox commit `aae10617` upgrades distribution 0.8.8 → 0.9.0 and Core 1.5.1 →
+1.5.2 while retaining Harness schema 3 and Codex adapter 2.4.0. Its ADR corpus is
+already physically compressed: 64 logical ADRs resolve through 30 live files and
+2 History Packs containing 34 entries, a net reduction of 32 physical source
+files. There are 24 current ADRs, exactly the navigation boundary, and no eligible
+terminal strict ADRs, so another History Pack would be dishonest.
+
+The remaining `action_required` state comes from nine current whole-document
+legacy ADRs (ADR-001, ADR-002, ADR-004, ADR-007, ADR-008, ADR-009, ADR-012,
+ADR-013, ADR-014). EP-091 also crosses review boundaries with 14 ADR references
+and 122 constraint references. The consolidation preview returns
+`defer_while_active_or_proposed_work_depends_on_context` because EP-091 consumes
+ADR-012. No semantic consolidation, retirement, supersession, rewrite, or deletion
+was inferred from the detector.
+
+The default thresholds therefore routed the real problems correctly: historical
+storage is already compact, current count is within target, persistent views cover
+all 24 current ADRs, and the actionable debt is legacy contract migration plus one
+over-wide active plan. Concurrent OQL work left whole-repository validation outside
+the stable Harness upgrade boundary; the command's refusal to hide that drift is
+the intended fail-closed behavior.
 
 ### Knowledge promotion candidates
 
@@ -391,8 +435,13 @@ versioned Core/adapter seeds.
 
 ## Artifacts and Notes
 
-- Plan: `docs/exec-plans/active/ep-096_implement-workflow-triggered-adr-maintenance/EXECPLAN.md`
+- Plan: `docs/exec-plans/completed/ep-096_implement-workflow-triggered-adr-maintenance/EXECPLAN.md`
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
+- Release/local installation: `artifacts/release-install-0.9.0.txt`
+- DataFox Harness upgrade: `artifacts/datafox-upgrade-0.9.0.txt`
+- DataFox maintenance payload: `artifacts/datafox-adr-maintenance.json`
+- DataFox legacy consolidation preview:
+  `artifacts/datafox-legacy-consolidation-preview.json`
 
 ## Revision Notes
 
@@ -401,3 +450,6 @@ versioned Core/adapter seeds.
   release, recovery, and downstream rollout contract before code changes.
 - 2026-09-04T05:16:00Z — Completed Milestones 1–2, recorded canonical check
   evidence, and advanced the live snapshot to release and downstream adoption.
+- 2026-09-04T04:17:00Z — Released and installed 0.9.0, upgraded DataFox without
+  touching its ADR corpus, recorded real pressure/packing counts, and completed
+  the plan for archival.

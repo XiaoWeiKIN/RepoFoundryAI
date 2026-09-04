@@ -1,0 +1,32 @@
+RepoFoundry AI 0.9.0 release and local installation
+Date: 2026-09-04
+
+Release:
+  pull request: https://github.com/XiaoWeiKIN/RepoFoundryAI/pull/47
+  merge commit: 16c7811b88885a807a6c8c8ad18e6ddd3466d6bf
+  tag: v0.9.0
+  release: https://github.com/XiaoWeiKIN/RepoFoundryAI/releases/tag/v0.9.0
+  Python 3.10 integrity: passed
+  Python 3.14 integrity: passed
+  required ep-integrity check: passed
+
+Installation:
+  The GitHub archive request returned HTTP 403, so install.py consumed a clean
+  detached worktree at the published v0.9.0 tag instead of the remote tarball.
+  action: upgraded
+  version: 0.9.0
+  package_sha256: 3741505a6343ad45f42665d3413f797643db369767501c4d12079994599b4c9e
+  active release: releases/0.9.0-3741505a6343
+  CLI: /Users/wangxiaowei1/.local/bin/repofoundry
+  Codex Skill: /Users/wangxiaowei1/.codex/skills/repo-foundry-ai
+
+Verification:
+  repofoundry --version
+  RepoFoundry AI 0.9.0
+
+Clean-repository smoke test:
+  schema_version: 1
+  policy.id: default-v1
+  state: within_target
+  fast_path: true
+  actions: []
