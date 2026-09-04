@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.7
+  upgrade --to 0.8.8
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.7
+  upgrade --to 0.8.8
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.7 --apply
+  upgrade --to 0.8.8 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -168,6 +168,11 @@ Design 引用已进入 History Pack 的终态 ADR 时仍能验证其身份和状
 `mark-review-ready` 与 `approve` 路径。完整发行版中的直接 Design 操作与 Harness
 校验现在对 live ADR 和 History Pack 使用同一逻辑语料；独立 Design skill 在没有
 Execution Plan sibling 时仍保持 live-only 兼容模式。
+
+0.8.8 区分当前架构输入与已封存的历史证据：terminal Design 仍会被新的 ADR 和
+active ExecPlan 拒绝，但它后来进入 `abandoned`、`obsolete`、`superseded` 或
+`rejected`，不会再使引用其已发布 revision 的 superseded/packed ADR 与
+completed/cancelled ExecPlan 失效。
 
 ## 管理 Engineering Specs
 
