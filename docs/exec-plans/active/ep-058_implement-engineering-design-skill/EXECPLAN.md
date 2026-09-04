@@ -9,9 +9,9 @@ latest_checkpoint:
 research_refs: ["R-001"]
 research_gate: satisfied
 research_gate_reason: ""
-adr_refs: ["ADR-001", "ADR-004", "ADR-014", "ADR-016", "ADR-018"]
-adr_constraint_refs: ["ADR-014#C-001", "ADR-014#C-002", "ADR-014#C-003", "ADR-014#C-004", "ADR-014#C-005", "ADR-014#C-006", "ADR-016#C-001", "ADR-016#C-002", "ADR-016#C-003", "ADR-016#C-004", "ADR-016#C-005", "ADR-016#C-006", "ADR-016#C-007", "ADR-016#C-008", "ADR-018#C-001", "ADR-018#C-002", "ADR-018#C-003", "ADR-018#C-004", "ADR-018#C-005", "ADR-018#C-006", "ADR-018#C-007", "ADR-018#C-008", "ADR-018#C-009", "ADR-018#C-010", "ADR-018#C-011", "ADR-018#C-012", "ADR-018#C-013", "ADR-018#C-014"]
-adr_evidence: ["ADR-001@sha256:9866f72aa09c400b36a9993681a73f7131381a28179a1f0832cd6a89a2ca8fae", "ADR-004@sha256:401daee8795f70b9c0816e02e655e874bc20c37603b937fe831009bb5a80ef98", "ADR-014@sha256:bf56752a919cc0bc807ef703db9cb8e4192a1e1495597b954412db93a915b1e7", "ADR-016@sha256:448a34be4804a9e60e7ce2e6e78158d7c45d462326b99d456fe533a1513590fb", "ADR-018@sha256:578dc79ed9f5fecc2d15a4ea550b63cc18e4e1301131476a4aa4439be81e9e6e"]
+adr_refs: ["ADR-001", "ADR-004", "ADR-014", "ADR-016", "ADR-018", "ADR-019"]
+adr_constraint_refs: ["ADR-014#C-001", "ADR-014#C-002", "ADR-014#C-003", "ADR-014#C-004", "ADR-014#C-005", "ADR-014#C-006", "ADR-016#C-001", "ADR-016#C-002", "ADR-016#C-003", "ADR-016#C-004", "ADR-016#C-005", "ADR-016#C-006", "ADR-016#C-007", "ADR-016#C-008", "ADR-018#C-001", "ADR-018#C-002", "ADR-018#C-003", "ADR-018#C-004", "ADR-018#C-005", "ADR-018#C-006", "ADR-018#C-007", "ADR-018#C-008", "ADR-018#C-009", "ADR-018#C-010", "ADR-018#C-011", "ADR-018#C-012", "ADR-018#C-013", "ADR-018#C-014", "ADR-019#C-001", "ADR-019#C-002", "ADR-019#C-003", "ADR-019#C-004", "ADR-019#C-005", "ADR-019#C-006"]
+adr_evidence: ["ADR-001@sha256:9866f72aa09c400b36a9993681a73f7131381a28179a1f0832cd6a89a2ca8fae", "ADR-004@sha256:401daee8795f70b9c0816e02e655e874bc20c37603b937fe831009bb5a80ef98", "ADR-014@sha256:bf56752a919cc0bc807ef703db9cb8e4192a1e1495597b954412db93a915b1e7", "ADR-016@sha256:448a34be4804a9e60e7ce2e6e78158d7c45d462326b99d456fe533a1513590fb", "ADR-018@sha256:578dc79ed9f5fecc2d15a4ea550b63cc18e4e1301131476a4aa4439be81e9e6e", "ADR-019@sha256:8c867f1cf7c10a58aa86e6813640a9a47682eac7e31b4060c0b117d00987f62a"]
 design_refs: ["docs/design-docs/engineering-workflow-packaging.md", "docs/design-docs/artifact-metadata-contract.md", "docs/design-docs/reversible-adr-effect.md", "docs/design-docs/first-class-technical-design-documents.md"]
 design_evidence: []
 architecture_entrypoint: "docs/design-docs/index.md"
@@ -24,7 +24,7 @@ verified_revision:
 verification_evidence: []
 archive_sha256:
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-04
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 ---
@@ -53,9 +53,12 @@ ExecPlan. Existing schema-1 Design Docs remain readable and are not mass-rewritt
 - Current state: the independently installable `engineering-design` producer,
   schema-1.1 lifecycle, immutable revision snapshots, read-only EP schema-2.8
   consumer, root Bootstrap composition, 0.6.0 packaging, and focused integration
-  tests are implemented. DD-011 remains `draft` and is not treated as approved.
-- Next action: obtain an explicit Design Owner decision on DD-011; if approved,
-  pin its published revision, rerun final verification, and archive EP-058.
+  tests are implemented. ADR-019 additionally introduces the independently
+  installable `detailed-design` authoring skill and reader-oriented Technical
+  Architecture Docs package layout. DD-011 remains `draft` and is not treated as
+  approved.
+- Next action: obtain an explicit Design Owner decision on DD-011; if approved, pin
+  its published revision, rerun final verification, and archive EP-058.
 - Open question: whether the Design Owner approves DD-011 revision 1. This does not
   change the implemented route, but the v2.8 completion gate correctly blocks archive.
 
@@ -88,14 +91,16 @@ flowchart LR
 
 The draft explanatory contract is
 `docs/design-docs/first-class-technical-design-documents.md`. The architecture
-entrypoint is `docs/design-docs/index.md`. ADR-018 is the canonical authority when
-either prose document is ambiguous.
+entrypoint is `docs/design-docs/index.md`. ADR-018 owns the lifecycle foundation;
+ADR-019 amends its content topology and review profile toward Technical
+Architecture Docs.
 
 ## Constraints and References
 
 | Source | Why it matters | When to read |
 |---|---|---|
 | `docs/adr/adr-018_first-class-technical-design-documents.md` | Accepted ownership, lifecycle, package, evidence, compatibility, and identifier constraints | Before every producer or consumer contract change |
+| `docs/adr/adr-019_technical-architecture-design-packages.md` | Accepted reader-oriented package topology, optional-concern profile, and legacy-package compatibility | Before package generation, authoring, or review changes |
 | `docs/design-docs/first-class-technical-design-documents.md` | Draft target format and workflow; explanatory only | Before templates, schemas, and UX changes |
 | `docs/research/concluded/R-001/RESEARCH.md` | Concluded evidence on independent producer/consumer artifacts | Before defining file boundaries |
 | `docs/design-docs/artifact-metadata-contract.md` | Common frontmatter and manifest rules | Before schema or template work |
@@ -110,9 +115,9 @@ either prose document is ambiguous.
 - Research references: ["R-001"].
 - Architecture decision gate: `satisfied`.
 - Architecture compliance: `applicable`.
-- ADR references: ["ADR-001", "ADR-004", "ADR-014", "ADR-016", "ADR-018"].
-- ADR constraint references: ["ADR-014#C-001", "ADR-014#C-002", "ADR-014#C-003", "ADR-014#C-004", "ADR-014#C-005", "ADR-014#C-006", "ADR-016#C-001", "ADR-016#C-002", "ADR-016#C-003", "ADR-016#C-004", "ADR-016#C-005", "ADR-016#C-006", "ADR-016#C-007", "ADR-016#C-008", "ADR-018#C-001", "ADR-018#C-002", "ADR-018#C-003", "ADR-018#C-004", "ADR-018#C-005", "ADR-018#C-006", "ADR-018#C-007", "ADR-018#C-008", "ADR-018#C-009", "ADR-018#C-010", "ADR-018#C-011", "ADR-018#C-012", "ADR-018#C-013", "ADR-018#C-014"].
-- ADR evidence: ["ADR-001@sha256:9866f72aa09c400b36a9993681a73f7131381a28179a1f0832cd6a89a2ca8fae", "ADR-004@sha256:401daee8795f70b9c0816e02e655e874bc20c37603b937fe831009bb5a80ef98", "ADR-014@sha256:bf56752a919cc0bc807ef703db9cb8e4192a1e1495597b954412db93a915b1e7", "ADR-016@sha256:448a34be4804a9e60e7ce2e6e78158d7c45d462326b99d456fe533a1513590fb", "ADR-018@sha256:578dc79ed9f5fecc2d15a4ea550b63cc18e4e1301131476a4aa4439be81e9e6e"].
+- ADR references: ["ADR-001", "ADR-004", "ADR-014", "ADR-016", "ADR-018", "ADR-019"].
+- ADR constraint references: ["ADR-014#C-001", "ADR-014#C-002", "ADR-014#C-003", "ADR-014#C-004", "ADR-014#C-005", "ADR-014#C-006", "ADR-016#C-001", "ADR-016#C-002", "ADR-016#C-003", "ADR-016#C-004", "ADR-016#C-005", "ADR-016#C-006", "ADR-016#C-007", "ADR-016#C-008", "ADR-018#C-001", "ADR-018#C-002", "ADR-018#C-003", "ADR-018#C-004", "ADR-018#C-005", "ADR-018#C-006", "ADR-018#C-007", "ADR-018#C-008", "ADR-018#C-009", "ADR-018#C-010", "ADR-018#C-011", "ADR-018#C-012", "ADR-018#C-013", "ADR-018#C-014", "ADR-019#C-001", "ADR-019#C-002", "ADR-019#C-003", "ADR-019#C-004", "ADR-019#C-005", "ADR-019#C-006"].
+- ADR evidence: ["ADR-001@sha256:9866f72aa09c400b36a9993681a73f7131381a28179a1f0832cd6a89a2ca8fae", "ADR-004@sha256:401daee8795f70b9c0816e02e655e874bc20c37603b937fe831009bb5a80ef98", "ADR-014@sha256:bf56752a919cc0bc807ef703db9cb8e4192a1e1495597b954412db93a915b1e7", "ADR-016@sha256:448a34be4804a9e60e7ce2e6e78158d7c45d462326b99d456fe533a1513590fb", "ADR-018@sha256:578dc79ed9f5fecc2d15a4ea550b63cc18e4e1301131476a4aa4439be81e9e6e", "ADR-019@sha256:8c867f1cf7c10a58aa86e6813640a9a47682eac7e31b4060c0b117d00987f62a"].
 - Design document references: ["docs/design-docs/engineering-workflow-packaging.md", "docs/design-docs/artifact-metadata-contract.md", "docs/design-docs/reversible-adr-effect.md", "docs/design-docs/first-class-technical-design-documents.md"].
 - Approved Design revision evidence: none yet; the three legacy-current inputs are grandfathered, while DD-011 remains draft and blocks EP completion until separately approved.
 - Architecture entrypoint: `docs/design-docs/index.md`.
@@ -121,8 +126,8 @@ R-001 concluded that professional workflows should exchange versioned,
 machine-checkable files instead of importing one another's implementation. Its
 useful conclusion here is the producer/consumer boundary: `engineering-design`
 owns Design mutation and publishes stable files; `engineering-execution-plan`
-reads those files. Research did not define Design semantics, so ADR-018 supplies
-the missing authority.
+reads those files. Research did not define Design semantics, so ADR-018 and its
+ADR-019 amendment supply the missing authority.
 
 ADR-001 and ADR-004 require independently installable professional packages under a
 thin root orchestrator. ADR-014 requires metadata on current governed Markdown and
@@ -133,7 +138,9 @@ skill and CLI own all Design lifecycle mutation; Research never mutates Designs;
 Execution Plan is a read-only consumer; single-file and package layouts share one
 logical model; approval seals a whole revision atomically; published revisions stay
 valid while a new revision is drafted; delivery completion requires approved Design
-revision evidence and current ADR closure.
+revision evidence and current ADR closure. ADR-019 replaces the concern-oriented
+authoring topology with Technical Architecture Docs routes, makes migration and
+verification optional, and preserves legacy package consumption.
 
 The known downside is another installable package and a new compatibility surface.
 The implementation controls that cost with Python-standard-library-only code,
@@ -166,15 +173,21 @@ or capacity. There are no unresolved facts that require another Research round.
 | ADR-018#C-003 | `epctl.py` only parses and validates approved Design evidence and exposes no Design mutation command. | CLI help and consumer tests. |
 | ADR-018#C-004 | One schema models unique `DD-NNN`, common metadata, lifecycle, and both single/package layouts. | Creation and validation tests for both layouts. |
 | ADR-018#C-005 | Review readiness requires a Research handoff or an explicit not-required reason and preserves findings, confidence, negative evidence, and unknowns. | Handoff fixture and missing-field rejection tests. |
-| ADR-018#C-006 | Required coverage sections must be substantive or contain a reasoned Not applicable statement. | Review-ready coverage table tests. |
+| ADR-018#C-006 | Preserve the original coverage constraint as amendment history; apply ADR-019's reader-oriented review profile to current work. | New review fixture requires a coherent architecture model without optional-concern placeholders. |
 | ADR-018#C-007 | Design approval records separate Design authority and never changes ADR state. | Approval fixture plus ADR state comparison. |
-| ADR-018#C-008 | Packages require an entrypoint, manifest, reading map, local IDs, roles, exact paths, byte sizes, and SHA-256; drift blocks. | Tamper, missing-member, and digest tests. |
+| ADR-018#C-008 | Preserve the manifest, stable identity, digest, and atomic package guarantees while applying ADR-019's current content topology. | Tamper, missing-member, digest, new-layout, and legacy-layout tests. |
 | ADR-018#C-009 | Typed Design dependencies are acyclic; independently governed content uses a separate `DD-NNN`. | Dependency cycle and member-boundary tests. |
 | ADR-018#C-010 | Approval atomically snapshots the whole revision; later revision work leaves the published snapshot valid. | Approve/revise/snapshot immutability tests. |
 | ADR-018#C-011 | Terminal states reject, unpublished states warn, and EP completion requires approved revision evidence plus current ADR closure. | New `epctl` warning and completion-gate tests. |
 | ADR-018#C-012 | Schema-1 legacy references continue to validate without bulk rewrite. | Legacy Design Doc fixture and repository validation. |
 | ADR-018#C-013 | The new package uses only its own files and the Python standard library. | Standalone copied-package test and import scan. |
 | ADR-018#C-014 | State-backed high-water marks never reuse global DD or package-local DOC IDs; indexes rebuild from artifacts while preserving human text. | Delete/reindex/allocation regression tests. |
+| ADR-019#C-001 | New packages use a `DESIGN.md` overview and reader-oriented architecture routes. | New-package filesystem fixture asserts the root and six Technical Architecture Docs directories. |
+| ADR-019#C-002 | New package creation and review do not create or require concern-oriented directories. | Fixture asserts that `contracts`, `data`, `operations`, `migration`, and `verification` roots are absent. |
+| ADR-019#C-003 | Optional concerns appear only when they materially shape the architecture and need no empty or Not-applicable content. | Templates, review protocol, and evals omit universal concern coverage. |
+| ADR-019#C-004 | Root `README.md` is the reading map; package-local identities remain stable independently of role paths. | Manifest, move, sync, and snapshot tests cover root navigation and stable `DOC-NNN`. |
+| ADR-019#C-005 | ADR-018 packages remain readable, synchronizable, publishable, and verifiable without byte rewriting. | Legacy package fixture repeats sync byte-for-byte and publishes the old paths. |
+| ADR-019#C-006 | Ordinary architecture authoring belongs to `detailed-design`; `engineering-design` adds governance only on explicit demand. | Root and package evals test the routing boundary. |
 
 Every structured constraint from every referenced ADR must appear exactly once.
 For a legacy ADR without structured constraints, restate its applicable decision
@@ -209,6 +222,11 @@ understand schema-1.1 Design roots and revision evidence, warn for unpublished D
 reject terminal Design, and block EP completion without an approved revision. It
 must expose no Design mutation command. Register the fifth skill in root routing,
 bootstrap, installation, prompts, docs, checks, and contract tests.
+
+Apply accepted ADR-019 by separating ordinary architecture authoring into
+`detailed-design`, replacing new package concern roots with reader-oriented
+Technical Architecture Docs routes, moving the reading map to root `README.md`,
+and retaining read/sync/publish/verify compatibility for ADR-018 packages.
 
 Finally run standalone, package, consumer, regression, skill, and repository
 verification. Record concise evidence in this plan, use the repository-supported
@@ -299,6 +317,10 @@ All commands run from `/Users/wangxiaowei1/x-otel/EngineeringPlan` unless stated
   `epctl.py` exposes no Design mutator.
 - [x] Exercise an independently copied `engineering-design/` package through
   `test_skill_runs_after_independent_copy`; it passed without sibling packages.
+- [x] Apply ADR-019 and run `python3 scripts/check.py`; 266 tests passed across
+  Research (35), Benchmark (9), Design (18), Execution Plan (82), and root
+  contracts (122), including new-layout creation and byte-stable legacy package
+  publication.
 
 ### Required Benchmark Scenario Gates
 
@@ -338,6 +360,9 @@ for ordinary source and configuration changes.
 - [x] (2026-08-17T02:56:37Z) Verified and recorded implementation evidence. EP-058
   intentionally remains active because DD-011 has not received separate Design
   Owner approval.
+- [x] (2026-09-04) Applied accepted ADR-019: added the `detailed-design` authoring
+  boundary, changed new package topology and review semantics, retained byte-stable
+  legacy package compatibility, and passed the full canonical suite.
 
 ## Surprises & Discoveries
 
@@ -361,6 +386,9 @@ for ordinary source and configuration changes.
 - 2026-08-17 — Implement accepted ADR-018 Option D as a fifth, independent
   `engineering-design` skill. Design approval remains distinct from ADR acceptance;
   therefore DD-011 stays `draft` during this EP unless separately authorized.
+- 2026-09-04 — Apply accepted ADR-019 as the current interpretation of
+  ADR-018#C-006 and ADR-018#C-008: architecture content follows reader routes and
+  optional concerns no longer determine directories or required sections.
 
 ## Blockers
 
@@ -369,17 +397,17 @@ for ordinary source and configuration changes.
 
 ## Outcomes & Retrospective
 
-The implementation delivers ADR-018 Option D as an independent producer rather
+The implementation delivers ADR-018 Option D, as amended by ADR-019, as an independent producer rather
 than extending Research or giving Execution Plan mutation authority. One model now
 covers single-file and package Designs, monotonic `DD-NNN` and local `DOC-NNN`
-identities, review coverage, typed dependencies, explicit Design approval, atomic
-immutable revisions, legacy schema-1 compatibility, and generated projections.
+identities, reader-oriented architecture navigation, typed dependencies, explicit
+Design approval, atomic immutable revisions, legacy schema-1 and ADR-018 package
+compatibility, and generated projections.
 
 `epctl.py` remains a read-only consumer and schema 2.8 pins approved Design evidence
 before completion. Root bootstrap, installation, routing, documentation, examples,
 evaluations, migration, and validation compose the new peer as RepoFoundry 0.6.0 /
-Harness Core 1.5.0. All 234 canonical tests pass and every validator reports zero
-errors.
+Harness Core 1.5.0. The canonical suite and every validator report zero errors.
 
 The remaining work is governance, not implementation: DD-011 is still a draft and
 therefore has no approved revision evidence to pin. EP-058 stays active by design;
@@ -416,11 +444,12 @@ Paths are repository-relative POSIX paths and hashes cover exact file bytes.
 
 - Plan: `docs/exec-plans/active/ep-058_implement-engineering-design-skill/EXECPLAN.md`
 - Accepted authority: `docs/adr/adr-018_first-class-technical-design-documents.md`
+  as amended by `docs/adr/adr-019_technical-architecture-design-packages.md`
 - Producer entrypoint: `engineering-design/SKILL.md`
 - Producer CLI: `engineering-design/scripts/designctl.py`
 - Draft explanatory Design: `docs/design-docs/first-class-technical-design-documents.md`
-- Verification: `python3 -B scripts/check.py` passed 234 tests and all repository
-  integrity checks on 2026-08-17.
+- Verification: `python3 scripts/check.py` passed 266 tests and all repository
+  integrity checks on 2026-09-04.
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -433,3 +462,6 @@ Paths are repository-relative POSIX paths and hashes cover exact file bytes.
 - 2026-08-17T03:02:54Z — Aligned status projection with the schema-2.8 Design
   completion gate and re-ran all 56 Execution Plan tests plus 16 root repository
   contract tests.
+- 2026-09-04 — Applied accepted ADR-019, added the `detailed-design` boundary,
+  changed new package topology and authoring gates, preserved legacy package
+  compatibility, and completed 266 canonical tests.

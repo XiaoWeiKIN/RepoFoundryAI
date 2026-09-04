@@ -333,7 +333,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                     "new-member",
                     "DD-001",
                     "--role",
-                    "interface",
+                    "subsystem",
                     "--slug",
                     "cache-contract",
                     "--title",
@@ -341,7 +341,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ).stdout.strip()
             )
             self.complete_placeholders(design)
-            self.complete_placeholders(design.parent / "docs/README.md")
+            self.complete_placeholders(design.parent / "README.md")
             self.complete_placeholders(design_member)
             self.run_cli(DESIGNCTL, repository, "sync", "DD-001")
             self.run_cli(
@@ -784,6 +784,9 @@ class RepositoryContractTestCase(unittest.TestCase):
         self.assertIn('"policy_schema": GOVERNANCE_POLICY_SCHEMA', foundryctl)
 
         professional_surfaces = {
+            ROOT / "detailed-design/SKILL.md": (
+                "不因主题复杂、章节较多或评审项较多自动创建"
+            ),
             ROOT / "engineering-research/SKILL.md": (
                 "两者不因任务复杂度自动创建 Research"
             ),
@@ -1288,6 +1291,21 @@ class RepositoryContractTestCase(unittest.TestCase):
                 ROOT / "engineering-case-study",
                 case_study_skill,
             )
+            detailed_design_skill = base / "detailed-design"
+            shutil.copytree(ROOT / "detailed-design", detailed_design_skill)
+
+            detailed_design_text = (detailed_design_skill / "SKILL.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("name: detailed-design", detailed_design_text)
+            for relative in (
+                "references/architecture.md",
+                "references/module-contract.md",
+                "references/review.md",
+                "templates/architecture.md",
+                "agents/openai.yaml",
+            ):
+                self.assertTrue((detailed_design_skill / relative).is_file())
 
             case_study_text = (case_study_skill / "SKILL.md").read_text(
                 encoding="utf-8"

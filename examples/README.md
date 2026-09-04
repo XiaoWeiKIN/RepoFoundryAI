@@ -135,9 +135,10 @@ and released together:
 
 ```text
 Use $engineering-design to convert concluded R-012 into the UModel module
-technical design. Organize architecture, public contracts, data ownership,
-operations, migration, and verification as focused documents under one
-DD-NNN review boundary and reading map.
+technical design. Use DESIGN.md for the architecture overview and organize only
+the focused documents contributors need under how-it-works, core-concepts,
+subsystems, extension-points, deep-dives, or contributor-guide. Keep one
+DD-NNN review boundary and a root README reading map.
 
 Preserve the Research findings, confidence limits, counterevidence, and open
 unknowns. Use package-local DOC-NNN identities for jointly approved topics.
@@ -150,11 +151,11 @@ Expected organization:
 
 ```mermaid
 flowchart TB
-    D["DD-NNN module Design"] --> A["architecture/DOC-NNN"]
-    D --> I["contracts/DOC-NNN"]
-    D --> O["operations/DOC-NNN"]
-    D --> V["verification/DOC-NNN"]
-    D -.->|"independent lifecycle"| X["another DD-NNN"]
+    D["DD-NNN module Design"] --> H["how-it-works/DOC-NNN"]
+    D --> C["core-concepts/DOC-NNN"]
+    D --> S["subsystems/DOC-NNN"]
+    D --> X["extension-points or deep-dives/DOC-NNN"]
+    D -.->|"independent lifecycle"| N["another DD-NNN"]
 ```
 
 Expected boundary: Research remains evidence, the Design Package explains how

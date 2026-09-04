@@ -1,7 +1,7 @@
 ---
 name: repo-foundry-ai
 description: |
-  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、项目级 RepoFoundry Skill、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex、Claude Code 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、把 RepoFoundry Skills 注册到当前项目、选择一个或全部 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、处理 ADR 过多与上下文压缩、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Engineering Benchmark、Engineering Research、Engineering Design、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-design 与 engineering-execution-plan 初始化。
+  面向 Coding Agent 原生且不绑定具体产品的软件工程系统：盘点仓库事实与缺口，初始化、验证和显式迁移版本化 Repository Harness，以 Agent-neutral Core 持有工程文档、项目级 RepoFoundry Skill、Engineering Spec lock 与任务激活语义，再通过能力声明式 adapter 接入 Codex、Claude Code 或 Portable CLI 工作流。适用于用户要求初始化或升级 AI 时代的项目脚手架、把 RepoFoundry Skills 注册到当前项目、选择一个或全部 Agent adapter、创建或整理 ARCHITECTURE.md/AGENTS.md、安装或更新命名规范与 Go 等语言规范、让任意 Agent 在实现或评审前激活同一组 Spec、建立 docs 文档控制面、处理 ADR 过多与上下文压缩、检查 adapter 能力与真实 enforcement、统一验证工程入口，或把后续工作路由到 Detailed Design、Engineering Benchmark、Engineering Research、Engineering Design、Engineering Execution Plan 或 Engineering Case Study。Bootstrap 和 upgrade 默认只预览；应用时保护已有定制内容，只创建缺失文件、迁移可证明未修改的 seed、保持已有 Spec 选择与 lock 不变，并组合 engineering-design 与 engineering-execution-plan 初始化。
 ---
 
 # RepoFoundry AI
@@ -22,6 +22,7 @@ flowchart LR
     S --> T
     W --> B["engineering-benchmark<br/>可复现测量"]
     W --> R["engineering-research<br/>问题与证据综合"]
+    W --> L["detailed-design<br/>架构文档协作"]
     W --> G["engineering-design<br/>技术设计包"]
     W --> E["engineering-execution-plan<br/>ADR 与实施"]
     W --> C["engineering-case-study<br/>工程分享"]
@@ -256,6 +257,7 @@ Hook 不可用时仍必须手动遵循 Router Skill 并运行其 `audit` 命令�
 
 | 请求 | 使用 Skill |
 |---|---|
+| 从代码与既有文档建立 mental model，撰写或评审 Architecture、Internals、模块设计或实现合同 | `detailed-design` |
 | 共同校准 Scenario，再预声明并执行性能、容量或回归测量；为一个 EP 建立多个独立测量门禁 | `engineering-benchmark`，再由 `engineering-execution-plan` 声明 Gate Set |
 | 共同校准研究问题与证据方向，解释矛盾并维护多文档 Research | `engineering-research` |
 | 共同探索架构取舍，把已收敛证据转成单文档或多文档技术设计包，并管理评审与版本 | `engineering-design` |

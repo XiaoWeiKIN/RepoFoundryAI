@@ -54,15 +54,23 @@ Research files.
 
 `DESIGN_MANIFEST.json` is a deterministic JSON object with common metadata,
 Design identity, lifecycle, working and published revisions, `DESIGN.md`
-entrypoint, `docs/README.md` reading map, typed dependencies, and every managed
+entrypoint, root `README.md` reading map, typed dependencies, and every managed
 Markdown document exactly once. Each document records stable ID, role,
 repository-relative package path, title, exact byte count, and SHA-256 of exact
 bytes. The manifest does not hash itself.
 
-Managed content roots are `architecture/`, `contracts/`, `data/`, `docs/`,
-`operations/`, `migration/`, and `verification/`. `artifacts/` is explicitly
-declared evidence and is not silently treated as a design member. `snapshots/`
-is immutable publication history.
+New managed content roots are `how-it-works/`, `core-concepts/`, `subsystems/`,
+`extension-points/`, `deep-dives/`, and `contributor-guide/`. They are reading
+routes, not mandatory concern buckets: create only the focused documents that
+improve navigation. `artifacts/` is explicitly declared evidence and is not
+silently treated as a design member. `snapshots/` is immutable publication
+history.
+
+Packages created before ADR-019 may retain `docs/README.md` and the legacy
+`architecture/`, `contracts/`, `data/`, `docs/`, `operations/`, `migration/`,
+and `verification/` roots. The tool reads, syncs, publishes, and verifies these
+packages without relocating or rewriting their authored files. New packages do
+not create those roots.
 
 Dependency values use `TYPE:DD-NNN`. Supported types are `uses`, `extends`,
 `implements`, and `replaces`. The Design graph and supersession graph must be

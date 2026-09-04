@@ -456,6 +456,7 @@ def validate_package(root: Path, expected_version: str | None = None) -> str:
         Path("assets/adapters/claude/repo-foundry-ai/SKILL.md"),
         Path("assets/adapters/claude/engineering-specs/SKILL.md"),
         Path("engineering-benchmark/SKILL.md"),
+        Path("detailed-design/SKILL.md"),
         Path("engineering-design/SKILL.md"),
         Path("engineering-research/SKILL.md"),
         Path("engineering-execution-plan/SKILL.md"),

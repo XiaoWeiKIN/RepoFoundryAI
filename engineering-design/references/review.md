@@ -2,39 +2,38 @@
 
 ## Review-ready gate
 
-Review the package as one system model, not as unrelated Markdown files.
-Before `mark-review-ready`, verify every concern below has substantive content
-somewhere in the package or a concrete `Not applicable: <reason>` disposition:
+Review the package as one technical architecture model, not as unrelated
+Markdown files or a concern checklist. Before `mark-review-ready`, confirm that
+the selected reader can:
 
-1. Design Summary
-2. Goals and Non-goals
-3. Research and Decision Inputs
-4. System Context and Invariants
-5. Proposed Architecture
-6. Interfaces and Contracts
-7. Data Model and State Ownership
-8. Control and Data Flows
-9. Failure Semantics and Recovery
-10. Compatibility, Migration, and Rollout
-11. Security, Privacy, and Operations
-12. Verification Strategy
-13. Alternatives, Open Questions, and Revisit Triggers
+1. understand the design outcome, scope, goals, and explicit non-goals;
+2. redraw the system context, major boundaries, and dependency direction;
+3. follow one to three representative requests, data items, state transitions,
+   or resource lifecycles end to end;
+4. identify the core abstractions, what each owns, and the invariants they
+   establish or preserve;
+5. distinguish stable extension points from internal implementation seams;
+6. navigate from concepts to the relevant focused document and source evidence;
+7. understand meaningful alternatives, open questions, validity conditions,
+   and revisit triggers.
 
 Also confirm:
 
-- reproduced Research findings retain confidence limits, negative evidence,
-  remaining unknowns, and validity conditions;
+- decision-relevant Research findings retain their confidence limits, negative
+  evidence, remaining unknowns, and validity conditions;
 - proposed ADRs do not authorize a published durable choice;
-- every package member is declared once and manifest bytes match disk;
-- interface versioning, idempotency, validation, and error behavior are explicit;
-- retry, timeout, partial failure, rollback, reconciliation, and operator action
-  are explicit where relevant;
-- old/new coexistence, downgrade, cleanup, and irreversible boundaries are clear;
-- verification names evidence that an ExecPlan can actually collect;
-- typed Design dependencies are current and acyclic.
+- every package member answers a distinct reader question, is declared once,
+  and matches the manifest byte-for-byte;
+- typed Design dependencies are current and acyclic;
 - material choices explored with the user are either confirmed Design inputs or
-  explicit open questions with owner, impact, and revisit trigger; provisional
-  preferences are not presented as settled invariants.
+  explicit open questions; provisional preferences are not presented as settled
+  invariants;
+- migration, verification, operations, security, data, compatibility, failure,
+  and recovery details appear only when they materially shape this architecture.
+
+An absent optional concern needs no empty section, placeholder member, or
+`Not applicable` prose. If one member merely mirrors a checklist item or repeats
+the overview, merge or remove it before review.
 
 ## Approval boundary
 

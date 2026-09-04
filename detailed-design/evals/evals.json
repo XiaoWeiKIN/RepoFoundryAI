@@ -1,0 +1,54 @@
+{
+  "skill_name": "detailed-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "参考 DataFusion 的写法，给这个查询引擎仓库写一份面向 contributor 的架构文档。",
+      "expected_output": "Produces one focused architecture document organized around the query lifecycle, core abstractions, boundaries, extension points, and a late code map; it does not create a DD package or mirror the repository tree.",
+      "files": [],
+      "assertions": [
+        {"name": "flow-first", "description": "Uses a real query or data lifecycle as the narrative spine before introducing source locations."},
+        {"name": "single-document-default", "description": "Defaults to one Markdown document and does not generate role-based directories, a manifest, or DD identities."}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "设计一个持久化 export queue，需要明确 lease、重试、崩溃恢复和并发边界。",
+      "expected_output": "Uses module plus contract concerns selectively, making state ownership, transitions, failure semantics, compatibility, and verification explicit without forcing unrelated architecture sections.",
+      "files": [],
+      "assertions": [
+        {"name": "contract-depth", "description": "Defines ownership and invariants deeply enough to constrain implementation."},
+        {"name": "selective-structure", "description": "Omits irrelevant template sections rather than filling a universal checklist."}
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review this architecture document against the current code and tell me the important gaps; do not rewrite it yet.",
+      "expected_output": "Reports evidence-backed findings ordered by engineering risk, including mental-model, ownership, boundary, evolution, verification, and freshness gaps, without mutating the document.",
+      "files": [],
+      "assertions": [
+        {"name": "risk-first-review", "description": "Leads with actionable findings and concrete failure modes rather than a prose rewrite."},
+        {"name": "read-only-boundary", "description": "Does not edit the document when only a review was requested."}
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "把这份架构文档登记成 DD-012，生成 manifest，进入 review_ready。",
+      "expected_output": "Routes governed DD identity, manifest, and lifecycle work to engineering-design instead of inventing those mechanics inside detailed-design.",
+      "files": [],
+      "assertions": [
+        {"name": "governance-boundary", "description": "Hands explicit DD lifecycle work to engineering-design."}
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "这个架构主题确实需要多篇文档，请生成一个 contributor-facing 文档目录。不要迁移和验证清单。",
+      "expected_output": "Uses a root README and only the needed reader-oriented Technical Architecture Docs routes such as how-it-works, core-concepts, subsystems, extension-points, deep-dives, and contributor-guide; it does not create concern buckets.",
+      "files": [],
+      "assertions": [
+        {"name": "reader-oriented-package", "description": "Organizes multiple documents by how contributors learn and navigate the architecture."},
+        {"name": "no-concern-buckets", "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."}
+      ]
+    }
+  ]
+}

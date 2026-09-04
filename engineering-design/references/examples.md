@@ -8,9 +8,9 @@ python3 scripts/designctl.py --repo . new-design \
   --slug umodel-registry --title "UModel registry module" --layout package \
   --research R-004 --adr ADR-021 --owner "Model Platform Owner" --author Codex
 python3 scripts/designctl.py --repo . new-member DD-012 \
-  --role interface --slug registry-api --title "Registry API contract"
+  --role flow --slug publication-flow --title "Registry publication flow"
 python3 scripts/designctl.py --repo . new-member DD-012 \
-  --role operations --slug publication-recovery --title "Publication and recovery"
+  --role subsystem --slug registry-core --title "Registry core subsystem"
 python3 scripts/designctl.py --repo . sync DD-012
 python3 scripts/designctl.py --repo . validate
 ```
@@ -18,7 +18,8 @@ python3 scripts/designctl.py --repo . validate
 The Agent then writes the Design content. It translates the Synthesis rather
 than copying it: supported findings become boundaries and invariants, rejected
 hypotheses become forbidden shortcuts, and unknowns become assumptions,
-blockers, verification checks, or revisit triggers.
+blockers or revisit triggers. Migration, verification, operations and similar
+topics become focused documents only when they materially shape this design.
 
 ## Create a bounded single-file design without Research
 

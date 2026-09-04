@@ -88,6 +88,22 @@
           "description": "Introduces one counterexample or failure condition that can discriminate whether the preference should survive or gain constraints."
         }
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "参考 DataFusion，基于当前代码给贡献者写一份查询引擎 Architecture 文档。",
+      "expected_output": "Routes ordinary architecture-document authoring to detailed-design and does not allocate a DD identity, manifest, package directory, or approval lifecycle.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "architecture-authoring-boundary",
+          "description": "Does not turn a normal Architecture or Internals document into a governed Design artifact."
+        },
+        {
+          "name": "no-package-by-complexity",
+          "description": "Does not infer package layout merely from system complexity or the number of review concerns."
+        }
+      ]
     }
   ]
 }

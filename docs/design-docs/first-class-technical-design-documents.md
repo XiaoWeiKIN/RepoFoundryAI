@@ -6,7 +6,7 @@ id: DD-011
 doc_type: design
 title: First-class technical Design Documents
 status: draft
-adr_refs: ["ADR-018"]
+adr_refs: ["ADR-018", "ADR-019"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-16
@@ -17,11 +17,13 @@ updated: 2026-08-17
 
 RepoFoundry needs a governed artifact that translates established evidence into
 an implementable system model. Research establishes what is true, uncertain,
-or recommended. A logical technical Design specifies how the selected system
-will behave: its boundaries, interfaces, data model, flows, failure semantics,
-compatibility obligations, and verification strategy. A small design may fit
-in one Markdown file; a module or system design may require a manifest-managed
-set of documents that share one identity and review boundary.
+or recommended. A logical technical Design explains how the selected system
+works through its mental model, representative flows, core abstractions,
+boundaries, extension points, and source map. Concerns such as migration,
+verification, operations, security, or compatibility appear only when they
+materially shape that architecture. A small design may fit in one Markdown
+file; a module or system design may require a manifest-managed set of documents
+that share one identity and review boundary.
 
 The current repository recognizes Design Docs as linked architecture inputs,
 but only after authors create them manually. `epctl` validates their metadata
@@ -54,7 +56,7 @@ Design Doc cannot replace an implementation plan.
 | Artifact | Primary question | Owns | Must not own |
 |---|---|---|---|
 | Research | What is true, unknown, or supported by evidence? | questions, sources, experiments, option comparison, confidence, Synthesis | target interfaces, implementation architecture, delivery tasks |
-| Design Doc | How should the selected system behave? | one logical design package containing boundaries, components, interfaces, data, flows, failure behavior, migration, operations, and verification design | decision authority, task progress, completion evidence |
+| Design Doc | How should the selected system behave? | one logical architecture narrative containing system shape, flows, abstractions, boundaries, extension points, and material constraints | decision authority, task progress, completion evidence |
 | ADR | Which durable choice is authorized? | one decision, normative constraints, consequences, confirmation, Decision Owner authorization | detailed component design or execution history |
 | ExecPlan | How will the authorized design be delivered? | milestones, paths, tasks, commands, recovery, acceptance evidence | new unsupported architecture decisions |
 
@@ -113,11 +115,12 @@ is selected at creation time:
 flowchart TB
     M["DD-012 UModel module design"] --> C["DESIGN.md<br/>scope, status, inputs, design map"]
     M --> F["DESIGN_MANIFEST.json<br/>members, roles, digests, entrypoint"]
-    M --> A["architecture/<br/>context and components"]
-    M --> I["contracts/<br/>schemas, APIs, errors"]
-    M --> D["data/<br/>identity and state ownership"]
-    M --> O["operations/<br/>failure, recovery, observability"]
-    M --> V["verification/<br/>test and acceptance design"]
+    M --> R["README.md<br/>reader routes"]
+    M --> H["how-it-works/<br/>representative flows"]
+    M --> K["core-concepts/<br/>abstractions and invariants"]
+    M --> S["subsystems/<br/>responsibility boundaries"]
+    M --> X["extension-points/<br/>supported composition"]
+    M --> D["deep-dives/<br/>material specialist topics"]
 ```
 
 The package path remains stable across lifecycle states:
@@ -126,24 +129,20 @@ The package path remains stable across lifecycle states:
 docs/design-docs/dd-012_umodel-registry/
 ├── DESIGN.md
 ├── DESIGN_MANIFEST.json
-├── docs/
-│   └── README.md
-├── architecture/
-│   ├── context-and-boundaries.md
-│   └── components-and-dependencies.md
-├── contracts/
-│   ├── entity-type-schema.md
-│   ├── registry-api.md
-│   └── validation-errors.md
-├── data/
-│   └── identity-and-storage.md
-├── operations/
-│   ├── publication-and-recovery.md
-│   └── observability.md
-├── migration/
-│   └── compatibility-and-rollout.md
-├── verification/
-│   └── acceptance-strategy.md
+├── README.md
+├── how-it-works/
+│   └── declaration-to-activation.md
+├── core-concepts/
+│   ├── entity-type-and-identity.md
+│   └── compiled-registry.md
+├── subsystems/
+│   └── registry-runtime.md
+├── extension-points/
+│   └── type-provider.md
+├── deep-dives/
+│   └── publication-and-recovery.md
+├── contributor-guide/
+│   └── changing-the-registry.md
 ├── artifacts/
 └── snapshots/
     └── rev-001/
@@ -154,10 +153,9 @@ and ADR inputs, goals, non-goals, system-wide invariants, the document map,
 cross-document conclusions, open blockers, and revision state. It does not
 copy every child document.
 
-`docs/README.md` is the human reading route. It explains which documents to
-read for architecture review, API review, data review, operations review, or
-implementation handoff. It is a navigation projection, not another source of
-design conclusions.
+Root `README.md` is the human reading route. It starts from the overview and
+directs contributors by behavior, concept, subsystem, extension, or deep dive.
+It is a navigation projection, not another source of design conclusions.
 
 Every managed member receives a stable package-local identity such as
 `DD-012/DOC-003`. Moving or renaming its file does not change that identity.
@@ -167,7 +165,7 @@ The member frontmatter declares its role and package:
 ---
 design_id: DD-012
 document_id: DOC-003
-role: interface
+role: subsystem
 title: EntityType registry API
 author: Codex
 owner: Model Platform Owner
@@ -188,8 +186,8 @@ The manifest is the machine-readable fact source for package membership:
   "documents": [
     {
       "id": "DOC-003",
-      "role": "interface",
-      "path": "contracts/registry-api.md",
+      "role": "subsystem",
+      "path": "subsystems/registry-runtime.md",
       "title": "EntityType registry API",
       "sha256": "<document-sha256>"
     }
@@ -197,9 +195,10 @@ The manifest is the machine-readable fact source for package membership:
 }
 ```
 
-Allowed roles include `architecture`, `component`, `interface`, `data`,
-`flow`, `security`, `operations`, `migration`, `verification`, and `appendix`.
-Roles organize review coverage; they do not force one file per role.
+Preferred roles are `flow`, `concept`, `subsystem`, `extension`, `deep-dive`,
+and `contributor-guide`. A role describes a reading route; it does not require
+a document or dictate which architecture concerns must appear. Legacy roles
+remain accepted for existing ADR-018 packages.
 
 The package boundary follows lifecycle independence:
 
@@ -287,50 +286,40 @@ architecture, or an explicit user direction already fixes the inputs, creation
 requires a concrete `--research-not-required-reason`. This reason belongs to
 the Design Doc and remains independently reviewable by a later ADR or EP.
 
-## The content profile applies to the package, not every member
+## The content profile follows the reader's architecture questions
 
-The complete Design Package must cover the following concerns. A single layout
-uses sections in one file. A package layout distributes concerns across member
-documents and maps each concern from `DESIGN.md` and the manifest.
+The complete Design Package must give its selected reader a coherent mental
+model. `DESIGN.md` owns the overview: outcome and scope, decision inputs,
+system context, representative flows, core abstractions and boundaries, and
+meaningful alternatives or open questions. Focused members exist only when a
+reader benefits from a separate route or a topic needs independently maintained
+depth.
 
-1. **Design Summary** — selected shape, user-visible outcome, and validity
-   conditions in one bounded statement.
-2. **Goals and Non-goals** — owned scope and explicit exclusions.
-3. **Research and Decision Inputs** — reproduced findings, confidence,
-   negative evidence, remaining unknowns, and ADR constraints.
-4. **System Context and Invariants** — existing boundaries that the design
-   preserves, with a Mermaid context diagram when relationships matter.
-5. **Proposed Architecture** — components, responsibilities, ownership, and
-   dependency direction.
-6. **Interfaces and Contracts** — APIs, schemas, commands, events, versioning,
-   idempotency, validation, and error surfaces.
-7. **Data Model and State Ownership** — identity, lifecycle, persistence,
-   consistency, retention, and sensitive-data boundaries.
-8. **Control and Data Flows** — success paths, concurrency, retries, and
-   partial failure using sequence or flow diagrams where useful.
-9. **Failure Semantics and Recovery** — fail-open/closed behavior, timeouts,
-   rollback, reconciliation, and operator actions.
-10. **Compatibility, Migration, and Rollout** — old/new coexistence, upgrade,
-    downgrade, cleanup, and irreversible boundaries.
-11. **Security, Privacy, and Operations** — trust boundaries, authorization,
-    observability, capacity assumptions, alerts, and support ownership.
-12. **Verification Strategy** — contract, integration, migration, failure,
-    security, and operational evidence needed before an EP can complete.
-13. **Alternatives, Open Questions, and Revisit Triggers** — rejected shapes,
-    blockers, evidence that would change the design, and follow-up ownership.
+The normal reading sequence is:
 
-`DESIGN.md` contains a coverage table so reviewers can prove that the package
-answers every concern without opening files by guesswork:
+1. understand the purpose, selected shape, goals, and non-goals;
+2. redraw the system context and dependency direction;
+3. trace representative requests, data, state, or resource lifecycles;
+4. understand core abstractions, ownership, invariants, and composition;
+5. inspect subsystem boundaries and supported extension points;
+6. follow the code map or a focused deep dive where needed;
+7. evaluate alternatives, open questions, validity conditions, and revisit
+   triggers.
 
-| Concern | Package document | Stable reference | Review owner |
-|---|---|---|---|
-| Proposed Architecture | `architecture/components-and-dependencies.md` | `DD-012/DOC-002` | Model Platform Owner |
-| Interfaces and Contracts | `contracts/entity-type-schema.md` | `DD-012/DOC-003` | Schema Owner |
-| Failure and Recovery | `operations/publication-and-recovery.md` | `DD-012/DOC-007` | Runtime Owner |
+Migration, verification, operations, security, compatibility, data, failure,
+and recovery details are optional. They belong in the architecture document
+whose behavior they change, and become a focused deep dive only when their
+depth and readership justify it. Their absence requires no empty heading,
+placeholder member, coverage row, or `Not applicable` prose.
 
-A concern may state `Not applicable` with a concrete reason in the coverage
-table. Missing coverage, unregistered members, and empty required placeholders
-block `mark-design-review-ready`.
+`DESIGN.md` still contains a generated package document map so reviewers can
+navigate stable identities without guessing paths:
+
+| Reading route | Package document | Stable reference |
+|---|---|---|
+| How it works | `how-it-works/declaration-to-activation.md` | `DD-012/DOC-002` |
+| Core concept | `core-concepts/compiled-registry.md` | `DD-012/DOC-003` |
+| Subsystem | `subsystems/registry-runtime.md` | `DD-012/DOC-004` |
 
 ## The UModel example becomes one coherent package
 
@@ -397,13 +386,13 @@ docs/
     └── dd-NNN_module-design/
         ├── DESIGN.md
         ├── DESIGN_MANIFEST.json
-        ├── docs/README.md
-        ├── architecture/
-        ├── contracts/
-        ├── data/
-        ├── operations/
-        ├── migration/
-        ├── verification/
+        ├── README.md
+        ├── how-it-works/
+        ├── core-concepts/
+        ├── subsystems/
+        ├── extension-points/
+        ├── deep-dives/
+        ├── contributor-guide/
         ├── artifacts/
         └── snapshots/
 ```
@@ -429,8 +418,8 @@ a diagnostic instead of an overwrite.
 `sync-design` updates the active manifest with every declared member's path,
 role, byte size, and SHA-256. `mark-design-review-ready` fails if files are
 missing, undeclared Markdown exists inside managed content roots, references
-escape the package, document IDs conflict, required concerns lack coverage, or
-the manifest drifts.
+escape the package, document IDs conflict, the architecture overview is not
+substantive, required authoring markers remain, or the manifest drifts.
 
 `approve-design` seals the manifest and copies the complete reviewable document
 set to `snapshots/rev-NNN/`. ADRs and ExecPlans cite the stable entrypoint and
@@ -461,8 +450,9 @@ Validation adds the following rules for schema `1.1` Design Docs:
 - Package manifests contain every managed document exactly once, use unique
   `DOC-NNN` identities, match file bytes and SHA-256 values, and declare one
   valid entrypoint and reading map.
-- `review_ready` and publishable revisions cover every required design concern
-  and contain no required placeholder.
+- `review_ready` and publishable revisions provide a coherent architecture
+  overview and contain no required authoring placeholder. Optional concerns are
+  not required to appear.
 - A published revision has explicit approval metadata and a sealed snapshot for
   the exact manifest payload.
 - Every `adr_ref` used to justify a durable choice resolves to a current
@@ -491,6 +481,12 @@ Research refs, package manifests, approval actors, or historical revisions. A
 legacy document migrates only when an author materially revises it or explicitly
 runs a previewed migration.
 
+Schema `1.1` packages created under ADR-018 may retain `docs/README.md` and the
+legacy concern roots. They remain readable, synchronizable, publishable, and
+verifiable without relocating or rewriting authored files. The compatibility
+parser accepts both layouts; only newly created packages use the Technical
+Architecture Docs routes.
+
 `designctl init` adopts an existing `docs/design-docs` directory without moving
 files. `epctl init` may register the same directory as a read-only architecture
 root. No migration rewrites accepted ADRs, archived ExecPlans, or legacy Design
@@ -514,13 +510,13 @@ The implementation must add focused tests for:
 - concluded, active, cancelled, missing, and tampered Research inputs;
 - all Design lifecycle transitions, explicit actors, working versus published
   revisions, immutable snapshots, supersession cycles, and terminal references;
-- required-concern coverage across one or many documents;
+- architecture overview coverage without forcing absent optional concerns;
 - proposed versus accepted ADR references and Design dependency closure at
   each lifecycle state;
 - new-EP and archive behavior for draft, review-ready, revising, current, and
   superseded packages, including exact `design_evidence` pins;
 - generated-index preservation and idempotent reindexing;
-- legacy schema `1` compatibility and byte preservation;
+- legacy schema `1` and ADR-018 package compatibility and byte preservation;
 - a producer-consumer fixture that creates Research with `researchctl`, creates
   a multi-document Design Package with an independently copied `designctl`,
   then uses an independently copied `epctl` to accept an ADR with explicit

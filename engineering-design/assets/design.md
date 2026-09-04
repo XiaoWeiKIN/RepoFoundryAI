@@ -41,21 +41,7 @@ managed package members share one review and approval boundary.
 
 ## Research and Decision Inputs
 
-### Supported Findings and Confidence
-
-<!-- REQUIRED: Reproduce decision-relevant findings and confidence; do not provide only links. -->
-
-### Negative Evidence and Rejected Hypotheses
-
-<!-- REQUIRED: Preserve evidence against tempting alternatives or state a reasoned Not applicable. -->
-
-### Remaining Unknowns and Validity Conditions
-
-<!-- REQUIRED: State remaining unknowns, assumptions, destinations, and evidence that would invalidate the design. -->
-
-### ADR Constraints
-
-<!-- REQUIRED: Map current accepted ADR constraints, or explain why no durable decision is required. -->
+<!-- REQUIRED: Summarize the evidence, accepted ADR constraints, remaining unknowns, and validity conditions that materially shape this architecture. Do not provide only links. -->
 
 ## System Context and Invariants
 
@@ -63,39 +49,15 @@ managed package members share one review and approval boundary.
 
 ## Proposed Architecture
 
-<!-- REQUIRED: Define components, responsibilities, ownership, and dependency direction. -->
-
-## Interfaces and Contracts
-
-<!-- REQUIRED: Define APIs, schemas, commands or events, versioning, idempotency, validation, and errors. -->
-
-## Data Model and State Ownership
-
-<!-- REQUIRED: Define identity, lifecycle, persistence, consistency, retention, and sensitive-data boundaries. -->
+<!-- REQUIRED: Explain the system shape, core abstractions, responsibility boundaries, ownership, dependency direction, and extension points. Link focused package members where deeper treatment helps the reader. -->
 
 ## Control and Data Flows
 
-<!-- REQUIRED: Define success, concurrency, retry, and partial-failure paths. Use Mermaid when relationships matter. -->
-
-## Failure Semantics and Recovery
-
-<!-- REQUIRED: Define fail-open/closed behavior, timeouts, rollback, reconciliation, and operator actions. -->
-
-## Compatibility, Migration, and Rollout
-
-<!-- REQUIRED: Define coexistence, upgrade, downgrade, cleanup, and irreversible boundaries. -->
-
-## Security, Privacy, and Operations
-
-<!-- REQUIRED: Define trust, authorization, observability, capacity, alerting, and support ownership. -->
-
-## Verification Strategy
-
-<!-- REQUIRED: Define contract, integration, migration, failure, security, and operational evidence. -->
+<!-- REQUIRED: Trace one to three representative requests, data items, state transitions, or resource lifecycles end to end. Include failure or concurrency behavior only where it shapes the architecture. -->
 
 ## Alternatives, Open Questions, and Revisit Triggers
 
-<!-- REQUIRED: Record rejected shapes, blockers, follow-up ownership, and evidence that changes this design. -->
+<!-- REQUIRED: Record meaningful rejected shapes, unresolved architecture questions, owners where known, and evidence that would change this design. -->
 
 ## Package Document Map
 

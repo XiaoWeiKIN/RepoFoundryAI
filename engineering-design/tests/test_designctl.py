@@ -223,17 +223,34 @@ class DesignctlTestCase(unittest.TestCase):
 
     def test_package_manifest_members_and_atomic_snapshot(self) -> None:
         design = self.new_design("registry-module", layout="package")
-        reading_map = design.parent / "docs/README.md"
+        reading_map = design.parent / "README.md"
         self.assertIn(
-            'href="../DESIGN.md"',
+            'href="DESIGN.md"',
             reading_map.read_text(encoding="utf-8"),
+        )
+        self.assertEqual(
+            {
+                path.name
+                for path in design.parent.iterdir()
+                if path.is_dir()
+            },
+            {
+                "artifacts",
+                "contributor-guide",
+                "core-concepts",
+                "deep-dives",
+                "extension-points",
+                "how-it-works",
+                "snapshots",
+                "subsystems",
+            },
         )
         member = Path(
             self.run_cli(
                 "new-member",
                 "DD-001",
                 "--role",
-                "interface",
+                "subsystem",
                 "--slug",
                 "registry-api",
                 "--title",
@@ -247,12 +264,13 @@ class DesignctlTestCase(unittest.TestCase):
         self.assertEqual(manifest["status"], "current")
         self.assertEqual(
             [item["role"] for item in manifest["documents"]],
-            ["entrypoint", "reading-map", "interface"],
+            ["entrypoint", "reading-map", "subsystem"],
         )
+        self.assertEqual(manifest["reading_map"], "README.md")
         snapshot = design.parent / "snapshots/rev-001"
         self.assertTrue((snapshot / "DESIGN.md").is_file())
-        self.assertTrue((snapshot / "docs/README.md").is_file())
-        self.assertTrue((snapshot / "contracts/doc-002_registry-api.md").is_file())
+        self.assertTrue((snapshot / "README.md").is_file())
+        self.assertTrue((snapshot / "subsystems/doc-002_registry-api.md").is_file())
         self.assertRegex(evidence, r"^DD-001@rev:1@sha256:[0-9a-f]{64}$")
         self.run_cli("validate")
 
@@ -272,15 +290,77 @@ class DesignctlTestCase(unittest.TestCase):
         )
         self.publish(design)
         self.run_cli("revise", "DD-001", "--reason", "Reorganize package navigation")
-        destination = design.parent / "architecture" / "worker-component.md"
+        destination = design.parent / "deep-dives" / "worker-component.md"
         member.rename(destination)
         self.run_cli("sync", "DD-001")
         manifest = json.loads(
             (design.parent / "DESIGN_MANIFEST.json").read_text(encoding="utf-8")
         )
         item = next(item for item in manifest["documents"] if item["id"] == "DOC-002")
-        self.assertEqual(item["path"], "architecture/worker-component.md")
+        self.assertEqual(item["path"], "deep-dives/worker-component.md")
         self.run_cli("validate")
+
+    def test_legacy_package_layout_remains_syncable_and_publishable(self) -> None:
+        design = self.new_design("legacy-package", layout="package")
+        package = design.parent
+        legacy_reading = package / "docs/README.md"
+        legacy_reading.parent.mkdir()
+        (package / "README.md").rename(legacy_reading)
+        legacy_reading.write_text(
+            legacy_reading.read_text(encoding="utf-8").replace(
+                'href="DESIGN.md"', 'href="../DESIGN.md"'
+            ),
+            encoding="utf-8",
+        )
+        for directory in (
+            "how-it-works",
+            "core-concepts",
+            "subsystems",
+            "extension-points",
+            "deep-dives",
+            "contributor-guide",
+        ):
+            (package / directory).rmdir()
+
+        member = Path(
+            self.run_cli(
+                "new-member",
+                "DD-001",
+                "--role",
+                "interface",
+                "--slug",
+                "legacy-contract",
+                "--title",
+                "Legacy contract",
+            ).stdout.strip()
+        )
+        self.assertEqual(member.parent.name, "contracts")
+        self.complete_markers(design)
+        self.complete_markers(legacy_reading)
+        self.complete_markers(member)
+        self.run_cli("sync", "DD-001")
+        stable_bytes = {
+            path.relative_to(package).as_posix(): path.read_bytes()
+            for path in (design, legacy_reading, member)
+        }
+
+        self.run_cli("sync", "DD-001")
+        self.run_cli("validate")
+        self.assertEqual(
+            stable_bytes,
+            {
+                path.relative_to(package).as_posix(): path.read_bytes()
+                for path in (design, legacy_reading, member)
+            },
+        )
+        evidence = self.publish(design)
+        manifest = json.loads((package / "DESIGN_MANIFEST.json").read_text())
+        self.assertEqual(manifest["reading_map"], "docs/README.md")
+        self.assertTrue((package / "snapshots/rev-001/docs/README.md").is_file())
+        self.assertTrue(
+            (package / "snapshots/rev-001/contracts/doc-002_legacy-contract.md").is_file()
+        )
+        self.assertRegex(evidence, r"^DD-001@rev:1@sha256:[0-9a-f]{64}$")
 
     def test_high_water_marks_never_reuse_deleted_ids(self) -> None:
         first = self.new_design("first")
@@ -322,7 +402,7 @@ class DesignctlTestCase(unittest.TestCase):
         design = self.new_design("drift", layout="package")
         self.run_cli("mark-review-ready", "DD-001", expected=2)
         self.complete_markers(design)
-        reading = design.parent / "docs/README.md"
+        reading = design.parent / "README.md"
         self.complete_markers(reading)
         self.run_cli("sync", "DD-001")
         reading.write_text(reading.read_text(encoding="utf-8") + "\nTampered.\n", encoding="utf-8")
@@ -521,7 +601,7 @@ class DesignctlTestCase(unittest.TestCase):
         package = self.new_design("symlink", layout="package")
         outside = self.repo / "outside.md"
         outside.write_text("# Outside\n", encoding="utf-8")
-        linked = package.parent / "contracts/linked.md"
+        linked = package.parent / "core-concepts/linked.md"
         linked.symlink_to(outside)
         symlink_result = self.run_cli("validate", expected=1)
         self.assertIn("Refusing symbolic link", symlink_result.stdout)

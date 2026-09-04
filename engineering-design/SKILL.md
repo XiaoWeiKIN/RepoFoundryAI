@@ -1,7 +1,7 @@
 ---
 name: engineering-design
 description: |
-  通过与用户交互式探索尚未收敛的架构取舍，把已完成的工程 Research、当前 ADR 约束或明确的非 Research 输入转化为可评审、可复用的技术 Design，并治理单文件 Design 与多文档 Design Package 的身份、内容覆盖、成员 manifest、修订快照、批准证据、依赖和生命周期。适用于用户要求共同讨论或细化平台定位、边界、核心不变量与方案取舍，把 Research 转成技术设计，设计一个模块或系统，创建/拆分/评审/批准/修订 Design Doc，组织一系列共同组成模块设计的文档，或提到 Design Package、DD-NNN、技术设计文档。Research 调研、ADR 决策授权、ExecPlan 交付规划和普通代码说明不触发本 skill。
+  把已完成的工程 Research、当前 ADR 约束或明确输入转化为受治理的技术 Design，并管理 DD-NNN、单文件或多文档 Design Package、manifest、修订快照、批准证据、依赖和生命周期。适用于用户明确要求创建、拆分、评审、批准或修订受治理 Design，或提到 Design Package、DD-NNN、manifest、revision。普通 Architecture、Internals、模块说明和实现合同的撰写或评审使用 detailed-design；Research、ADR 授权、ExecPlan 和普通代码说明也不触发本 skill。
 ---
 
 # Engineering Design
@@ -21,18 +21,22 @@ flowchart LR
 
 ## 先判断是否应创建 Design
 
-使用本 skill：目标是定义模块或系统的边界、组件、接口、数据、流程、失败语义、
-迁移、运行和验证，且结果需要被评审或复用。以下请求分别路由：
+使用本 skill：目标是把模块或系统的架构说明登记为受治理、可批准和可复用的
+`DD-NNN` 制品。以下请求分别路由：
 
 - 仍有会改变路线的未知：先用 `engineering-research`。
+- 需要从代码建立 mental model，撰写或优化普通 Architecture、Internals、模块设计或实现
+  合同，但不需要 `DD-NNN` 生命周期：使用 `detailed-design`。
 - 外部事实已经足够，但平台边界、状态所有权、接口形态、失败策略等仍有多个合理取舍：
   留在本 skill，先做交互式探索。
 - 需要授权一个长期架构选择：用 `engineering-execution-plan` 创建 ADR。
 - 方向和设计均已批准，只需拆交付步骤：用 `engineering-execution-plan` 创建 EP。
 - 只解释现有代码且不产生持久设计契约：直接回答，不创建 Design。
 
-一个小而完整的设计使用 `layout: single`。一个模块需要架构、契约、数据、运维、
-迁移或验证等多位作者共同评审时使用 `layout: package`。只有在子设计具有独立 owner、
+一个小而完整的受治理设计使用 `layout: single`。复杂度、章节数量和 review concern
+本身不是 package 的理由。只有已经确认存在多个需要独立导航或维护、但仍共享一次批准
+边界的文档时，才使用 `layout: package`。不要按架构、契约、数据、运维、迁移和验证
+机械地各建一个成员。只有在子设计具有独立 owner、
 消费者、ADR、批准节奏或发布生命周期时，才拆成另一个全局 `DD-NNN`；包内专题使用
 局部 `DOC-NNN`。
 
@@ -71,12 +75,14 @@ flowchart LR
    schema-1 文档。
 4. 用 `new-design` 创建单文件或包。必须提供至少一个 `--research R-NNN`，或明确的
    `--research-not-required-reason`；不要代替用户编造 owner、author 或批准者。
-5. 对 package 用 `new-member` 增加聚焦文档。每次成员变化后运行 `sync`，保持路径、
-   字节数和 SHA-256 manifest 精确一致。
+5. 对 package 用 `new-member` 增加真正需要独立导航的聚焦文档，按 `how-it-works`、
+   `core-concepts`、`subsystems`、`extension-points`、`deep-dives` 或
+   `contributor-guide` 组织。每次成员变化后运行 `sync`，保持路径、字节数和 SHA-256
+   manifest 精确一致。
 6. 语义性撰写整套 Design。必须复述结论与置信边界、负面证据和剩余未知，不能只放
-   Research 链接；把探索中确认的约束、方案理由、反例复验和否决项写入对应 concern，
-   不复制完整聊天记录。所有必需 concern 都要有实质内容，或写明具体的
-   `Not applicable` 原因。
+   Research 链接；把探索中确认的约束、方案理由、反例复验和否决项写入架构叙事，
+   不复制完整聊天记录。迁移、验证、运维、安全、数据和兼容性只在确实塑造该架构时
+   出现；不要创建空章节、占位文档或 `Not applicable` 清单。
 7. 运行 `mark-review-ready DD-NNN`。失败时修正文档，不绕过 REQUIRED marker、
    Research、ADR、依赖环或 manifest drift 门禁。
 8. 只有 Design Owner 或声明的 Design authority 明确批准该完整修订后，才运行

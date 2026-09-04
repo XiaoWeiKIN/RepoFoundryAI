@@ -18,19 +18,15 @@ updated: {{DATE}}
 
 ## Purpose and Design Relevance
 
-<!-- REQUIRED: Explain which package concern this member resolves and why it belongs in {{DESIGN_ID}}. -->
+<!-- REQUIRED: Explain which reader question this document answers and why it belongs in {{DESIGN_ID}}. -->
 
-## Detailed Design
+## Architecture Detail
 
-<!-- REQUIRED: Specify the role-specific design with concrete interfaces, state, flows, or operational behavior. -->
+<!-- REQUIRED: Explain the relevant behavior, abstractions, boundaries, invariants, and examples at the depth this reading route needs. -->
 
-## Cross-document Contracts
+## Relationships and Source Map
 
-<!-- REQUIRED: Link stable DD/DOC identities and state assumptions or invariants shared with other members. -->
-
-## Verification
-
-<!-- REQUIRED: State observable evidence that will verify this part of the design. -->
+<!-- REQUIRED: Link stable DD/DOC identities, shared assumptions, and the implementation or evidence a contributor should inspect next. -->
 
 ## Revision Notes
 

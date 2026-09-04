@@ -248,6 +248,22 @@
           "description": "各专业 Skill 独立携带其协作协议，不依赖另一个 Skill 的安装路径"
         }
       ]
+    },
+    {
+      "id": 12,
+      "prompt": "参考 DataFusion 的风格，基于当前仓库给 contributor 写一份架构文档，讲清请求流程、核心抽象和源码入口。",
+      "expected_output": "路由到 detailed-design，以一份聚焦 Markdown 建立 mental model，先讲真实流程、抽象和边界，再给源码映射；不因内容复杂自动创建 DD-NNN、Design Package、manifest 或 approval lifecycle。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "routes_architecture_documentation",
+          "description": "普通 Architecture、Internals 和模块文档协作由 detailed-design 处理"
+        },
+        {
+          "name": "separates_documentation_from_governance",
+          "description": "只有明确的 DD 生命周期请求才进入 engineering-design"
+        }
+      ]
     }
   ]
 }

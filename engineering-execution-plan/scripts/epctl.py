@@ -4524,9 +4524,9 @@ def verify_design_manifest(
     if layout == "package":
         if manifest.get("entrypoint") != "DESIGN.md":
             errors.append(f"{manifest_path}: entrypoint must be DESIGN.md")
-        if manifest.get("reading_map") != "docs/README.md":
+        if manifest.get("reading_map") not in {"README.md", "docs/README.md"}:
             errors.append(
-                f"{manifest_path}: reading_map must be docs/README.md"
+                f"{manifest_path}: reading_map must be README.md or legacy docs/README.md"
             )
     elif manifest.get("entrypoint") != "DESIGN.md":
         errors.append(f"{manifest_path}: entrypoint must be DESIGN.md")
@@ -4579,12 +4579,19 @@ def verify_design_manifest(
     if "DESIGN.md" not in paths:
         errors.append(f"{manifest_path}: documents must include DESIGN.md")
     if layout == "package":
-        if "docs/README.md" not in paths or reading_maps != 1:
+        reading_map = manifest.get("reading_map")
+        if reading_map not in paths or reading_maps != 1:
             errors.append(
-                f"{manifest_path}: package requires one docs/README.md reading map"
+                f"{manifest_path}: package requires exactly one declared reading map"
             )
-        managed_paths = {"DESIGN.md"}
+        managed_paths = {"DESIGN.md", str(reading_map)}
         managed_roots = {
+            "how-it-works",
+            "core-concepts",
+            "subsystems",
+            "extension-points",
+            "deep-dives",
+            "contributor-guide",
             "architecture",
             "contracts",
             "data",
