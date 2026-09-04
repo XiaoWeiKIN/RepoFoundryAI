@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "non_normative": true,
+  "state": "action_required",
+  "fast_path": false,
+  "policy": {
+    "id": "default-v1",
+    "numeric_boundary": "exclusive",
+    "terminal_candidate_threshold": 3
+  },
+  "signals": [
+    {
+      "dimension": "effective_adrs",
+      "value": 24,
+      "review_threshold": 24,
+      "action_threshold": 40,
+      "severity": "within_target",
+      "action_type": "consolidate_current",
+      "explanation": "Review view taxonomy when the current ADR set exceeds the navigation target of 24."
+    },
+    {
+      "dimension": "largest_component",
+      "value": 1,
+      "review_threshold": 12,
+      "action_threshold": 24,
+      "severity": "within_target",
+      "action_type": "consolidate_current",
+      "explanation": "A large weakly connected current graph usually needs narrower task capsules; target is 12 ADRs."
+    },
+    {
+      "dimension": "max_active_plan_adr_refs",
+      "value": 14,
+      "review_threshold": 12,
+      "action_threshold": 24,
+      "severity": "review_due",
+      "action_type": "narrow_plan_context",
+      "explanation": "An active plan above this ADR input target should be partitioned or use stable constraint selection."
+    },
+    {
+      "dimension": "max_active_plan_constraint_refs",
+      "value": 122,
+      "review_threshold": 96,
+      "action_threshold": 192,
+      "severity": "review_due",
+      "action_type": "narrow_plan_context",
+      "explanation": "A plan above this structured-constraint input target should use task-specific selection or narrower implementation milestones."
+    },
+    {
+      "dimension": "partially_amended_adrs",
+      "value": 0,
+      "review_threshold": 8,
+      "action_threshold": 16,
+      "severity": "within_target",
+      "action_type": "consolidate_current",
+      "explanation": "A high partially-amended count warrants owner review for possible new atomic consolidation ADRs; it never triggers automatic merge."
+    },
+    {
+      "dimension": "legacy_current_adrs",
+      "value": 9,
+      "review_threshold": 0,
+      "action_threshold": 8,
+      "severity": "action_required",
+      "action_type": "migrate_legacy_contracts",
+      "explanation": "Each current legacy ADR requires whole-document capsule context."
+    },
+    {
+      "dimension": "uncovered_current_adrs",
+      "value": 0,
+      "review_threshold": 0,
+      "action_threshold": 8,
+      "severity": "within_target",
+      "action_type": "repair_views",
+      "explanation": "Current ADRs outside every healthy view remain discoverable but lack persistent domain navigation."
+    },
+    {
+      "dimension": "max_view_capsule_bytes",
+      "value": 25575,
+      "review_threshold": 32768,
+      "action_threshold": 65536,
+      "severity": "within_target",
+      "action_type": "narrow_view_context",
+      "explanation": "A complete view above the default capsule budget requires a narrower task selection or a reviewed budget reason."
+    }
+  ],
+  "eligible_terminal_adrs": [],
+  "actions": [
+    {
+      "type": "narrow_plan_context",
+      "severity": "review_due",
+      "reason_dimensions": [
+        "max_active_plan_adr_refs",
+        "max_active_plan_constraint_refs"
+      ],
+      "affected": {
+        "adrs": [],
+        "views": [],
+        "plans": [
+          "EP-091"
+        ]
+      },
+      "preview_only": true,
+      "authority_required": "repository owner review before any follow-up mutation",
+      "next_command": "epctl adr-health --json"
+    },
+    {
+      "type": "migrate_legacy_contracts",
+      "severity": "action_required",
+      "reason_dimensions": [
+        "legacy_current_adrs"
+      ],
+      "affected": {
+        "adrs": [
+          "ADR-001",
+          "ADR-002",
+          "ADR-004",
+          "ADR-007",
+          "ADR-008",
+          "ADR-009",
+          "ADR-012",
+          "ADR-013",
+          "ADR-014"
+        ],
+        "views": [],
+        "plans": []
+      },
+      "preview_only": true,
+      "authority_required": "repository owner review before any follow-up mutation",
+      "next_command": "epctl adr-consolidation-plan --adr ADR-001 --adr ADR-002 --adr ADR-004 --adr ADR-007 --adr ADR-008 --adr ADR-009 --adr ADR-012 --adr ADR-013 --adr ADR-014 --json"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "non_normative": true,
+  "preview_only": true,
+  "selection": {
+    "kind": "explicit_adrs",
+    "view_id": "",
+    "title": ""
+  },
+  "direct_adrs": [
+    "ADR-001",
+    "ADR-002",
+    "ADR-004",
+    "ADR-007",
+    "ADR-008",
+    "ADR-009",
+    "ADR-012",
+    "ADR-013",
+    "ADR-014"
+  ],
+  "resolved_adrs": [
+    "ADR-001",
+    "ADR-002",
+    "ADR-004",
+    "ADR-007",
+    "ADR-008",
+    "ADR-009",
+    "ADR-012",
+    "ADR-013",
+    "ADR-014"
+  ],
+  "amendment_edges": [],
+  "amendment_chains": [],
+  "partially_amended_adrs": [],
+  "whole_document_legacy_adrs": [
+    "ADR-001",
+    "ADR-002",
+    "ADR-004",
+    "ADR-007",
+    "ADR-008",
+    "ADR-009",
+    "ADR-012",
+    "ADR-013",
+    "ADR-014"
+  ],
+  "active_plan_impact": [
+    {
+      "id": "EP-091",
+      "adr_refs": [
+        "ADR-012"
+      ]
+    }
+  ],
+  "proposed_overlap": [],
+  "recommendation": "defer_while_active_or_proposed_work_depends_on_context",
+  "required_next_step": "If semantic consolidation remains desirable, author one new atomic proposed ADR, obtain explicit Decision Owner acceptance, implement migration, then use authorized effect transitions.",
+  "forbidden_mutations": [
+    "merge",
+    "accept",
+    "retire",
+    "supersede",
+    "rewrite",
+    "delete"
+  ]
+}

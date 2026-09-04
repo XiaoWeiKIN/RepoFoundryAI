@@ -1,0 +1,50 @@
+DataFox RepoFoundry Harness upgrade to 0.9.0
+Date: 2026-09-04
+Repository: /Users/wangxiaowei1/x-otel/datafox
+Branch: feat/oql-engine
+
+Before:
+  distribution: 0.8.8
+  core: 1.5.1
+  Harness schema: 3
+  Codex adapter: 2.4.0
+
+Preview:
+  No upgrade conflict was reported. The only managed file replacement was
+  .repo-foundry/skills/repo-foundry-ai/SKILL.md; the Harness manifest carried
+  the version/provenance update. Repository-customized AGENTS.md and the
+  Design index were preserved.
+
+The first apply failed closed during post-validation because concurrent OQL
+work had left DD-008's generated Design Manifest and the generated Engineering
+Spec requirement index behind their source documents. The upgrade transaction
+rolled back to 0.8.8. After reviewed deterministic projection refreshes:
+
+  repofoundry --repo . spec sync --apply
+  designctl.py --repo . sync DD-008
+
+Spec and Design validation both reported 0 errors. Repeating the preview and
+apply then succeeded.
+
+After:
+  distribution: 0.9.0
+  core: 1.5.2
+  Harness schema: 3
+  Codex adapter: 2.4.0
+  repofoundry validate --harness: 0 errors, 7 existing scaffold warnings
+  repofoundry spec validate: 0 errors, 0 warnings
+  designctl validate at upgrade point: 0 errors, 0 warnings
+
+Mutation boundary:
+  The 0.9.0 upgrade changed only the versioned Core Skill and Harness manifest.
+  It created no ADR History Pack and changed no logical ADR source. DataFox
+  still reports 30 live ADR files, 2 History Packs, and 34 packed entries.
+
+Commit:
+  aae10617 chore: upgrade RepoFoundry harness to 0.9.0
+
+The DataFox worktree also contained unrelated in-progress OQL code and Design
+changes. They were preserved and excluded from the upgrade commit. A parallel
+task changed DD-008 again after the successful validation point, so a later
+whole-repository epctl validation correctly failed closed on that new manifest
+drift; it is not attributed to the Harness migration.
