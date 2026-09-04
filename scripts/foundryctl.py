@@ -472,6 +472,7 @@ def load_execution_plan_ctl() -> ModuleType:
         "load_config",
         "repo_lock",
         "save_config",
+        "adr_corpus_data",
     ):
         if not hasattr(module, attribute):
             raise FoundryctlError(
@@ -3813,7 +3814,12 @@ def validate_harness(
             )
     try:
         designctl = load_design_ctl()
-        design_errors, design_warnings = designctl.validate_repo(repo)
+        epctl = load_execution_plan_ctl()
+        logical_adr_data = epctl.adr_corpus_data(repo)
+        design_errors, design_warnings = designctl.validate_repo(
+            repo,
+            logical_adr_data=logical_adr_data,
+        )
     except Exception as exc:
         errors.append(f"HARNESS_DESIGN_CONTRACT_INVALID: {exc}")
     else:

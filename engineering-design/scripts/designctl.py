@@ -786,16 +786,28 @@ def validate_research_reference(repo: Path, research_id: str) -> list[str]:
 
 
 def validate_adr_reference(
-    repo: Path, adr_id: str, require_current: bool
+    repo: Path,
+    adr_id: str,
+    require_current: bool,
+    *,
+    logical_adr_data: dict[str, dict[str, str]] | None = None,
 ) -> list[str]:
+    normalized_adr_id = normalize_adr_id(adr_id)
     located = locate_artifact(
-        repo / "docs" / "adr", "*.md", normalize_adr_id(adr_id)
+        repo / "docs" / "adr", "*.md", normalized_adr_id
     )
-    if located is None:
+    if located is not None:
+        path, data = located
+        source = str(path)
+    elif logical_adr_data is not None and normalized_adr_id in logical_adr_data:
+        data = logical_adr_data[normalized_adr_id]
+        source = f"History Pack entry {normalized_adr_id}"
+    else:
         return [f"ADR not found: {adr_id}"]
-    path, data = located
     if require_current and data.get("status") != "accepted":
-        return [f"{path}: ADR {adr_id} is not current accepted architecture"]
+        return [
+            f"{source}: ADR {adr_id} is not current accepted architecture"
+        ]
     if data.get("status") not in {
         "proposed",
         "accepted",
@@ -804,7 +816,7 @@ def validate_adr_reference(
         "retired",
         "superseded",
     }:
-        return [f"{path}: invalid ADR status {data.get('status', '')!r}"]
+        return [f"{source}: invalid ADR status {data.get('status', '')!r}"]
     return []
 
 
@@ -1284,6 +1296,7 @@ def validate_design_record(
     records: dict[str, DesignRecord],
     *,
     for_review: bool = False,
+    logical_adr_data: dict[str, dict[str, str]] | None = None,
 ) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -1348,7 +1361,14 @@ def validate_design_record(
         adr_refs = []
     require_current = for_review or status in {"review_ready", "current"}
     for adr_id in adr_refs:
-        errors.extend(validate_adr_reference(repo, adr_id, require_current))
+        errors.extend(
+            validate_adr_reference(
+                repo,
+                adr_id,
+                require_current,
+                logical_adr_data=logical_adr_data,
+            )
+        )
     if require_current and not adr_refs and not data.get(
         "decision_not_required_reason", ""
     ).strip():
@@ -1397,13 +1417,22 @@ def validate_design_record(
     return unique(errors), unique(warnings)
 
 
-def validate_repo(repo: Path) -> tuple[list[str], list[str]]:
+def validate_repo(
+    repo: Path,
+    *,
+    logical_adr_data: dict[str, dict[str, str]] | None = None,
+) -> tuple[list[str], list[str]]:
     records, errors = scan_designs(repo)
     warnings: list[str] = []
     errors.extend(validate_dependency_graph(records))
     errors.extend(validate_supersession_graph(records))
     for record in records.values():
-        item_errors, item_warnings = validate_design_record(repo, record, records)
+        item_errors, item_warnings = validate_design_record(
+            repo,
+            record,
+            records,
+            logical_adr_data=logical_adr_data,
+        )
         errors.extend(item_errors)
         warnings.extend(item_warnings)
     try:

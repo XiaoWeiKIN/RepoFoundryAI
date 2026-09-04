@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -655,7 +656,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 3)
         self.assertEqual(
             manifest["producer"],
-            {"name": "repo-foundry", "version": "0.8.5"},
+            {"name": "repo-foundry", "version": "0.8.6"},
         )
         self.assertEqual(
             manifest["core"],
@@ -779,7 +780,78 @@ class FoundryctlTestCase(unittest.TestCase):
     def test_cli_reports_the_distribution_version(self) -> None:
         result = self.run_cli("--version")
 
-        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.8.5")
+        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.8.6")
+
+    def test_harness_validation_resolves_design_adr_refs_from_history_packs(
+        self,
+    ) -> None:
+        self.run_cli("bootstrap", "--adapter", "codex", "--apply")
+        adr = Path(
+            self.run_ep_cli(
+                "new-adr",
+                "--slug",
+                "historical-design-input",
+                "--title",
+                "Historical design input",
+            ).stdout.strip()
+        )
+        text = adr.read_text(encoding="utf-8")
+        for placeholder, value in {
+            "REPLACE_WITH_SCOPE": "test architecture boundary",
+            "REPLACE_WITH_CONSTRAINT": (
+                "The implementation must preserve the test boundary."
+            ),
+            "REPLACE_WITH_CONFIRMATION": "Run the architecture contract test.",
+        }.items():
+            text = text.replace(placeholder, value)
+        text = re.sub(
+            r"<!--\s*REQUIRED(?:_[A-Z_]+)?\s*:[\s\S]*?-->",
+            "Recorded evidence.",
+            text,
+        )
+        text = re.sub(r"(?m)^-\s+\[ \]", "- [x]", text)
+        adr.write_text(text, encoding="utf-8")
+        self.run_ep_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "rejected",
+            "--decision-maker",
+            "Test Decision Owner",
+        )
+
+        designctl = foundryctl.load_design_ctl()
+        designctl.new_design(
+            self.repo,
+            slug="historical-input-consumer",
+            title="Historical input consumer",
+            layout="single",
+            research_refs=[],
+            research_not_required_reason=(
+                "The bounded fixture has authoritative inputs."
+            ),
+            adr_refs=["ADR-001"],
+            dependencies=[],
+            author="Test Author",
+            owner="Test Owner",
+        )
+        packed = json.loads(
+            self.run_ep_cli(
+                "pack-historical-adrs",
+                "ADR-001",
+                "--packed-by",
+                "Test Archivist",
+                "--reason",
+                "Compact a terminal design input fixture.",
+                "--apply",
+                "--json",
+            ).stdout
+        )
+
+        self.assertTrue(packed["applied"])
+        self.assertFalse(adr.exists())
+        validation = self.run_cli("validate", "--harness")
+        self.assertNotIn("ADR not found: ADR-001", validation.stderr)
 
     def test_084_manifest_can_upgrade_after_core_skill_template_change(
         self,
@@ -848,7 +920,7 @@ class FoundryctlTestCase(unittest.TestCase):
             [item["id"] for item in migrated["applied_migrations"]],
             [
                 "core-1.5.0-to-1.5.1",
-                "distribution-0.8.4-to-0.8.5",
+                "distribution-0.8.4-to-0.8.6",
             ],
         )
         self.assertEqual(

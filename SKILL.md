@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.5
+  upgrade --to 0.8.6
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.5
+  upgrade --to 0.8.6
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.5 --apply
+  upgrade --to 0.8.6 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -159,6 +159,10 @@ accepted/current ADR；旧 Decision View 进入 `review_required`，等待 owner
 候选 corpus，apply 才在锁内生成 content-addressed pack、删除已验证源文件并再次
 全量验证，任何失败回滚原字节。逻辑 ADR、关系、证据和索引保持可解析；生命周期
 修改或降级到不识别 pack 的版本前必须先完整 unpack。升级本身不会自动打包任何 ADR。
+
+0.8.6 让 Harness 的 Design contract 校验复用同一 logical ADR resolver，因此
+Design 引用已进入 History Pack 的终态 ADR 时仍能验证其身份和状态；pack 损坏、重复
+身份或 current Design 引用 non-current ADR 继续失败关闭。
 
 ## 管理 Engineering Specs
 
