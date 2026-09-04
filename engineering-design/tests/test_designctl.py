@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DESIGNCTL = ROOT / "scripts" / "designctl.py"
+EPCTL = ROOT.parent / "engineering-execution-plan" / "scripts" / "epctl.py"
 
 
 class DesignctlTestCase(unittest.TestCase):
@@ -32,6 +33,29 @@ class DesignctlTestCase(unittest.TestCase):
                 sys.executable,
                 "-B",
                 str(DESIGNCTL),
+                "--repo",
+                str(self.repo),
+                *arguments,
+            ],
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+        if result.returncode != expected:
+            self.fail(
+                f"expected exit {expected}, got {result.returncode}\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+        return result
+
+    def run_ep_cli(
+        self, *arguments: str, expected: int = 0
+    ) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(EPCTL),
                 "--repo",
                 str(self.repo),
                 *arguments,
@@ -81,6 +105,78 @@ class DesignctlTestCase(unittest.TestCase):
             "Test Owner",
         )
         return Path(result.stdout.strip())
+
+    def test_direct_cli_resolves_design_adr_refs_from_history_packs(self) -> None:
+        self.run_ep_cli("init")
+        adr = Path(
+            self.run_ep_cli(
+                "new-adr",
+                "--slug",
+                "historical-design-input",
+                "--title",
+                "Historical design input",
+            ).stdout.strip()
+        )
+        text = adr.read_text(encoding="utf-8")
+        for placeholder, value in {
+            "REPLACE_WITH_SCOPE": "test architecture boundary",
+            "REPLACE_WITH_CONSTRAINT": (
+                "The implementation must preserve the test boundary."
+            ),
+            "REPLACE_WITH_CONFIRMATION": "Run the architecture contract test.",
+        }.items():
+            text = text.replace(placeholder, value)
+        text = re.sub(
+            r"<!--\s*REQUIRED(?:_[A-Z_]+)?\s*:[\s\S]*?-->",
+            "Recorded evidence.",
+            text,
+        )
+        text = re.sub(r"(?m)^-\s+\[ \]", "- [x]", text)
+        adr.write_text(text, encoding="utf-8")
+        self.run_ep_cli(
+            "decide-adr",
+            "ADR-001",
+            "--outcome",
+            "rejected",
+            "--decision-maker",
+            "Test Decision Owner",
+        )
+        self.run_cli(
+            "new-design",
+            "--slug",
+            "historical-input-consumer",
+            "--title",
+            "Historical input consumer",
+            "--layout",
+            "single",
+            "--research-not-required-reason",
+            "The bounded fixture has authoritative inputs.",
+            "--adr",
+            "ADR-001",
+            "--author",
+            "Test Author",
+            "--owner",
+            "Test Owner",
+        )
+        packed = json.loads(
+            self.run_ep_cli(
+                "pack-historical-adrs",
+                "ADR-001",
+                "--packed-by",
+                "Test Archivist",
+                "--reason",
+                "Compact a terminal design input fixture.",
+                "--apply",
+                "--json",
+            ).stdout
+        )
+
+        self.assertTrue(packed["applied"])
+        self.assertFalse(adr.exists())
+        validation = self.run_cli("validate")
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        self.assertNotIn("ADR not found: ADR-001", validation.stdout)
+        self.assertEqual(status[0]["errors"], [])
 
     def publish(self, path: Path) -> str:
         self.complete_markers(path)

@@ -7,6 +7,7 @@ import argparse
 import contextlib
 import datetime as dt
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -30,6 +31,9 @@ except ImportError:  # pragma: no cover - POSIX
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSET_DIR = SKILL_DIR / "assets"
+EXECUTION_PLAN_CTL = (
+    SKILL_DIR.parent / "engineering-execution-plan" / "scripts" / "epctl.py"
+)
 STATE_VERSION = 1
 CURRENT_SCHEMA = "1.1"
 CURRENT_METADATA_SCHEMA = "1"
@@ -150,6 +154,49 @@ class DesignRecord:
     @property
     def package(self) -> Path:
         return self.path.parent
+
+
+def load_logical_adr_data(
+    repo: Path,
+) -> dict[str, dict[str, str]] | None:
+    """Load the canonical logical ADR corpus when the bundled engine exists."""
+    if not EXECUTION_PLAN_CTL.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location(
+        "_repo_foundry_designctl_epctl",
+        EXECUTION_PLAN_CTL,
+    )
+    if spec is None or spec.loader is None:
+        raise DesignctlError(
+            "Unable to load bundled engineering-execution-plan component: "
+            f"{EXECUTION_PLAN_CTL}"
+        )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+        resolver = getattr(module, "adr_corpus_data", None)
+        if not callable(resolver):
+            raise DesignctlError(
+                "Bundled engineering-execution-plan component does not expose "
+                "adr_corpus_data"
+            )
+        data = resolver(repo.resolve())
+    except DesignctlError:
+        sys.modules.pop(spec.name, None)
+        raise
+    except Exception as exc:
+        sys.modules.pop(spec.name, None)
+        raise DesignctlError(
+            "Unable to resolve the logical ADR corpus through the bundled "
+            f"engineering-execution-plan component: {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise DesignctlError(
+            "Bundled engineering-execution-plan adr_corpus_data returned an "
+            "invalid corpus"
+        )
+    return data
 
 
 def utc_now() -> dt.datetime:
@@ -1422,6 +1469,8 @@ def validate_repo(
     *,
     logical_adr_data: dict[str, dict[str, str]] | None = None,
 ) -> tuple[list[str], list[str]]:
+    if logical_adr_data is None:
+        logical_adr_data = load_logical_adr_data(repo)
     records, errors = scan_designs(repo)
     warnings: list[str] = []
     errors.extend(validate_dependency_graph(records))
@@ -1529,8 +1578,14 @@ def new_design(
         if errors:
             raise DesignctlError("\n".join(errors))
     normalized_adrs = unique(normalize_adr_id(item) for item in adr_refs)
+    logical_adr_data = load_logical_adr_data(repo)
     for adr_id in normalized_adrs:
-        errors = validate_adr_reference(repo, adr_id, require_current=False)
+        errors = validate_adr_reference(
+            repo,
+            adr_id,
+            require_current=False,
+            logical_adr_data=logical_adr_data,
+        )
         if errors:
             raise DesignctlError("\n".join(errors))
     normalized_dependencies = unique(normalize_dependency(item) for item in dependencies)
@@ -1661,7 +1716,13 @@ def mark_review_ready(repo: Path, design_id: str) -> Path:
     records, scan_errors = scan_designs(repo)
     errors = list(scan_errors)
     errors.extend(validate_dependency_graph(records))
-    item_errors, _ = validate_design_record(repo, record, records, for_review=True)
+    item_errors, _ = validate_design_record(
+        repo,
+        record,
+        records,
+        for_review=True,
+        logical_adr_data=load_logical_adr_data(repo),
+    )
     errors.extend(item_errors)
     if errors:
         raise DesignctlError("Review-ready gate failed:\n- " + "\n- ".join(unique(errors)))
@@ -1805,7 +1866,13 @@ def approve(
         raise DesignctlError("approve requires a schema-1.1 review_ready Design")
     records, scan_errors = scan_designs(repo)
     errors = list(scan_errors) + validate_dependency_graph(records)
-    item_errors, _ = validate_design_record(repo, record, records, for_review=True)
+    item_errors, _ = validate_design_record(
+        repo,
+        record,
+        records,
+        for_review=True,
+        logical_adr_data=load_logical_adr_data(repo),
+    )
     errors.extend(item_errors)
     if errors:
         raise DesignctlError("Approval gate failed:\n- " + "\n- ".join(unique(errors)))
@@ -1980,8 +2047,14 @@ def status_payload(repo: Path, selected: str | None) -> list[dict[str, object]]:
         records = {design_id: records[design_id]}
     result: list[dict[str, object]] = []
     all_records, _ = scan_designs(repo)
+    logical_adr_data = load_logical_adr_data(repo)
     for design_id, record in sorted(records.items()):
-        item_errors, item_warnings = validate_design_record(repo, record, all_records)
+        item_errors, item_warnings = validate_design_record(
+            repo,
+            record,
+            all_records,
+            logical_adr_data=logical_adr_data,
+        )
         try:
             dependencies = json_list(record.data, "design_dependencies") if record.schema == CURRENT_SCHEMA else []
         except DesignctlError:
