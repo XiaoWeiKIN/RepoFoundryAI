@@ -303,8 +303,34 @@ RepoFoundry 0.9.0 会在 `validate` 中执行版本化 `default-v1` 维护策略
 升级状态；三个及以上可机械验证的 strict 终态 live ADR 会独立产生
 `pack_history`。当前决策、图耦合、amendment、View 与 active plan 压力分别路由到
 不同 action。所有 action 都是非规范、只预览的建议：检测不会自动 retire、
-supersede、rewrite、consolidate、pack、unpack 或 apply。外部定时任务调用
-`adr-maintenance --check`，不复制策略。
+supersede、rewrite、consolidate、pack、unpack 或 apply。
+
+ADR 维护会在以下入口执行：
+
+| 触发点 | 调用方式 | 行为 |
+|---|---|---|
+| 显式检查 | `adr-maintenance`，可选 `--json` 或 `--explain` | 返回完整的确定性结果和只预览 action。 |
+| 常规仓库检查 | `status` 或 `validate` | `status` 嵌入有界摘要；`validate` 输出非阻断 warning。 |
+| Agent 工作流边界 | ADR lifecycle/storage apply 成功后，以及 Governed 交接前 | 仓库工作流运行 `adr-maintenance`，并把尚未解决的 typed action 带入交接。 |
+| 定时 CI | 外部 scheduler 运行 `adr-maintenance --check` | 只有 `action_required` 返回退出码 `1`；`review_due` 不阻断。 |
+
+RepoFoundry 内置 evaluator 和工作流规则，但不安装常驻 daemon，也不定义按时钟运行的
+周期。需要每日或每周检查时，由团队在现有 CI 中定时调用
+`adr-maintenance --check`；scheduler 不得复制阈值，也不得自动修改 ADR。
+
+下面这组建议用于把日常 Agent 检索上下文控制在可管理范围内，并明确区分策略阈值与
+团队实践建议：
+
+| 范围 | 建议数量 | 含义 |
+|---|---:|---|
+| 项目级有效 Current ADR | 不超过 24 | `default-v1` review 边界；大于 24 为 `review_due`，大于 40 为 `action_required`。 |
+| 单个 Decision View | 显式种子不超过 8，解析后的 ADR 闭包不超过 12 | 导航建议。当前策略实际检测完整 View 成本：大于 32 KiB 为 `review_due`，大于 64 KiB 为 `action_required`。 |
+| 单次任务 Capsule | 优先物化 3～8 个 ADR source，通常不超过 12 | 上下文建议。工具强制的默认预算是 32 KiB；完整上下文过大时应使用 focused materialization，不能截断。 |
+| 可打包的终态 live ADR | 达到 3 个就安排 History Pack；通常按 3～5 个一批评审 | `default-v1` 在 `candidate_count >= 3` 时输出 `pack_history`；真正打包仍需显式 IDs、actor、reason、preview 和 apply 授权。 |
+| 单个决策的 amendment/replacement 链 | 出现 3 层及以上后优先合并 | 这是团队建议：创建新的原子 proposed ADR，而不是无限追加 amendment；owner 接受和后续 effect transition 仍需显式授权。 |
+
+这些数量不是质量分，也不能作为删除历史的理由。是否适合合并或打包，仍取决于领域
+耦合、精确字节、active plan 消费关系和决策授权。
 
 语义生命周期处理完成后，可以把显式选择的 strict 终态 ADR（`rejected`、`retired`
 或 `superseded`）从多个 Markdown 文件物理替换为一个无损、content-addressed History

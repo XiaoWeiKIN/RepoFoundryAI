@@ -326,8 +326,36 @@ value is greater than the boundary; three or more mechanically eligible terminal
 strict live ADRs independently produce `pack_history`. Current-decision, graph,
 amendment, view, and active-plan pressure route to their own action families. Every
 action is non-normative and preview-only: detection never retires, supersedes,
-rewrites, consolidates, packs, unpacks, or applies an ADR change. External schedulers
-invoke `adr-maintenance --check` instead of duplicating the policy.
+rewrites, consolidates, packs, unpacks, or applies an ADR change.
+
+ADR maintenance is evaluated at these integration points:
+
+| Trigger | Invocation | Behavior |
+|---|---|---|
+| Explicit inspection | `adr-maintenance`, optionally with `--json` or `--explain` | Returns the complete deterministic result and preview-only actions. |
+| Normal repository checks | `status` or `validate` | `status` embeds a bounded summary; `validate` emits a non-blocking warning. |
+| Agent workflow boundary | After a successful ADR lifecycle/storage apply and before a Governed handoff | The repository workflow runs `adr-maintenance` and carries unresolved typed actions into the handoff. |
+| Scheduled CI | An external scheduler runs `adr-maintenance --check` | Exits `1` only for `action_required`; `review_due` remains non-blocking. |
+
+RepoFoundry ships the evaluator and workflow rules, not a resident daemon or a
+wall-clock cadence. Teams that want daily or weekly checks configure their existing
+CI scheduler to invoke `adr-maintenance --check`; the scheduler must not duplicate
+the thresholds or perform an ADR mutation automatically.
+
+The following operating envelope keeps ADR retrieval small enough for routine Agent
+work. It deliberately distinguishes policy thresholds from team guidance:
+
+| Scope | Recommended range | Meaning |
+|---|---:|---|
+| Effective current ADR set | At most 24 | `default-v1` review boundary; more than 24 is `review_due` and more than 40 is `action_required`. |
+| Decision View | At most 8 explicit seeds and 12 ADRs in the resolved closure | Navigation guidance. The policy currently evaluates complete-view cost instead: more than 32 KiB is `review_due` and more than 64 KiB is `action_required`. |
+| Task capsule | Prefer 3–8 materialized ADR sources and keep at most 12 when practical | Context guidance. The enforced default budget is 32 KiB; use focused materialization instead of truncation when complete context is too large. |
+| Eligible terminal live ADRs | Plan a History Pack at 3; batches of 3–5 are usually easy to review | `default-v1` emits `pack_history` at `candidate_count >= 3`; packing still requires explicit IDs, actor, reason, preview, and apply authority. |
+| One decision's amendment or replacement chain | Consolidate at 3 or more follow-up layers | Team guidance. Create a new atomic proposed ADR rather than extending the chain indefinitely; owner acceptance and later effect transitions remain explicit. |
+
+The count guidance is not a quality score or a reason to delete history. Domain
+coupling, exact bytes, active-plan consumers, and decision authority still determine
+whether consolidation or packing is valid.
 
 After semantic lifecycle work is complete, explicitly selected strict terminal
 ADRs (`rejected`, `retired`, or `superseded`) may be replaced physically by one
