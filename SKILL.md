@@ -79,7 +79,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   validate --harness
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.8
+  upgrade --to 0.9.0
 
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   spec validate
@@ -129,9 +129,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.8
+  upgrade --to 0.9.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.8.8 --apply
+  upgrade --to 0.9.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
@@ -173,6 +173,13 @@ Execution Plan sibling 时仍保持 live-only 兼容模式。
 active ExecPlan 拒绝，但它后来进入 `abandoned`、`obsolete`、`superseded` 或
 `rejected`，不会再使引用其已发布 revision 的 superseded/packed ADR 与
 completed/cancelled ExecPlan 失效。
+
+0.9.0 把 ADR 维护检测内置为确定性 `default-v1` 策略。`adr-maintenance`、`status`
+与 `validate` 共享同一组可解释 hard indicators；Agent 在 ADR 生命周期/存储变更后及
+Governed 交接前运行检查，外部定时 CI 使用同一命令的 `--check`。检测会区分当前
+决策复杂度、View/Plan 上下文和终态物理归档，输出 typed preview action；它不会
+自动 retire、supersede、合并、打包或执行任何 apply。数值越过 review/action 边界才
+升级状态，三个及以上可机械验证的 strict 终态 live ADR 独立触发 `pack_history`。
 
 ## 管理 Engineering Specs
 

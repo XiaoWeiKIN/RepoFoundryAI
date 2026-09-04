@@ -133,6 +133,7 @@ flowchart LR
     R --> V["Decision View<br/>持久领域导航"]
     R --> C["Decision Capsule<br/>临时精确上下文"]
     R --> H["ADR Health<br/>独立压力维度"]
+    H --> M["ADR Maintenance<br/>typed preview actions"]
     R --> P["Consolidation Plan<br/>只读影响预览"]
     V -.->|"non-normative"| A
     C -.->|"non-normative"| A
@@ -142,6 +143,20 @@ flowchart LR
 constraints、amendment、active ExecPlan、View coverage 与预计 capsule bytes。每个
 signal 给出 value、review threshold、state 和解释；不得合并成不透明分数，也不得据此
 自动 transition ADR。
+
+`adr-maintenance` 在这些事实之上应用版本化 `default-v1` 策略。数值只有大于边界才
+进入 `review_due` 或 `action_required`；三个及以上可机械验证的 strict 终态 live ADR
+使用独立的 `candidate_count >= 3` 规则。输出包含 policy、fast/slow path、逐 signal
+边界与 severity、候选 ID、typed preview action、受影响对象、授权要求和下一条只读
+命令。`status` 只嵌入有界摘要，`validate` 只增加 warning；显式
+`adr-maintenance --check` 仅在 `action_required` 时返回 1。外部 scheduler 可以定时调用
+同一命令，但不得复制阈值。
+
+检测与修改严格分离。`pack_history` 只说明哪些 live 文件满足机械条件，仍需 operator
+显式提供 IDs、actor、reason，审查 pack preview，并另行授权 `--apply`。当前决策或图
+压力只能建议 `consolidate_current`；真正合并仍须新建原子 proposed ADR、由 Decision
+Owner 接受、完成迁移后再授权 effect transition。安装、Harness upgrade、reindex、
+status、validate 和维护检查均不得创建 Pack、改 lifecycle 或写确认时间戳。
 
 Decision View registry 为 `docs/.epctl/decision-views.json` schema 1。每项只包含稳定
 kebab-case `id`、单行 `title` 与排序后的显式 current ADR `adr_refs`。配置是唯一持久

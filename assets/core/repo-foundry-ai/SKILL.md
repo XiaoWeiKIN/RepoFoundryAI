@@ -59,6 +59,11 @@ do not depend on a user-home installation path.
   consolidation remains an authorized ADR lifecycle change; physical compaction
   may only use its explicit lossless terminal History Pack preview/apply and exact
   unpack contract. A Harness upgrade never packs ADRs automatically.
+- Resolve the active `engineering-execution-plan` Skill and run its
+  `epctl.py --repo . adr-maintenance` after a successful ADR lifecycle or storage
+  mutation and before a Governed handoff. Treat `review_due` and
+  `action_required` as typed maintenance work, not mutation authority. Scheduled
+  CI may use `--check`; it must not copy the policy into an adapter.
 - Use the case-study workflow only after implementation evidence exists.
 
 Authority, destructive or external actions, security, data integrity, locked
@@ -103,4 +108,6 @@ activation decision remains auditable:
 - `Compatibility or migration:`
 
 Do not mark an execution plan complete until required checks pass and its
-evidence points at the verified revision.
+evidence points at the verified revision. A Governed handoff must also include the
+latest ADR maintenance state when the repository contains the initialized
+Execution Plan control plane.

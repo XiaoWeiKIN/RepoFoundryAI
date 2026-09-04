@@ -490,6 +490,7 @@ class RepositoryContractTestCase(unittest.TestCase):
                 "./engineering-execution-plan/references/benchmark.md",
                 text,
             )
+            self.assertIn("adr-maintenance --check", text)
         self.assertIn(
             "name: repo-foundry-ai",
             (ROOT / "SKILL.md").read_text(encoding="utf-8"),
@@ -508,8 +509,17 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.8.8",
+            "0.9.0",
         )
+        for relative in (
+            "SKILL.md",
+            "assets/core/repo-foundry-ai/SKILL.md",
+            "assets/adapters/portable/agent-guide.md",
+        ):
+            self.assertIn(
+                "adr-maintenance",
+                (ROOT / relative).read_text(encoding="utf-8"),
+            )
         self.assertIn(
             "name: engineering-execution-plan",
             (

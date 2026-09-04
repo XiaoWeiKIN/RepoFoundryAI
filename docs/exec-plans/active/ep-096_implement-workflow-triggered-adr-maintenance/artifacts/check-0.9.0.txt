@@ -1,0 +1,26 @@
+RepoFoundry AI 0.9.0 source verification
+Date: 2026-09-04
+
+Command:
+  PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/check.py
+
+Result:
+  PASS - skill metadata and evaluation contracts
+  PASS - Markdown links
+  PASS - engineering research tests (35)
+  PASS - engineering benchmark tests (9)
+  PASS - engineering design tests (17)
+  PASS - engineering execution-plan tests (82)
+  PASS - installer, Harness upgrade, and repository contract tests (122)
+  PASS - Research validator (0 errors)
+  PASS - ExecPlan validator (0 errors; existing non-blocking warnings only)
+  PASS - Design validator (0 errors; existing legacy warning only)
+  PASS - generated index projections
+  PASS - git whitespace validation
+
+Final line:
+  [check] all integrity checks passed
+
+Additional verification:
+  git diff --check
+  PASS - no whitespace errors

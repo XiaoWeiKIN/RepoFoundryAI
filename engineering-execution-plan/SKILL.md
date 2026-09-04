@@ -1,7 +1,7 @@
 ---
 name: engineering-execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务；为大型 ADR corpus 生成 lossless Decision View、精确有界 capsule、独立健康度与只读合并影响预览，并把显式选择的 strict 终态 ADR 无损打包为可逆 History Pack；并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、ADR 太多、整理或压缩 ADR 上下文、历史 ADR 打包或恢复、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务；为大型 ADR corpus 生成 lossless Decision View、精确有界 capsule、独立健康度、确定性维护触发器与只读合并影响预览，并把显式选择的 strict 终态 ADR 无损打包为可逆 History Pack；并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、ADR 太多、整理或压缩 ADR 上下文、定期检测 ADR 硬指标、历史 ADR 打包或恢复、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Engineering Execution Plan
@@ -200,6 +200,8 @@ python3 <skill-dir>/scripts/epctl.py --repo . \
   --reason "<why the seal was invalid when introduced>" --apply
 
 python3 <skill-dir>/scripts/epctl.py --repo . adr-health --json
+python3 <skill-dir>/scripts/epctl.py --repo . adr-maintenance --json
+python3 <skill-dir>/scripts/epctl.py --repo . adr-maintenance --check
 python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
   --title "Runtime decisions" --adr ADR-004 --adr ADR-005
 python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
@@ -341,6 +343,20 @@ amendment、active-plan、View coverage 与 context cost 各维度；输出没�
 也不会触发生命周期变化。由 repository owner 用
 `set-decision-view` 明确维护领域种子；工具每次从 current-effect 图重建依赖、
 amendment 和 constraint 身份。View 是持久导航，不是 ADR，也没有 accepted 状态。
+
+`adr-maintenance` 在同一健康投影上执行 `default-v1`：每个 signal 独立显示 value、
+review/action boundary、severity 与 action type；整体状态只取最大 severity，不计算
+分数。健康 fast path 不构造影响建议；越过边界或显式 `--explain` 才进入 slow path。
+三个及以上 mechanically eligible 的 strict 终态 live ADR 独立触发 `pack_history`；
+current、graph、amendment、legacy、View coverage/cost 与 active-plan 压力分别路由到
+`consolidate_current`、`migrate_legacy_contracts`、`repair_views`、
+`narrow_view_context` 或 `narrow_plan_context`。所有 action 都是 `preview_only`，
+不能替代显式 actor/reason、Decision Owner、preview 或 `--apply` 授权。
+
+每次 ADR lifecycle/storage apply 成功后，以及 Governed 工作交接前，都运行一次
+`adr-maintenance`。`validate` 会给出非阻断 warning，`status` 给出有界摘要；需要定时
+CI gate 时调用 `adr-maintenance --check`，只有 `action_required` 返回 1。不要在 CI、
+Codex、Claude 或 portable adapter 中复制阈值，也不要因为 `review_due` 自动改 ADR。
 
 任务开始时用 `decision-capsule --view ...` 或显式 `--adr` 编译临时上下文。complete
 是默认模式：strict ADR 复制原文 `Decision Statement` 和选中的
@@ -497,7 +513,9 @@ Doc / artifact 或拆分 EP，不能反复 checkpoint 掩盖范围膨胀。
    `benchmark:BR-NNN@sha256:<manifest-payload-sha256>`；Run 的
    `subject_revision` 必须等于同一个 `verified_revision` 且 outcome 必须是
    `passed`。缺一个、重复覆盖一个、或引用未声明 Scenario 都会阻止归档。
-7. 运行 `validate`，再运行：
+7. 运行 `adr-maintenance`，把最新 state、typed actions 与尚需 owner 决策的工作写入
+   交接或复盘；它不阻止无关 EP 归档，也不授权自动修改 ADR。
+8. 运行 `validate`，再运行：
 
 ```bash
 python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \

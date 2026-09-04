@@ -270,12 +270,12 @@ to an immutable commit, records the archive SHA-256, and validates the staged
 package before activation.
 
 Repository migration remains a separate, preview-first operation. After a
-distribution upgrade, run this in each existing project and replace `0.8.8`
+distribution upgrade, run this in each existing project and replace `0.9.0`
 with the installed target version when necessary:
 
 ```bash
-repofoundry --repo . upgrade --to 0.8.8
-repofoundry --repo . upgrade --to 0.8.8 --apply
+repofoundry --repo . upgrade --to 0.9.0
+repofoundry --repo . upgrade --to 0.9.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -296,6 +296,7 @@ flowchart LR
     R --> V["Decision Views<br/>persistent navigation"]
     R --> C["Decision capsules<br/>exact bounded context"]
     R --> H["Independent health dimensions"]
+    H --> M["Maintenance policy<br/>typed preview actions"]
     R --> P["Consolidation impact<br/>preview only"]
 ```
 
@@ -304,6 +305,8 @@ context needed. Preview is the default for persistent changes:
 
 ```bash
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-health --json
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-maintenance --json
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-maintenance --check
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . set-decision-view runtime \
   --title "Runtime decisions" --adr ADR-012 --adr ADR-019
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . set-decision-view runtime \
@@ -315,6 +318,16 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . decision-caps
   --focus-reason "Implement the selected runtime boundary" --json
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-consolidation-plan --view runtime --json
 ```
+
+RepoFoundry 0.9.0 evaluates the versioned `default-v1` maintenance policy during
+`validate`, summarizes it in `status`, and exposes the complete result through
+`adr-maintenance`. Numeric signals cross review/action boundaries only when their
+value is greater than the boundary; three or more mechanically eligible terminal
+strict live ADRs independently produce `pack_history`. Current-decision, graph,
+amendment, view, and active-plan pressure route to their own action families. Every
+action is non-normative and preview-only: detection never retires, supersedes,
+rewrites, consolidates, packs, unpacks, or applies an ADR change. External schedulers
+invoke `adr-maintenance --check` instead of duplicating the policy.
 
 After semantic lifecycle work is complete, explicitly selected strict terminal
 ADRs (`rejected`, `retired`, or `superseded`) may be replaced physically by one
@@ -498,9 +511,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.8.8
-repofoundry --repo . upgrade --to 0.8.8 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.8.8 --apply
+repofoundry --repo . upgrade --to 0.9.0
+repofoundry --repo . upgrade --to 0.9.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.9.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -544,12 +557,12 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.8.8` uses Harness schema `3`, Harness Core `1.5.1`, Codex
-adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.0`, and
+RepoFoundry `0.9.0` uses Harness schema `3`, Harness Core `1.5.2`, Codex
+adapter `2.4.0`, Claude adapter `1.3.0`, Portable adapter `1.3.1`, and
 activation protocol `2`.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
-`upgrade --to 0.8.8 --apply`. Earlier schema `3` Core and adapter contracts
+`upgrade --to 0.9.0 --apply`. Earlier schema `3` Core and adapter contracts
 also stay readable; an upgrade, or a previewed bootstrap that adds
 an adapter, records the component migrations and creates the new project Skill
 paths. A versioned seed is replaced only when its bytes still match the
