@@ -250,11 +250,11 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.8.8` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.9.0` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.8.8
-repofoundry --repo . upgrade --to 0.8.8 --apply
+repofoundry --repo . upgrade --to 0.9.0
+repofoundry --repo . upgrade --to 0.9.0 --apply
 repofoundry --repo . validate
 ```
 
@@ -274,6 +274,7 @@ flowchart LR
     R --> V["Decision Views<br/>持久导航"]
     R --> C["Decision capsules<br/>精确有界上下文"]
     R --> H["独立健康度维度"]
+    H --> M["维护策略<br/>typed preview actions"]
     R --> P["合并影响<br/>只预览"]
 ```
 
@@ -282,6 +283,8 @@ flowchart LR
 
 ```bash
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-health --json
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-maintenance --json
+python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . adr-maintenance --check
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . set-decision-view runtime \
   --title "Runtime decisions" --adr ADR-012 --adr ADR-019
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . set-decision-view runtime \
@@ -294,6 +297,14 @@ python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . decision-caps
 python3 <engineering-execution-plan-dir>/scripts/epctl.py --repo . \
   adr-consolidation-plan --view runtime --json
 ```
+
+RepoFoundry 0.9.0 会在 `validate` 中执行版本化 `default-v1` 维护策略，在 `status`
+中给出摘要，并由 `adr-maintenance` 输出完整结果。数值只有大于 review/action 边界才会
+升级状态；三个及以上可机械验证的 strict 终态 live ADR 会独立产生
+`pack_history`。当前决策、图耦合、amendment、View 与 active plan 压力分别路由到
+不同 action。所有 action 都是非规范、只预览的建议：检测不会自动 retire、
+supersede、rewrite、consolidate、pack、unpack 或 apply。外部定时任务调用
+`adr-maintenance --check`，不复制策略。
 
 语义生命周期处理完成后，可以把显式选择的 strict 终态 ADR（`rejected`、`retired`
 或 `superseded`）从多个 Markdown 文件物理替换为一个无损、content-addressed History
@@ -461,9 +472,9 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.8.8
-repofoundry --repo . upgrade --to 0.8.8 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.8.8 --apply
+repofoundry --repo . upgrade --to 0.9.0
+repofoundry --repo . upgrade --to 0.9.0 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.9.0 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
@@ -504,10 +515,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.8.8` 使用 Harness schema `3`、Harness Core `1.5.1`、Codex
-adapter `2.4.0`、Claude adapter `1.3.0`、Portable adapter `1.3.0` 与激活协议
+RepoFoundry `0.9.0` 使用 Harness schema `3`、Harness Core `1.5.2`、Codex
+adapter `2.4.0`、Claude adapter `1.3.0`、Portable adapter `1.3.1` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.8.8 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.9.0 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持

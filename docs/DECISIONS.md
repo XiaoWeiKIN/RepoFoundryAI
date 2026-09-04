@@ -22,7 +22,6 @@ and superseded states so history remains auditable.
 <!-- ADRCTL:ACTIVE:START -->
 | ID | Title | Decision | Effect | Related ADRs | Updated | Research | Path |
 |---|---|---|---|---|---|---|---|
-| ADR-061 | Trigger ADR maintenance from deterministic workflow thresholds | pending | proposed | depends on ADR-060 | 2026-09-04 | [] | [ADR](adr/adr-061_workflow-triggered-adr-maintenance.md) |
 <!-- ADRCTL:ACTIVE:END -->
 
 ## Effective
@@ -47,6 +46,7 @@ and superseded states so history remains auditable.
 | ADR-058 | Separate ADR history from lossless decision working context | accepted | partially amended | depends on ADR-014; depends on ADR-016; amended by ADR-059; amended by ADR-060 | 2026-09-01 | [] | [ADR](adr/adr-058_lossless-adr-context-compaction.md) |
 | ADR-059 | Add explicit focused materialization to ADR task capsules | accepted | current | amends ADR-058 | 2026-09-03 | [] | [ADR](adr/adr-059_focused-adr-context-materialization.md) |
 | ADR-060 | Physically compact terminal ADRs into lossless history packs | accepted | current | amends ADR-058 | 2026-09-03 | [] | [ADR](adr/adr-060_lossless-terminal-adr-history-packs.md) |
+| ADR-061 | Trigger ADR maintenance from deterministic workflow thresholds | accepted | current | depends on ADR-060 | 2026-09-04 | [] | [ADR](adr/adr-061_workflow-triggered-adr-maintenance.md) |
 <!-- ADRCTL:CURRENT:END -->
 
 ## Current constraint amendments

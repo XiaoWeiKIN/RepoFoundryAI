@@ -4,7 +4,7 @@ metadata_schema: "1"
 artifact_type: adr
 id: ADR-061
 title: "Trigger ADR maintenance from deterministic workflow thresholds"
-status: proposed
+status: accepted
 research_refs: []
 depends_on: ["ADR-060"]
 amends: []
@@ -12,13 +12,13 @@ amends_constraints: []
 design_refs: ["docs/design-docs/dd-013_policy-driven-adr-maintenance.md"]
 supersedes: []
 superseded_by:
-decision_maker:
-decided:
-decision_outcome:
+decision_maker: "Wangxiaowei1"
+decided: "2026-09-04T03:26:50Z"
+decision_outcome: accepted
 effect_changed_by:
 effect_changed:
 effect_reason:
-payload_sha256:
+payload_sha256: 3e130b6287ff330a35489701ba675e6ed4759ce095dc1073cc53d19553c25251
 created: 2026-09-04
 updated: 2026-09-04
 author: "Codex"

@@ -63,6 +63,17 @@ ADR_HEALTH_COMPONENT_TARGET = 12
 ADR_HEALTH_ACTIVE_PLAN_TARGET = 12
 ADR_HEALTH_ACTIVE_PLAN_CONSTRAINT_TARGET = 96
 ADR_HEALTH_PARTIAL_AMENDMENT_TARGET = 8
+ADR_MAINTENANCE_SCHEMA_VERSION = 1
+ADR_MAINTENANCE_POLICY_ID = "default-v1"
+ADR_MAINTENANCE_TERMINAL_THRESHOLD = 3
+ADR_MAINTENANCE_ACTION_ORDER = (
+    "pack_history",
+    "consolidate_current",
+    "repair_views",
+    "narrow_view_context",
+    "narrow_plan_context",
+    "migrate_legacy_contracts",
+)
 
 INIT_DIRECTORIES = (
     "docs/.epctl",
@@ -313,6 +324,66 @@ class HistoryPackOperationPlan:
     pack_payload: dict[str, object]
     selected_sources: tuple[AdrSource, ...]
     candidate_sources: tuple[AdrSource, ...]
+
+
+@dataclass(frozen=True)
+class AdrMaintenanceSignalPolicy:
+    dimension: str
+    review_boundary: int
+    action_boundary: int
+    action_type: str
+
+
+ADR_MAINTENANCE_SIGNAL_POLICIES = (
+    AdrMaintenanceSignalPolicy(
+        "effective_adrs",
+        ADR_HEALTH_EFFECTIVE_TARGET,
+        40,
+        "consolidate_current",
+    ),
+    AdrMaintenanceSignalPolicy(
+        "largest_component",
+        ADR_HEALTH_COMPONENT_TARGET,
+        24,
+        "consolidate_current",
+    ),
+    AdrMaintenanceSignalPolicy(
+        "max_active_plan_adr_refs",
+        ADR_HEALTH_ACTIVE_PLAN_TARGET,
+        24,
+        "narrow_plan_context",
+    ),
+    AdrMaintenanceSignalPolicy(
+        "max_active_plan_constraint_refs",
+        ADR_HEALTH_ACTIVE_PLAN_CONSTRAINT_TARGET,
+        192,
+        "narrow_plan_context",
+    ),
+    AdrMaintenanceSignalPolicy(
+        "partially_amended_adrs",
+        ADR_HEALTH_PARTIAL_AMENDMENT_TARGET,
+        16,
+        "consolidate_current",
+    ),
+    AdrMaintenanceSignalPolicy(
+        "legacy_current_adrs",
+        0,
+        8,
+        "migrate_legacy_contracts",
+    ),
+    AdrMaintenanceSignalPolicy(
+        "uncovered_current_adrs",
+        0,
+        8,
+        "repair_views",
+    ),
+    AdrMaintenanceSignalPolicy(
+        "max_view_capsule_bytes",
+        DECISION_CAPSULE_DEFAULT_BUDGET_BYTES,
+        64 * 1024,
+        "narrow_view_context",
+    ),
+)
 
 
 _ADR_SOURCE_OVERRIDE: contextvars.ContextVar[
@@ -6326,6 +6397,7 @@ def adr_graph_metrics(
         "connected_components": len(components),
         "largest_component": len(components[0]) if components else 0,
         "component_sizes": [len(component) for component in components],
+        "components": components,
     }
 
 
@@ -6344,8 +6416,12 @@ def health_signal(
     }
 
 
-def adr_health(repo: Path) -> dict[str, object]:
-    rows = status_rows(repo)
+def adr_health(
+    repo: Path,
+    rows: dict[str, list[dict[str, object]]] | None = None,
+) -> dict[str, object]:
+    if rows is None:
+        rows = status_rows(repo)
     adrs = rows["adrs"]
     plans = rows["plans"]
     data_by_id = adr_corpus_data(repo)
@@ -6367,6 +6443,7 @@ def adr_health(repo: Path) -> dict[str, object]:
     structured_constraints_total = 0
     structured_current = 0
     legacy_current = 0
+    legacy_current_ids: list[str] = []
     current_constraints = 0
     for item in adrs:
         source = source_by_id[str(item["id"])]
@@ -6390,6 +6467,7 @@ def adr_health(repo: Path) -> dict[str, object]:
                 current_constraints += len(constraints)
         else:
             legacy_current += 1
+            legacy_current_ids.append(str(item["id"]))
 
     graph = adr_graph_metrics(current_ids, data_by_id)
     partially_amended = [
@@ -6559,6 +6637,7 @@ def adr_health(repo: Path) -> dict[str, object]:
             "whole_document_adrs": whole_document_total,
             "structured_current_adrs": structured_current,
             "whole_document_current_adrs": legacy_current,
+            "whole_document_current_ids": sorted(legacy_current_ids),
         },
         "graph": graph,
         "constraints": {
@@ -6659,6 +6738,385 @@ def print_adr_health(payload: dict[str, object]) -> None:
             f"| {item['dimension']} | {item['value']} | "
             f"{item['review_threshold']} | {item['state']} | "
             f"{md_cell(str(item['explanation']))} |"
+        )
+
+
+def eligible_terminal_adr_ids(repo: Path) -> list[str]:
+    eligible: list[str] = []
+    for source in adr_sources(repo):
+        if (
+            source.physical_kind != "live"
+            or not source.strict
+            or source.data.get("status") not in ADR_HISTORY_PACK_STATUSES
+        ):
+            continue
+        if source.path.is_symlink() or not source.path.is_file():
+            continue
+        errors, _, data = validate_adr_source(source, historical=True)
+        if errors:
+            raise EpctlError(
+                f"{source.data.get('id', source.path.name)} is not a valid "
+                "terminal ADR:\n- " + "\n- ".join(errors)
+            )
+        if not re.fullmatch(r"[0-9a-f]{64}", data.get("payload_sha256", "")):
+            raise EpctlError(
+                f"{data.get('id', source.path.name)} has no valid sealed "
+                "payload digest"
+            )
+        eligible.append(data["id"])
+    return sorted(eligible)
+
+
+def adr_maintenance_severity(
+    value: int,
+    policy: AdrMaintenanceSignalPolicy,
+) -> str:
+    if value > policy.action_boundary:
+        return "action_required"
+    if value > policy.review_boundary:
+        return "review_due"
+    return "within_target"
+
+
+def adr_maintenance_signal_objects(
+    signal: dict[str, object],
+    health: dict[str, object],
+    rows: dict[str, list[dict[str, object]]],
+) -> dict[str, list[str]]:
+    dimension = str(signal["dimension"])
+    review_boundary = int(signal["review_threshold"])
+    adrs = rows["adrs"]
+    current_ids = sorted(
+        str(item["id"]) for item in adrs if bool(item.get("current"))
+    )
+    affected = {"adrs": [], "views": [], "plans": []}
+    if dimension == "effective_adrs":
+        affected["adrs"] = current_ids
+    elif dimension == "largest_component":
+        graph = health["graph"]
+        assert isinstance(graph, dict)
+        components = graph["components"]
+        assert isinstance(components, list)
+        affected["adrs"] = list(components[0]) if components else []
+    elif dimension == "partially_amended_adrs":
+        amendments = health["amendments"]
+        assert isinstance(amendments, dict)
+        affected["adrs"] = list(amendments["partially_amended_ids"])
+    elif dimension == "legacy_current_adrs":
+        contracts = health["contracts"]
+        assert isinstance(contracts, dict)
+        affected["adrs"] = list(contracts["whole_document_current_ids"])
+    elif dimension == "uncovered_current_adrs":
+        views = health["views"]
+        assert isinstance(views, dict)
+        affected["adrs"] = list(views["uncovered_current_adrs"])
+    elif dimension == "max_view_capsule_bytes":
+        views = health["views"]
+        assert isinstance(views, dict)
+        items = views["items"]
+        assert isinstance(items, list)
+        affected["views"] = sorted(
+            str(item["id"])
+            for item in items
+            if int(item["estimated_full_capsule_bytes"]) > review_boundary
+        )
+    elif dimension in {
+        "max_active_plan_adr_refs",
+        "max_active_plan_constraint_refs",
+    }:
+        active_plans = health["active_plans"]
+        assert isinstance(active_plans, dict)
+        plans = active_plans["plans"]
+        assert isinstance(plans, list)
+        metric = (
+            "adr_refs"
+            if dimension == "max_active_plan_adr_refs"
+            else "constraint_refs"
+        )
+        affected["plans"] = sorted(
+            str(item["id"])
+            for item in plans
+            if int(item[metric]) > review_boundary
+        )
+    return affected
+
+
+def adr_argument_string(adr_ids: Iterable[str]) -> str:
+    return " ".join(f"--adr {adr_id}" for adr_id in adr_ids)
+
+
+def adr_maintenance_next_command(
+    action_type: str,
+    affected: dict[str, list[str]],
+) -> str:
+    adr_ids = affected["adrs"]
+    if action_type == "pack_history":
+        if len(adr_ids) > ADR_HISTORY_PACK_MAX_ENTRIES:
+            return "epctl adr-health --json"
+        joined = " ".join(adr_ids)
+        return (
+            f"epctl pack-historical-adrs {joined} "
+            '--packed-by "$REPOFOUNDRY_PACKED_BY" '
+            '--reason "$REPOFOUNDRY_PACK_REASON" --json'
+        )
+    if action_type in {
+        "consolidate_current",
+        "repair_views",
+        "migrate_legacy_contracts",
+    } and adr_ids:
+        return (
+            "epctl adr-consolidation-plan "
+            f"{adr_argument_string(adr_ids)} --json"
+        )
+    if action_type == "narrow_view_context" and affected["views"]:
+        return (
+            "epctl adr-consolidation-plan --view "
+            f"{affected['views'][0]} --json"
+        )
+    return "epctl adr-health --json"
+
+
+def adr_maintenance_authority(action_type: str) -> str:
+    if action_type == "pack_history":
+        return (
+            "explicit ADR IDs, actor, reason, reviewed preview, and separate "
+            "--apply authorization"
+        )
+    if action_type == "consolidate_current":
+        return (
+            "new atomic ADR, explicit Decision Owner acceptance, implementation, "
+            "and authorized effect transitions"
+        )
+    return "repository owner review before any follow-up mutation"
+
+
+def plan_adr_maintenance_actions(
+    signals: list[dict[str, object]],
+    health: dict[str, object],
+    rows: dict[str, list[dict[str, object]]],
+    eligible_terminal_adrs: list[str],
+) -> list[dict[str, object]]:
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for signal in signals:
+        if signal["severity"] == "within_target":
+            continue
+        grouped.setdefault(str(signal["action_type"]), []).append(signal)
+
+    if len(eligible_terminal_adrs) >= ADR_MAINTENANCE_TERMINAL_THRESHOLD:
+        grouped["pack_history"] = []
+
+    actions: list[dict[str, object]] = []
+    severity_rank = {"review_due": 1, "action_required": 2}
+    for action_type in ADR_MAINTENANCE_ACTION_ORDER:
+        if action_type not in grouped:
+            continue
+        action_signals = grouped[action_type]
+        affected = {"adrs": [], "views": [], "plans": []}
+        for signal in action_signals:
+            signal_affected = adr_maintenance_signal_objects(signal, health, rows)
+            for kind in affected:
+                affected[kind].extend(signal_affected[kind])
+        if action_type == "pack_history":
+            affected["adrs"] = list(eligible_terminal_adrs)
+        for kind in affected:
+            affected[kind] = sorted(set(affected[kind]))
+        severity = (
+            max(
+                (str(signal["severity"]) for signal in action_signals),
+                key=severity_rank.__getitem__,
+            )
+            if action_signals
+            else "action_required"
+        )
+        actions.append(
+            {
+                "type": action_type,
+                "severity": severity,
+                "reason_dimensions": [
+                    str(signal["dimension"]) for signal in action_signals
+                ]
+                or ["eligible_terminal_adrs"],
+                "affected": affected,
+                "preview_only": True,
+                "authority_required": adr_maintenance_authority(action_type),
+                "next_command": adr_maintenance_next_command(action_type, affected),
+            }
+        )
+    return actions
+
+
+def evaluate_adr_maintenance(
+    health: dict[str, object],
+    rows: dict[str, list[dict[str, object]]],
+    eligible_terminal_adrs: Iterable[str],
+    *,
+    explain: bool = False,
+) -> dict[str, object]:
+    health_signals = health["signals"]
+    assert isinstance(health_signals, list)
+    health_by_dimension = {
+        str(item["dimension"]): item
+        for item in health_signals
+        if isinstance(item, dict)
+    }
+    policy_dimensions = {
+        policy.dimension for policy in ADR_MAINTENANCE_SIGNAL_POLICIES
+    }
+    if set(health_by_dimension) != policy_dimensions:
+        raise EpctlError("ADR health signals do not match maintenance policy default-v1")
+
+    signals: list[dict[str, object]] = []
+    for policy in ADR_MAINTENANCE_SIGNAL_POLICIES:
+        source = health_by_dimension[policy.dimension]
+        value = int(source["value"])
+        if int(source["review_threshold"]) != policy.review_boundary:
+            raise EpctlError(
+                f"ADR health review threshold drift for {policy.dimension}"
+            )
+        signals.append(
+            {
+                "dimension": policy.dimension,
+                "value": value,
+                "review_threshold": policy.review_boundary,
+                "action_threshold": policy.action_boundary,
+                "severity": adr_maintenance_severity(value, policy),
+                "action_type": policy.action_type,
+                "explanation": source["explanation"],
+            }
+        )
+
+    terminal_ids = sorted(set(eligible_terminal_adrs))
+    severity_rank = {
+        "within_target": 0,
+        "review_due": 1,
+        "action_required": 2,
+    }
+    state = max(
+        (str(signal["severity"]) for signal in signals),
+        key=severity_rank.__getitem__,
+        default="within_target",
+    )
+    if len(terminal_ids) >= ADR_MAINTENANCE_TERMINAL_THRESHOLD:
+        state = "action_required"
+    fast_path = (
+        not explain
+        and state == "within_target"
+        and len(terminal_ids) < ADR_MAINTENANCE_TERMINAL_THRESHOLD
+    )
+    actions = (
+        []
+        if fast_path
+        else plan_adr_maintenance_actions(signals, health, rows, terminal_ids)
+    )
+    return {
+        "schema_version": ADR_MAINTENANCE_SCHEMA_VERSION,
+        "non_normative": True,
+        "state": state,
+        "fast_path": fast_path,
+        "policy": {
+            "id": ADR_MAINTENANCE_POLICY_ID,
+            "numeric_boundary": "exclusive",
+            "terminal_candidate_threshold": ADR_MAINTENANCE_TERMINAL_THRESHOLD,
+        },
+        "signals": signals,
+        "eligible_terminal_adrs": terminal_ids,
+        "actions": actions,
+    }
+
+
+def adr_maintenance(
+    repo: Path,
+    *,
+    explain: bool = False,
+    rows: dict[str, list[dict[str, object]]] | None = None,
+) -> dict[str, object]:
+    if rows is None:
+        rows = status_rows(repo)
+    return evaluate_adr_maintenance(
+        adr_health(repo, rows),
+        rows,
+        eligible_terminal_adr_ids(repo),
+        explain=explain,
+    )
+
+
+def adr_maintenance_summary(payload: dict[str, object]) -> dict[str, object]:
+    policy = payload["policy"]
+    actions = payload["actions"]
+    eligible = payload["eligible_terminal_adrs"]
+    assert isinstance(policy, dict)
+    assert isinstance(actions, list)
+    assert isinstance(eligible, list)
+    return {
+        "schema_version": payload["schema_version"],
+        "non_normative": True,
+        "policy_id": policy["id"],
+        "state": payload["state"],
+        "fast_path": payload["fast_path"],
+        "eligible_terminal_adr_count": len(eligible),
+        "action_types": [str(action["type"]) for action in actions],
+        "details_command": "epctl adr-maintenance --json",
+    }
+
+
+def print_adr_maintenance(payload: dict[str, object]) -> None:
+    print(
+        "ADR maintenance is a non-normative, read-only projection; every action "
+        "is preview-only."
+    )
+    policy = payload["policy"]
+    assert isinstance(policy, dict)
+    print(
+        f"Policy: {policy['id']} | State: {payload['state']} | "
+        f"Path: {'fast' if payload['fast_path'] else 'slow'}"
+    )
+    print()
+    print(
+        "| Dimension | Value | Review boundary | Action boundary | Severity | "
+        "Action | Explanation |"
+    )
+    print("|---|---:|---:|---:|---|---|---|")
+    signals = payload["signals"]
+    assert isinstance(signals, list)
+    for signal in signals:
+        assert isinstance(signal, dict)
+        print(
+            f"| {signal['dimension']} | {signal['value']} | "
+            f"{signal['review_threshold']} | {signal['action_threshold']} | "
+            f"{signal['severity']} | {signal['action_type']} | "
+            f"{md_cell(str(signal['explanation']))} |"
+        )
+
+    eligible = payload["eligible_terminal_adrs"]
+    assert isinstance(eligible, list)
+    print()
+    print(
+        "Eligible terminal ADRs: "
+        + (", ".join(str(value) for value in eligible) or "none")
+    )
+    actions = payload["actions"]
+    assert isinstance(actions, list)
+    print()
+    if not actions:
+        print("Actions: none.")
+        return
+    print("| Action | Severity | Reasons | Affected | Authority | Next command |")
+    print("|---|---|---|---|---|---|")
+    for action in actions:
+        assert isinstance(action, dict)
+        affected = action["affected"]
+        assert isinstance(affected, dict)
+        affected_text = "; ".join(
+            f"{kind}={','.join(str(value) for value in values)}"
+            for kind, values in affected.items()
+            if values
+        ) or "—"
+        print(
+            f"| {action['type']} | {action['severity']} | "
+            f"{md_cell(', '.join(str(value) for value in action['reason_dimensions']))} | "
+            f"{md_cell(affected_text)} | "
+            f"{md_cell(str(action['authority_required']))} | "
+            f"`{md_cell(str(action['next_command']))}` |"
         )
 
 
@@ -11996,8 +12454,11 @@ def status_rows(repo: Path) -> dict[str, list[dict[str, object]]]:
 
 def print_status(repo: Path, as_json: bool) -> None:
     payload = status_rows(repo)
+    maintenance = adr_maintenance(repo, rows=payload)
     if as_json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        json_payload: dict[str, object] = dict(payload)
+        json_payload["adr_maintenance"] = adr_maintenance_summary(maintenance)
+        print(json.dumps(json_payload, ensure_ascii=False, indent=2))
         return
     print(
         "| Research | Title | Status | Synthesis | Open questions | "
@@ -12066,6 +12527,13 @@ def print_status(repo: Path, as_json: bool) -> None:
             f"{md_cell(str(row['area']))} | {row['status']} | {row['linked_ep']} | "
             f"{row['open_blockers']} | {row['last_activity']} |"
         )
+    summary = adr_maintenance_summary(maintenance)
+    print()
+    print(
+        f"ADR maintenance: {summary['state']} ({summary['policy_id']}); "
+        f"actions: {', '.join(summary['action_types']) or 'none'}; "
+        f"details: {summary['details_command']}"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -12236,6 +12704,22 @@ def build_parser() -> argparse.ArgumentParser:
         "adr-health",
         help="Report independent, non-normative ADR corpus pressure dimensions",
     ).add_argument("--json", action="store_true", dest="as_json")
+
+    maintenance = sub.add_parser(
+        "adr-maintenance",
+        help="Evaluate deterministic ADR pressure and preview typed next actions",
+    )
+    maintenance.add_argument("--json", action="store_true", dest="as_json")
+    maintenance.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit 1 when the maintenance state is action_required",
+    )
+    maintenance.add_argument(
+        "--explain",
+        action="store_true",
+        help="Run slow-path action analysis even when all signals are healthy",
+    )
 
     set_view = sub.add_parser(
         "set-decision-view",
@@ -12656,6 +13140,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
                 print_adr_health(payload)
+        elif args.command == "adr-maintenance":
+            errors, _ = validate_repo(repo)
+            if errors:
+                raise EpctlError(
+                    "ADR maintenance blocked by invalid repository:\n- "
+                    + "\n- ".join(errors)
+                )
+            payload = adr_maintenance(repo, explain=args.explain)
+            if args.as_json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print_adr_maintenance(payload)
+            if args.check and payload["state"] == "action_required":
+                return 1
         elif args.command == "set-decision-view":
             print(
                 json.dumps(
@@ -12799,6 +13297,24 @@ def main(argv: list[str] | None = None) -> int:
                 with repo_lock(repo):
                     rebuild_indexes(repo)
             errors, warnings = validate_repo(repo)
+            if not errors:
+                try:
+                    maintenance = adr_maintenance(repo)
+                except EpctlError as exc:
+                    errors.append(f"ADR maintenance evaluation failed: {exc}")
+                else:
+                    if maintenance["state"] != "within_target":
+                        actions = maintenance["actions"]
+                        assert isinstance(actions, list)
+                        action_types = ", ".join(
+                            str(action["type"]) for action in actions
+                        )
+                        warnings.append(
+                            "ADR maintenance "
+                            f"{maintenance['state']} ({ADR_MAINTENANCE_POLICY_ID}): "
+                            f"{action_types or 'owner review'}; run "
+                            "epctl adr-maintenance --explain"
+                        )
             for warning in warnings:
                 print(f"WARNING: {warning}", file=sys.stderr)
             for error in errors:

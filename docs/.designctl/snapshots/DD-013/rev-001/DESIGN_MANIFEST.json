@@ -1,0 +1,29 @@
+{
+  "approval_ref": "user-confirmation-2026-09-04",
+  "approved_at": "2026-09-04T03:26:50Z",
+  "approved_by": "Wangxiaowei1",
+  "artifact_type": "design-revision-manifest",
+  "author": "Codex",
+  "created": "2026-09-04",
+  "design_id": "DD-013",
+  "documents": [
+    {
+      "bytes": 22490,
+      "id": "DD-013",
+      "path": "DESIGN.md",
+      "role": "entrypoint",
+      "sha256": "ca571a9942f70495a7cf1d9dedc1bd8061d825f6d4669587bd5ab0a222fbdd7b",
+      "title": "Policy-driven ADR maintenance triggers"
+    }
+  ],
+  "entrypoint": "DESIGN.md",
+  "id": "DD-013-REV-001",
+  "layout": "single",
+  "metadata_schema": "1",
+  "owner": "Wangxiaowei1",
+  "revision": 1,
+  "schema_version": "1",
+  "status": "current",
+  "title": "Policy-driven ADR maintenance triggers — approved revision 1",
+  "updated": "2026-09-04"
+}

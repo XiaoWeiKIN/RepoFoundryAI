@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import json
@@ -59,6 +60,16 @@ class EpctlTestCase(unittest.TestCase):
 
     def init(self) -> None:
         self.run_cli("init")
+
+    def load_epctl(self):
+        module_name = f"epctl_test_{self._testMethodName}"
+        spec = importlib.util.spec_from_file_location(module_name, SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
 
     def init_git(self) -> None:
         subprocess.run(
@@ -4744,6 +4755,226 @@ The whole legacy document is normative, including this unique sentence.
                 for path in before
             },
         )
+
+    def test_adr_maintenance_boundaries_fast_path_and_no_score(self) -> None:
+        self.init()
+        epctl = self.load_epctl()
+        rows = epctl.status_rows(self.repo)
+        baseline = epctl.adr_health(self.repo, rows)
+
+        healthy = epctl.evaluate_adr_maintenance(baseline, rows, [])
+        self.assertEqual(healthy["state"], "within_target")
+        self.assertTrue(healthy["fast_path"])
+        self.assertEqual(healthy["actions"], [])
+        self.assertNotIn("score", json.dumps(healthy))
+        two_terminal = epctl.evaluate_adr_maintenance(
+            baseline,
+            rows,
+            ["ADR-002", "ADR-001"],
+        )
+        self.assertEqual(two_terminal["state"], "within_target")
+        self.assertTrue(two_terminal["fast_path"])
+        three_terminal = epctl.evaluate_adr_maintenance(
+            baseline,
+            rows,
+            ["ADR-003", "ADR-001", "ADR-002"],
+        )
+        self.assertEqual(three_terminal["state"], "action_required")
+        self.assertFalse(three_terminal["fast_path"])
+
+        for policy in epctl.ADR_MAINTENANCE_SIGNAL_POLICIES:
+            at_review = copy.deepcopy(baseline)
+            signal = next(
+                item
+                for item in at_review["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            signal["value"] = policy.review_boundary
+            result = epctl.evaluate_adr_maintenance(at_review, rows, [])
+            selected = next(
+                item
+                for item in result["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            self.assertEqual(selected["severity"], "within_target")
+
+            above_review = copy.deepcopy(baseline)
+            signal = next(
+                item
+                for item in above_review["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            signal["value"] = policy.review_boundary + 1
+            result = epctl.evaluate_adr_maintenance(above_review, rows, [])
+            selected = next(
+                item
+                for item in result["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            self.assertEqual(selected["severity"], "review_due")
+            self.assertFalse(result["fast_path"])
+
+            at_action = copy.deepcopy(baseline)
+            signal = next(
+                item
+                for item in at_action["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            signal["value"] = policy.action_boundary
+            result = epctl.evaluate_adr_maintenance(at_action, rows, [])
+            selected = next(
+                item
+                for item in result["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            self.assertEqual(selected["severity"], "review_due")
+
+            above_action = copy.deepcopy(baseline)
+            signal = next(
+                item
+                for item in above_action["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            signal["value"] = policy.action_boundary + 1
+            result = epctl.evaluate_adr_maintenance(above_action, rows, [])
+            selected = next(
+                item
+                for item in result["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            self.assertEqual(selected["severity"], "action_required")
+
+        called = False
+        original_planner = epctl.plan_adr_maintenance_actions
+
+        def record_planner(*args, **kwargs):
+            nonlocal called
+            called = True
+            return original_planner(*args, **kwargs)
+
+        epctl.plan_adr_maintenance_actions = record_planner
+        try:
+            epctl.evaluate_adr_maintenance(baseline, rows, [])
+            self.assertFalse(called)
+            explained = epctl.evaluate_adr_maintenance(
+                baseline,
+                rows,
+                [],
+                explain=True,
+            )
+            self.assertTrue(called)
+            self.assertFalse(explained["fast_path"])
+            self.assertEqual(explained["actions"], [])
+        finally:
+            epctl.plan_adr_maintenance_actions = original_planner
+
+    def test_adr_maintenance_routes_each_pressure_family(self) -> None:
+        self.init()
+        epctl = self.load_epctl()
+        rows = epctl.status_rows(self.repo)
+        health = epctl.adr_health(self.repo, rows)
+        for policy in epctl.ADR_MAINTENANCE_SIGNAL_POLICIES:
+            signal = next(
+                item
+                for item in health["signals"]
+                if item["dimension"] == policy.dimension
+            )
+            signal["value"] = policy.action_boundary + 1
+
+        result = epctl.evaluate_adr_maintenance(
+            health,
+            rows,
+            ["ADR-003", "ADR-001", "ADR-002", "ADR-003"],
+        )
+        self.assertEqual(result["state"], "action_required")
+        self.assertEqual(result["eligible_terminal_adrs"], [
+            "ADR-001",
+            "ADR-002",
+            "ADR-003",
+        ])
+        self.assertEqual(
+            [action["type"] for action in result["actions"]],
+            list(epctl.ADR_MAINTENANCE_ACTION_ORDER),
+        )
+        for action in result["actions"]:
+            self.assertTrue(action["preview_only"])
+            self.assertTrue(action["authority_required"])
+            self.assertNotIn("--apply", action["next_command"])
+        pack = result["actions"][0]
+        self.assertEqual(
+            pack["affected"]["adrs"],
+            ["ADR-001", "ADR-002", "ADR-003"],
+        )
+        self.assertIn("$REPOFOUNDRY_PACKED_BY", pack["next_command"])
+        self.assertNotIn("score", json.dumps(result))
+
+    def test_adr_maintenance_cli_status_validate_and_terminal_trigger(self) -> None:
+        sources = self.rejected_adr_fixture(3)
+        before = {
+            path.relative_to(self.repo).as_posix(): hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
+            for path in self.repo.rglob("*")
+            if path.is_file()
+        }
+
+        first = self.run_cli("adr-maintenance", "--json")
+        second = self.run_cli("adr-maintenance", "--json")
+        self.assertEqual(first.stdout, second.stdout)
+        payload = json.loads(first.stdout)
+        self.assertEqual(payload["schema_version"], 1)
+        self.assertTrue(payload["non_normative"])
+        self.assertEqual(payload["state"], "action_required")
+        self.assertEqual(
+            payload["eligible_terminal_adrs"],
+            ["ADR-001", "ADR-002", "ADR-003"],
+        )
+        self.assertEqual(payload["actions"][0]["type"], "pack_history")
+        self.assertEqual(
+            self.run_cli("adr-maintenance", "--check", expected=1).returncode,
+            1,
+        )
+        human = self.run_cli("adr-maintenance").stdout
+        self.assertIn("non-normative, read-only projection", human)
+        self.assertIn("pack_history", human)
+
+        status = json.loads(self.run_cli("status", "--json").stdout)
+        self.assertTrue(status["adr_maintenance"]["non_normative"])
+        self.assertEqual(status["adr_maintenance"]["state"], "action_required")
+        self.assertIn("pack_history", status["adr_maintenance"]["action_types"])
+        validation = self.run_cli("validate")
+        self.assertIn("ADR maintenance action_required", validation.stderr)
+        self.assertEqual(
+            before,
+            {
+                path.relative_to(self.repo).as_posix(): hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+                for path in self.repo.rglob("*")
+                if path.is_file()
+            },
+        )
+        self.assertTrue(all(path.is_file() for path in sources))
+
+    def test_adr_maintenance_fails_before_output_on_invalid_corpus(self) -> None:
+        self.init()
+        research = self.new_research("maintenance-invalid-corpus")
+        self.conclude_research(research)
+        adr = self.new_adr("maintenance-invalid-corpus")
+        self.accept_adr(adr)
+        review_due = json.loads(
+            self.run_cli("adr-maintenance", "--check", "--json").stdout
+        )
+        self.assertEqual(review_due["state"], "review_due")
+        adr.write_text(
+            adr.read_text(encoding="utf-8") + "\nTampered after sealing.\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_cli("adr-maintenance", "--json", expected=2)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("blocked by invalid repository", result.stderr)
+        self.assertIn("decided ADR payload changed", result.stderr)
 
     def test_decision_view_registry_and_symlinks_fail_closed(self) -> None:
         self.init()

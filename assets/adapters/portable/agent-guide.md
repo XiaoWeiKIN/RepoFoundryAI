@@ -55,7 +55,11 @@ native lifecycle interception. Use explicit whole-Spec fallback only with a
 reason; a raised capsule budget also requires `--capsule-budget-reason`. Use
 `--none --reason` when nothing applies. Run `rehydrate` after a context reset,
 re-run activation if planned paths change, run each resolved
-Requirement's Verification row, then audit the final handoff:
+Requirement's Verification row, then audit the final handoff. When the
+Execution Plan control plane is initialized, resolve its Skill and run
+`epctl.py --repo . adr-maintenance` after an ADR lifecycle/storage mutation and
+before a Governed handoff; scheduled CI may add `--check`. The result is
+preview-only and grants no lifecycle or History Pack authority.
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py evidence \

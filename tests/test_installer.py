@@ -16,6 +16,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_PATH = ROOT / "install.py"
+CURRENT_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SPEC = importlib.util.spec_from_file_location("repofoundry_installer", INSTALLER_PATH)
 assert SPEC is not None and SPEC.loader is not None
 installer = importlib.util.module_from_spec(SPEC)
@@ -88,13 +89,13 @@ class InstallerTestCase(unittest.TestCase):
                 ).stdout
             )
             self.assertEqual(first["action"], "installed")
-            self.assertEqual(first["version"], "0.8.8")
+            self.assertEqual(first["version"], CURRENT_VERSION)
             self.assertFalse(first["project_harnesses_modified"])
             self.assertEqual(first["host_integrations"], [])
             self.assertTrue((prefix / "current").is_symlink())
             self.assertEqual(
                 (prefix / "current" / "VERSION").read_text(encoding="utf-8").strip(),
-                "0.8.8",
+                CURRENT_VERSION,
             )
             launcher = bin_dir / "repofoundry"
             self.assertTrue(launcher.is_file())
@@ -106,7 +107,10 @@ class InstallerTestCase(unittest.TestCase):
                 timeout=30,
                 check=True,
             )
-            self.assertEqual(version.stdout.strip(), "RepoFoundry AI 0.8.8")
+            self.assertEqual(
+                version.stdout.strip(),
+                f"RepoFoundry AI {CURRENT_VERSION}",
+            )
             releases_before = sorted((prefix / "releases").iterdir())
 
             second = json.loads(
@@ -467,7 +471,7 @@ class InstallerTestCase(unittest.TestCase):
             bin_dir = root / "bin"
             source = installer.PackageSource(
                 root=ROOT,
-                version="0.8.8",
+                version=CURRENT_VERSION,
                 provenance={"kind": "local", "path": str(ROOT)},
             )
             original_run = installer.subprocess.run
