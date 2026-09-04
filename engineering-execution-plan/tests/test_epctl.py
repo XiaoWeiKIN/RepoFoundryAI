@@ -1034,6 +1034,93 @@ class EpctlTestCase(unittest.TestCase):
         )
         self.assertIn("status: cancelled", cancelled.read_text(encoding="utf-8"))
         self.run_cli("validate")
+
+    def test_historical_inputs_survive_later_design_abandonment(self) -> None:
+        self.init()
+        research = self.new_research("terminal-design-history")
+        self.conclude_research(research)
+        design_ref, _ = self.write_single_design(
+            "DD-001",
+            "historical-design",
+        )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+        old_adr = self.new_adr("design-backed-v1")
+        self.replace_frontmatter(
+            old_adr,
+            "design_refs",
+            json.dumps([design_ref]),
+        )
+        self.accept_adr(old_adr, "ADR-001")
+        completed_plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "historical-design-consumer",
+                "--title",
+                "Historical design consumer",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+                "--design",
+                design_ref,
+            ).stdout.strip()
+        )
+        self.complete_all_placeholders(completed_plan)
+        self.run_cli(
+            "archive-ep",
+            "EP-001",
+            *COMPLETION_ATTESTATION_ARGS,
+        )
+        replacement = self.new_adr("design-backed-v2")
+        self.accept_adr(replacement, "ADR-002")
+        self.run_cli(
+            "supersede-adr",
+            "ADR-001",
+            "--by",
+            "ADR-002",
+            "--decision-maker",
+            "Test Decision Owner",
+            "--reason",
+            "The replacement no longer consumes the historical Design.",
+            "--apply",
+        )
+        self.run_cli(
+            "pack-historical-adrs",
+            "ADR-001",
+            "--packed-by",
+            "Test Archivist",
+            "--reason",
+            "Preserve the superseded Design-backed decision as packed history.",
+            "--apply",
+        )
+        self.assertFalse(old_adr.exists())
+        design_path = self.repo / design_ref
+        self.replace_frontmatter(design_path, "status", "abandoned")
+        self.replace_frontmatter(
+            design_path,
+            "terminal_reason",
+            '"The replacement architecture no longer uses this Design."',
+        )
+
+        validated = self.run_cli("validate")
+        self.assertIn('{"errors": 0', validated.stdout)
+        rejected = self.run_cli(
+            "new-ep",
+            "--slug",
+            "invalid-terminal-design-consumer",
+            "--title",
+            "Invalid terminal Design consumer",
+            "--research",
+            "R-001",
+            "--decision-not-required-reason",
+            "The Design would otherwise be the complete architecture input.",
+            "--design",
+            design_ref,
+            expected=2,
+        )
+        self.assertIn("linked Design Doc has terminal status", rejected.stderr)
+
     def test_adr_review_transition_preserves_history_and_pauses_active_work(
         self,
     ) -> None:

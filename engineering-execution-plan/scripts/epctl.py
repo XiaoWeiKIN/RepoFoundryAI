@@ -218,6 +218,12 @@ ADR_ACCEPTED_ORIGIN_STATUSES = {
     "superseded",
 }
 ADR_HISTORICAL_STATUSES = ADR_ACCEPTED_ORIGIN_STATUSES | {"rejected"}
+DESIGN_TERMINAL_STATUSES = {
+    "obsolete",
+    "abandoned",
+    "superseded",
+    "rejected",
+}
 ADR_TRANSITIONS = {
     "accepted": {"under_review", "retired"},
     "under_review": {"accepted", "retired"},
@@ -4585,6 +4591,7 @@ def design_ref_details(
     value: str,
     *,
     entrypoint: bool = False,
+    historical: bool = False,
 ) -> tuple[dict[str, object], list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -4624,8 +4631,11 @@ def design_ref_details(
     elif not doc_type:
         warnings.append(f"{path}: linked Design Doc has no doc_type")
     status = data.get("status", "").lower()
-    if status in {"obsolete", "abandoned", "superseded", "rejected"}:
-        errors.append(f"{path}: linked Design Doc has terminal status {status!r}")
+    if status in DESIGN_TERMINAL_STATUSES:
+        if not historical:
+            errors.append(
+                f"{path}: linked Design Doc has terminal status {status!r}"
+            )
     elif status in {"draft", "review_ready"}:
         warnings.append(f"{path}: linked Design Doc is unpublished ({status})")
     elif not status:
@@ -4721,8 +4731,14 @@ def validate_design_evidence(
     repo: Path,
     design_ref: str,
     evidence: str,
+    *,
+    historical: bool = False,
 ) -> list[str]:
-    details, errors, _ = design_ref_details(repo, design_ref)
+    details, errors, _ = design_ref_details(
+        repo,
+        design_ref,
+        historical=historical,
+    )
     if errors:
         return errors
     data = details.get("data")
@@ -4782,11 +4798,13 @@ def validate_design_ref(
     value: str,
     *,
     entrypoint: bool = False,
+    historical: bool = False,
 ) -> tuple[list[str], list[str]]:
     _, errors, warnings = design_ref_details(
         repo,
         value,
         entrypoint=entrypoint,
+        historical=historical,
     )
     return errors, warnings
 
@@ -4794,12 +4812,18 @@ def validate_design_ref(
 def validate_design_input_set(
     repo: Path,
     design_refs: Iterable[str],
+    *,
+    historical: bool = False,
 ) -> tuple[dict[str, dict[str, object]], list[str], list[str]]:
     details_by_id: dict[str, dict[str, object]] = {}
     errors: list[str] = []
     warnings: list[str] = []
     for design_ref in design_refs:
-        details, item_errors, item_warnings = design_ref_details(repo, design_ref)
+        details, item_errors, item_warnings = design_ref_details(
+            repo,
+            design_ref,
+            historical=historical,
+        )
         errors.extend(item_errors)
         warnings.extend(item_warnings)
         design_id = details.get("id")
@@ -4907,6 +4931,10 @@ def validate_design_doc_corpus(repo: Path) -> tuple[list[str], list[str]]:
                 _, contract_errors, contract_warnings = design_ref_details(
                     repo,
                     relative,
+                    historical=(
+                        data.get("status", "").lower()
+                        in DESIGN_TERMINAL_STATUSES
+                    ),
                 )
                 errors.extend(contract_errors)
                 warnings.extend(contract_warnings)
@@ -8993,7 +9021,11 @@ def validate_adr(
                     f"{path}: amended constraint {constraint_ref} does not exist"
                 )
     for design_ref in design_refs:
-        design_errors, design_warnings = validate_design_ref(repo, design_ref)
+        design_errors, design_warnings = validate_design_ref(
+            repo,
+            design_ref,
+            historical=historical,
+        )
         errors.extend(f"{path}: {error}" for error in design_errors)
         warnings.extend(design_warnings)
     superseded_by = data.get("superseded_by", "")
@@ -9894,7 +9926,11 @@ def validate_plan(
                     f"{path}: missing frontmatter field architecture_entrypoint"
                 )
             design_details, design_errors, design_warnings = (
-                validate_design_input_set(repo, design_refs)
+                validate_design_input_set(
+                    repo,
+                    design_refs,
+                    historical=historical_plan,
+                )
             )
             errors.extend(f"{path}: {error}" for error in design_errors)
             warnings.extend(design_warnings)
@@ -9909,6 +9945,7 @@ def validate_plan(
                     repo,
                     architecture_entrypoint,
                     entrypoint=True,
+                    historical=historical_plan,
                 )
                 errors.extend(f"{path}: {error}" for error in item_errors)
                 warnings.extend(item_warnings)
@@ -9936,6 +9973,7 @@ def validate_plan(
                         repo,
                         str(details["path"]),
                         evidence_value,
+                        historical=historical_plan,
                     )
                     errors.extend(
                         f"{path}: {error}" for error in evidence_errors
@@ -10686,7 +10724,12 @@ def validate_repo(
     )
     for source in logical_adr_sources:
         path = source.path
-        item_errors, item_warnings, data = validate_adr_source(source)
+        item_errors, item_warnings, data = validate_adr_source(
+            source,
+            historical=(
+                source.data.get("status") in ADR_HISTORY_PACK_STATUSES
+            ),
+        )
         errors.extend(item_errors)
         warnings.extend(item_warnings)
         item_id = data.get("id", "")
