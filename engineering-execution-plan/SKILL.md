@@ -1,7 +1,7 @@
 ---
 name: engineering-execution-plan
 description: |
-  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务，并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+  消费 accepted/current ADR、Design revision、它们携带的 concluded Research 溯源与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务，并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。Research 只作为 ADR/Design 的审计证据，不能直接指导开发。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
 ---
 
 # Engineering Execution Plan
@@ -22,9 +22,10 @@ flowchart LR
     B -->|"最终 revision 验收"| G["Benchmark Gate Set<br/>0..N 个预声明 Scenario"]
     Q -->|"是"| R["engineering-research 或兼容生产者<br/>问题、证据、多文档 corpus"]
     R --> S["Sealed Manifest + Synthesis<br/>版本化文件契约"]
-    S -.->|"需要明确系统设计"| T["engineering-design<br/>Design Package revision"]
-    Q -->|"否，写明理由"| RG["Research Gate<br/>not_required"]
-    S --> A{"本次路线需要独立架构决定？"}
+    S -->|"转化系统形态"| T["engineering-design<br/>Design Package revision"]
+    S -->|"转化长期选择"| A{"本次路线需要独立架构决定？"}
+    S -.->|"不得直接指导开发"| EP
+    Q -->|"否，写明理由"| RG["Research conversion gate<br/>not_required"]
     A -->|"是"| P["Proposed ADR"]
     P --> H["用户 / Decision Owner<br/>明确接受或拒绝"]
     H --> D["Accepted ADR<br/>Decision Statement + C-NNN constraints"]
@@ -42,9 +43,12 @@ flowchart LR
 ```
 
 Engineering Research 负责减少未知并输出 sealed Manifest/Synthesis；本 skill
-从该文件契约开始，负责 ADR、ExecPlan 和实施生命周期。生产者可以是
+只在 ADR/Design 转化链中验证该文件契约，并负责 ADR、ExecPlan 和实施生命周期。
+Research 自身不是 Architecture Input 或 implementation constraint，不能独立满足
+开发门禁。生产者可以是
 `engineering-research`、BMAD、其他 Deep Research 工具或人工流程，只要制品满足
-契约。引用提供审计链；下游制品仍需复述执行所需的结论和约束。
+契约。`research_refs` 只提供审计链；执行所需的结构、行为和约束必须来自 referenced
+Design 或 accepted ADR。
 
 Engineering Design 负责把已建立的证据翻译成单文件或多文档 Design Package，
 并管理 `draft → review_ready → current`、revision 快照和依赖图。本 skill 只解析
@@ -76,7 +80,9 @@ Benchmark Skill。
 涉及公共契约、安全、可靠性、数据、不可逆迁移、第三方选型，或 Benchmark 会改变
 架构路线时。prototype 本身属于 Explore，不自动触发 Research。新的可复现测量使用
 `engineering-benchmark`；跨来源解释和 Synthesis 使用 `engineering-research`。
-只有已经创建 ExecPlan 后，未提供 Research 才在计划内记录具体 Gate 理由；
+Research 结束后必须先进入 ADR 或 Design；没有发生这种转化时，它仍只是调研，
+不得直接创建实施计划。只有已经创建 ExecPlan 后，未提供 Research 才在计划内记录
+具体 conversion Gate 理由；
 Explore/Build 不为“没有触发 Research”创建跳过制品。
 
 - 当前 accepted ADR 和代码事实已覆盖所需输入。
@@ -222,10 +228,11 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
 - 脚本不可用时按 `assets/` 模板执行，并扫描文件系统、索引和高水位后取最大 ID +1。
 - 不要求目标仓库使用 Git。
 
-## 消费 Research 与 Synthesis
+## 验证 Research 转化与溯源
 
 1. 如果仍有会改变路线的未知，先使用 `engineering-research` 或其他兼容流程。
-2. 只让 `concluded` Research 满足 Gate；cancelled 或 active Research 都不能。
+2. 只有 `concluded` Research 可以进入 ADR/Design 转化链；cancelled 或 active
+   Research 都不能。
 3. schema 1.1/1.2 Research 还必须有 `owner`、`maturity: review_ready` 和完整
    `approved_by/approved_at/approval_ref`；decision-ready 本身不是结束授权。
 4. 验证 sealed `SYNTHESIS.md` 正文摘要。
@@ -235,7 +242,13 @@ python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
    - package-relative 文档存在且 bytes/SHA-256 匹配；
    - entrypoint 属于文档集合。
 6. 兼容没有 manifest 的既有 v1 Research，但不要把这种兼容当作新制品模板。
-7. 在 ADR 与 ExecPlan 中复述关键结论、置信边界、负面证据、成立条件和剩余未知。
+7. 新建或验证 v2.8 ExecPlan 时，`research_refs` 必须与 referenced ADR/Design 的
+   Research 溯源集合精确对应：缺少引用会破坏审计链，多出的引用表示 Research
+   尚未转化，两种情况都失败。frontmatter 中保留的 `research_gate` 是兼容字段名，
+   语义是 Research conversion/provenance gate，不授予开发权。
+8. 在 ADR 或 Design 中复述关键结论、置信边界、负面证据、成立条件和剩余未知；
+   ExecPlan 只总结转化结果，并把真正的实施约束归因到 ADR/Design，不能把 Research
+   推荐直接重写成 constraint、milestone 或 acceptance item。
 
 本仓库的 `epctl` 暂时保留 legacy Research 创建/归档命令，供既有自动化迁移；
 新 Research 不再从本 skill 的主流程创建。
@@ -311,13 +324,16 @@ non-current ADR 不能满足新 ExecPlan；受影响的既有 active EP 显示
 1. 若实施范围、里程碑边界、迁移顺序、回滚或验收方案存在多个会显著改变计划的
    可信形态，先按 `references/collaboration.md` 做有界实施校准；不要在 EP 内重新
    决定未收敛的架构。
-2. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
+2. Research conversion gate 必须满足以下二选一：`research_refs` 精确覆盖所有
+   referenced ADR/Design 的 concluded Research 溯源，或提供具体 not-required 理由。
+   任何没有被 ADR/Design 消费的 Research 引用都会使创建失败。
 3. Architecture Decision Gate 必须由所需 accepted ADR 满足，或提供具体
    not-required 理由；提供理由时仍可引用适用的既有 ADR。
 4. Architecture Compliance 必须独立标为 `applicable` 或 `not_applicable`：
    applicable 时引用全部相关当前 ADR/Design Docs；not_applicable 时不得夹带
    architecture inputs，并写明具体理由。
-5. ADR 引用的 Research 和 Design Docs 也必须进入 ExecPlan 的对应引用数组。
+5. ADR 与 Design 引用的 Research，以及 ADR 引用的 Design Docs，都必须进入
+   ExecPlan 的对应引用数组。
 6. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
 7. 对每个需要性能、容量、可靠性或回归验收的独立维度，先完成一个稳定的
    Benchmark Scenario。不要等实现完成、看到结果后才补门禁。
@@ -328,8 +344,9 @@ non-current ADR 不能满足新 ExecPlan；受影响的既有 active EP 显示
 10. 在 `Benchmark Gate Set` 中写清每个 Scenario 驱动哪个开发决定或里程碑。
    不同环境、流量模型或判定规则保持为不同 Scenario，不聚合成不可解释的总分。
 11. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
-   - 支持路线的关键证据与置信边界；
+   - 每份 Research 由哪份 ADR/Design 转化，以及仅供审计的关键证据与置信边界；
    - accepted ADR 的接口、数据、运维、迁移和负面后果；
+   - Design 提供的结构、接口、流程、失败和验证设计；
    - 仍需在实现中验证的未知；
    - 跳过 Gate 的具体理由。
 12. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：

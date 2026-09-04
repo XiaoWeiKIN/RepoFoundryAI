@@ -68,6 +68,26 @@
           "description": "把产品边界交给 Design/ADR，而不是伪装成 Research 事实"
         }
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "R-004 已 concluded。把 Synthesis 里的推荐直接拆成开发任务并指导实现。",
+      "expected_output": "不创建开发任务，也不把 Research 推荐表述为实施约束；说明 R-004 仍是调研证据，必须先由 ADR 授权长期选择或由 Design 转成系统行为，再由 Execution Plan 管理交付。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "does_not_direct_development",
+          "description": "Research skill 不创建 Task、ExecPlan 或代码修改"
+        },
+        {
+          "name": "routes_to_conversion",
+          "description": "把下一步路由到 ADR 或 Design，而不是直接实施"
+        },
+        {
+          "name": "preserves_evidence_role",
+          "description": "把 Synthesis 保持为事实、置信边界和候选建议"
+        }
+      ]
     }
   ]
 }

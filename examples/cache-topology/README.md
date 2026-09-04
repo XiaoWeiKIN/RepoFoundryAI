@@ -215,18 +215,21 @@ ADR 必须停在 proposed；不要替 Decision Owner 接受。
 
 “继续”“按这个方向做”“帮我写 ADR”都不足以证明谁接受了哪份决定。
 
-## ExecPlan 必须把上游结论带入实施上下文
+## ExecPlan 必须消费 ADR 转化结果，而不是直接消费 Research
 
 ```text
 使用 $engineering-execution-plan，基于 R-001 和已接受的 ADR-001，
 创建“Implement tenant settings cache topology” ExecPlan。
 
-计划必须复述 Research 的约束和负面后果，写明 Research Gate 与
-Architecture Gate，给出真实文件路径、里程碑、验证命令、回滚方式和完成证据。
+R-001 只作为 ADR-001 的审计溯源。计划必须复述 ADR-001 如何把 Research 证据
+转成架构约束和负面后果，写明 Research conversion gate 与 Architecture Gate，
+给出真实文件路径、里程碑、验证命令、回滚方式和完成证据。不得直接从 Research
+推荐派生 Task 或验收项。
 先创建并评审计划，不要开始实现。
 ```
 
-生成的 EP 应明确 Research Gate、Architecture Decision Gate 与持续合规状态：
+生成的 EP 应明确 Research conversion gate（兼容字段仍名为 `research_gate`）、
+Architecture Decision Gate 与持续合规状态：
 
 ```yaml
 research_refs: ["R-001"]
@@ -239,7 +242,8 @@ architecture_compliance: applicable
 
 `Research and Architecture Inputs` 至少复述：
 
-- 目标：read p95 低于 60 ms，数据库读取减少 60%；
+- 转化链：R-001 → ADR-001，R-001 仅供审计；
+- ADR-001 授权的目标：read p95 低于 60 ms，数据库读取减少 60%；
 - 结构：5 秒 L1、30 秒 Redis L2、数据库 source of truth；
 - 安全边界：key 包含 `tenant_id` 和 cache schema version；
 - 运维边界：两层独立 kill switch，Redis 失败回源数据库；
@@ -281,7 +285,7 @@ verification_evidence 必须引用真实 CI 和仓库内验收产物。
 ```text
 使用 $engineering-research 和 $engineering-execution-plan
 对 R-001、ADR-001、EP-001 做最终一致性检查。
-验证 manifest、Synthesis seal、Owner 授权、Research/Architecture Decision Gate、
+验证 manifest、Synthesis seal、Owner 授权、Research conversion / Architecture Decision Gate、
 ADR 约束的 Architecture Compliance Matrix、
 verified revision 和 evidence，并报告任何 error；不要用自动修复掩盖问题。
 ```
@@ -290,11 +294,12 @@ verified revision 和 evidence，并报告任何 error；不要用自动修复�
 
 - R-001 是 `concluded`，Synthesis 与 manifest 都是 sealed。
 - ADR-001 是 `accepted`，并记录真实 Decision Owner。
-- 实施前 EP-001 是 `active`，Research 与 Architecture Decision Gate 都是
+- 实施前 EP-001 是 `active`，Research conversion 与 Architecture Decision Gate 都是
   `satisfied`，Architecture Compliance 是 `applicable`；真实验收和上述归档
   Prompt 完成后，它才是带 revision/evidence 的 sealed `completed`。
 - Research 与 Execution Plan 的校验都没有 error。
 
 这个例子刻意保留 Research 分析、Research Owner 结束授权和 Decision Owner
 架构授权三个不同步骤。`researchctl` 与 `epctl` 是 Skill 内部的确定性执行机制，
-不应成为用户学习这条工作流的入口。
+不应成为用户学习这条工作流的入口。R-001 只有经过 ADR-001 转化后才进入 EP-001；
+Research 结束本身不构成开发输入。

@@ -10,7 +10,7 @@ adr_refs: ["ADR-018"]
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 created: 2026-08-16
-updated: 2026-08-17
+updated: 2026-08-28
 ---
 
 # First-class technical Design Documents
@@ -38,18 +38,22 @@ contract to the next consumer.
 ```mermaid
 flowchart LR
     Q["Decision-relevant unknowns"] --> R["Research + Synthesis<br/>What is true and why?"]
-    R -->|"concluded evidence contract"| D["Design Doc<br/>How will the system work?"]
-    D --> A["ADR<br/>Which durable choice is authorized?"]
-    A -->|"accepted constraints"| D2["Current Design revision"]
-    D2 --> E["ExecPlan<br/>How will we deliver and prove it?"]
+    R -->|"translate system behavior"| D["Design Doc<br/>How will the system work?"]
+    R -->|"translate durable choice"| A["ADR<br/>Which choice is authorized?"]
+    A -->|"accepted constraints"| D
+    A --> E["ExecPlan<br/>How will we deliver and prove it?"]
+    D -->|"Design revision"| E
+    R -.->|"must not guide development directly"| E
     E --> C["Code + verification evidence"]
 ```
 
 The arrows do not impose a single-pass waterfall. Authors may draft a Design
 Doc while an ADR is proposed, then revise the document to conform to accepted
-constraints. The gates remain directional: unresolved Research cannot satisfy
-the evidence input, an unaccepted ADR cannot authorize a durable choice, and a
-Design Doc cannot replace an implementation plan.
+constraints. Some work needs only an accepted ADR, some needs a Design with a
+concrete decision-not-required reason, and some needs both. The gates remain
+directional: Research can inform ADR/Design but cannot itself become a development
+input, an unaccepted ADR cannot authorize a durable choice, and a Design Doc
+cannot replace an implementation plan.
 
 | Artifact | Primary question | Owns | Must not own |
 |---|---|---|---|
@@ -85,12 +89,17 @@ exposes `designctl`.
 Checkpoint, Bugfix, and technical debt. It consumes approved Design Package
 revisions through a versioned file contract, validates Design dependency
 closure for ADRs and EPs, and never creates, approves, revises, or supersedes a
-Design.
+Design. ExecPlan `research_refs` are audit provenance only: for active v2.8 plans,
+they must exactly match the Research references consumed by the plan's ADR/Design
+inputs. A Research-only plan fails creation and validation.
 
 ```mermaid
 flowchart LR
     R["engineering-research<br/>evidence producer"] -->|"sealed Research contract"| D["engineering-design<br/>Design Package lifecycle"]
+    R -->|"sealed Research contract"| A["engineering-execution-plan<br/>ADR lifecycle"]
     D -->|"approved Design revision contract"| E["engineering-execution-plan<br/>ADR + delivery lifecycle"]
+    A -->|"accepted ADR constraints"| E
+    R -.->|"no direct implementation edge"| E
     E --> I["implementation + evidence"]
 ```
 
@@ -280,7 +289,9 @@ a conditional Research recommendation as an unconditional architecture fact.
 One Research may produce several Design Packages, and one Design Package may
 consume several Research packages. IDs and references therefore form a
 many-to-many graph; conversion never moves, renames, or mutates the Research
-package.
+package. A Research that has not been referenced by an ADR or Design remains a
+Research result only. Its recommendation cannot be copied directly into an
+ExecPlan as a constraint, milestone, Task, or acceptance criterion.
 
 If Research was not required because authoritative standards, existing current
 architecture, or an explicit user direction already fixes the inputs, creation
@@ -472,6 +483,11 @@ Validation adds the following rules for schema `1.1` Design Docs:
 - ADR and ExecPlan `design_refs` resolve to non-terminal Design entrypoints. A
   new EP may inspect a review-ready revision, but completed archival requires
   approved `design_evidence` for every package in the dependency closure.
+- For active schema-2.8 EPs, Research provenance is the exact union of
+  `research_refs` declared by referenced ADRs and Designs. Missing provenance
+  breaks the audit chain; extra Research is unconverted and cannot enter the
+  development plan. Archived historical plans remain byte-stable compatibility
+  records.
 - Design prose cannot satisfy `adr_constraint_refs`; the EP compliance matrix
   still maps stable `ADR-NNN#C-NNN` constraints to implementation and tests.
 - Terminal Design Docs cannot be inputs to new work, and supersession graphs
@@ -518,7 +534,9 @@ The implementation must add focused tests for:
 - proposed versus accepted ADR references and Design dependency closure at
   each lifecycle state;
 - new-EP and archive behavior for draft, review-ready, revising, current, and
-  superseded packages, including exact `design_evidence` pins;
+  terminal or superseded Design states, including exact `design_evidence` pins;
+- rejection of Research-only EP creation, exact ADR/Design Research provenance
+  closure, and read-only compatibility for archived plans;
 - generated-index preservation and idempotent reindexing;
 - legacy schema `1` compatibility and byte preservation;
 - a producer-consumer fixture that creates Research with `researchctl`, creates
@@ -554,3 +572,6 @@ The implementation must add focused tests for:
 - 2026-08-17 — Aligned the draft with the implemented command names, typed
   dependency syntax, schema-1.1 evidence consumer, status output, and managed
   index compatibility. The document remains draft pending Design Owner review.
+- 2026-08-28 — Clarified that Research must be semantically converted by a
+  referenced ADR or Design before development, made ExecPlan Research references
+  audit-only provenance, and added exact conversion-closure validation.

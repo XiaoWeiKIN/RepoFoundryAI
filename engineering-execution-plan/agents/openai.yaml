@@ -1,4 +1,4 @@
 interface:
   display_name: "Engineering Execution Plan"
   short_description: "Deliberate ADRs and align execution plans"
-  default_prompt: "Use $engineering-execution-plan to collaboratively deliberate material ADR choices, align the execution plan, and preserve explicit authority and evidence gates."
+  default_prompt: "Use $engineering-execution-plan to collaboratively deliberate material ADR choices, require Research-to-ADR/Design conversion before development, align the execution plan, and preserve explicit authority and evidence gates."

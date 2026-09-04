@@ -24,7 +24,7 @@ verified_revision:
 verification_evidence: []
 archive_sha256:
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-28
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 ---
@@ -49,13 +49,16 @@ ExecPlan. Existing schema-1 Design Docs remain readable and are not mass-rewritt
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 4 — canonical verification recorded; publication gate pending.
+- Current milestone: Milestone 5 complete — publication gate pending.
 - Current state: the independently installable `engineering-design` producer,
   schema-1.1 lifecycle, immutable revision snapshots, read-only EP schema-2.8
   consumer, root Bootstrap composition, 0.6.0 packaging, and focused integration
-  tests are implemented. DD-011 remains `draft` and is not treated as approved.
-- Next action: obtain an explicit Design Owner decision on DD-011; if approved,
-  pin its published revision, rerun final verification, and archive EP-058.
+  tests are implemented. The Research conversion gate now requires the exact audit
+  closure of Research already translated by referenced ADRs or Designs, preserves
+  legacy compatibility, and has canonical regression evidence. DD-011 remains
+  `draft`.
+- Next action: obtain an explicit Design Owner decision on DD-011; if approved, pin
+  its published revision, rerun final verification, and archive EP-058.
 - Open question: whether the Design Owner approves DD-011 revision 1. This does not
   change the implemented route, but the v2.8 completion gate correctly blocks archive.
 
@@ -79,9 +82,12 @@ repository-global.
 
 ```mermaid
 flowchart LR
-  R["Engineering Research"] -->|"handoff + evidence"| D["Engineering Design"]
-  A["Current ADR closure"] -->|"constraints"| D
-  D -->|"approved revision evidence"| E["Engineering Execution Plan"]
+  R["Engineering Research"] -->|"evidence for system shape"| D["Engineering Design"]
+  R -->|"evidence for durable choice"| A["Current ADR closure"]
+  A -->|"constraints"| D
+  A -->|"accepted constraints"| E["Engineering Execution Plan"]
+  D -->|"approved revision evidence"| E
+  R -.->|"no direct development edge"| E
   E --> I["Implementation and verification"]
   D -. "design approval is not ADR authority" .-> A
 ```
@@ -106,7 +112,7 @@ either prose document is ambiguous.
 
 ## Research and Architecture Inputs
 
-- Research gate: `satisfied`.
+- Research conversion gate (`research_gate`): `satisfied`.
 - Research references: ["R-001"].
 - Architecture decision gate: `satisfied`.
 - Architecture compliance: `applicable`.
@@ -117,12 +123,14 @@ either prose document is ambiguous.
 - Approved Design revision evidence: none yet; the three legacy-current inputs are grandfathered, while DD-011 remains draft and blocks EP completion until separately approved.
 - Architecture entrypoint: `docs/design-docs/index.md`.
 
-R-001 concluded that professional workflows should exchange versioned,
+R-001 is audit provenance converted by ADR-001; it is not an implementation
+constraint. R-001 concluded that professional workflows should exchange versioned,
 machine-checkable files instead of importing one another's implementation. Its
 useful conclusion here is the producer/consumer boundary: `engineering-design`
 owns Design mutation and publishes stable files; `engineering-execution-plan`
 reads those files. Research did not define Design semantics, so ADR-018 supplies
-the missing authority.
+the missing authority. The implementation paths and acceptance below derive from
+ADR-001/ADR-018 and DD-011, not directly from R-001.
 
 ADR-001 and ADR-004 require independently installable professional packages under a
 thin root orchestrator. ADR-014 requires metadata on current governed Markdown and
@@ -162,8 +170,8 @@ or capacity. There are no unresolved facts that require another Research round.
 | ADR-016#C-007 | New EP validation uses current dependency and amendment closure before Design evidence. | `epctl validate` and new Design-consumer tests. |
 | ADR-016#C-008 | Continue reading legacy ADR schemas and their existing digest domains. | Full `engineering-execution-plan/tests` suite passes. |
 | ADR-018#C-001 | `engineering-design` and `designctl.py` exclusively implement Design IDs, lifecycle, manifests, snapshots, indexes, and publication. | Source-boundary tests assert no Design mutator elsewhere. |
-| ADR-018#C-002 | Research handoff is input only; Research commands never write Design paths. | Cross-skill contract test plus Research regression suite. |
-| ADR-018#C-003 | `epctl.py` only parses and validates approved Design evidence and exposes no Design mutation command. | CLI help and consumer tests. |
+| ADR-018#C-002 | Research handoff is evidence only; Research commands never write Design paths, and an unconverted Research reference cannot enter a new EP. | Cross-skill contract test plus Research-only EP rejection regression. |
+| ADR-018#C-003 | `epctl.py` only parses and validates ADR/Design conversion provenance and approved Design evidence, and exposes no Design mutation command. | CLI help, exact Research conversion-closure tests, and consumer tests. |
 | ADR-018#C-004 | One schema models unique `DD-NNN`, common metadata, lifecycle, and both single/package layouts. | Creation and validation tests for both layouts. |
 | ADR-018#C-005 | Review readiness requires a Research handoff or an explicit not-required reason and preserves findings, confidence, negative evidence, and unknowns. | Handoff fixture and missing-field rejection tests. |
 | ADR-018#C-006 | Required coverage sections must be substantive or contain a reasoned Not applicable statement. | Review-ready coverage table tests. |
@@ -210,6 +218,13 @@ reject terminal Design, and block EP completion without an approved revision. It
 must expose no Design mutation command. Register the fifth skill in root routing,
 bootstrap, installation, prompts, docs, checks, and contract tests.
 
+Finally enforce the missing semantic boundary discovered during follow-up review:
+for active schema-2.8 plans, `research_refs` is the exact audit-provenance union of
+referenced ADRs and Designs. `new-ep` and `validate` reject both missing provenance
+and unconverted extra Research. Update Research, Design, Execution Plan, routing,
+examples, and evals so no instruction still presents Synthesis as a development
+contract. Preserve completed plans as historical compatibility records.
+
 Finally run standalone, package, consumer, regression, skill, and repository
 verification. Record concise evidence in this plan, use the repository-supported
 working-tree revision evidence, and archive EP-058 only when every gate passes.
@@ -240,6 +255,14 @@ Run full validation from a cleanly described working-tree revision and update
 outcomes and evidence. EP-058 remains active while its ADR-linked DD-011 input is
 unpublished; archive requires a later explicit Design approval and a final verified
 revision rather than weakening or bypassing that gate.
+
+### Milestone 5: Research must be converted before development
+
+`new-ep` rejects Research-only plans and validates exact Research provenance through
+referenced ADR/Design inputs. Research and Synthesis templates hand off only to ADR
+or Design; ExecPlan templates attribute implementation constraints to those converted
+artifacts. Focused, full-package, and canonical repository tests must pass without
+rewriting archived plans or accepted ADR payloads.
 
 ## Concrete Steps
 
@@ -274,24 +297,35 @@ All commands run from `/Users/wangxiaowei1/x-otel/EngineeringPlan` unless stated
    Expect zero errors. Draft Design warnings and the pre-existing ready-to-archive
    plan warning are acceptable only when reported as warnings, not errors.
 
+5. Verify the Research conversion boundary:
+
+       python3 -m unittest engineering-execution-plan.tests.test_epctl.EpctlTestCase.test_research_cannot_directly_guide_an_execplan engineering-execution-plan.tests.test_epctl.EpctlTestCase.test_design_converts_research_before_execplan_consumption
+       python3 -m unittest discover -s engineering-execution-plan/tests -p 'test_*.py'
+       python3 -B scripts/check.py
+
+   Expect Research-only creation to fail closed, ADR/Design conversion paths to
+   validate, archived compatibility to remain readable, and the canonical check to
+   report zero errors.
+
 ## Validation and Acceptance
 
 - [x] Run `python3 -m unittest discover -s engineering-design/tests -p 'test_*.py'`;
   16 tests passed, covering both layouts, lifecycle, integrity, compatibility, and
   independent installation.
 - [x] Run `python3 -m unittest discover -s engineering-execution-plan/tests -p 'test_*.py'`;
-  56 tests passed, including ADR-effect regressions and schema-2.8 Design consumer gates.
+  62 tests passed, including ADR-effect regressions, schema-2.8 Design consumer
+  gates, and exact Research conversion closure.
 - [x] Run `python3 -m unittest discover -s tests -p 'test_*.py'`; 118 root package,
   installer, prompt, migration, and architecture-contract tests passed.
 - [x] Run `python3 /Users/wangxiaowei1/.codex/skills/.system/skill-creator/scripts/quick_validate.py engineering-design`;
   result: `Skill is valid!`.
-- [x] Run `python3 -B scripts/check.py`; all integrity checks passed, including 234
-  tests across Research (35), Benchmark (9), Design (16), Execution Plan (56), and
+- [x] Run `python3 -B scripts/check.py`; all integrity checks passed, including 240
+  tests across Research (35), Benchmark (9), Design (16), Execution Plan (62), and
   root contracts (118).
 - [x] Run `python3 engineering-execution-plan/scripts/epctl.py --repo . validate`;
-  result: zero errors and four documented warnings (DD-011 unpublished twice through
-  linked inputs, EP-058 explicitly archive-blocked by DD-011, plus pre-existing
-  EP-006 archive readiness).
+  result: zero errors and four documented warnings (DD-011 unpublished twice
+  through linked inputs, EP-058 explicitly archive-blocked by DD-011, plus
+  pre-existing EP-006 archive readiness).
 - [x] Run `python3 engineering-design/scripts/designctl.py --repo . validate`; result:
   zero errors and one expected warning that legacy DD-011 remains an unpublished draft.
 - [x] Inspect the consumer CLI through the root ownership contract;
@@ -299,6 +333,10 @@ All commands run from `/Users/wangxiaowei1/x-otel/EngineeringPlan` unless stated
   `epctl.py` exposes no Design mutator.
 - [x] Exercise an independently copied `engineering-design/` package through
   `test_skill_runs_after_independent_copy`; it passed without sibling packages.
+- [x] Verify Research-only EP rejection, Design/ADR conversion provenance, complete
+  Execution Plan regressions, Research/Design skill tests, and the canonical check
+  after the 2026-08-28 boundary correction; `python3 -B scripts/check.py` passed all
+  240 tests and every validator, index, and whitespace check.
 
 ### Required Benchmark Scenario Gates
 
@@ -338,6 +376,9 @@ for ordinary source and configuration changes.
 - [x] (2026-08-17T02:56:37Z) Verified and recorded implementation evidence. EP-058
   intentionally remains active because DD-011 has not received separate Design
   Owner approval.
+- [x] (2026-08-28T03:57:40Z) Enforced Research→ADR/Design→ExecPlan conversion,
+  preserved legacy Synthesis and archived-plan compatibility, and passed all 240
+  canonical tests plus repository validation.
 
 ## Surprises & Discoveries
 
@@ -355,12 +396,20 @@ for ordinary source and configuration changes.
   only checked acceptance and reported `ready_to_archive`. Status and validation now
   consume the same Design publication gate and report
   `archive_blocked: design_unpublished:DD-011`.
+- The original `research_gate: satisfied` proved only that Research was concluded;
+  it did not prove that an ADR or Design had translated that evidence. This allowed
+  Research-only plans to treat Synthesis as an implicit development contract. The
+  corrected invariant makes Research references the exact audit closure of the
+  referenced ADR/Design set.
 
 ## Decision Log
 
 - 2026-08-17 — Implement accepted ADR-018 Option D as a fifth, independent
   `engineering-design` skill. Design approval remains distinct from ADR acceptance;
   therefore DD-011 stays `draft` during this EP unless separately authorized.
+- 2026-08-28 — Treat direct Research-to-development flow as a compliance defect in
+  the ADR-018 boundary: enforce Research→ADR/Design→ExecPlan conversion without
+  changing any accepted ADR payload or inferring new decision authority.
 
 ## Blockers
 
@@ -378,8 +427,9 @@ immutable revisions, legacy schema-1 compatibility, and generated projections.
 `epctl.py` remains a read-only consumer and schema 2.8 pins approved Design evidence
 before completion. Root bootstrap, installation, routing, documentation, examples,
 evaluations, migration, and validation compose the new peer as RepoFoundry 0.6.0 /
-Harness Core 1.5.0. All 234 canonical tests pass and every validator reports zero
-errors.
+Harness Core 1.5.0. The consumer now treats Research as audit provenance only and
+requires its exact conversion closure through referenced ADRs or Designs. All 240
+canonical tests pass and every validator reports zero errors.
 
 The remaining work is governance, not implementation: DD-011 is still a draft and
 therefore has no approved revision evidence to pin. EP-058 stays active by design;
@@ -419,8 +469,8 @@ Paths are repository-relative POSIX paths and hashes cover exact file bytes.
 - Producer entrypoint: `engineering-design/SKILL.md`
 - Producer CLI: `engineering-design/scripts/designctl.py`
 - Draft explanatory Design: `docs/design-docs/first-class-technical-design-documents.md`
-- Verification: `python3 -B scripts/check.py` passed 234 tests and all repository
-  integrity checks on 2026-08-17.
+- Verification: `python3 -B scripts/check.py` passed 240 tests and all repository
+  integrity checks on 2026-08-28.
 - Full logs, traces, screenshots and generated evidence belong under `artifacts/`; keep only concise observations and paths here.
 
 ## Revision Notes
@@ -433,3 +483,8 @@ Paths are repository-relative POSIX paths and hashes cover exact file bytes.
 - 2026-08-17T03:02:54Z — Aligned status projection with the schema-2.8 Design
   completion gate and re-ran all 56 Execution Plan tests plus 16 root repository
   contract tests.
+- 2026-08-28 — Reopened implementation verification after the user identified that
+  concluded Research could still guide development directly; added exact
+  ADR/Design conversion-closure behavior, documentation, and regression coverage.
+- 2026-08-28T03:57:40Z — Completed Milestone 5 with 240 passing canonical tests;
+  retained active status because DD-011 approval remains a separate gate.

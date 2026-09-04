@@ -6,12 +6,14 @@ The distribution repository contains
 `examples/cache-topology/README.md` and a four-document corpus. It demonstrates
 one linked Research with an `index.md` entrypoint, three answered Research
 Questions, a bounded Synthesis, a sealed snapshot, an explicitly authorized
-ADR, and a gated ExecPlan.
+ADR that converts the Research, and an ExecPlan that consumes the ADR while
+retaining Research only as audit provenance.
 
 The expected Research conclusion selects a five-second process-local L1 plus a
 30-second Redis L2. It preserves the faster-but-invalid L1-only result as
-negative evidence and sends Redis outage and invalidation backlog tests to the
-ExecPlan. The example is written as a Codex conversation: users express intent,
+negative evidence and proposes Redis outage and invalidation backlog checks for
+ADR/Design conversion. The Research does not send development work directly to
+the ExecPlan. The example is written as a Codex conversation: users express intent,
 constraints, and authority through prompts; this Skill invokes `researchctl`
 internally and reports the resulting artifacts.
 

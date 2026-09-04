@@ -36,7 +36,7 @@
     {
       "id": 2,
       "prompt": "我们还不知道缓存方案是否正确传播 trace context，需要读源码、查规范并做最小实验。请先初始化项目，然后继续处理。",
-      "expected_output": "使用 repo-foundry-ai 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，再交给 engineering-execution-plan。",
+      "expected_output": "使用 repo-foundry-ai 预览并应用项目 Harness；随后把未知事实和实验路由到 engineering-research，而不是直接创建 ADR 或 ExecPlan。Research 结论完成并获得 Owner 授权后，必须先转化为 ADR 或 Design；只有这些架构输入才能进入 engineering-execution-plan，Research 仅保留为审计溯源。",
       "files": [],
       "assertions": [
         {
@@ -52,7 +52,7 @@
     {
       "id": 3,
       "prompt": "仓库已经初始化。我有 concluded Research 和明确接受的 ADR，现在要拆成可恢复的实施计划。",
-      "expected_output": "不重复 Bootstrap；把请求路由到 engineering-execution-plan，验证 Research 与 ADR 输入后创建自包含、可验证和可恢复的 ExecPlan。",
+      "expected_output": "不重复 Bootstrap；把请求路由到 engineering-execution-plan，验证 accepted ADR 已承接 concluded Research，并把 Research 作为审计溯源、ADR 作为开发约束，随后创建自包含、可验证和可恢复的 ExecPlan。",
       "files": [],
       "assertions": [
         {

@@ -16,12 +16,13 @@ payload_sha256:
 
 # {{TITLE}}
 
-This Synthesis is the bounded, living decision interface between a
-multi-document Research corpus and downstream decisions or plans.
+This Synthesis is the bounded, living evidence interface between a
+multi-document Research corpus and downstream ADRs or Designs.
 Each `review_ready` revision is content-addressed but does not conclude the
 parent Research. Selected milestones are preserved as complete, deduplicated
 files under `snapshots/`; once sealed, changing the body invalidates the
-recorded SHA-256.
+recorded SHA-256. Research is not an implementation contract: conclusions must
+be translated into a referenced ADR or Design before they can guide delivery.
 
 ## Executive Conclusion
 
@@ -51,9 +52,9 @@ recorded SHA-256.
 
 <!-- REQUIRED: Recommend an option, state why it ranks highest, and list conditions required for the recommendation to remain valid. -->
 
-## Handoff to ADR and ExecPlan
+## Handoff to ADR or Design
 
-<!-- REQUIRED: State durable decisions, implementation constraints, remaining validations, and which evidence is audit-only. -->
+<!-- REQUIRED: State candidate decisions or design implications, remaining validations, and which evidence is audit-only. Do not state implementation directives or claim that Research itself authorizes development. -->
 
 ## Revision Notes
 

@@ -182,7 +182,7 @@ Explore 开始，并只允许按 `Explore → Build → Governed` 单调升级�
 
 - Explore：有界、可逆的阅读、实验、本地编辑与测试，不要求持久制品或 Spec receipt。
 - Build：有界生产修改，维护简短 intent/path/acceptance/compatibility 契约并激活适用 Spec。
-- Governed：公共契约、安全、数据、不可逆操作、可靠性声明、发布或长期决定，按触发器使用 Research、ADR、ExecPlan 与 sealed Benchmark。
+- Governed：公共契约、安全、数据、不可逆操作、可靠性声明、发布或长期决定，按触发器使用 Research、Design、ADR、ExecPlan 与 sealed Benchmark；Research 必须先转化为 ADR/Design，不能直接指导开发。
 
 所有模式都保持人类授权、破坏性/外部写入、安全、数据完整性、兼容性、locked/sealed
 证据与真实验证边界。不得用较低模式规避已确认边界，也不因“任务复杂”本身强制一张

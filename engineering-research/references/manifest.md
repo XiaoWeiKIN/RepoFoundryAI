@@ -186,7 +186,8 @@ validation failure.
 
 ## Consumer requirements
 
-A consumer such as `engineering-execution-plan`:
+A consumer such as `engineering-design`, or the ADR side of
+`engineering-execution-plan`:
 
 1. locates concluded Research through its controller;
 2. validates the sealed Synthesis body digest;
@@ -195,3 +196,7 @@ A consumer such as `engineering-execution-plan`:
    and per-document digests;
 5. may accept legacy concluded packages without a manifest;
 6. never assumes the producer skill is installed.
+
+An ExecPlan may validate the same package only as provenance already converted
+by one of its referenced ADRs or Designs. Manifest validity never turns
+Research into an implementation contract.

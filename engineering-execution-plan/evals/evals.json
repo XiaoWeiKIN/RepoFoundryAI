@@ -48,7 +48,7 @@
     {
       "id": 3,
       "prompt": "统一网关、BFF、前端 SDK 的 token 刷新契约，还要兼容旧字段。先做充分 Research 和总结，再起草技术架构决策给我看；我看到 ADR 后再决定是否接受，现在不要提前建开发 EP。",
-      "expected_output": "创建 Research 包，围绕现状、兼容约束和候选契约收集证据并形成独立 Synthesis；Research Gate 满足后创建 proposed ADR。没有用户对具体 ADR 的明确决定，因此不接受 ADR，也不创建 ExecPlan。",
+      "expected_output": "创建 Research 包，围绕现状、兼容约束和候选契约收集证据并形成独立 Synthesis；Research concluded 后只把它作为 proposed ADR 的证据输入，由 ADR 完成规范转化。没有用户对具体 ADR 的明确决定，因此不接受 ADR，也不创建 ExecPlan。",
       "files": [],
       "assertions": [
         {
@@ -264,7 +264,7 @@
     {
       "id": 12,
       "prompt": "仓库中 R-004 已 concluded，ADR-002 已 accepted 且没有被替代。请引用它们创建支付幂等迁移 EP，另一个没看过 Research/ADR 的 Agent 也必须能只读根计划继续。",
-      "expected_output": "创建 v2.8 ExecPlan，Research Gate 与 Architecture Decision Gate satisfied、Architecture Compliance applicable；引用 R-004/ADR-002，在 Inputs 复述证据结论、架构后果、迁移约束和剩余未知，并把每项 ADR constraint 映射到实现与验证。根计划包含可执行里程碑、命令、验收和恢复方法。",
+      "expected_output": "创建 v2.8 ExecPlan，Research conversion gate 与 Architecture Decision Gate satisfied、Architecture Compliance applicable；引用 R-004/ADR-002，明确 R-004 仅是 ADR-002 的审计溯源，在 Inputs 复述 ADR 转化后的架构后果、迁移约束和剩余未知，并把每项 ADR constraint 映射到实现与验证。根计划不得直接从 Research 派生开发要求，并包含可执行里程碑、命令、验收和恢复方法。",
       "files": [],
       "assertions": [
         {
@@ -305,7 +305,7 @@
         },
         {
           "name": "does_not_create_ep",
-          "description": "Research Gate 未满足时没有创建 ExecPlan"
+          "description": "Research 未 concluded 且未转化为 ADR/Design 时没有创建 ExecPlan"
         }
       ]
     },
@@ -356,7 +356,7 @@
     {
       "id": 16,
       "prompt": "给一个只改模块内私有 helper 名称和测试的 EP。现有测试已经完整定义行为，不改 API、数据、依赖或部署；请判断能否跳过 Research 和 ADR。",
-      "expected_output": "可以 fast track：Research Gate 与 Architecture Decision Gate 都为 not_required，并分别写出可核查理由；由于没有任何现有 architecture input，Architecture Compliance 为 not_applicable 且另写理由。仍创建自包含 v2.8 ExecPlan 和真实验收。",
+      "expected_output": "可以 fast track：Research conversion gate 与 Architecture Decision Gate 都为 not_required，并分别写出可核查理由；由于没有任何现有 architecture input，Architecture Compliance 为 not_applicable 且另写理由。仍创建自包含 v2.8 ExecPlan 和真实验收。",
       "files": [],
       "assertions": [
         {
@@ -504,7 +504,7 @@
     {
       "id": 22,
       "prompt": "adapter 清理不产生新的架构决定，但现有 accepted ADR-004 的 C-001/C-002 仍约束这个模块。R-003 已 concluded。请创建 EP，不要为了形式再起草 ADR。",
-      "expected_output": "创建 v2.8 EP：Research Gate satisfied，Architecture Decision Gate not_required 并记录无新决定的理由，Architecture Compliance applicable；引用 ADR-004、固定 payload digest，并把 ADR-004#C-001/C-002 分别映射到实现保持点与验证。",
+      "expected_output": "创建 v2.8 EP：Research conversion gate satisfied，Architecture Decision Gate not_required 并记录无新决定的理由，Architecture Compliance applicable；R-003 只作为 ADR-004 的审计溯源，引用 ADR-004、固定 payload digest，并把 ADR-004#C-001/C-002 分别映射到实现保持点与验证。",
       "files": [],
       "assertions": [
         {
@@ -610,6 +610,26 @@
         {
           "name": "does_not_fake_execution_progress",
           "description": "计划对齐不等于任务、验收、Benchmark gate 或实现已经完成"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "R-012 已 concluded，但还没有 ADR 或 Design。直接按 Synthesis 的推荐创建开发 EP 并开始实现。",
+      "expected_output": "拒绝创建 Research-only ExecPlan，也不从 Synthesis 直接生成约束、Task、里程碑或验收项；说明 Research 仍只是证据，先根据需要转化为 accepted ADR 或 Design，再把 R-012 作为该架构输入的审计溯源进入 EP。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "rejects_direct_research_to_development",
+          "description": "没有创建 active ExecPlan，也没有开始实现"
+        },
+        {
+          "name": "requires_conversion_artifact",
+          "description": "明确要求 referenced ADR 或 Design 承接 Research"
+        },
+        {
+          "name": "keeps_research_audit_only",
+          "description": "Research/Synthesis 被描述为事实与审计证据，而不是开发契约"
         }
       ]
     }

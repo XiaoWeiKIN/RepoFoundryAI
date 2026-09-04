@@ -17,7 +17,11 @@ flowchart LR
   A["Current accepted ADRs"] -->|"constraints"| D
   X["Interactive exploration"] -->|"confirmed design inputs"| D
   D -->|"approved revision evidence"| E["ExecPlan"]
+  R -.->|"不得直接指导开发"| E
 ```
+
+Research 到 Design 的箭头是语义转化，不是文件转发。没有进入 Design 或 accepted
+ADR 的 Research 仍只是调研，ExecPlan 不得从中直接派生实施约束、Task 或验收项。
 
 ## 先判断是否应创建 Design
 
@@ -113,4 +117,5 @@ CLI 是确定性治理层，不会替作者生成正确的系统设计；语义�
 本 skill 输出 schema-1.1 Design 根、可选 package manifest/reading map/member docs、
 不可变 revision snapshot 和 evidence pin。ADR 和 EP 消费仓库文件，不导入本 skill。
 未发布 Design 只能作为带 warning 的输入；终态 Design 不能进入新工作；EP 完成必须
-固定每个依赖 Design 的批准修订与当前 ADR closure。
+固定每个依赖 Design 的批准修订与当前 ADR closure。EP 中的 Research 引用只用于
+证明这些 ADR/Design 的来源闭包，不能绕过 Design/ADR 直接影响开发。

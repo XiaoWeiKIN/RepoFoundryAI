@@ -44,14 +44,15 @@ flowchart TD
 - 结论涉及公共契约、安全、可靠性、数据或高逆转成本。
 
 需要新建、接管或维护 Research 时切换到独立的
-`engineering-research` Skill。本 Skill 从 concluded Research 的文件契约开始，
-不负责证据采集或 corpus authoring。
+`engineering-research` Skill。本 Skill 只在 ADR/Design 转化链中验证 concluded
+Research 的文件契约，不负责证据采集或 corpus authoring，也不把 Research 直接
+当作开发输入。
 
 需要创建、评审、修订、放弃或替代 Design Package 时切换到独立的
 `engineering-design` Skill。本 Skill 只读消费其版本化 repository contract；
 不得通过 `epctl` 改变 Design 生命周期。
 
-可跳过 Research：
+Research conversion gate 可标记 `not_required`：
 
 - 当前 accepted ADR 和代码事实已覆盖输入。
 - 权威标准或用户已固定方案。
@@ -160,18 +161,22 @@ stateDiagram-v2
 - 编号在仓库锁内分配，扫描 active、completed、索引和高水位后取最大值 +1。
 - 允许故障跳号；删除文件后也不复用编号。
 - `RESEARCH.md`、`DECISIONS.md`、`PLANS.md`、`BUGFIXES.md` 的托管区可由 `reindex` 重建，人工区必须保留。
-- 新 ExecPlan 使用 `schema_version: "2.8"`，明确 Research Gate、Architecture
+- 新 ExecPlan 使用 `schema_version: "2.8"`，明确 Research conversion gate
+  （frontmatter 兼容字段仍为 `research_gate`）、Architecture
   Decision Gate、Architecture Compliance、ADR 依赖闭包、Design Doc 引用、可选
   架构入口和零到多个 `required_benchmark_scenarios`，并增加
   `adr_constraint_refs`、`adr_evidence`、`design_evidence` 与
   `Architecture Compliance Matrix`。
-- Research Gate 只接受 valid + concluded Research；Decision Gate satisfied 和
-  active Compliance input 只接受 valid + accepted + current ADR。
+- Research conversion gate 只接受 valid + concluded Research，并要求每个引用都由
+  referenced ADR 或 Design 消费；Decision Gate satisfied 和 active Compliance input
+  只接受 valid + accepted + current ADR。
 - manifest-bearing Research 还必须具有 sealed、摘要一致且文档完整的受支持 manifest；无 manifest 的旧包继续走兼容路径。
-- Research Gate 可以为 `not_required`，但必须有理由且不能同时保留 Research 引用。
+- Research conversion gate 可以为 `not_required`，但必须有理由且不能同时保留
+  Research 引用。
   Architecture Decision Gate 为 `not_required` 时仍可保留适用的既有 ADR；
   Architecture Compliance 为 `not_applicable` 时才要求 architecture inputs 为空。
-- ADR 引用的 Research 必须同时进入 ExecPlan。
+- ADR 或 Design 引用的 Research 必须同时进入 ExecPlan；ExecPlan 额外引用但没有
+  ADR/Design 承接的 Research 必须失败。
 - ADR 的 `depends_on` / `amends` 必须无环，且传递闭包全部进入 ExecPlan；
   ADR 引用的 Design Docs 也必须进入 ExecPlan。
 - schema 1.1 Design 的 typed dependency 必须无环且传递闭包全部进入 ExecPlan；

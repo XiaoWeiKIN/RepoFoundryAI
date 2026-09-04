@@ -77,6 +77,7 @@ class EpctlTestCase(unittest.TestCase):
         *,
         status: str = "current",
         dependencies: list[str] | None = None,
+        research_refs: list[str] | None = None,
     ) -> tuple[str, str]:
         number = int(design_id.split("-", 1)[1])
         design_root = self.repo / "docs" / "design-docs"
@@ -94,6 +95,12 @@ class EpctlTestCase(unittest.TestCase):
             else 'approved_by: ""\napproved_at: ""\napproval_ref: ""\n'
         )
         title = f"{slug.replace('-', ' ').title()} design"
+        design_research_refs = research_refs or []
+        research_reason = (
+            ""
+            if design_research_refs
+            else "Existing accepted architecture fixes this test input"
+        )
         root_text = (
             "---\n"
             'schema_version: "1.1"\n'
@@ -106,8 +113,8 @@ class EpctlTestCase(unittest.TestCase):
             f"status: {status}\n"
             'working_revision: "1"\n'
             f'published_revision: "{published}"\n'
-            "research_refs: []\n"
-            'research_not_required_reason: "Existing accepted architecture fixes this test input"\n'
+            f"research_refs: {json.dumps(design_research_refs)}\n"
+            f'research_not_required_reason: "{research_reason}"\n'
             "adr_refs: []\n"
             f"design_dependencies: {json.dumps(dependencies or [])}\n"
             'decision_not_required_reason: "The fixture introduces no durable architecture decision"\n'
@@ -735,6 +742,109 @@ class EpctlTestCase(unittest.TestCase):
             status["plans"][0]["architecture_compliance"],
             "applicable",
         )
+
+    def test_research_cannot_directly_guide_an_execplan(self) -> None:
+        self.init()
+        research = self.new_research("unconverted-evidence")
+        self.conclude_research(research)
+
+        result = self.run_cli(
+            "new-ep",
+            "--slug",
+            "research-only-plan",
+            "--title",
+            "Research only plan",
+            "--research",
+            "R-001",
+            "--decision-not-required-reason",
+            "The fixture proposes no durable decision.",
+            "--architecture-not-applicable-reason",
+            "The fixture deliberately has no architecture input.",
+            expected=2,
+        )
+
+        self.assertIn("Research conversion gate failed", result.stderr)
+        self.assertIn("Research references are audit-only", result.stderr)
+        self.assertIn("missing conversion for: R-001", result.stderr)
+
+        adr = self.new_adr("converted-evidence")
+        self.accept_adr(adr)
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "converted-plan",
+                "--title",
+                "Converted plan",
+                "--research",
+                "R-001",
+                "--adr",
+                "ADR-001",
+            ).stdout.strip()
+        )
+        second = self.new_research("extra-audit-only-evidence")
+        self.conclude_research(second)
+        plan.write_text(
+            plan.read_text(encoding="utf-8").replace(
+                '["R-001"]',
+                '["R-001", "R-002"]',
+            ),
+            encoding="utf-8",
+        )
+
+        validation = self.run_cli("validate", expected=1)
+        self.assertIn("Research references are audit-only", validation.stderr)
+        self.assertIn("missing conversion for: R-002", validation.stderr)
+
+    def test_design_converts_research_before_execplan_consumption(self) -> None:
+        self.init()
+        research = self.new_research("design-evidence")
+        self.conclude_research(research)
+        design_ref, _ = self.write_single_design(
+            "DD-001",
+            "converted-research",
+            research_refs=["R-001"],
+        )
+        self.run_cli("register-architecture-root", "docs/design-docs")
+
+        missing_provenance = self.run_cli(
+            "new-ep",
+            "--slug",
+            "missing-research-provenance",
+            "--title",
+            "Missing research provenance",
+            "--research-not-required-reason",
+            "The caller omitted the Design's Research provenance.",
+            "--decision-not-required-reason",
+            "The Design fixes the implementation shape.",
+            "--design",
+            design_ref,
+            expected=2,
+        )
+        self.assertIn(
+            "ADR/Design inputs require Research provenance missing from the plan",
+            missing_provenance.stderr,
+        )
+        self.assertIn("R-001 (DD-001)", missing_provenance.stderr)
+
+        plan = Path(
+            self.run_cli(
+                "new-ep",
+                "--slug",
+                "design-converted-plan",
+                "--title",
+                "Design converted plan",
+                "--research",
+                "R-001",
+                "--decision-not-required-reason",
+                "The current Design fixes the implementation shape.",
+                "--design",
+                design_ref,
+            ).stdout.strip()
+        )
+
+        self.assertIn("research_gate: satisfied", plan.read_text(encoding="utf-8"))
+        self.run_cli("validate")
 
     def test_existing_architecture_can_apply_without_a_new_decision(self) -> None:
         self.init()

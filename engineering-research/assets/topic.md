@@ -90,13 +90,13 @@ sources. Keep raw logs, captures, benchmark output, and generated dumps in
 
 <!-- topic-role: handoff -->
 
-| 去向 | 状态 | 具体变化或约束 |
+| 去向 | 状态 | 具体证据变化或候选影响 |
 |---|---|---|
 | Synthesis | pending | |
-| ADR / ExecPlan | pending | |
+| ADR / Design | pending | |
 | Prototype / monitoring | pending | |
 
-<!-- REQUIRED_TOPIC_HANDOFF: State what Synthesis should add, change, downgrade, or leave unchanged. Record implementation and monitoring consequences only when supported. Replace pending with integrated, unchanged, not-ready, required, or an exact revision reference as work progresses. -->
+<!-- REQUIRED_TOPIC_HANDOFF: State what Synthesis should add, change, downgrade, or leave unchanged. Record candidate decision/design implications and monitoring consequences only when supported; never present them as implementation directives. Replace pending with integrated, unchanged, not-ready, required, or an exact revision reference as work progresses. -->
 
 ## 证据索引
 

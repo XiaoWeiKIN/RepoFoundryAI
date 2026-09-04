@@ -337,10 +337,15 @@ Use $engineering-case-study with the verified code, Research, ADR, and ExecPlan
 to write a bilingual module-design article.
 ```
 
+Research produces facts, evidence, confidence boundaries, and candidate
+recommendations only. Unless a referenced ADR or Design translates it, the
+Research remains research and cannot directly create development constraints,
+Tasks, milestones, or acceptance criteria. ExecPlan Research references retain
+only the audit provenance of that conversion.
+
 The [cache-topology example](./examples/cache-topology/README.md) shows a
-Prompt-driven Research-to-decision handoff. The Design contract adds a distinct
-review boundary between established evidence and delivery when implementation
-architecture must be specified.
+Prompt-driven handoff from Research through ADR/Design into delivery. A clear
+architecture-conversion boundary always separates evidence from development.
 
 ## Prompt-driven examples
 

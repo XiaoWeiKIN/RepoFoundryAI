@@ -60,7 +60,7 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 
 ## Research and Architecture Inputs
 
-- Research gate: `{{RESEARCH_GATE}}`.
+- Research conversion gate (`research_gate`): `{{RESEARCH_GATE}}`.
 - Research references: {{RESEARCH_REFS}}.
 - Architecture decision gate: `{{ARCHITECTURE_DECISION_GATE}}`.
 - Architecture compliance: `{{ARCHITECTURE_COMPLIANCE}}`.
@@ -71,7 +71,7 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 - Approved Design revision evidence: {{DESIGN_EVIDENCE}}.
 - Architecture entrypoint: `{{ARCHITECTURE_ENTRYPOINT}}`.
 
-<!-- REQUIRED: Restate the Research conclusions, accepted ADR consequences, implementation constraints, and remaining unknowns needed to execute this plan without opening upstream artifacts. Explain each not-required reason when a gate was explicitly skipped. -->
+<!-- REQUIRED: For every Research reference, name the ADR or Design that converted it and keep Research claims audit-only. Restate accepted ADR consequences, Design behavior, implementation constraints, and remaining unknowns needed to execute this plan without opening upstream artifacts. Never derive a milestone, Task, constraint, or acceptance item directly from Research. Explain each not-required reason when a gate was explicitly skipped. -->
 
 ## Architecture Compliance Matrix
 
@@ -128,7 +128,7 @@ do not pre-fill these fields while the plan is active.
 
 ## Progress
 
-- [ ] ({{TIMESTAMP}}) Plan created; research and fill every REQUIRED section before implementation.
+- [ ] ({{TIMESTAMP}}) Plan created; resolve every REQUIRED section and conversion gate before implementation.
 
 ## Surprises & Discoveries
 

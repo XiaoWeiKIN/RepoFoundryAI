@@ -311,9 +311,13 @@ Design Package，明确边界、契约、失败语义和可评审 revision。
 撰写一篇中英双语模块设计文章。
 ```
 
+Research 只产出事实、证据、置信边界和候选建议。没有进入 referenced ADR 或
+Design 的调研仍只是调研，不能直接生成开发约束、Task、里程碑或验收项；ExecPlan
+中的 Research 引用只保存 ADR/Design 转化链的审计溯源。
+
 [cache-topology 端到端示例](./examples/cache-topology/README.md)展示了既有 corpus
-到 Research 与决策的 Prompt 交接；当实施架构需要被明确说明时，Design 契约在
-证据与交付之间增加独立评审边界。
+经 Research 转化为 ADR/Design，再进入交付计划的 Prompt 交接；Research 与交付
+之间始终存在一个明确的架构转化边界。
 
 ## Prompt 驱动的示例
 

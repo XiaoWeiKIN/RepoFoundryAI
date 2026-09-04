@@ -20,9 +20,9 @@
 5. **可以恢复**：危险或可能半途失败的操作有重试、回滚和清理方法。
 6. **持续更新**：计划始终反映当前真实路线，同时保留历史轨迹。
 7. **保持有界**：根文档优先服务当前接手，旧事件封存到 checkpoint，完整证据外置。
-8. **输入已决且约束可执行**：Research 与 Architecture Decision Gate 有可验证
-   引用或具体 not-required 理由；Architecture Compliance 独立判断，适用的 ADR
-   constraints 已映射到实现和验证。
+8. **输入已决且约束可执行**：Research conversion gate 证明每份 Research 已由
+   referenced ADR/Design 转化，或有具体 not-required 理由；Architecture Decision
+   Gate 与 Compliance 独立判断，适用的 ADR constraints 已映射到实现和验证。
 9. **测量门禁已预声明**：需要 Benchmark 验收时，完整 Scenario 集合在实现前
    声明，并映射到具体开发决定或里程碑。
 
@@ -36,7 +36,7 @@
 | Current Snapshot | 最新 checkpoint、当前里程碑、当前状态、准确下一动作和开放问题 |
 | Context and Orientation | 术语、现状、模块关系、完整仓库相对路径 |
 | Constraints and References | 当前任务所需约束摘要与权威入口 |
-| Research and Architecture Inputs | Gate、关键证据、ADR 后果、执行约束、剩余未知和跳过理由 |
+| Research and Architecture Inputs | Research→ADR/Design 转化链、审计证据、ADR 后果、Design 行为、执行约束、剩余未知和跳过理由 |
 | Architecture Compliance Matrix | 每项 ADR constraint 或 legacy input 对应的实现/保持位置与验证方式 |
 | Benchmark Gate Set | 预声明 Scenario、它驱动的开发决定或里程碑、完成契约 |
 | Plan of Work | 当前准备怎样修改以及为什么 |
@@ -62,7 +62,8 @@ ID、title/status、author/owner 与 created/updated。
 
 该 section 是上游证据和执行计划之间的稳定接口，至少写明：
 
-- 每份 concluded Research 支持的结论、置信边界和 sealed Synthesis 路径。
+- 每份 concluded Research 由哪份 referenced ADR/Design 转化，以及只用于审计的
+  结论、置信边界和 sealed Synthesis 路径。
 - Architecture Decision Gate 为何由 accepted ADR 满足，或为何本次不需要独立决定。
 - Architecture Compliance 为何 applicable/not_applicable；“不需要新决定”不能用来
   跳过既有架构。
@@ -73,11 +74,13 @@ ID、title/status、author/owner 与 created/updated。
 - 每份 Design revision 提供的接口、数据流、迁移或运维细节；多文档集合优先给出
   `architecture_entrypoint`。schema 1.1 Design 使用
   `DD-NNN@rev:N@sha256:<manifest-digest>` evidence 固定精确 approved revision。
-- 哪些事实是审计信息，哪些约束必须进入实现和验收。
+- 哪些 Research 事实仅是审计信息，哪些 ADR/Design 结果进入实现和验收；不得把
+  Research 推荐直接改写成约束、里程碑或验收项。
 - 剩余未知为何不改变路线，或它们对应的实验、blocker、里程碑和验收项。
 - Gate/Compliance 为 `not_required` / `not_applicable` 时各自的具体依据。
 
-引用不能替代正文。接手 Agent 不应先打开 Research/ADR 才知道要改什么。
+引用不能替代正文。接手 Agent 不应先打开 Research/ADR 才知道要改什么；但正文也
+不能借“自包含”之名把 Research 升格为开发契约。
 
 `Architecture Compliance Matrix` 必须逐条回答：约束在哪里实现或由本次改动保持，
 哪个 test/lint/schema check/observable evidence 证明它。结构化 ADR 的每项 constraint

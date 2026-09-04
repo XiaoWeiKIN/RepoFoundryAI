@@ -48,7 +48,9 @@ Exactly one input route is required:
 The Design repeats decision-relevant supported findings and confidence,
 negative evidence and rejected hypotheses, and remaining unknowns and validity
 conditions. A link alone is not a semantic handoff. The producer never mutates
-Research files.
+Research files. Until this translation exists (or an accepted ADR performs the
+decision translation), Research remains evidence only and cannot guide an
+ExecPlan or implementation directly.
 
 ## Package manifest
 

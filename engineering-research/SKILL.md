@@ -7,7 +7,9 @@ description: |
 # Engineering Research
 
 把决策相关未知转化为可审计、可多轮深化的多文档证据包。输出有界的
-Synthesis；只有 Research Owner 明确授权后才封存并交给 ADR 或实施计划。
+Synthesis；只有 Research Owner 明确授权后才封存并交给 ADR 或 Design。
+Research 只建立事实、证据、置信边界与候选建议；未被 ADR 或 Design 显式转化的
+内容仍只是调研，不得作为 ExecPlan、Task 或代码修改的开发指令。
 
 ```mermaid
 flowchart LR
@@ -18,7 +20,10 @@ flowchart LR
     M --> S["Review-ready Synthesis"]
     S -->|"继续深入"| R
     S -->|"Owner 明确批准"| F["Sealed Synthesis"]
-    F --> D["ADR / ExecPlan / 其他消费者"]
+    F --> D["ADR / Design / 其他证据消费者"]
+    D --> E["获得授权或批准的架构输入"]
+    E --> P["ExecPlan / implementation"]
+    F -.->|"不得直接指导开发"| P
 ```
 
 Research 是“身份与生命周期 + 文档集合 + Synthesis”，不是某个固定文件名。
@@ -171,7 +176,8 @@ schema 1 或 1.1 package 补齐缺失入口，并只更新带完整 `RCTL:NOTES`
 7. 修复 manifest drift、缺失本地引用和不可解释的冲突；绝对来源路径至少记录
    可移植替代或 provenance。
 8. 在 `SYNTHESIS.md` 直接回答研究目的，比较选项，保留负面证据、置信边界、
-   剩余未知、推荐条件和下游约束。
+   剩余未知、推荐条件和待 ADR/Design 转化的候选影响。不要把它们写成已生效的
+   实施约束。
 9. 没有 open Research Question、open blocker 或 REQUIRED 标记时，执行
    `mark-review-ready`。普通轮次不加 `--snapshot`；正式评审、下游交接或重大
    决策节点才加。两者都不是结束授权。
@@ -200,7 +206,7 @@ Research Owner；显式 `--author` 优先，否则继承或诚实保留未分配
 
 **禁止把“decision-ready”“问题已回答”“完成第一版”“继续”推断为结束授权。**
 Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保留已获得的
-证据，但不能满足下游 Research Gate。
+证据，但不能进入下游 ADR/Design 转化与溯源 gate。
 
 ## 有界性与变更
 
@@ -235,6 +241,11 @@ Research 取消同样需要 Owner 明确授权和原因。Cancelled Research 保
 - 可选的 snapshot、notes 和 artifacts。
 - 对路线有影响的 sealed Benchmark Run 引用及其研究级解释；Benchmark Bundle
   本身仍由独立生产者维护。
+
+下游可以为决策或设计审计读取这些制品，但不能把 Research 或 Synthesis 直接当作
+实现规范。进入开发前，相关结论必须由 referenced accepted ADR 转成规范约束，或由
+referenced Design 转成系统结构、接口和行为；ExecPlan 中的 `research_refs` 只保存
+这条转化链的溯源证据。
 
 消费者必须依赖该文件契约，而不是本 skill 的安装路径。完整字段、摘要算法、
 引用诊断和兼容规则见 `references/manifest.md`；典型场景见

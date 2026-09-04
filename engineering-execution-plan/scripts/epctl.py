@@ -128,8 +128,11 @@ SYNTHESIS_SECTIONS = (
     "Remaining Unknowns",
     "Options Comparison",
     "Recommendation and Preconditions",
-    "Handoff to ADR and ExecPlan",
     "Revision Notes",
+)
+SYNTHESIS_HANDOFF_SECTIONS = (
+    "Handoff to ADR or Design",
+    "Handoff to ADR and ExecPlan",
 )
 ADR_SECTIONS = (
     "Context and Problem Statement",
@@ -2525,6 +2528,10 @@ def design_ref_details(
         "id": design_id,
         "legacy": data.get("schema_version") != "1.1",
         "dependencies": [],
+        "research_refs": parse_inline_ids(
+            str(data.get("research_refs", "")),
+            "R",
+        ),
         "evidence": "",
     }
     if data.get("schema_version") != "1.1":
@@ -2538,6 +2545,29 @@ def design_ref_details(
         errors.append(
             f"{path}: single Design must be directly under docs/design-docs"
         )
+    try:
+        design_research_refs = parse_reference_array(
+            data.get("research_refs", ""),
+            "R",
+            "research_refs",
+        )
+    except EpctlError as exc:
+        errors.append(f"{path}: {exc}")
+        design_research_refs = []
+    research_reason = inline_text(
+        data.get("research_not_required_reason", "")
+    )
+    if design_research_refs and research_reason:
+        errors.append(
+            f"{path}: Design cannot have both research_refs and a "
+            "research_not_required_reason"
+        )
+    elif not design_research_refs and not research_reason:
+        errors.append(
+            f"{path}: Design requires research_refs or a "
+            "research_not_required_reason"
+        )
+    details["research_refs"] = design_research_refs
     try:
         dependencies = parse_string_array(
             data.get("design_dependencies", "[]"),
@@ -2744,6 +2774,71 @@ def validate_design_input_set(
         list(dict.fromkeys(errors)),
         list(dict.fromkeys(warnings)),
     )
+
+
+def research_conversion_targets(
+    adr_data_by_id: dict[str, dict[str, str]],
+    design_details: dict[str, dict[str, object]],
+) -> dict[str, list[str]]:
+    """Map Research provenance to the ADRs or Designs that interpret it.
+
+    Research is evidence, not an implementation input.  An ExecPlan may retain
+    Research references for auditability only when a referenced ADR or Design
+    has performed the semantic conversion into an architecture input.
+    """
+
+    targets: dict[str, list[str]] = {}
+
+    def add(research_id: str, target: str) -> None:
+        targets.setdefault(research_id, [])
+        if target not in targets[research_id]:
+            targets[research_id].append(target)
+
+    for adr_id, data in adr_data_by_id.items():
+        for research_id in parse_inline_ids(data.get("research_refs", ""), "R"):
+            add(research_id, adr_id)
+
+    for design_id, details in design_details.items():
+        design_research_refs = details.get("research_refs", [])
+        if not isinstance(design_research_refs, list):
+            design_research_refs = []
+        for research_id in design_research_refs:
+            if not isinstance(research_id, str):
+                continue
+            add(research_id, design_id)
+
+    return targets
+
+
+def research_conversion_errors(
+    research_refs: Iterable[str],
+    adr_data_by_id: dict[str, dict[str, str]],
+    design_details: dict[str, dict[str, object]],
+) -> list[str]:
+    provided = set(research_refs)
+    targets = research_conversion_targets(adr_data_by_id, design_details)
+    required = set(targets)
+    errors: list[str] = []
+
+    missing_provenance = sorted(required - provided)
+    if missing_provenance:
+        rendered = ", ".join(
+            f"{research_id} ({', '.join(targets[research_id])})"
+            for research_id in missing_provenance
+        )
+        errors.append(
+            "ADR/Design inputs require Research provenance missing from the "
+            f"plan: {rendered}"
+        )
+
+    unconverted = sorted(provided - required)
+    if unconverted:
+        errors.append(
+            "Research references are audit-only and must be converted by a "
+            "referenced ADR or Design; missing conversion for: "
+            + ", ".join(unconverted)
+        )
+    return errors
 
 
 def validate_design_doc_corpus(repo: Path) -> tuple[list[str], list[str]]:
@@ -3623,14 +3718,6 @@ def new_ep(
             )
         for adr_id in closure:
             adr_data = adr_data_by_id[adr_id]
-            missing_research = set(
-                parse_inline_ids(adr_data.get("research_refs", ""), "R")
-            ) - set(research_refs)
-            if missing_research:
-                raise EpctlError(
-                    f"{adr_id} requires Research references missing from the plan: "
-                    + ", ".join(sorted(missing_research))
-                )
             required_designs = set(
                 parse_string_array(adr_data.get("design_refs", ""), "design_refs")
             )
@@ -3640,6 +3727,16 @@ def new_ep(
                     f"{adr_id} requires Design Doc references missing from the plan: "
                     + ", ".join(sorted(missing_designs))
                 )
+        conversion_errors = research_conversion_errors(
+            research_refs,
+            adr_data_by_id,
+            design_details,
+        )
+        if conversion_errors:
+            raise EpctlError(
+                "Research conversion gate failed:\n- "
+                + "\n- ".join(conversion_errors)
+            )
         structured_constraint_refs, compliance_rows = (
             render_architecture_compliance_rows(
                 adr_refs,
@@ -4762,6 +4859,14 @@ def validate_synthesis(
             )
         )
     errors.extend(validate_required_sections(path, text, SYNTHESIS_SECTIONS))
+    handoff_count = sum(
+        len(section_values(text, heading))
+        for heading in SYNTHESIS_HANDOFF_SECTIONS
+    )
+    if handoff_count == 0:
+        errors.append(f"{path}: missing ## Handoff to ADR or Design")
+    elif handoff_count > 1:
+        errors.append(f"{path}: duplicate Synthesis handoff section")
     required = bool(marker_names(text))
     if require_sealed and status != "sealed":
         errors.append(f"{path}: concluded Research requires sealed Synthesis")
@@ -5737,20 +5842,24 @@ def validate_plan(
         if research_gate == "satisfied":
             if not research_refs:
                 errors.append(
-                    f"{path}: satisfied Research Gate requires research_refs"
+                    f"{path}: satisfied Research conversion gate requires "
+                    "research_refs"
                 )
             if research_reason:
                 errors.append(
-                    f"{path}: satisfied Research Gate cannot have a skip reason"
+                    f"{path}: satisfied Research conversion gate cannot have "
+                    "a skip reason"
                 )
         elif research_gate == "not_required":
             if research_refs:
                 errors.append(
-                    f"{path}: not_required Research Gate cannot have research_refs"
+                    f"{path}: not_required Research conversion gate cannot "
+                    "have research_refs"
                 )
             if not research_reason:
                 errors.append(
-                    f"{path}: not_required Research Gate requires a reason"
+                    f"{path}: not_required Research conversion gate requires "
+                    "a reason"
                 )
         else:
             errors.append(f"{path}: invalid research_gate {research_gate!r}")
@@ -5942,7 +6051,7 @@ def validate_plan(
             missing_research = set(
                 parse_inline_ids(adr_data.get("research_refs", ""), "R")
             ) - set(research_refs)
-            if missing_research:
+            if missing_research and (schema_version != "2.8" or historical_plan):
                 errors.append(
                     f"{path}: {adr_id} requires missing Research references "
                     + ", ".join(sorted(missing_research))
@@ -6076,6 +6185,15 @@ def validate_plan(
                         f"{path}: Research and Architecture Inputs must mention "
                         "every design_evidence pin"
                     )
+            if schema_version == "2.8" and not historical_plan:
+                errors.extend(
+                    f"{path}: {error}"
+                    for error in research_conversion_errors(
+                        research_refs,
+                        adr_data_by_id,
+                        design_details,
+                    )
+                )
         if schema_version in {"2.6", "2.7", "2.8"}:
             errors.extend(
                 validate_required_sections(path, text, EXECPLAN_V26_SECTIONS)
@@ -8275,7 +8393,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="R-NNN",
-        help="Concluded Research reference; repeat for multiple packages",
+        help=(
+            "Audit provenance already converted by a referenced ADR or "
+            "Design; repeat for multiple concluded packages"
+        ),
     )
     ep.add_argument(
         "--adr",

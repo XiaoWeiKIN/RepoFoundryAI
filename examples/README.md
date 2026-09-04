@@ -109,7 +109,7 @@ flowchart LR
     R --> H["Human review"]
 ```
 
-## Example 4: take an existing corpus through Research, ADR, and ExecPlan
+## Example 4: convert an existing corpus from Research into ADR, then ExecPlan
 
 The detailed
 [cache-topology walkthrough](cache-topology/README.md) demonstrates this flow:
@@ -124,9 +124,13 @@ decision-ready Synthesis. Stop at review-ready and do not conclude it.
 After explicit Research Owner conclusion, a separate prompt asks
 `$engineering-execution-plan` for a proposed ADR. A Decision Owner must then
 accept or reject that exact ADR before the Skill creates a gated ExecPlan.
+Research remains audit provenance in the plan; only the accepted ADR guides
+development. A Design may serve as the alternative conversion artifact when
+the needed output is an implementation-level system model.
 
 Expected boundary: review-ready, concluded Research, proposed ADR, accepted
-ADR, and active ExecPlan are separate states with separate authority.
+ADR, and active ExecPlan are separate states with separate authority. There is
+no direct Research-to-implementation edge.
 
 ## Example 5: turn concluded Research into one multi-document module design
 

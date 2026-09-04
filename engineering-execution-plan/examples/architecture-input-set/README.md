@@ -95,7 +95,8 @@ design_refs: ["docs/design-docs/spans-env-placement-routing.md"]
 
 ## 3. 创建依赖闭合的 EP
 
-假设 Research 已由既有证据覆盖，可以明确跳过 Research Gate：
+假设既有 accepted ADR 和 current Design 已经提供可执行架构输入，且本次没有新的
+Research 溯源，可以明确把 Research conversion gate 标为 `not_required`：
 
 ```bash
 python3 "$EPCTL" --repo . new-ep \

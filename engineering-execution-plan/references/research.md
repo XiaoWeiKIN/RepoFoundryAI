@@ -5,16 +5,18 @@
 - Ownership boundary
 - Legacy Research package
 - Manifest-bearing Research package
-- Research Gate
-- ADR and ExecPlan handoff
+- Research conversion and provenance gate
+- ADR/Design conversion and ExecPlan audit handoff
 - Compatibility
 
 ## Ownership boundary
 
-`engineering-execution-plan` consumes concluded Research; it does not own evidence
-acquisition, experiments, multi-document corpus maintenance, or Synthesis
-authoring. Use the independent `engineering-research` skill or any producer
-that emits the compatible repository file contract.
+`engineering-execution-plan` validates concluded Research only as provenance for
+a referenced ADR or Design. Research is not an implementation input and cannot
+independently authorize an ExecPlan, milestone, Task, or code change. This skill
+does not own evidence acquisition, experiments, multi-document corpus
+maintenance, or Synthesis authoring. Use the independent `engineering-research`
+skill or any producer that emits the compatible repository file contract.
 
 The consumer never imports another skill, executes its script by path, or
 assumes how it is installed.
@@ -80,25 +82,31 @@ Detailed producer behavior belongs to
 `engineering-research/references/manifest.md` in the distribution repository;
 consumers need only the contract above.
 
-## Research Gate
+## Research conversion and provenance gate
 
-Before `new-adr` or gated `new-ep`:
+Before `new-adr`, Research validation still proves that a proposed decision is
+grounded in concluded evidence. Before a v2.8 `new-ep`:
 
-1. locate the referenced package in `docs/research/completed/`;
-2. validate controller and sealed Synthesis;
-3. validate the manifest when declared;
-4. reject cancelled, active, missing, unsealed, unsupported, or tampered
+1. collect Research provenance declared by every referenced ADR and Design;
+2. require `research_refs` to match that collected set exactly;
+3. locate each package in `docs/research/completed/`;
+4. validate controller and sealed Synthesis;
+5. validate the manifest when declared;
+6. reject cancelled, active, missing, unsealed, unsupported, or tampered
    packages;
-5. require every Research referenced by an ADR to also appear in the ExecPlan
-   Research references.
+7. reject any plan Research reference that has no converting ADR or Design.
 
 When Research is legitimately unnecessary, record a specific Gate reason
 based on existing accepted decisions, authoritative standards, fixed user
 direction, or local reversible scope. “No research was done” is not a reason.
+The frontmatter field remains named `research_gate` for schema-2.8 compatibility;
+its meaning is conversion/provenance integrity, not permission to develop from
+Research.
 
-## ADR and ExecPlan handoff
+## ADR/Design conversion and ExecPlan audit handoff
 
-Do not force downstream readers to load the complete corpus. Restate:
+ADR or Design must perform the semantic translation. Do not force their readers
+to load the complete corpus. Restate:
 
 - direct conclusion and confidence boundary;
 - evidence that materially changes option ranking;
@@ -108,11 +116,14 @@ Do not force downstream readers to load the complete corpus. Restate:
 - which evidence is audit-only.
 
 The manifest provides auditability; the sealed Synthesis provides bounded
-decision context.
+decision/design context. In the ExecPlan, identify which ADR/Design converted
+each Research reference. Research findings may be summarized as audit context,
+but implementation constraints, milestones, and acceptance criteria must be
+attributed to the ADR/Design result rather than to Research itself.
 
 A sealed Engineering Benchmark Run may be one evidence source inside Research.
 When a Run can change option ranking or contradicts other sources, Research
-must interpret it before ADR or ExecPlan consumption. When the route is already
+must interpret it before ADR or Design conversion. When the route is already
 accepted and the Run only verifies the final revision, the ExecPlan may consume
 the Benchmark contract directly without creating another Research.
 

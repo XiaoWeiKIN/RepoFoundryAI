@@ -238,11 +238,13 @@ contains many documents. It contains:
 - remaining unknowns and their destinations;
 - option comparison against Decision Drivers;
 - recommendation and preconditions;
-- durable downstream constraints and audit-only evidence.
+- candidate ADR/Design implications and audit-only evidence.
 
 Do not copy the corpus into Synthesis. A reader should understand the current
 recommendation without loading every source, while still being able to audit
-each load-bearing claim.
+each load-bearing claim. Recommendations and implications remain evidence until
+a referenced ADR or Design translates them; they are not implementation
+constraints.
 
 A `review_ready` Synthesis is immutable until `new-round` returns it to draft.
 It is a review checkpoint, not a terminal lifecycle state.

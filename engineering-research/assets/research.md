@@ -26,7 +26,9 @@ This controller is the bounded entrypoint for a multi-document Research
 package. Keep current questions, routes, findings, and next actions here. Put
 focused analysis in the declared corpus, raw evidence in `artifacts/`, and the
 current decision-ready view in `SYNTHESIS.md`. Decision readiness never grants
-permission to conclude or archive the Research.
+permission to conclude or archive the Research, and conclusion never grants
+permission to develop directly from it. ADR or Design must perform the
+downstream semantic conversion.
 
 ## Research Metadata
 

@@ -96,7 +96,7 @@ flowchart LR
     R --> H["人工评审"]
 ```
 
-## 示例四：把现有 corpus 推进到 Research、ADR 和 ExecPlan
+## 示例四：把现有 corpus 从 Research 转化为 ADR，再进入 ExecPlan
 
 [cache-topology 完整示例](cache-topology/README.md) 展示了这条链路：
 
@@ -109,10 +109,12 @@ research-input/cache-topology/ 下的多文档 corpus，将其组织为一个 li
 
 Research Owner 明确结束后，另一条 Prompt 才让
 `$engineering-execution-plan` 创建 proposed ADR。Decision Owner 必须对具体
-ADR 明确接受或拒绝，Skill 才能创建有 Gate 的 ExecPlan。
+ADR 明确接受或拒绝，Skill 才能创建有 Gate 的 ExecPlan。计划中的 Research 只保留
+审计溯源，真正指导开发的是 accepted ADR；如果需要的是实施级系统模型，也可以由
+Design 作为转化制品。
 
 预期边界：review-ready、concluded Research、proposed ADR、accepted ADR 和
-active ExecPlan 是五个独立状态，授权也互不替代。
+active ExecPlan 是五个独立状态，授权也互不替代；不存在 Research 直达开发的边。
 
 ## 示例五：把 concluded Research 转成一个多文档模块设计
 

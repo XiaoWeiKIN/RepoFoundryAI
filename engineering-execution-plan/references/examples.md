@@ -84,7 +84,8 @@ docs/design-docs/storage-migration.md，架构入口是 docs/design-docs/index.m
 先注册并验证 Design Doc 根目录，再检查 ADR 依赖闭包；缺少输入时停止。
 ```
 
-ADR 引用的每份 Research 和 Design Doc 都必须出现在 ExecPlan 中。若 ADR-009
+ADR/Design 引用的每份 Research，以及 ADR 引用的每份 Design Doc，都必须出现在
+ExecPlan 中。Research 只保留为这些架构输入的审计溯源，不能直接指导实施。若 ADR-009
 `depends_on: ["ADR-004"]`，不能只传 `--adr ADR-009`；依赖闭包必须显式完整。
 完整案例见 `examples/architecture-input-set/README.md`。
 
@@ -95,7 +96,7 @@ ADR 引用的每份 Research 和 Design Doc 都必须出现在 ExecPlan 中。�
 
 ```text
 使用 $engineering-execution-plan 为 adapter boundary 清理创建一个 ExecPlan。
-现有 ADR-004 和 contract tests 已完整定义行为，因此 Research Gate 可标记
+现有 ADR-004 和 contract tests 已完整定义行为，因此 Research conversion gate 可标记
 not_required；改动不产生独立持久选择，因此 Architecture Decision Gate 可标记
 not_required，但 ADR-004 仍是 applicable architecture input。引用 ADR-004，保留
 Architecture Compliance applicable，并把其 constraints 映射到 contract tests。
@@ -105,7 +106,7 @@ Architecture Compliance applicable，并把其 constraints 映射到 contract te
 更不能作为忽略既有 ADR 的理由。
 
 如果模块内 helper 重命名确实不受任何 architecture input 约束，则分别记录
-Research Gate not_required、Architecture Decision Gate not_required 和
+Research conversion gate not_required、Architecture Decision Gate not_required 和
 Architecture Compliance not_applicable 的理由；三个判断不能合并成一句套话。
 
 ## ADR 局部修订

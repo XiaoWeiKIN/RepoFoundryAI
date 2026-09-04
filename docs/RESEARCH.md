@@ -12,6 +12,8 @@ approval plus a sealed `SYNTHESIS.md`.
   rounds belong in `rounds/`; review snapshots belong in `snapshots/`.
 - Decision-ready Research remains active until the Owner explicitly authorizes
   conclusion.
+- Concluded Research remains evidence only. A referenced ADR or Design must
+  translate it before it can influence an ExecPlan or implementation.
 - IDs are monotonic across active, completed, this index and
   `.epctl/state.json`.
 - The managed tables are projections. Rebuild them with `epctl reindex`.

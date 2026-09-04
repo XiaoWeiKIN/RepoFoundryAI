@@ -114,8 +114,11 @@ SYNTHESIS_SECTIONS = (
     "Remaining Unknowns",
     "Options Comparison",
     "Recommendation and Preconditions",
-    "Handoff to ADR and ExecPlan",
     "Revision Notes",
+)
+SYNTHESIS_HANDOFF_SECTIONS = (
+    "Handoff to ADR or Design",
+    "Handoff to ADR and ExecPlan",
 )
 RESEARCH_QUESTION_STATUSES = {"open", "answered", "deferred", "invalidated"}
 RESEARCH_SCHEMA_VERSIONS = {"1", "1.1", "1.2"}
@@ -2779,6 +2782,14 @@ def validate_synthesis(
     if data.get("parent_id") != parent_id:
         errors.append(f"{path}: parent_id must be {parent_id}")
     errors.extend(validate_sections(path, text, SYNTHESIS_SECTIONS))
+    handoff_count = sum(
+        len(section_values(text, heading))
+        for heading in SYNTHESIS_HANDOFF_SECTIONS
+    )
+    if handoff_count == 0:
+        errors.append(f"{path}: missing ## Handoff to ADR or Design")
+    elif handoff_count > 1:
+        errors.append(f"{path}: duplicate Synthesis handoff section")
     status = data.get("status")
     allowed_statuses = (
         {"draft", "review_ready", "sealed"}
