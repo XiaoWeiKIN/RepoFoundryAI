@@ -1056,7 +1056,7 @@ class FoundryctlTestCase(unittest.TestCase):
             [
                 "core-1.5.1-to-1.5.2",
                 "adapter-portable-1.3.0-to-1.3.1",
-                "distribution-0.8.8-to-0.9.0",
+                "distribution-0.8.8-to-0.10.0",
             ],
         )
         self.assertEqual(adr_bytes, {path: path.read_bytes() for path in adr_paths})
