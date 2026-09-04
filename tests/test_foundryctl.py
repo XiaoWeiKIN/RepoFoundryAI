@@ -656,7 +656,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 3)
         self.assertEqual(
             manifest["producer"],
-            {"name": "repo-foundry", "version": "0.8.6"},
+            {"name": "repo-foundry", "version": "0.8.7"},
         )
         self.assertEqual(
             manifest["core"],
@@ -780,7 +780,7 @@ class FoundryctlTestCase(unittest.TestCase):
     def test_cli_reports_the_distribution_version(self) -> None:
         result = self.run_cli("--version")
 
-        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.8.6")
+        self.assertEqual(result.stdout.strip(), "RepoFoundry AI 0.8.7")
 
     def test_harness_validation_resolves_design_adr_refs_from_history_packs(
         self,
@@ -920,7 +920,7 @@ class FoundryctlTestCase(unittest.TestCase):
             [item["id"] for item in migrated["applied_migrations"]],
             [
                 "core-1.5.0-to-1.5.1",
-                "distribution-0.8.4-to-0.8.6",
+                "distribution-0.8.4-to-0.8.7",
             ],
         )
         self.assertEqual(
