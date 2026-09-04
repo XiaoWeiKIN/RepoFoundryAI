@@ -22,6 +22,7 @@ and superseded states so history remains auditable.
 <!-- ADRCTL:ACTIVE:START -->
 | ID | Title | Decision | Effect | Related ADRs | Updated | Research | Path |
 |---|---|---|---|---|---|---|---|
+| ADR-061 | Trigger ADR maintenance from deterministic workflow thresholds | pending | proposed | depends on ADR-060 | 2026-09-04 | [] | [ADR](adr/adr-061_workflow-triggered-adr-maintenance.md) |
 <!-- ADRCTL:ACTIVE:END -->
 
 ## Effective
