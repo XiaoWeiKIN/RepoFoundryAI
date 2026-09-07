@@ -636,6 +636,22 @@
           "description": "View 或 consolidation preview 不执行 accept、retire、supersede、rewrite 或 delete"
         }
       ]
+    },
+    {
+      "id": 28,
+      "prompt": "给这个模块补一份普通的架构说明，讲清接口、数据流和失败处理。不要创建 DD-NNN 或设计审批流程。",
+      "expected_output": "路由到 detailed-design 并交付普通架构文档；不因涉及接口和数据流而调用 engineering-design 的生命周期命令。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "routes_content_to_detailed_design",
+          "description": "文档内容由 detailed-design 处理，不误入受治理的 Design 工作流"
+        },
+        {
+          "name": "no_unrequested_artifacts",
+          "description": "不创建 DD-NNN、manifest、Research、ADR 或 EP"
+        }
+      ]
     }
   ]
 }

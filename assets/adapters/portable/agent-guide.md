@@ -22,8 +22,6 @@ Create a stable local session and turn identifier and run the shared engine:
 python3 .repo-foundry/engineering-specs/spec_router.py begin \
   --adapter-id portable --session-id <session-id> --turn-id <turn-id> \
   --prompt "<task summary>"
-python3 .repo-foundry/engineering-specs/spec_router.py candidates \
-  --path <planned-path> [--path <planned-path> ...]
 ```
 
 `begin` reports the repository profile and mode. Adaptive Explore permits
@@ -42,6 +40,8 @@ cards for applicable Specs, then record exact direct Requirements with reasons
 or a justified explicit-none decision before the first mutation:
 
 ```bash
+python3 .repo-foundry/engineering-specs/spec_router.py candidates \
+  --path <planned-path> [--path <planned-path> ...]
 python3 .repo-foundry/engineering-specs/spec_router.py requirements \
   --path <planned-path> --spec <applicable-spec-id>
 python3 .repo-foundry/engineering-specs/spec_router.py activate \
@@ -69,7 +69,10 @@ python3 .repo-foundry/engineering-specs/spec_router.py audit \
   --message-file <handoff-file>
 ```
 
-Explore may use normal prose for outcome, verification, and unresolved risk.
+Explore reads only the files and checks needed for the local task. Continue
+authorized implementation through relevant checks and corrections; ordinary
+local work does not require another approval. Explore may use normal prose for
+outcome, verification, and unresolved risk.
 The evidence export preserves each source-owned published level but records
 Advisory as RepoFoundry's effective ceiling. This adapter does not claim a
 finding executor or Warning/Blocking lifecycle.

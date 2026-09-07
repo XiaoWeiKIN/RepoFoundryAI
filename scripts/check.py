@@ -62,7 +62,8 @@ def run(label: str, command: list[str], cwd: Path = ROOT) -> None:
 def repository_markdown_files() -> list[Path]:
     return sorted(
         path
-        for path in ROOT.rglob("*.md")
+        for pattern in ("*.md", "*.md.template")
+        for path in ROOT.rglob(pattern)
         if not EXCLUDED_DIRECTORIES.intersection(path.relative_to(ROOT).parts)
     )
 
@@ -162,13 +163,18 @@ def validate_skill_packages() -> None:
         (ROOT / "engineering-case-study", "engineering-case-study"),
     )
     for directory, expected_name in skills:
-        metadata = skill_frontmatter(directory / "SKILL.md")
+        filename = (
+            "SKILL.md.template"
+            if directory.is_relative_to(ROOT / "assets") else "SKILL.md"
+        )
+        skill_path = directory / filename
+        metadata = skill_frontmatter(skill_path)
         if metadata.get("name") != expected_name:
             raise CheckError(
-                f"{directory / 'SKILL.md'}: expected name {expected_name!r}"
+                f"{skill_path}: expected name {expected_name!r}"
             )
         if "description" not in metadata:
-            raise CheckError(f"{directory / 'SKILL.md'}: missing description")
+            raise CheckError(f"{skill_path}: missing description")
         agent_metadata = (directory / "agents" / "openai.yaml").read_text(
             encoding="utf-8"
         )
@@ -180,7 +186,7 @@ def validate_skill_packages() -> None:
 
     project_skill_assets = (
         (
-            ROOT / "assets" / "core" / "repo-foundry-ai" / "SKILL.md",
+            ROOT / "assets" / "core" / "repo-foundry-ai" / "SKILL.md.template",
             "repo-foundry-ai",
         ),
         (
@@ -189,7 +195,7 @@ def validate_skill_packages() -> None:
             / "adapters"
             / "codex"
             / "repo-foundry-ai"
-            / "SKILL.md",
+            / "SKILL.md.template",
             "repo-foundry-ai",
         ),
         (
@@ -198,7 +204,7 @@ def validate_skill_packages() -> None:
             / "adapters"
             / "claude"
             / "repo-foundry-ai"
-            / "SKILL.md",
+            / "SKILL.md.template",
             "repo-foundry-ai",
         ),
         (
@@ -207,7 +213,7 @@ def validate_skill_packages() -> None:
             / "adapters"
             / "claude"
             / "engineering-specs"
-            / "SKILL.md",
+            / "SKILL.md.template",
             "engineering-specs",
         ),
     )
@@ -237,7 +243,7 @@ def validate_skill_packages() -> None:
             / "adapters"
             / "codex"
             / "engineering-specs"
-            / "SKILL.md"
+            / "SKILL.md.template"
         ),
         *(path for path, _ in project_skill_assets),
         *sorted((ROOT / "references").glob("*.md")),

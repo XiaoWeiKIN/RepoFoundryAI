@@ -1,598 +1,106 @@
 ---
 name: engineering-execution-plan
-description: |
-  消费已完成的工程 Research/Synthesis、approved Design revision 与 sealed Benchmark evidence，通过交互式 ADR 权衡和 ExecPlan 实施校准，创建和维护仓库内的 ADR、ExecPlan、Task、Checkpoint、Bugfix 与技术债务；为大型 ADR corpus 生成 lossless Decision View、精确有界 capsule、独立健康度、确定性维护触发器与只读合并影响预览，并把显式选择的 strict 终态 ADR 无损打包为可逆 History Pack；并支持多个预声明 Benchmark Scenario 共同作为一个 EP 的完成门禁。适用于用户要求共同讨论架构决策、一起规划实施范围或里程碑，提到 engineering-execution-plan、旧称 execution-plan、EP、ExecPlan、执行计划、ADR、架构决策、ADR 太多、整理或压缩 ADR 上下文、定期检测 ADR 硬指标、历史 ADR 打包或恢复、多个压测驱动开发、拆 task、压缩计划、记录或归档 bugfix、查状态、登记技术债务及文档—代码 CI 契约。初始化 Codex Agent-first 项目、创建 AGENTS.md/ARCHITECTURE.md 或验证项目 Harness 时使用 repo-foundry-ai；需要新的可复现测量时使用 engineering-benchmark；需要资料搜集、跨来源解释、多文档 Research corpus 或 Synthesis 时使用 engineering-research；需要创建、评审或修订技术 Design Package 时使用 engineering-design。本 skill 只依赖版本化文件契约，不依赖其他 Skill 的安装路径，并且只读消费 Design，不提供任何 Design 生命周期命令。ADR 的接受或拒绝必须有用户或 Decision Owner 的明确授权。普通编码、一次性局部修复、代码解释和测试编写不会自动创建持久制品。
+description: 创建和维护 ADR、ExecPlan、Task、Checkpoint、Bugfix 与 ADR 历史。用于明确的工程治理或可恢复交付；普通编码、局部修复和代码解释不自动创建制品。
 ---
 
 # Engineering Execution Plan
 
-把需要 Governed 模式的复杂工程工作组织成可追溯、可恢复、可机械验证的仓库制品。
-Explore 的可逆探索和 Build 的有界实现默认使用线程内契约，不因“看起来复杂”自动
-创建持久制品。只有公共契约、安全、数据、不可逆迁移、可靠性声明、发布、长期决定
-或跨会话恢复等触发器才升级到 Governed。默认工作流是：
+把需要持久跟踪的工程决定与交付组织成可追溯、可恢复、可验证的仓库制品。
+方向已明确时推进实现和验收；Owner 的决定与证据完整性由各自门禁持有。
 
-项目级 Harness 初始化属于 `repo-foundry-ai`；本 skill 的 `init` 只创建
-ADR、ExecPlan、Bugfix 等执行治理制品。
+## 选择工作深度
 
-```mermaid
-flowchart LR
-    F["功能目标"] --> Q{"存在决策相关未知？"}
-    F --> B["engineering-benchmark<br/>可选：预声明 Scenario + sealed Run"]
-    B -->|"路线未知或证据矛盾"| R
-    B -->|"最终 revision 验收"| G["Benchmark Gate Set<br/>0..N 个预声明 Scenario"]
-    Q -->|"是"| R["engineering-research 或兼容生产者<br/>问题、证据、多文档 corpus"]
-    R --> S["Sealed Manifest + Synthesis<br/>版本化文件契约"]
-    S -.->|"需要明确系统设计"| T["engineering-design<br/>Design Package revision"]
-    Q -->|"否，写明理由"| RG["Research Gate<br/>not_required"]
-    S --> A{"本次路线需要独立架构决定？"}
-    A -->|"是"| P["Proposed ADR"]
-    P --> H["用户 / Decision Owner<br/>明确接受或拒绝"]
-    H --> D["Accepted ADR<br/>Decision Statement + C-NNN constraints"]
-    A -->|"否，写明理由"| AG["Architecture Decision Gate<br/>not_required"]
-    D --> C{"既有架构是否适用于本 EP？"}
-    AG --> C
-    T -->|"approved revision evidence"| I
-    C -->|"是"| I["Architecture Input Set<br/>ADRs + Design revisions + 入口"]
-    C -->|"否，写明理由"| NA["Architecture Compliance<br/>not_applicable"]
-    I --> M["Compliance Matrix<br/>constraint → implementation → verification"]
-    M --> EP["ExecPlan v2.8<br/>自包含计划 + 完成证明"]
-    NA --> EP
-    G --> EP
-    RG --> A
-```
+Explore 的有界可逆工作和 Build 的生产修改默认使用线程内契约。只有公共契约、
+安全、数据、不可逆迁移、可靠性声明、发布、长期决定、跨会话恢复，或用户明确要求
+持久制品时才进入对应治理流程。Explore/Build 不为“没有触发 Research”创建跳过制品。
 
-Engineering Research 负责减少未知并输出 sealed Manifest/Synthesis；本 skill
-从该文件契约开始，负责 ADR、ExecPlan 和实施生命周期。生产者可以是
-`engineering-research`、BMAD、其他 Deep Research 工具或人工流程，只要制品满足
-契约。引用提供审计链；下游制品仍需复述执行所需的结论和约束。
-
-Engineering Design 负责把已建立的证据翻译成单文件或多文档 Design Package，
-并管理 `draft → review_ready → current`、revision 快照和依赖图。本 skill 只解析
-仓库内版本化 Design contract：未发布 Design 可以作为带告警的讨论输入，但不能
-支撑 EP 完成；approved revision 必须以 `DD-NNN@rev:N@sha256:<manifest>` 固定。
-Design 的创建、批准、修订、放弃和替代全部路由到 `engineering-design`。
-
-Engineering Benchmark 负责可复现测量。会改变路线的 Benchmark 先由 Research
-解释；已决定路线的 final-revision Benchmark 可以直接进入 EP 验收。一个 EP
-可以预声明多个 `BS-NNN`，每个 Scenario 代表一个独立的开发门禁，不合并成总分。
-完成时，每个 Scenario 必须恰好由一个同 revision 的 passed sealed Run 覆盖。EP
-用 `benchmark:BR-NNN@sha256:<payload>` 引用证据并按文件契约验真，不调用
-Benchmark Skill。
-
-## 制品路由
-
-| 情况 | 制品 |
+| 需要的结果 | 路由 |
 |---|---|
-| Explore：调查、实验、prototype、局部可逆修改 | 无持久制品；线程内记录结果与风险 |
-| Build：有界生产修改，无 Governed 触发器 | 线程内 intent/path/acceptance/compatibility 契约 |
-| 用户明确要求记录的局部既有行为缺陷 | Bugfix |
-| 需要可复现测量、性能/容量对比或回归证据 | 切换到 `engineering-benchmark` |
-| 关键事实不清、需要比较方案或实验 | 切换到 `engineering-research` |
-| 需要定义或评审系统边界、组件、接口、数据、失败与迁移设计 | 切换到 `engineering-design` |
-| 存在影响长期边界且逆转成本较高的选择 | ADR |
-| 跨模块、多里程碑、需跨会话恢复或已有决策待实施 | ExecPlan |
-
-进入 Governed 且仍有会改变路线的未知时，默认先取得 concluded Research，尤其是
-涉及公共契约、安全、可靠性、数据、不可逆迁移、第三方选型，或 Benchmark 会改变
-架构路线时。prototype 本身属于 Explore，不自动触发 Research。新的可复现测量使用
-`engineering-benchmark`；跨来源解释和 Synthesis 使用 `engineering-research`。
-只有已经创建 ExecPlan 后，未提供 Research 才在计划内记录具体 Gate 理由；
-Explore/Build 不为“没有触发 Research”创建跳过制品。
-
-- 当前 accepted ADR 和代码事实已覆盖所需输入。
-- 权威标准或用户已经固定实现方向。
-- 工作局部、可逆，且没有会改变计划路线的未知。
-
-存在两个以上可信选项，并涉及公共接口、跨系统边界、长期约束、高迁移成本、安全、数据一致性、可靠性或部署拓扑时创建 ADR。局部且易逆转的实现取舍写入 ExecPlan Decision Log，并记录 Architecture Decision Gate 跳过理由。跳过新决定不代表可以忽略既有架构；仍要独立判断 Architecture Compliance。
-
-Bugfix 一旦需要 Research、ADR、任务拆分、公共契约变更或持续推进，升级为 ExecPlan。普通“修 bug”仍是实现请求；用户未要求记录时不创建 Bugfix 台账。
-
-完整判定与状态机见 `references/templates.md`。消费 manifest-bearing Research
-前读取 `references/research.md`；起草或决定 ADR 前读取
-`references/adr.md`。
-
-## 交互式决策与计划校准
-
-用户要求共同讨论 ADR、一起拆解 EP，或存在会实质改变长期约束、实施边界、迁移
-顺序、回滚或验收证据的多个可信方案时，完整读取
-[collaboration.md](references/collaboration.md)。交互状态只服务会话收敛，不新增
-ADR/EP lifecycle，也不替代 Research、Design、Decision Owner 或完成证据。
-
-- ADR 使用交互式权衡：比较原子选项、Decision Drivers、后果和一个区分性反例，
-  再形成可整体接受或拒绝的 proposed ADR。探索中的简短选项回复只是候选偏好；
-  只有可归因主体对具体 ADR outcome 的明确接受/拒绝才构成决定授权。
-- ExecPlan 使用实施校准：在 accepted ADR 与 approved Design 输入不变的前提下，
-  校准范围、里程碑、依赖、迁移、回滚和验收。若讨论重新打开公共契约、数据所有权
-  或长期架构选择，停止计划收敛并路由回 Research、Design 或 ADR。
-- 不逐项询问可由仓库事实推导的 Task 细节。Checkpoint、验证、Benchmark Run、
-  seal 和 archive 继续按证据与状态机确定性执行，不能通过协商改变结果。
-
-## 仓库布局
-
-```text
-docs/
-├── .epctl/
-│   ├── state.json
-│   ├── config.json          # 可选：注册既有 architecture roots
-│   ├── decision-views.json  # schema 1：显式 View 种子；非规范
-│   ├── adr-revisions/       # 可选：completed/cancelled EP 的历史 ADR payload
-│   │   └── ADR-NNN/
-│   │       └── sha256-<payload>.md
-│   ├── adr-packs/           # 可选：无损 strict 终态 ADR 历史包
-│   │   └── sha256-<pack>.json
-│   └── checkpoint-recoveries/ # 可选：出生即错误的 checkpoint seal 恢复凭据
-│       └── EP-NNN/CP-NNN/
-│           └── sha256-<document>.json
-├── RESEARCH.md
-├── DECISIONS.md
-├── DECISION-VIEWS.md        # 可重建 View 索引
-├── PLANS.md
-├── BUGFIXES.md
-├── research/
-│   ├── active/r-NNN_slug/
-│   │   ├── RESEARCH.md
-│   │   ├── SYNTHESIS.md
-│   │   ├── notes/
-│   │   └── artifacts/
-│   └── completed/
-├── adr/
-│   └── adr-NNN_slug.md
-├── decision-views/          # 由 epctl 生成；不要手工编辑
-│   └── <view>.md
-├── design-docs/             # 可选：既有 ADR / Design Doc corpus
-├── exec-plans/
-│   ├── active/ep-NNN_slug/
-│   │   ├── EXECPLAN.md
-│   │   ├── tasks/
-│   │   ├── history/
-│   │   └── artifacts/
-│   ├── completed/
-│   └── tech-debt-tracker.md
-└── bugfixes/
-    ├── active/
-    └── completed/
-```
-
-Research 结论或取消时整体移动到 `research/completed/`。新 ADR 始终写入
-`docs/adr/`，路径稳定且不随状态移动。既有 ADR / Design Doc corpus 可以原地注册，
-不要求搬迁。四个根索引都是可重建投影；制品文件才是事实源。`DECISIONS.md` 的
-默认 `Effective` 表只包含递归 current 的 accepted ADR，并另行投影 Proposed、
-Review Required、Historical 与当前 constraint amendments。旧版两表布局通过
-`reindex` 或 `validate --fix-index` 原地升级，不修改 ADR 文档。
-
-## 优先使用确定性脚本
-
-把 `<skill-dir>` 解析为本 skill 所在目录。所有命令在目标仓库根目录运行：
-
-```bash
-python3 <skill-dir>/scripts/epctl.py --repo . init
-python3 <skill-dir>/scripts/epctl.py --repo . register-architecture-root \
-  docs/design-docs
-
-python3 <skill-dir>/scripts/epctl.py --repo . new-adr \
-  --slug cache-topology --title "Choose cache topology" --research R-001 \
-  --author "Codex" --owner "Cache Platform Owner" \
-  --depends-on ADR-004 --amends ADR-003 \
-  --amends-constraint ADR-003#C-002 \
-  --design docs/design-docs/cache-topology.md
-python3 <skill-dir>/scripts/epctl.py --repo . decide-adr ADR-001 \
-  --outcome accepted --decision-maker "<explicit authority>"
-python3 <skill-dir>/scripts/epctl.py --repo . transition-adr ADR-001 \
-  --to under_review --decision-maker "<explicit authority>" \
-  --reason "<new evidence>"
-python3 <skill-dir>/scripts/epctl.py --repo . supersede-adr ADR-001 \
-  --by ADR-002 --decision-maker "<explicit authority>" \
-  --reason "<replacement rationale>"
-python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
-  --from-file evidence/adr-001-historical.md
-python3 <skill-dir>/scripts/epctl.py --repo . register-adr-revision ADR-001 \
-  --from-file evidence/adr-001-historical.md --apply
-
-python3 <skill-dir>/scripts/epctl.py --repo . \
-  register-checkpoint-recovery EP-001 CP-001 \
-  --from-git-commit <full-ancestor-commit> \
-  --attested-by "<explicit actor>" \
-  --reason "<why the seal was invalid when introduced>"
-python3 <skill-dir>/scripts/epctl.py --repo . \
-  register-checkpoint-recovery EP-001 CP-001 \
-  --from-git-commit <full-ancestor-commit> \
-  --attested-by "<explicit actor>" \
-  --reason "<why the seal was invalid when introduced>" --apply
-
-python3 <skill-dir>/scripts/epctl.py --repo . adr-health --json
-python3 <skill-dir>/scripts/epctl.py --repo . adr-maintenance --json
-python3 <skill-dir>/scripts/epctl.py --repo . adr-maintenance --check
-python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
-  --title "Runtime decisions" --adr ADR-004 --adr ADR-005
-python3 <skill-dir>/scripts/epctl.py --repo . set-decision-view runtime \
-  --title "Runtime decisions" --adr ADR-004 --adr ADR-005 --apply
-python3 <skill-dir>/scripts/epctl.py --repo . decision-capsule \
-  --view runtime --constraint ADR-005#C-002 --json
-python3 <skill-dir>/scripts/epctl.py --repo . decision-capsule \
-  --view runtime --constraint ADR-005#C-002 \
-  --materialization focused --focus-reason "Implement the selected boundary" \
-  --json
-python3 <skill-dir>/scripts/epctl.py --repo . adr-consolidation-plan \
-  --view runtime --json
-python3 <skill-dir>/scripts/epctl.py --repo . pack-historical-adrs \
-  ADR-051 ADR-052 --packed-by "<explicit actor>" \
-  --reason "<why these terminal files should be compacted>"
-python3 <skill-dir>/scripts/epctl.py --repo . pack-historical-adrs \
-  ADR-051 ADR-052 --packed-by "<explicit actor>" \
-  --reason "<why these terminal files should be compacted>" --apply
-python3 <skill-dir>/scripts/epctl.py --repo . unpack-adr-history-pack \
-  sha256-<pack>.json --unpacked-by "<explicit actor>" \
-  --reason "<recovery or downgrade reason>"
-
-python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
-  --slug implement-cache --title "Implement cache topology" \
-  --author "Codex" --owner "Cache Platform Owner" \
-  --research R-001 --adr ADR-004 --adr ADR-005 \
-  --design docs/design-docs/cache-topology.md \
-  --architecture-entrypoint docs/design-docs/index.md \
-  --benchmark-scenario BS-003 \
-  --benchmark-scenario BS-004
-
-python3 <skill-dir>/scripts/epctl.py --repo . validate
-python3 <skill-dir>/scripts/epctl.py --repo . validate --fix-index
-python3 <skill-dir>/scripts/epctl.py --repo . reindex
-python3 <skill-dir>/scripts/epctl.py --repo . status
-```
-
-重复引用时重复写 `--research`、`--adr`、`--design` 或
-`--benchmark-scenario`。注册信息写入
-`docs/.epctl/config.json`，本地和 CI 因而使用同一组 architecture roots。如果某个
-Gate 不需要正式制品：
-
-```bash
-python3 <skill-dir>/scripts/epctl.py --repo . new-ep \
-  --slug local-cleanup --title "Clean up local adapter" \
-  --research-not-required-reason "<specific existing evidence>" \
-  --decision-not-required-reason "<why no durable choice exists>" \
-  --architecture-not-applicable-reason "<why no existing architecture input applies>"
-```
-
-- 先运行 `init`；它只补缺失目录和索引，不覆盖已有内容。
-- 用脚本分配 ADR/EP 等本 skill 拥有的 ID、复制 assets、迁移状态、封存
-  payload、重建索引和验证引用。不要手工猜编号。
-- `.epctl/state.json` 保存编号高水位。故障可以造成跳号，不能复用旧 ID。
-- completed/cancelled EP 引用的旧 ADR payload 不再等于当前 ADR 时，先用
-  `register-adr-revision` 预览，再以 `--apply` 写入 digest-addressed 的不可变
-  repository evidence。也可以显式使用 `--from-git-blob <full-object-id>` 恢复
-  Git blob；正常 `validate` 只读仓库文件，不依赖 Git。
-- schema 1.2 Checkpoint 的 seal 若在首次引入该精确路径的 Git commit 中就已错误，
-  不得改写历史文件。使用 `register-checkpoint-recovery` 预览并登记
-  content-addressed receipt；工具只接受唯一错误为 payload mismatch、commit 为
-  `HEAD` 祖先、父 commit 不含该路径且 commit blob 与当前原始字节完全一致的
-  checkpoint。正常 `validate` 离线验证 receipt 与当前字节，不重新调用 Git。
-- `validate --fix-index` 只修复派生索引，不改事实制品。
-- 升级 RepoFoundry 后先运行 `reindex`；它会把旧 `Proposed` / `Decided` ADR 索引
-  转为 Proposed / Effective / Review Required / Historical，并保留受管区域之外的
-  人工内容。重复运行应无 diff。
-- 脚本不可用时按 `assets/` 模板执行，并扫描文件系统、索引和高水位后取最大 ID +1。
-- 不要求目标仓库使用 Git。
-
-## 消费 Research 与 Synthesis
-
-1. 如果仍有会改变路线的未知，先使用 `engineering-research` 或其他兼容流程。
-2. 只让 `concluded` Research 满足 Gate；cancelled 或 active Research 都不能。
-3. schema 1.1/1.2 Research 还必须有 `owner`、`maturity: review_ready` 和完整
-   `approved_by/approved_at/approval_ref`；decision-ready 本身不是结束授权。
-4. 验证 sealed `SYNTHESIS.md` 正文摘要。
-5. 如果控制页声明 `RESEARCH_MANIFEST.json`，还必须验证：
-   - schema 与 Research ID；
-   - sealed manifest payload；
-   - package-relative 文档存在且 bytes/SHA-256 匹配；
-   - entrypoint 属于文档集合。
-6. 兼容没有 manifest 的既有 v1 Research，但不要把这种兼容当作新制品模板。
-7. 在 ADR 与 ExecPlan 中复述关键结论、置信边界、负面证据、成立条件和剩余未知。
-
-本仓库的 `epctl` 暂时保留 legacy Research 创建/归档命令，供既有自动化迁移；
-新 Research 不再从本 skill 的主流程创建。
-
-## 消费 Design revision
-
-1. 通过 `design_refs` 引用 `DD-NNN` 或 legacy Design 路径；schema 1.1 Design
-   还必须包含它的 `design_dependencies` 传递闭包，且依赖图无环。
-2. `new-ep` 对每个已发布 Design 自动写入
-   `DD-NNN@rev:N@sha256:<manifest-digest>`；不要手工猜测或改写 evidence。
-3. `validate` 独立检查 revision snapshot 的 manifest、路径、bytes、SHA-256、
-   entrypoint 与 reading map，不导入或调用 `designctl`。
-4. active EP 可以暂时引用 `draft`、`review_ready` 或 `revising` 工作版本并收到告警；
-   `completed` 必须为完整依赖闭包提供有效 approved evidence。legacy schema 1
-   Design 只有 `status: current` 才能满足完成门禁。
-5. Design 是解释性架构输入，ADR constraint 仍是授权后的规范约束；两者冲突时
-   停止归档并回到 Design/ADR 对应生命周期处理。
-
-## ADR 与显式决策权
-
-Agent 可以调研、比较并起草 `proposed` ADR。只有当前对话或明确授权来源中出现用户/Decision Owner 对具体 ADR 结果的明确接受或拒绝，才可运行 `decide-adr`。
-
-以下表达不构成决策授权：要求分析、要求起草、同意继续研究、同意实施整个 skill 改造、沉默或推断出的偏好。授权必须能回答“谁决定了哪份 ADR 的哪个结果”。
-
-当 ADR 仍在共同权衡时，先按 `references/collaboration.md` 把候选偏好经过后果复述
-和区分性压力场景，再写成 proposed ADR。裸露的 `1`、`2`、`Option B` 不自动等于
-对某份完整 ADR 的接受；明确身份、目标 ADR 和 outcome 的授权仍可直接进入决定门槛。
-
-决定前：
-
-1. 复述 sealed Synthesis 中影响选择的结论和证据路径。
-2. 写全 Context、Decision Drivers、可信选项、Outcome、Decision Statement、
-   Normative Constraints、Consequences、Confirmation 和 Revisit Triggers。
-3. 把真实授权主体传给 `--decision-maker`。
-
-新建 schema 1.4 ADR 必须给出一句可整体接受或拒绝的 `Decision Statement`，并把
-长期约束写成稳定的 `C-NNN` 行：strength、scope、constraint、confirmation。
-下游使用 `ADR-NNN#C-NNN` 引用它们。accepted/rejected schema 1.1–1.4 ADR 的正文、
-Research/ADR/Design 输入和决策授权由 SHA-256 一并封存。方向变化时创建并接受新 ADR，再按语义使用 `amends` 或执行
-preview-first 的 `supersede-adr`；若仅需暂停调查，则 preview/apply
-`transition-adr --to under_review`，之后明确 reaffirm 或 retire。每次 effect change
-都要求授权主体和原因。不要编辑旧决定，也不要把状态变化当作自动代码回滚。
-non-current ADR 不能满足新 ExecPlan；受影响的既有 active EP 显示
-`architecture_review_required` 并禁止 completed 归档。
-
-日常检索从 `DECISIONS.md` 的 Effective 开始。current ADR 被 current amendment
-局部修订时，索引显示 `partially amended` 并把每个受影响
-`ADR-NNN#C-NNN` 映射到 amendment ADR；这只是派生 effect，不新增状态或改写旧
-决定。Review Required 用于处理 under-review 和传递 non-current 链，Historical
-保留 rejected、retired、superseded 决定。
-
-当 current ADR 数量、关系图或 active EP 输入过大时，不要为减少文件数而退役仍然
-有效的决定。先运行 `adr-health` 查看 corpus、contract、graph、constraint、
-amendment、active-plan、View coverage 与 context cost 各维度；输出没有聚合总分，
-也不会触发生命周期变化。由 repository owner 用
-`set-decision-view` 明确维护领域种子；工具每次从 current-effect 图重建依赖、
-amendment 和 constraint 身份。View 是持久导航，不是 ADR，也没有 accepted 状态。
-
-`adr-maintenance` 在同一健康投影上执行 `default-v1`：每个 signal 独立显示 value、
-review/action boundary、severity 与 action type；整体状态只取最大 severity，不计算
-分数。健康 fast path 不构造影响建议；越过边界或显式 `--explain` 才进入 slow path。
-三个及以上 mechanically eligible 的 strict 终态 live ADR 独立触发 `pack_history`；
-current、graph、amendment、legacy、View coverage/cost 与 active-plan 压力分别路由到
-`consolidate_current`、`migrate_legacy_contracts`、`repair_views`、
-`narrow_view_context` 或 `narrow_plan_context`。所有 action 都是 `preview_only`，
-不能替代显式 actor/reason、Decision Owner、preview 或 `--apply` 授权。
-
-每次 ADR lifecycle/storage apply 成功后，以及 Governed 工作交接前，都运行一次
-`adr-maintenance`。`validate` 会给出非阻断 warning，`status` 给出有界摘要；需要定时
-CI gate 时调用 `adr-maintenance --check`，只有 `action_required` 返回 1。不要在 CI、
-Codex、Claude 或 portable adapter 中复制阈值，也不要因为 `review_due` 自动改 ADR。
-
-任务开始时用 `decision-capsule --view ...` 或显式 `--adr` 编译临时上下文。complete
-是默认模式：strict ADR 复制原文 `Decision Statement` 和选中的
-`Normative Constraints` 行，legacy ADR 整篇复制。只有显式给出 stable constraint、
-`--materialization focused` 与非空 `--focus-reason` 时，才可在完整 closure 验证后
-物化定向子图；输出必须声明 `focused_partial`、完整 closure digest 与省略边界。
-legacy focus 或缺少 scoped target 的 broad amendment 失败关闭。两种模式都报告
-source/capsule SHA-256；默认 32 KiB，超限给出 materialized source byte cost，绝不
-摘要、截断或自动切换模式。提高预算必须写 `--budget-reason`。Capsule 只辅助
-Architecture Input 阅读，不替代 ExecPlan 的 Compliance Matrix。
-
-`adr-consolidation-plan` 只报告 amendment chain、legacy contract、proposed overlap
-和 active EP impact，并始终声明 `preview_only: true`。语义合并必须另起一份原子
-proposed ADR，取得明确 Decision Owner acceptance，完成迁移后再走授权的
-supersede/retire 流程。该命令本身无权修改、接受、退役、替代或删除任何 ADR。
-
-终态历史的物理文件压缩只使用 `pack-historical-adrs`，它与语义合并严格分离：
-
-- 只接受显式列出的 `docs/adr/` strict live ADR，且状态必须是 `rejected`、
-  `retired` 或 `superseded`；accepted/current、under-review、proposed、legacy、已打包、
-  symlink 或未通过 seal 验证的输入会使整个操作失败。
-- preview 不创建目录、lock、pack 或索引；它先用 logical candidate corpus 完成验证，
-  报告 pack SHA-256、删除集合与净物理文件减少量。只有审查后才加 `--apply`。
-- apply 在 repository lock 内重新预检，写入
-  `docs/.epctl/adr-packs/sha256-<digest>.json`，再删除源文件、重建索引并全量验证；
-  任一失败恢复 pack、源文件和受管索引的原字节。
-- pack 保存原路径、完整 UTF-8 bytes 的 canonical Base64、document/payload digest、
-  ID/title/status 和操作 provenance。normal validation、关系、历史 evidence、索引、
-  status 与 health 通过统一离线 resolver 把 entry 当作同一 logical ADR。
-- packed ADR 不能直接执行 lifecycle mutation；先用 `unpack-adr-history-pack` preview，
-  确认所有目标路径无冲突后 `--apply`。unpack 全量恢复精确 bytes、验证后才删除 pack。
-- 降级到不理解 History Pack 的 RepoFoundry 版本前，必须 unpack 所有 pack，并以
-  `adr-health` 确认 `packed_entries` 和 `history_packs` 都为 0。Harness upgrade 与安装
-  永远不会自动打包或解包。
-
-一份 ADR 只记录一个原子决定，不因一个功能需要多个决定而合并成“大 ADR”：
-
-- `depends_on` 表示必须同时成立的 accepted 前置决定。
-- `amends` 表示新决定只修订旧决定的一部分；schema 1.2+ 还必须用
-  `amends_constraints` / `--amends-constraint ADR-NNN#C-NNN` 精确指出被改约束，
-  两份 ADR 仍是当前决定。
-- `supersedes` 表示完整替代，旧 ADR 进入 superseded。
-- `design_refs` 指向承载接口、数据流、迁移细节的 Design Docs。
-
-关系必须无环且互斥。ExecPlan 的 `adr_refs` 必须包含 `depends_on` / `amends`
-传递闭包，不能只引用叶子 ADR。
-
-既有 `docs/design-docs` 等目录先用 `register-architecture-root` 注册。
-`doc_type: adr` 或文件名含 `ADR-NNN` 的文档会被发现；缺少 epctl
-`decision_maker` / seal 的 accepted 旧 ADR 可兼容作为 architecture input，但验证会持续告警，
-工具把它视为只读。后续变化应创建严格的新 ADR，不要就地伪造历史授权。
-
-## 创建 ExecPlan
-
-执行前读取 `references/template.md`。
-
-1. 若实施范围、里程碑边界、迁移顺序、回滚或验收方案存在多个会显著改变计划的
-   可信形态，先按 `references/collaboration.md` 做有界实施校准；不要在 EP 内重新
-   决定未收敛的架构。
-2. Research Gate 必须引用所有相关 concluded Research，或提供具体 not-required 理由。
-3. Architecture Decision Gate 必须由所需 accepted ADR 满足，或提供具体
-   not-required 理由；提供理由时仍可引用适用的既有 ADR。
-4. Architecture Compliance 必须独立标为 `applicable` 或 `not_applicable`：
-   applicable 时引用全部相关当前 ADR/Design Docs；not_applicable 时不得夹带
-   architecture inputs，并写明具体理由。
-5. ADR 引用的 Research 和 Design Docs 也必须进入 ExecPlan 的对应引用数组。
-6. 多文档架构集可指定一个 `architecture_entrypoint`，供人和 Agent 从索引开始阅读。
-7. 对每个需要性能、容量、可靠性或回归验收的独立维度，先完成一个稳定的
-   Benchmark Scenario。不要等实现完成、看到结果后才补门禁。
-8. 运行 `new-ep` 创建 v2.8 目录和模板；已发布 Design evidence 自动固定；对每个必需 Scenario重复
-   `--benchmark-scenario BS-NNN`。没有 Benchmark 门禁时保留空集合。
-9. 在 `Architecture Compliance Matrix` 中逐条映射所有 `ADR-NNN#C-NNN` 到实施
-   位置和 test/lint/schema/observable evidence；Design Doc 只能解释，不能覆盖 ADR。
-10. 在 `Benchmark Gate Set` 中写清每个 Scenario 驱动哪个开发决定或里程碑。
-   不同环境、流量模型或判定规则保持为不同 Scenario，不聚合成不可解释的总分。
-11. 完整填写所有 REQUIRED section，并在 `Research and Architecture Inputs` 中复述：
-   - 支持路线的关键证据与置信边界；
-   - accepted ADR 的接口、数据、运维、迁移和负面后果；
-   - 仍需在实现中验证的未知；
-   - 跳过 Gate 的具体理由。
-12. 保证无历史会话的 Agent 只读当前工作树和根 `EXECPLAN.md` 就能继续：
-   - 解释目的、术语、用户可观察结果和系统现状；
-   - 给出准确仓库相对路径、接口与依赖；
-   - 提供独立可验证里程碑、工作目录、命令、预期输出和证据位置；
-   - 写明幂等重试、回滚、迁移与清理。
-
-上游引用用于审计，不得替代根计划内的执行上下文。不要预测耗时；时间戳只记录事实。
-
-Benchmark 驱动开发采用闭环而不是自动改代码：Run 为 `failed`、
-`inconclusive` 或 `errored` 时，保留 sealed evidence，在 Current Snapshot /
-Progress 写明未满足的 Scenario，把修复落到对应 Milestone 或有限 Task，再创建新
-Run 重测。只有规则本身确认错误时才先修订计划并创建新 Scenario；不能根据已看到
-的结果降低原 Scenario 阈值。
-
-## 维护有界 Living Document
-
-当前事实随路线更新并保持精简：Purpose、Current Snapshot、Context、Inputs、
-Benchmark Gate Set、Plan、Milestones、Validation、Recovery、Interfaces。
-
-当前 checkpoint 区间内追加历史：Progress、Surprises & Discoveries、Decision Log、Blockers、Revision Notes。纠错时新增更正记录。每个停止点更新 Progress；修改当前事实时记录 Revision Notes。
-
-`EXECPLAN.md` 的目标工作集不超过 500 行、48 KiB 和 30 个活跃历史事件；超过
-任一目标值时建立 checkpoint 的准备信号。800 行、64 KiB 和 50 个活跃历史事件
-是必须处理的强警戒线。里程碑完成、交接前，或出现任一级信号时：
-
-1. 把仍有效的发现和决定吸收到当前事实。
-2. 把完整输出移到 `artifacts/`。
-3. 读取 `references/checkpoints.md`。
-4. 读取 `references/integrity.md`，取得当前仓库或工作区 revision。
-5. 先运行带 `--revision` 的 `checkpoint ... --dry-run`，确认后再正式封存。
-6. 保证未完成 Progress/Validation 和 open blocker 留在根文件。
-7. 只读根 `EXECPLAN.md` 做一次恢复检查。
-
-Checkpoint 是 sealed 历史链，不能成为继续工作的必读前置。
-
-既有 schema 1.2 Checkpoint 若出生时已经带有错误 `payload_sha256`，先读取
-`references/checkpoints.md` 的恢复契约。凭据只能豁免该精确文档的已证明 mismatch；
-结构错误、receipt drift、不同 document bytes 或无法证明路径首次引入仍失败关闭。
-不得为了让验证通过而直接重算历史 seal。
-
-文档规模只决定是否压缩历史，不决定是否归档。一个 active EP 超过 5 个里程碑或
-10 个未完成 Task 时复核它是否仍有单一完成边界；超过 8 个里程碑或 15 个未完成
-Task 时，`status` 和 `validate` 建议把可独立验证、发布或回滚的结果拆成 successor
-EP。checkpoint 后根文件仍然过大，通常说明当前事实或工程范围过宽，应外置 Design
-Doc / artifact 或拆分 EP，不能反复 checkpoint 掩盖范围膨胀。
-
-## Task、未知与阻塞
-
-- 仅在工作能指定有限修改目标和独立验证时创建 Task。
-- Task 使用稳定 `parent_id: EP-NNN`；开始前检查依赖均为 `done` 或 `cancelled`。
-- 根 ExecPlan 始终同步总体进度、接口和关键决定。
-- 技术未知优先通过 Research、仓库检索或最小实验解决。
-- 只有缺权限/凭据/外部状态、人类产品判断、范围外能力，或继续会造成安全、数据、兼容风险时建立 open blocker。
-- blocker 解除后补充结果并恢复实体状态，不因历史阻塞持续报告 blocked。
-
-## Bugfix 与技术债务
-
-用户明确要求持久记录局部缺陷时使用 Bugfix，并读取 `references/bugfix.md`。至少记录 Symptom、Scope、Root Cause、Fix、Verification 和证据。升级为复杂工作时创建符合 Gate 的 ExecPlan，将 Bugfix 设为 `escalated`、填写 `linked_ep` 并归档，后续只在 EP 推进。
-
-技术债务是反馈入口。用户未提供优先级或目标日期时使用 `unspecified` / `unscheduled`，不要猜测。
-
-## 严格完成与归档
-
-完成 ExecPlan 前：
-
-1. 运行真实验证并记录结果和证据。
-2. 勾选全部 Validation。
-3. 确认 Task 全部 `done` / `cancelled`。
-4. 确认没有 open blocker。
-5. 填写 Outcomes & Retrospective。
-6. 取得实际通过验证的 repository/workspace revision 和证据引用。
-   对 v2.5+ `required_benchmark_scenarios` 中的每个 Scenario，取得恰好一个
-   passed sealed Run。sealed Benchmark 使用
-   `benchmark:BR-NNN@sha256:<manifest-payload-sha256>`；Run 的
-   `subject_revision` 必须等于同一个 `verified_revision` 且 outcome 必须是
-   `passed`。缺一个、重复覆盖一个、或引用未声明 Scenario 都会阻止归档。
-7. 运行 `adr-maintenance`，把最新 state、typed actions 与尚需 owner 决策的工作写入
-   交接或复盘；它不阻止无关 EP 归档，也不授权自动修改 ADR。
-8. 运行 `validate`，再运行：
-
-```bash
-python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-NNN \
-  --outcome completed \
-  --verified-revision "<vcs-or-snapshot-revision>" \
-  --evidence "benchmark:BR-014@sha256:<payload>" \
-  --evidence "benchmark:BR-015@sha256:<payload>"
-```
-
-不完整计划保持 active/blocked，或在明确停止时以原因归档为 cancelled。不能靠口头确认、force 或删除验收项伪装完成。
-
-`status` 的 `completion` 只报告仓库内事实：
-
-- `in_progress`：仍有未勾选验收；
-- `archive_blocked`：验收已勾选，但仍有 REQUIRED 占位、open blocker、未结束
-  Task、待复核 ADR，或 schema 2.8 Design 尚未发布/缺少有效 revision evidence；
-- `ready_to_archive`：计划内容已收敛，可以执行最终验证；v2.3+ 仍须在
-  `archive-ep` 提供真实 `verified_revision` 和 `verification_evidence`；
-- `archived`：制品已以 `completed` 或 `cancelled` 移入 completed 目录。
-
-脚本不会根据长度、无活动时间或 `ready_to_archive` 自动修改、checkpoint 或归档
-EP。Agent 在里程碑完成、交接、状态检查和最终验证后消费这些信号并执行对应动作。
-
-归档只记录知识提升候选。新的架构决定仍需 proposed ADR 和独立明确授权；不要在“归档 EP”的隐含授权下接受 ADR 或修改 `AGENTS.md`。
-
-用户明确要求把模块设计、最佳实践或 EP 过程整理成分享材料时，使用独立的
-`engineering-case-study` Skill。EP 完成、归档或出现 knowledge promotion
-candidate 本身都不构成生成案例的触发条件。
-
-## 状态与验证
-
-- `status` 汇总 Research 问题、Synthesis、ADR、Benchmark Scenario Gate、验收、
-  Task、blocker、Checkpoint 和文档大小，并为每个 EP 输出 `completion`、`scope`
-  与 `working_set`。`--json` 同时输出阈值计数、阻塞原因和归档命令仍需提供的输入。
-- `validate` 检查 ID、路径、状态、必需 section、引用、依赖、payload 和索引。
-- `reindex` 从事实制品重建 Research、ADR、ExecPlan 和 Bugfix 投影。
-- CI 只调用仓库内唯一检查入口；GitHub、GitLab 或其他 CI 平台不得复制校验逻辑。
-- accepted ADR 的 Confirmation 应指向测试、lint、schema check 或明确人工验收。
-- v2.6–2.8 active EP 的 ADR 必须 current，`adr_constraint_refs` 必须精确覆盖结构化
-  constraints，`adr_evidence` 必须匹配决定 seal，Compliance Matrix 必须逐条映射。
-  completed/cancelled EP 保留当时摘要；若当前 ADR 已是另一个 payload revision，
-  验证器从 `.epctl/adr-revisions/` 解析原摘要，绝不要求改写 sealed EP。
-- v2.8 EP 的 `design_evidence` 必须精确覆盖所有已发布的 schema 1.1 Design
-  输入；完成时每个 Design dependency 都必须有可独立验真的 approved revision pin。
-- completed v2.3+ EP 必须保存 `verified_revision` 和至少一个
-  `verification_evidence`，归档正文由 `archive_sha256` 封存；Checkpoint 必须
-  保存 `repository_revision`。
-- `benchmark:` evidence 会验证本地 sealed Manifest、精确文件清单、SHA-256、
-  `passed` outcome、Scenario Gate 的一一覆盖和共同 final revision；普通
-  `ci:` / `artifact:` 引用保持原语义。
-
-## 制品元数据
-
-新建 ADR、ExecPlan、Task、Checkpoint 和 Bugfix 使用统一
-`metadata_schema: "1"`，并携带稳定的 `artifact_type`、`id`、`title`、`status`、
-`author`、`owner`、`created` 和 `updated`。当前 artifact schema 分别是 ADR
-`1.4`、ExecPlan `2.8`、Task `1`、Checkpoint `1.2`、Bugfix `1`。
-
-`author` 是当前版本的实际写作者，`owner` 是持续负责者；两者不授予
-`decision_maker`、Research approval 或 Benchmark execution 权限。新建命令优先
-显式接收 `--author`/`--owner`，Task 与 Checkpoint 在边界明确时继承父 EP。
-未知 actor 使用 `Unassigned`，不得杜撰。accepted ADR、sealed Checkpoint 与归档
-ExecPlan 把 metadata 纳入 digest；旧版 sealed 制品按原 schema 保持只读兼容。
-当前 Design Doc 使用仓库内唯一的 `DD-NNN` 和相同 common metadata；注册后的
-corpus 由 `validate` 检查，legacy Design Doc 只读兼容并告警。
-
-## 参考
-
-- 制品路由、状态机、兼容策略 → `references/templates.md`
-- Research/Synthesis 消费契约与 manifest 兼容 → `references/research.md`
-- sealed Benchmark 作为 final-revision evidence → `references/benchmark.md`
-- ADR 门槛、授权、状态与 supersession → `references/adr.md`
-- 多 ADR / Design Doc Architecture Input Set 示例 →
-  `examples/architecture-input-set/README.md`
-- ExecPlan 自包含要求与 Living Document → `references/template.md`
-- Checkpoint、压缩与恢复 → `references/checkpoints.md`
-- 文档—代码完整性、CI 适配与合并门禁 → `references/integrity.md`
-- Bugfix 字段与升级/归档 → `references/bugfix.md`
-- Prompt 示例、典型场景和端到端输出边界 → `references/examples.md`
-- ADR 权衡与 ExecPlan 实施校准 → `references/collaboration.md`
+| 普通实现、局部修复、一次性实验 | 直接完成，不自动创建 EP 或 Bugfix |
+| 用户要求持久记录的局部既有行为缺陷 | Bugfix |
+| 可复用或参与验收的测量证据 | `engineering-benchmark` |
+| 会改变工程决定且尚未解决的事实未知 | `engineering-research` 或兼容证据生产者 |
+| 普通架构、组件、接口与实现合同文档 | `detailed-design` |
+| 用户要求 DD-NNN、Design Package、批准或修订受治理设计 | `engineering-design` |
+| 有可信替代方案且影响长期边界的选择 | ADR |
+| 需要可恢复交付、跨模块里程碑或实施已接受决定 | ExecPlan |
+| 项目 Harness 初始化、升级或 Spec 安装 | `repo-foundry-ai` |
+
+局部易逆转的实现选择可记录在 EP Decision Log。已经创建 EP 时，如 Research、
+新 ADR 或 Architecture Compliance 不适用，记录具体 Gate 理由；跳过新决定不代表
+忽略既有架构约束。
+
+## 按任务读取契约
+
+把 `<skill-dir>` 解析为本 skill 所在目录，使用
+`python3 <skill-dir>/scripts/epctl.py --repo <repo> <command>`。
+`status [--json]` 查看当前状态，`--help` 查询参数；只读取当前任务对应的说明：
+
+| 当前操作 | 说明 |
+|---|---|
+| 判定制品、状态机或兼容输入 | [templates.md](references/templates.md) |
+| 起草、决定、修订或替代 ADR | [adr.md](references/adr.md) |
+| ADR 健康、Decision View、capsule、合并预览或 History Pack | [adr.md](references/adr.md) 的对应章节 |
+| 创建或接手 ExecPlan、维护 Task 与验收 | [template.md](references/template.md) |
+| 消费 Research / Synthesis | [research.md](references/research.md) |
+| 使用 sealed Benchmark 验收 | [benchmark.md](references/benchmark.md) |
+| 建立 Checkpoint、压缩或恢复历史 | [checkpoints.md](references/checkpoints.md) |
+| 完成计划、处理摘要、CI 或 revision 证据 | [integrity.md](references/integrity.md) |
+| 记录或升级 Bugfix | [bugfix.md](references/bugfix.md) |
+| 用户要求共同权衡，或存在影响决定的实质取舍 | [collaboration.md](references/collaboration.md) |
+| 命令示例、历史兼容操作 | [commands.md](references/commands.md) |
+
+使用 CLI 分配 ID、维护索引、迁移状态和封存证据；`init` 只补缺失执行治理目录。
+不要手工猜编号、复用高水位或改写封存摘要。专业生产者可独立安装，消费者只读取
+仓库文件契约；本 skill 不持有 Research、Benchmark 或 Design 的写入生命周期。
+
+## 决定与输入
+
+- Agent 可以比较方案并起草完整 proposed ADR。只有用户或 Decision Owner 对具体
+  ADR outcome 的明确接受/拒绝，才运行 `decide-adr`。当前会话已有精确授权时直接
+  执行；一般实施授权、候选偏好、沉默和“继续研究”都不能代替该决定。
+- 一份 ADR 记录一个原子决定。保留 Decision Statement、稳定的 C-NNN constraints、
+  Confirmation、后果和 Revisit Triggers；关系与修改规则由 ADR 契约约束。
+- Research Gate 只接受 concluded 证据与有效 seal；active 或 cancelled 不满足 Gate。
+  在下游复述影响实施的结论、置信边界、负面证据和剩余未知。
+- Design 的创建、批准、修订和替代属于 `engineering-design`。未批准 revision 可供
+  讨论，但 EP 完成必须固定全部依赖的有效 approved revision evidence。
+- Architecture Input Set 包含适用的 current ADR closure 与 Design 输入；用
+  Compliance Matrix 将 ADR-NNN#C-NNN 映射到实现与验证。历史 compatibility
+  只按引用契约处理，不伪造旧 Owner 授权。
+- 只对用户拥有且会实质改变范围、迁移或验收的未知进行校准。信息充分时直接起草
+  或实施；局部技术细节从仓库取证，不逐项索取确认。
+
+## 推进与完成
+
+根 EXECPLAN.md 应足以让没有历史会话的 Agent 接手：明确目的、当前事实、路径、
+独立可验证的里程碑、恢复方式和剩余阻塞。历史、完整日志和测量输出按需归入
+Checkpoint / artifacts，不能成为继续工作的默认阅读前置。
+
+按 `status` 给出的 working_set、scope 与 completion 信号维护计划。规模超限先
+收敛当前事实和封存历史，不把长度、无活动时间或 ready_to_archive 当作完成证明。
+Task 保持有限范围和独立完成边界；技术未知先取证，只在缺权限、外部状态、人类
+决定或真实安全/兼容边界时保留 blocker，解除后恢复推进。
+
+在已授权范围内持续完成实现、相关检查和失败修正。Benchmark 的失败或无结论也
+保留 sealed evidence；修复后创建新 Run，不能按已看到的结果降低 Scenario 阈值。
+
+完成 EP 时：
+
+1. 全部 Validation 与 Task 有真实结果，没有 open blocker，填写 Outcomes & Retrospective。
+2. 取得实际验证的 revision 与 evidence。预声明的每个 Benchmark Scenario 恰好对应
+   一个同 revision 的 passed sealed Run；Design 输入有完整的批准 revision pin。
+3. 运行 `adr-maintenance` 和 `validate`，再用 `archive-ep --outcome completed`
+   记录 verified revision 与 evidence。无关 ADR 维护建议不阻止 EP 归档，也不授权改 ADR。
+
+不完整计划继续推进，或在明确停止时以原因归档为 cancelled。批准请求应针对已准备好
+的具体决定；不要在第一版实现后因惯例暂停。ADR lifecycle/storage 变化后及 Governed
+交接前运行 `adr-maintenance`，其 typed actions 只授权准备预览。
+
+accepted ADR、sealed Checkpoint 和 archived EP 的证据不能原地改写。正常验证保持
+离线；出生即错误的 seal 只能走已证明精确原始字节的恢复契约。未知 author/owner
+使用 `Unassigned`，不从 Git committer 猜测，也不把作者身份当作批准权限。
+
+只有用户明确要求工程分享时才使用 `engineering-case-study`；EP 完成本身不触发文章。
+端到端调用见 [Prompt 示例](references/examples.md)，多架构输入见
+[Architecture Input Set 示例](examples/architecture-input-set/README.md)。

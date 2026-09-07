@@ -50,10 +50,10 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.5.2"
-CODEX_ADAPTER_VERSION = "2.4.0"
-CLAUDE_ADAPTER_VERSION = "1.3.0"
-PORTABLE_ADAPTER_VERSION = "1.3.1"
+CORE_HARNESS_VERSION = "1.5.3"
+CODEX_ADAPTER_VERSION = "2.4.1"
+CLAUDE_ADAPTER_VERSION = "1.3.1"
+PORTABLE_ADAPTER_VERSION = "1.3.2"
 ACTIVATION_PROTOCOL_VERSION = 2
 GOVERNANCE_POLICY_SCHEMA = 1
 GOVERNANCE_PROFILES = ("adaptive", "strict")
@@ -92,7 +92,7 @@ CODEX_DOCUMENT_FILE_ASSETS = (
 CODEX_ROUTER_FILE_ASSETS = (
     (
         ".agents/skills/engineering-specs/SKILL.md",
-        "adapters/codex/engineering-specs/SKILL.md",
+        "adapters/codex/engineering-specs/SKILL.md.template",
     ),
     (
         ".agents/skills/engineering-specs/agents/openai.yaml",
@@ -178,7 +178,7 @@ CORE_FILE_ASSETS = (
     ),
     (
         ".repo-foundry/skills/repo-foundry-ai/SKILL.md",
-        "core/repo-foundry-ai/SKILL.md",
+        "core/repo-foundry-ai/SKILL.md.template",
     ),
 )
 CODEX_ADAPTER_DIRECTORIES = (
@@ -191,7 +191,7 @@ CODEX_ADAPTER_FILE_ASSETS = (
     ("AGENTS.md", "adapters/codex/AGENTS.md"),
     (
         ".agents/skills/repo-foundry-ai/SKILL.md",
-        "adapters/codex/repo-foundry-ai/SKILL.md",
+        "adapters/codex/repo-foundry-ai/SKILL.md.template",
     ),
     *CODEX_ROUTER_FILE_ASSETS,
 )
@@ -202,11 +202,11 @@ CLAUDE_ADAPTER_DIRECTORIES = (
 CLAUDE_ADAPTER_FILE_ASSETS = (
     (
         ".claude/skills/repo-foundry-ai/SKILL.md",
-        "adapters/claude/repo-foundry-ai/SKILL.md",
+        "adapters/claude/repo-foundry-ai/SKILL.md.template",
     ),
     (
         ".claude/skills/engineering-specs/SKILL.md",
-        "adapters/claude/engineering-specs/SKILL.md",
+        "adapters/claude/engineering-specs/SKILL.md.template",
     ),
 )
 PORTABLE_ADAPTER_DIRECTORIES = ("docs/agent-guides",)

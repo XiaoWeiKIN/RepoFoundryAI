@@ -1,15 +1,16 @@
 ---
 name: engineering-specs
-description: Classify Agent work as Explore, Build, or Governed and route Build/Governed implementation and review tasks to exact Requirements from applicable version-locked Engineering Specifications. Determine Spec candidates from planned paths, decide Applicability, inspect bounded Requirement cards, record direct IDs with reasons, apply the exact context capsule, and report verification. Do not use this Skill to install or upgrade Specifications.
+description: Activate locked Engineering Specifications for Build/Governed changes and formal code reviews. Excludes ordinary explanation and Spec installation or upgrades.
 ---
 
 # Engineering Specs
 
-Inspect the repository governance profile and current mode before work.
+For changes or formal code review, inspect the repository profile and current mode.
 Adaptive starts Explore; strict starts Governed. Explore permits bounded
 reversible local work without an activation receipt. Build and Governed require
 the applicable locked Specifications before mutation.
 
+Ordinary code explanation and navigation do not require this workflow.
 When the project Hooks are unavailable, establish the baseline manually before
 the first step below:
 
