@@ -1,7 +1,6 @@
 ---
 name: engineering-benchmark
-description: |
-  通过执行前的交互式 Scenario 校准，设计、执行和封存可复现的工程 Benchmark 证据，包括 Benchmark Suite、稳定 Scenario、单次 Run、原始 artifacts、Result 与带 SHA-256 的 Evidence Manifest。适用于用户要求一起设计压测场景、校准工作负载或判定阈值，做性能压测、容量测试、方案对比、回归基线、故障注入、外部压测、让一个或多个压测 Scenario 驱动某个 EP 的验收，或提到 benchmark、load test、基准、吞吐、延迟、资源占用、回归证据。只负责生成事实证据，不解释跨来源冲突、不形成 Research Synthesis、不接受 ADR，也不替代 EP 的决策与实施治理。
+description: 设计、执行并封存可复用的工程测量，用于性能比较、容量声明或回归验收。普通测试、一次性 profiling 和已有结果解读不触发。
 ---
 
 # Engineering Benchmark

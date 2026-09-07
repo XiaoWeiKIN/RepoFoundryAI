@@ -128,10 +128,11 @@ class InstallerTestCase(unittest.TestCase):
 
     def test_package_requires_every_project_skill_entrypoint(self) -> None:
         required = (
-            "assets/core/repo-foundry-ai/SKILL.md",
-            "assets/adapters/codex/repo-foundry-ai/SKILL.md",
-            "assets/adapters/claude/repo-foundry-ai/SKILL.md",
-            "assets/adapters/claude/engineering-specs/SKILL.md",
+            "assets/core/repo-foundry-ai/SKILL.md.template",
+            "assets/adapters/codex/repo-foundry-ai/SKILL.md.template",
+            "assets/adapters/codex/engineering-specs/SKILL.md.template",
+            "assets/adapters/claude/repo-foundry-ai/SKILL.md.template",
+            "assets/adapters/claude/engineering-specs/SKILL.md.template",
         )
         for relative in required:
             with self.subTest(relative=relative):
@@ -144,6 +145,43 @@ class InstallerTestCase(unittest.TestCase):
                         "package entrypoint is missing or unsafe",
                     ):
                         installer.validate_package(source)
+
+    def test_installed_discovery_contains_only_public_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / "codex"
+            self.run_installer(
+                ROOT,
+                root / "prefix",
+                root / "bin",
+                "--host", "codex",
+                "--codex-home", str(codex_home),
+            )
+            skill = codex_home / "skills" / "repo-foundry-ai"
+            discovered = {
+                path.relative_to(skill).as_posix()
+                for path in skill.rglob("SKILL.md")
+            }
+            self.assertEqual(
+                discovered,
+                {
+                    "SKILL.md",
+                    "detailed-design/SKILL.md",
+                    "engineering-benchmark/SKILL.md",
+                    "engineering-case-study/SKILL.md",
+                    "engineering-design/SKILL.md",
+                    "engineering-execution-plan/SKILL.md",
+                    "engineering-research/SKILL.md",
+                },
+            )
+
+    def test_pinned_legacy_template_names_remain_installable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            self.copy_source(source, "0.9.0")
+            for path in (source / "assets").rglob("SKILL.md.template"):
+                path.rename(path.with_name("SKILL.md"))
+            self.assertEqual(installer.validate_package(source), "0.9.0")
 
     def test_upgrade_switches_current_and_retains_old_release(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

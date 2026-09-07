@@ -1,6 +1,6 @@
 ---
 name: engineering-specs
-description: "Activate and audit this repository's locked Engineering Specifications through the canonical RepoFoundry engine."
+description: "Activate locked Engineering Specifications for Build/Governed changes and formal code reviews. Excludes ordinary explanation and Spec installation or upgrades."
 ---
 
 # Engineering Specifications
@@ -9,14 +9,13 @@ Use the canonical repository-local Router. This Claude adapter provides native
 Skill discovery, but Specification activation and enforcement are explicit CLI
 steps; it does not claim lifecycle Hook enforcement.
 
-From the repository root, choose stable session and turn identifiers and run:
+Ordinary code explanation and navigation do not require this workflow.
+For changes or formal review, choose stable session and turn identifiers and run:
 
 ```bash
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   begin --adapter-id claude --session-id <session> --turn-id <turn> \
   --prompt <task-summary>
-python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
-  candidates --path <initial-scoped-path>
 ```
 
 The `begin` result reports adaptive/strict profile and Explore/Build/Governed
@@ -33,6 +32,8 @@ Build and Governed decide Spec Applicability, request bounded cards, then record
 exact direct Requirements with one reason per ID for every applicable path scope:
 
 ```bash
+python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
+  candidates --path <path>
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \
   requirements --path <path> --spec <applicable-spec-id>
 python3 .repo-foundry/engineering-specs/spec_router.py --repo . \

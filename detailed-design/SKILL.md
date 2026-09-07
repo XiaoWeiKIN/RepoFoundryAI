@@ -1,7 +1,6 @@
 ---
 name: detailed-design
-description: |
-  协作撰写、重构和评审面向工程师的架构与详细设计文档：从仓库证据建立 mental model，以真实请求、数据或状态生命周期组织叙事，解释核心抽象、边界、不变量、扩展点和源码映射。适用于 Architecture、Internals、模块设计、实现合同和技术文档评审。普通 API 文档、用户手册、ADR 授权、Research、实施计划，以及 DD-NNN/manifest/revision 治理不使用本 skill。
+description: 撰写、重构或评审 Architecture、Internals、模块设计与实现合同文档。受治理的 DD-NNN / Design Package 生命周期使用 engineering-design。
 ---
 
 # Detailed Design

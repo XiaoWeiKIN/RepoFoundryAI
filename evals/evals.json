@@ -264,6 +264,38 @@
           "description": "只有明确的 DD 生命周期请求才进入 engineering-design"
         }
       ]
+    },
+    {
+      "id": 13,
+      "prompt": "仓库使用 adaptive Harness。只把 README 中的拼写错误修好，不改变行为或工程规则。",
+      "expected_output": "直接定位并修复错字，检查受影响的文档。按 Explore 处理，不为此读取架构全图、创建治理制品或执行全仓库测试。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "bounded_documentation_work",
+          "description": "只读取与修改有关的文档和规则，检查文档改动后交付"
+        },
+        {
+          "name": "no_incidental_governance",
+          "description": "不创建 Research、ADR、EP、Spec receipt 或无关 Harness 迁移"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "这是一个没有 Harness 的小仓库，只修 README 的错误链接；不要初始化工程系统。",
+      "expected_output": "按现有仓库约定修复并核对链接；不因为发现个人 RepoFoundry skill 而启动 bootstrap 或询问 adapter。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "honors_no_bootstrap",
+          "description": "没有运行 bootstrap、创建 Harness 或索取 adapter 选择"
+        },
+        {
+          "name": "completes_link_fix",
+          "description": "交付经过核对的正确链接"
+        }
+      ]
     }
   ]
 }

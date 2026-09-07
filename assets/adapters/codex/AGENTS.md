@@ -4,10 +4,10 @@
 
 ## Start Here
 
-- Read `README.md` for the project purpose and supported workflows.
+- Use `README.md` when project purpose or supported workflows are unclear.
 - Read `ARCHITECTURE.md` before changing module boundaries.
 - Use `docs/index.md` as the documentation map.
-- Invoke `$engineering-specs` to inspect the current governance mode; use `docs/agent-guides/managed/index.md` only as its locked routing source.
+- For changes or formal code review, invoke `$engineering-specs` to inspect governance mode; its locked routing source is `docs/agent-guides/managed/index.md`. Ordinary explanation and navigation need no activation.
 - Keep this file at or below 100 physical lines, including blank lines and comments.
 
 ## Knowledge Map
@@ -44,6 +44,7 @@
 
 <!-- BOOTSTRAP_TODO: List the exact build, test, lint, and Harness validation commands. -->
 
-- Run the repository's documented checks for every changed area.
+- Run checks relevant to the changed behavior and risk; documentation-only edits need documentation checks.
 - Validate observable behavior, not only file creation or compilation.
+- Continue authorized local checks and corrections until the requested outcome is verified.
 - Record verification evidence in the active ExecPlan when one exists.

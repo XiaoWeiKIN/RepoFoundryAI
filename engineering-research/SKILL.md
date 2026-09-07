@@ -1,7 +1,6 @@
 ---
 name: engineering-research
-description: |
-  创建、接管和迭代维护仓库内的工程 Research 与 Synthesis，并通过交互式研究引导与用户共同校准研究问题、证据缺口和下一轮方向；包括结构化专题文档、源码/文档/网络来源、实验与 prototype、多文档 corpus、研究轮次、阶段性 Synthesis revision、作者与研究类型元数据、入口索引、manifest、引用完整性、linked corpus 快照和显式授权后的结论封存。适用于用户要求一起调研或讨论某个研究点、先调研一个功能或技术方案、创建或评审专题研究文档、基于第一版继续深入、比较选项、分析现有多篇研究文档、处理 BMAD/Deep Research 产物、生成决策级总结，或提到 Research、技术调研、专题文档、证据、Synthesis、research corpus、research manifest。普通代码解释、方向已固定的局部实现或纯 ExecPlan 维护不触发本 skill。
+description: 为工程决策创建或维护 Research、专题证据与 Synthesis。用于持久研究或治理中的关键事实未知；普通代码解释和局部实现取证不触发。
 ---
 
 # Engineering Research

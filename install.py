@@ -451,10 +451,11 @@ def validate_package(root: Path, expected_version: str | None = None) -> str:
         Path("SKILL.md"),
         Path("agents/openai.yaml"),
         Path("scripts/foundryctl.py"),
-        Path("assets/core/repo-foundry-ai/SKILL.md"),
-        Path("assets/adapters/codex/repo-foundry-ai/SKILL.md"),
-        Path("assets/adapters/claude/repo-foundry-ai/SKILL.md"),
-        Path("assets/adapters/claude/engineering-specs/SKILL.md"),
+        Path("assets/core/repo-foundry-ai/SKILL.md.template"),
+        Path("assets/adapters/codex/repo-foundry-ai/SKILL.md.template"),
+        Path("assets/adapters/codex/engineering-specs/SKILL.md.template"),
+        Path("assets/adapters/claude/repo-foundry-ai/SKILL.md.template"),
+        Path("assets/adapters/claude/engineering-specs/SKILL.md.template"),
         Path("engineering-benchmark/SKILL.md"),
         Path("detailed-design/SKILL.md"),
         Path("engineering-design/SKILL.md"),
@@ -465,6 +466,9 @@ def validate_package(root: Path, expected_version: str | None = None) -> str:
     package_files(root)
     for relative in required:
         target = root / relative
+        # Pinned older releases used discoverable names for their templates.
+        if relative.name == "SKILL.md.template" and not target.exists():
+            target = target.with_name("SKILL.md")
         if not target.is_file() or target.is_symlink():
             raise InstallError(f"package entrypoint is missing or unsafe: {relative}")
     skill = (root / "SKILL.md").read_text(encoding="utf-8")

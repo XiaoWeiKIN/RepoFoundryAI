@@ -1,7 +1,6 @@
 ---
 name: engineering-design
-description: |
-  把已完成的工程 Research、当前 ADR 约束或明确输入转化为受治理的技术 Design，并管理 DD-NNN、单文件或多文档 Design Package、manifest、修订快照、批准证据、依赖和生命周期。适用于用户明确要求创建、拆分、评审、批准或修订受治理 Design，或提到 Design Package、DD-NNN、manifest、revision。普通 Architecture、Internals、模块说明和实现合同的撰写或评审使用 detailed-design；Research、ADR 授权、ExecPlan 和普通代码说明也不触发本 skill。
+description: 创建、评审、批准或修订受治理的 DD-NNN / Design Package。普通架构、模块说明与实现合同文档使用 detailed-design。
 ---
 
 # Engineering Design

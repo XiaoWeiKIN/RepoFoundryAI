@@ -32,20 +32,20 @@
     {
       "id": 2,
       "prompt": "总结 OQL translator 开发中最值得团队复用的最佳实践，写成分享文章。不要新建 Research 或 EP。",
-      "expected_output": "用户没有指定输出语言，因此先询问“这篇分享希望用中文、英文，还是中英双语？”，收到选择前不创建文章。语言明确后，再从多个真实实现、测试、规范和历史记录中识别失败模式；普通代码取证不升级为持久 Research 或 ExecPlan。",
+      "expected_output": "没有既有语言偏好或目标文档约定时，沿用中文请求生成中文 draft。根据真实代码、测试和历史记录建立证据后完成文章；普通写作取证不升级为 Research 或 ExecPlan，也不为缺少语言字段暂停。",
       "files": [],
       "assertions": [
         {
-          "name": "asks_for_language_first",
-          "description": "没有根据中文提问推断输出中文，而是在成文前询问中文、英文或中英双语"
+          "name": "uses_contextual_language_default",
+          "description": "遵循已有明确偏好或仓库写作约定；都没有时用请求语言直接写作，并说明默认值"
         },
         {
-          "name": "creates_no_file_before_answer",
-          "description": "收到语言选择前不创建案例文件或默认语言草稿"
+          "name": "completes_authorized_draft",
+          "description": "取证后生成草稿并核对来源，不因没有单独填写语言而要求确认"
         },
         {
           "name": "grounds_practice_in_real_cases",
-          "description": "语言确认后的最佳实践由真实代码、测试或多个案例支撑，不把单个偏好包装成通用原则"
+          "description": "最佳实践由真实代码、测试或多个案例支撑，不把单个偏好包装成通用原则"
         },
         {
           "name": "includes_counterexample_and_boundary",
@@ -155,21 +155,21 @@
     },
     {
       "id": 8,
-      "prompt": "使用 $engineering-case-study 分享 entitymetrics 的设计。",
-      "expected_output": "主题已经明确，但输出语言未指定；只询问“这篇分享希望用中文、英文，还是中英双语？”，等待用户选择，不从中文请求推断语言，也不创建案例文件。",
+      "prompt": "使用 $engineering-case-study 分享 entitymetrics 的设计。此前我已明确要求：本次分享给国际团队，文章用英文。",
+      "expected_output": "沿用当前会话已明确的英文偏好，取证并完成英文 draft。中文请求不覆盖已有语言选择，也不重复询问；未验证的结果保持诚实边界。",
       "files": [],
       "assertions": [
         {
-          "name": "asks_single_language_question",
-          "description": "只提出中文、英文或中英双语这一项必要问题"
+          "name": "preserves_explicit_preference",
+          "description": "输出英文并记录 language=en，不被中文请求的默认语言覆盖"
         },
         {
-          "name": "does_not_infer_from_prompt_language",
-          "description": "不会因为用户使用中文提问就默认生成中文"
+          "name": "does_not_reconfirm_language",
+          "description": "直接推进取证和写作，不重复询问已经明确的语言"
         },
         {
-          "name": "waits_before_writing",
-          "description": "在用户回答前不取代其选择、不生成草稿文件"
+          "name": "delivers_grounded_draft",
+          "description": "基于可定位证据交付 draft，不虚构性能或完成状态"
         }
       ]
     }

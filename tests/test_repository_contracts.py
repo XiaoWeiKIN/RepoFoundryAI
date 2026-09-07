@@ -509,11 +509,11 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.10.0",
+            "0.11.0",
         )
         for relative in (
             "SKILL.md",
-            "assets/core/repo-foundry-ai/SKILL.md",
+            "assets/core/repo-foundry-ai/SKILL.md.template",
             "assets/adapters/portable/agent-guide.md",
         ):
             self.assertIn(
@@ -590,7 +590,10 @@ class RepositoryContractTestCase(unittest.TestCase):
             "curl -fsSL https://raw.githubusercontent.com/"
             "XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -"
         )
-        for document in (ROOT / "README.md", ROOT / "README.zh-CN.md", ROOT / "SKILL.md"):
+        for document in (
+            ROOT / "README.md", ROOT / "README.zh-CN.md",
+            ROOT / "references/installation.md",
+        ):
             content = document.read_text(encoding="utf-8")
             self.assertIn(command, content)
             self.assertIn(f"{command} --host claude", content)
@@ -737,7 +740,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             / "codex"
             / "engineering-specs"
         )
-        router_skill = (router / "SKILL.md").read_text(encoding="utf-8")
+        router_skill = (router / "SKILL.md.template").read_text(encoding="utf-8")
         self.assertIn("name: engineering-specs", router_skill)
         self.assertIn("`Applicability` section", router_skill)
         self.assertIn("## Classify the task", router_skill)
@@ -751,10 +754,10 @@ class RepositoryContractTestCase(unittest.TestCase):
 
     def test_risk_adaptive_governance_surfaces_are_consistent(self) -> None:
         agent_surfaces = (
-            ROOT / "assets/core/repo-foundry-ai/SKILL.md",
+            ROOT / "assets/core/repo-foundry-ai/SKILL.md.template",
             ROOT / "assets/adapters/codex/AGENTS.md",
-            ROOT / "assets/adapters/codex/engineering-specs/SKILL.md",
-            ROOT / "assets/adapters/claude/engineering-specs/SKILL.md",
+            ROOT / "assets/adapters/codex/engineering-specs/SKILL.md.template",
+            ROOT / "assets/adapters/claude/engineering-specs/SKILL.md.template",
             ROOT / "assets/adapters/portable/agent-guide.md",
         )
         for path in agent_surfaces:
@@ -806,7 +809,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         core_text = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted(core.rglob("*"))
-            if path.is_file() and path.suffix in {".md", ".py", ".json"}
+            if path.is_file() and path.suffix in {".md", ".template", ".py", ".json"}
         )
         for product_token in (
             "Codex",
@@ -852,22 +855,22 @@ class RepositoryContractTestCase(unittest.TestCase):
     def test_project_skill_assets_are_thin_portable_and_well_formed(self) -> None:
         assets = {
             "core": (
-                ROOT / "assets/core/repo-foundry-ai/SKILL.md",
+                ROOT / "assets/core/repo-foundry-ai/SKILL.md.template",
                 "name: repo-foundry-ai",
                 120,
             ),
             "codex": (
-                ROOT / "assets/adapters/codex/repo-foundry-ai/SKILL.md",
+                ROOT / "assets/adapters/codex/repo-foundry-ai/SKILL.md.template",
                 "name: repo-foundry-ai",
                 80,
             ),
             "claude": (
-                ROOT / "assets/adapters/claude/repo-foundry-ai/SKILL.md",
+                ROOT / "assets/adapters/claude/repo-foundry-ai/SKILL.md.template",
                 "name: repo-foundry-ai",
                 80,
             ),
             "claude-specs": (
-                ROOT / "assets/adapters/claude/engineering-specs/SKILL.md",
+                ROOT / "assets/adapters/claude/engineering-specs/SKILL.md.template",
                 "name: engineering-specs",
                 120,
             ),
