@@ -40,19 +40,19 @@ executed_by: ""
 
 ## Raw Observations
 
-<!-- REQUIRED: Report measurements with units, sample counts, uncertainty or dispersion, correctness checks, and pointers to raw artifacts. -->
+<!-- REQUIRED: Report measurements with units, sample units and counts, aggregation, effect sizes, uncertainty or dispersion and its definition, validity/correctness checks, and pointers to raw artifacts and generating commands. Retain excluded samples with reasons; do not report only the best run. -->
 
 ## Interpretation
 
-<!-- REQUIRED: Separate supported interpretation from raw observations. Do not accept an architecture decision here. -->
+<!-- REQUIRED: For each hypothesis/prediction ID, record predicted versus observed results, evidence links, and supported / falsified / inconclusive. Cross-check mechanism claims against measurements, compiler/runtime diagnostics, and version-matched source; qualify gaps or conflicts. Separate interpretation from observations and gate outcome. Do not accept an architecture decision here. -->
 
 ## Contradictions and Supersession
 
-<!-- REQUIRED: Record conflicting signals, anomalies, known invalid evidence, and why any superseded Run is replaced while remaining auditable. Write "None observed" when applicable. -->
+<!-- REQUIRED: Preserve falsified hypotheses, conflicting signals, anomalies, invalid experiments, and corrections. State what exposed each issue and link follow-up Scenarios/Runs without rewriting the original hypothesis. Explain supersession while retaining older evidence. Write "None observed" when applicable. -->
 
 ## Boundaries and Extrapolation
 
-<!-- REQUIRED: State environmental differences, validity limits, missing samples, and conclusions this Run cannot support. -->
+<!-- REQUIRED: Bind conclusions to tested versions, architecture, workload, and scale. Distinguish specification guarantees from implementation details; state invalidating conditions, environmental differences, missing evidence, and conclusions this Run cannot support. -->
 
 ## Handoff
 

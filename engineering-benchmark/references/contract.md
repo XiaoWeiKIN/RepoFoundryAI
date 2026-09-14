@@ -92,7 +92,7 @@ be erased.
 A Scenario is complete before any Run is created. It must declare:
 
 1. the decision or operational question it can inform;
-2. a falsifiable hypothesis and explicit falsifier;
+2. a falsifiable hypothesis, concrete metric/diagnostic predictions, and explicit falsifier;
 3. subject, control, and comparison variants;
 4. controlled and intentionally changing variables;
 5. dataset, traffic model, cardinality, duration, and scale;
@@ -107,6 +107,20 @@ A Scenario is complete before any Run is created. It must declare:
 
 The copied `SCENARIO.md` inside a Run is the protocol of record for that Run.
 Changing the reusable Scenario affects future Runs only.
+
+Hypotheses and predictions must be recorded before benchmark execution, not
+reconstructed from results. Disclose prior exploratory measurements and use
+fresh Runs to test hypotheses derived from them. Comparisons must perform
+equivalent work and isolate the variable being attributed; multifactor designs
+must predeclare their matrix and interaction analysis or limit attribution to
+the combined change.
+
+The protocol also specifies measurement-validity checks, sample units,
+comparison ordering, repetition and stopping rules, and the method for
+reporting effect sizes and uncertainty. Mechanism claims require measurements,
+compiler/runtime diagnostics, and matching source evidence; unavailable evidence
+limits the claim. See [scientific-method.md](scientific-method.md) for design
+guidance and the Go microbenchmark application.
 
 ## Result contract
 
@@ -140,6 +154,20 @@ The body separates:
 - boundaries and extrapolation;
 - downstream handoff;
 - artifact inventory, including external evidence.
+
+For every prediction, report whether observations support it, falsify it, or
+remain inconclusive, with evidence links. Preserve invalid experiments,
+excluded samples and their reasons, and falsified hypotheses. Every reported
+number must trace to raw evidence and its generating command. Mechanism
+interpretation must reconcile measurement, diagnostic, and source evidence or
+state the gap; a passing behavior gate alone does not establish causality.
+Conclusions are bounded by the tested versions, architecture, and workload.
+
+These are authoring and scientific-review requirements within the existing
+Scenario and Result sections. They do not change schema or legacy bundle
+validation: benchctl checks structure and integrity, not causal validity or
+whether the author truly declared a hypothesis before measuring. Do not
+rewrite sealed historical bundles to retrofit these requirements.
 
 External evidence entries record an immutable URI or platform ID, SHA-256 or
 provider digest, retention policy, and access conditions. A mutable dashboard

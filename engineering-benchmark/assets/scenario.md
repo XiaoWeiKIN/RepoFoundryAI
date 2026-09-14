@@ -16,7 +16,7 @@ updated: {{DATE_JSON}}
 
 ## Question and Hypothesis
 
-<!-- REQUIRED: State the exact question, a falsifiable hypothesis, and the observation that would falsify it. -->
+<!-- REQUIRED: Before running benchmarks, state the mechanism question or bounded behavior claim. Give each hypothesis an ID, concrete metric or diagnostic predictions, and an explicit falsifier. Disclose prior exploratory data; hypotheses derived from it require fresh validation runs. -->
 
 ## Subject, Control, and Variants
 
@@ -24,7 +24,7 @@ updated: {{DATE_JSON}}
 
 ## Variables
 
-<!-- REQUIRED: Separate controlled variables, intentionally changed variables, and measured responses. -->
+<!-- REQUIRED: Separate controlled variables, intentionally changed variables, measured responses, and confounders. Keep work and correctness semantics equivalent and change one causal variable per comparison; for multiple factors predeclare a matrix and interaction analysis or limit claims to the combined effect. -->
 
 ## Dataset and Traffic Model
 
@@ -36,19 +36,19 @@ updated: {{DATE_JSON}}
 
 ## Procedure and Commands
 
-<!-- REQUIRED: Provide setup, exact executable commands or harness entrypoint, warmup, measurement, repetition, cache-state, teardown, and recovery steps. -->
+<!-- REQUIRED: Provide setup, exact commands or harness entrypoint, validity checks before measurement, warmup, measurement, repetition, sample unit, comparison ordering, cache-state, teardown, and recovery steps. Rule out eliminated work, empty runs, and load-generator or timer artifacts. Default to at least 8 repetitions for microbenchmarks; justify a suitable independent-repeat strategy for long-running experiments. -->
 
 ## Metrics and Correctness Checks
 
-<!-- REQUIRED: Define primary and secondary metrics, units, aggregation, uncertainty, sample exclusions, and correctness or data-integrity checks. -->
+<!-- REQUIRED: Define primary and secondary metrics, units, aggregation, effect size, uncertainty or dispersion method, sample exclusions, and correctness checks. Mechanism claims need discriminating diagnostics beyond timing alone; latency and throughput may be primary metrics for bounded capacity/SLO claims. -->
 
 ## Decision Rule
 
-<!-- REQUIRED: Predeclare how observations map to passed, failed, or inconclusive. Include thresholds, comparison margins, and minimum sample requirements. -->
+<!-- REQUIRED: Predeclare how observations map to passed, failed, or inconclusive. Include thresholds, comparison margins, minimum sample requirements, and stopping conditions. Do not stop only when results become significant or interpret insufficient resolution as equivalence. -->
 
 ## Evidence Requirements
 
-<!-- REQUIRED: List required configs, stdout/stderr, raw measurements, traces, profiles, environment capture, and any external immutable evidence. -->
+<!-- REQUIRED: List required configs, stdout/stderr, all raw samples, diagnostics, environment capture, and external immutable evidence. For mechanism claims plan measurement + compiler/runtime diagnostics + version-matched source evidence; declare unavailable evidence and the resulting limits. Link each reported metric to its generating command and raw artifact. -->
 
 ## Safety, Cleanup, and Recovery
 
