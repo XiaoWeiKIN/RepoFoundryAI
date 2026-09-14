@@ -509,7 +509,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.11.0",
+            "0.11.1",
         )
         for relative in (
             "SKILL.md",

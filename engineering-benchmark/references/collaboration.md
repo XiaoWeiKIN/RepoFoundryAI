@@ -54,6 +54,12 @@ an acceptance threshold that cannot be inferred.
 7. Write the retained assumptions, limitations, falsifier, and decision rule
    into the Scenario before `new-run`.
 
+Prefer reasoning through the discriminating case when that is sufficient. If
+calibration uses actual measurements, record its provisional hypothesis before
+execution and retain the outputs as exploratory evidence. A hypothesis revised
+from those observations needs a fresh validation Run after the Scenario is
+fixed; the calibration data cannot also serve as its prospective test.
+
 A compact response shape is:
 
 ```text
