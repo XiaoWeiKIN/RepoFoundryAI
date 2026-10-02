@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec Lab · RepoFoundry</title>
+<style>
+:root{--bg:#f5f4ee;--paper:#fff;--ink:#19332c;--muted:#53665f;--line:#dce3dc;--accent:#12694f;--light:#eaf3eb;--warn:#a24e22;--warnbg:#fff3e9;--mono:ui-monospace,SFMono-Regular,Consolas,monospace}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:wait;opacity:.6}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #c09134;outline-offset:3px}
+header{border-bottom:1px solid var(--line);background:var(--paper)}
+.bar{max-width:1456px;margin:auto;display:flex;justify-content:space-between;align-items:center;padding:20px 32px;gap:16px}
+.brand{font-weight:800;letter-spacing:.08em;font-size:13px}
+.brand span{font-weight:400;color:var(--muted);margin-left:16px}
+.badge{font:11px var(--mono);padding:7px 10px;border:1px solid var(--line);border-radius:20px;white-space:nowrap}
+.badge::before{content:"●";color:var(--accent);margin-right:8px}
+main{max-width:1456px;margin:auto;padding:36px 32px 60px}
+.hero{display:flex;align-items:end;justify-content:space-between;gap:36px;margin-bottom:28px}
+.eyebrow{font:11px var(--mono);letter-spacing:.12em;color:var(--accent);margin:0 0 12px}
+h1{font-size:clamp(27px,3.2vw,42px);line-height:1.25;letter-spacing:-.04em;margin:0 0 12px;font-weight:650}
+.lede{max-width:720px;color:var(--muted);margin:0}
+.hero-note{font-size:12px;color:var(--muted);max-width:245px;border-left:2px solid var(--line);padding-left:16px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:24px 0}
+.step{background:var(--paper);padding:15px 18px}
+.step .num{font:12px var(--mono);color:var(--accent);margin-right:10px}
+.step b{font-size:13px;font-weight:600}
+.step small{display:block;color:var(--muted);font-size:11px;margin-left:27px}
+.layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px;align-items:start}
+.panel{min-width:0;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px}
+.sidebar{position:sticky;top:20px}
+.panel h2{font-size:18px;line-height:1.4;margin:0}
+.section-head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.hint{font-size:12px;color:var(--muted);margin:8px 0 0}
+.label{display:block;font-size:12px;font-weight:600;margin:0 0 8px}
+.field{width:100%;border:1px solid var(--line);border-radius:8px;background:#fafbf8;color:var(--ink);padding:10px 12px}
+textarea.field{font:13px/1.7 var(--mono);resize:vertical;min-height:120px}
+.primary{width:100%;margin-top:14px;padding:11px 14px;background:var(--accent);border:1px solid var(--accent);border-radius:8px;color:#fff;font-weight:600}
+.secondary{padding:6px 10px;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:7px;font-size:12px}
+.budget{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.boundary{background:var(--light);border-radius:9px;font-size:12px;margin-top:22px;padding:14px}
+.boundary strong{display:block;margin-bottom:4px}
+.stack{min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.status{font-size:13px;background:var(--light);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:20px;overflow-wrap:anywhere}
+.status.error{background:var(--warnbg);color:var(--warn);border-color:#efd8c3}
+.empty{color:var(--muted);padding:24px 16px;background:#fafbf8;border:1px dashed var(--line);border-radius:8px;font-size:13px}
+.spec-list{display:grid;gap:12px}
+.spec{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.spec-top{padding:15px 16px;background:#fafbf8;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.spec-top code{font:12px var(--mono);font-weight:600;overflow-wrap:anywhere}
+.version{font:11px var(--mono);color:var(--muted);margin-left:auto}
+.spec-desc{margin:0;padding:0 16px 12px;background:#fafbf8;font-size:12px;color:var(--muted)}
+.scope{display:block;font:11px/1.6 var(--mono);margin-top:6px;overflow-wrap:anywhere}
+.req{display:grid;grid-template-columns:18px 1fr;gap:12px;padding:14px 16px;border-top:1px solid var(--line);cursor:pointer}
+.req:has(input:checked){background:var(--light)}
+.req input{margin-top:5px;accent-color:var(--accent)}
+.req code{font:11px var(--mono);color:var(--accent)}
+.req .title{display:block;font-size:13px;font-weight:600}
+.req .activation{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.req .level{font:10px var(--mono);color:var(--muted)}
+.pill{border:1px solid var(--line);border-radius:5px;padding:3px 7px;font:11px var(--mono);color:var(--muted);white-space:nowrap}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.metric{background:#fafbf8;border-radius:8px;padding:12px 15px}
+.metric span{display:block;font-size:11px;color:var(--muted)}
+.metric b{font:24px var(--mono);font-weight:500}
+.graph{overflow:auto;border-radius:8px;background:#fafbf8;margin-bottom:14px}
+.graph svg{display:block;min-width:100%;height:auto}
+.edge{fill:none;stroke:#8aa497;stroke-width:1.5}
+.node{fill:#fff;stroke:#a9b9ac}
+.node.direct{fill:var(--light);stroke:var(--accent)}
+svg text{fill:var(--ink);font:11px var(--mono)}
+svg .node-label{font:12px system-ui,sans-serif}
+details{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+summary{cursor:pointer;font-size:12px;font-weight:600}
+.records{display:grid;gap:8px;margin-top:12px}
+.record{font-size:12px;padding:12px;background:#fafbf8;border-radius:8px;overflow-wrap:anywhere}
+.record code{font-family:var(--mono);font-size:11px}
+.record p{margin:5px 0;color:var(--muted)}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.toolbar label{font-size:12px;color:var(--muted)}
+.meter{height:6px;display:block;width:100%;border:0;margin:12px 0;accent-color:var(--accent)}
+.capsule{white-space:pre-wrap;overflow:auto;font:12px/1.8 var(--mono);max-height:460px;min-height:100px;padding:18px;background:#102d24;color:#ebf3e8;border-radius:9px;margin:14px 0 8px;tab-size:4;overflow-wrap:anywhere}
+.capsule.nowrap{white-space:pre;overflow-wrap:normal}
+.digest{white-space:pre-wrap;font:11px/1.7 var(--mono);overflow-wrap:anywhere;color:var(--muted);margin-top:12px}
+.source-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.source-grid h3{font-size:11px;color:var(--muted);margin:0 0 5px}
+.source-grid p{white-space:pre-line;font:11px/1.7 var(--mono);margin:0;overflow-wrap:anywhere}
+.foot{margin-top:24px;font-size:11px;color:var(--muted)}
+[hidden]{display:none!important}
+@media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}
+.sidebar{position:static}
+.hero-note{display:none}
+.source-grid{grid-template-columns:1fr}
+.bar,main{padding-left:20px;padding-right:20px}
+.step{padding:12px 9px}
+.step small{margin-left:0}
+.step b{font-size:11px}
+.step .num{margin-right:4px}
+}
+@media(prefers-reduced-motion:no-preference){button{transition:background .15s,border-color .15s}
+.panel{animation:enter .2s ease-out}
+@keyframes enter{from{opacity:.6;transform:translateY(4px)}
+to{opacity:1;transform:translateY(0)}
+}
+}
+
+</style>
+</head>
+<body>
+<header><div class="bar"><div class="brand">REPOFOUNDRY<span>/ SPEC LAB</span></div><span class="badge">LOCAL · READ ONLY</span></div></header>
+<main>
+<div class="hero"><div><p class="eyebrow">ENGINEERING CONTEXT, MADE VISIBLE</p><h1>在修改之前，看清规则。</h1><p class="lede">从计划修改的路径出发，探索规范候选、Requirement 依赖，以及 Router 实际编译的上下文。</p></div><p class="hero-note">这是解释界面，不是激活工具。<br>所有选择仅用于当前预览。</p></div>
+<div class="steps" aria-label="预览流程"><div class="step"><span class="num">01</span><b>计划路径</b><small>本次准备修改什么</small></div><div class="step"><span class="num">02</span><b>候选规范</b><small>路径匹配，不等于语义适用</small></div><div class="step"><span class="num">03</span><b>依赖闭包</b><small>直接选择 + 必需上下文</small></div><div class="step"><span class="num">04</span><b>Context capsule</b><small>经摘要校验的精确原文</small></div></div>
+<div id="status" class="status" role="status" aria-live="polite">输入一个或多个计划路径，然后检查候选规范。</div>
+<div class="layout">
+<aside class="panel sidebar"><form id="paths-form"><label class="label" for="paths">计划修改的文件路径</label><textarea id="paths" class="field" spellcheck="false" placeholder="service/main.go&#10;README.md" aria-describedby="path-help"></textarea><p id="path-help" class="hint">每行一个仓库相对路径，最多 8 个。文件可以尚未创建。不展开通配符。</p><button id="inspect" class="primary" type="submit">检查路径 →</button></form>
+<div class="budget"><label class="label" for="budget">Capsule 预算</label><select id="budget" class="field"><option value="32768">32 KiB · Router 默认预算</option><option value="16384">16 KiB</option><option value="8192">8 KiB</option><option value="1024">1 KiB · 探索超限行为</option></select><p class="hint">超限会失败，不截断规范。此界面不能提高正式 Router 的预算。</p></div>
+<div class="boundary"><strong>预览不授予执行权限</strong>不会创建 receipt、运行 Hook 或写入仓库。正式激活仍需任务理由、适用性判断及原有校验。</div>
+<p class="hint">每次请求重新验证本地源。页面没有后台自动刷新；源变更后请重新检查路径。</p>
+</aside>
+<div class="stack">
+<section class="panel" aria-labelledby="spec-heading"><div class="section-head"><div><h2 id="spec-heading">候选 Specs</h2><p class="hint">卡片是选择提示，不是规范原文。按当前任务语义勾选需要预览的 Requirement。</p></div><span id="spec-count" class="pill">—</span></div><div id="specs" class="spec-list"><div class="empty">路径检查后，候选规范会显示在这里。</div></div></section>
+<section class="panel" aria-labelledby="closure-heading"><div class="section-head"><div><h2 id="closure-heading">依赖如何进入上下文</h2><p class="hint">箭头从 Requirement 指向它依赖的 Requirement。整份规范模式单独列出。</p></div></div><div class="metrics"><div class="metric"><span>直接选择</span><b id="direct-count">0</b></div><div class="metric"><span>依赖 Requirement</span><b id="dependency-count">0</b></div><div class="metric"><span>整份 Spec</span><b id="whole-count">0</b></div></div><div id="graph" class="graph" tabindex="0" aria-label="依赖图，可横向滚动"></div><details id="closure-details"><summary>查看完整依赖与精确源码范围</summary><div id="records" class="records"></div></details><details><summary>Mermaid 源码</summary><pre id="mermaid-source" class="digest"></pre></details></section>
+<section class="panel" aria-labelledby="capsule-heading"><div class="section-head"><div><h2 id="capsule-heading">精确 Context capsule</h2><p id="capsule-size" class="hint">尚未选择 Requirement。空选择不表示“没有适用规范”。</p></div><div class="toolbar"><label><input id="wrap" type="checkbox" checked> 自动换行</label><button id="copy" class="secondary" disabled>复制原文</button></div></div><progress id="meter" class="meter" max="32768" value="0" aria-label="Capsule 预算占用"></progress><pre id="capsule" class="capsule" tabindex="0">选择 Requirement 后查看真实 Router 的编译结果。</pre><div id="capsule-digest" class="digest"></div></section>
+<section class="panel" aria-labelledby="source-heading"><div class="section-head"><div><h2 id="source-heading">这次预览来自哪里</h2><p class="hint">HEAD 只标识已提交代码。下方源摘要绑定本次读取的本地规范；它不是整个工作树快照。</p></div></div><div id="provenance" class="source-grid"><p class="hint">尚未读取本地规范。</p></div><details><summary>查看源文件摘要</summary><pre id="source-files" class="digest"></pre></details></section>
+</div></div><p class="foot">Spec Lab · 实验性、可丢弃的阅读界面。关闭本地进程即可丢弃视图；规范、决定和证据仍由原文件持有。</p>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const token = location.hash.slice(1);
+if (token) history.replaceState(null, "", location.pathname);
+let sequence = 0, pending = null, currentPaths = [], selected = new Set(), whole = new Set(), lastText = "";
+function element(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+function status(text, error = false) { $("status").textContent = text; $("status").className = error ? "status error" : "status"; }
+function resetResult() {
+  lastText = ""; $("copy").disabled = true;
+  $("capsule").textContent = "暂无当前有效预览。请检查路径并选择 Requirement。";
+  $("capsule-size").textContent = "空选择不等于没有适用规范。";
+  $("capsule-digest").textContent = ""; $("meter").value = 0;
+  for (const id of ["direct-count", "dependency-count", "whole-count"]) $(id).textContent = "0";
+  $("graph").replaceChildren(); $("records").replaceChildren(); $("mermaid-source").textContent = "";
+  $("provenance").replaceChildren(element("p", "尚无当前有效源快照。", "hint")); $("source-files").textContent = "";
+}
+function invalidatePaths() {
+  sequence++; if (pending) pending.abort(); pending = null;
+  currentPaths = []; selected.clear(); whole.clear(); $("inspect").disabled = false;
+  $("specs").replaceChildren(element("div", "路径已变化，请重新检查。", "empty")); $("spec-count").textContent = "—";
+  resetResult(); status("路径尚未检查，旧预览已撤下。");
+}
+function checkbox(id, title, detail, checked, change) {
+  const label = element("label", undefined, "req");
+  const input = document.createElement("input"); input.type = "checkbox"; input.checked = checked; input.dataset.key = id;
+  input.addEventListener("change", () => change(input.checked));
+  const content = element("span"); content.append(element("code", id), element("span", title, "title"), element("span", detail, "activation"));
+  label.append(input, content); return label;
+}
+function renderSpecs(specs) {
+  const activeKey = document.activeElement?.dataset?.key;
+  $("specs").replaceChildren(); $("spec-count").textContent = `${specs.length} candidates`;
+  if (!specs.length) $("specs").append(element("div", "这些路径没有匹配的已安装 Spec。此结果不替代正式的适用性判断。", "empty"));
+  for (const spec of specs) {
+    const card = element("div", undefined, "spec"), top = element("div", undefined, "spec-top");
+    top.append(element("code", spec.id), element("span", `v${spec.version}`, "version"));
+    const desc = element("p", spec.description, "spec-desc"); desc.append(element("span", spec.applies_to.join(" · "), "scope"));
+    card.append(top, desc);
+    if (spec.routing_mode === "whole-spec") {
+      card.append(checkbox(spec.id, "Legacy · 整份规范预览", "没有 Requirement 索引。选择后按 Router 的整份规范依赖规则编译。", whole.has(spec.id), checked => {
+        checked ? whole.add(spec.id) : whole.delete(spec.id); preview();
+      }));
+    }
+    for (const req of spec.cards) {
+      const label = checkbox(req.id, req.title, req.activation, selected.has(req.id), checked => {
+        checked ? selected.add(req.id) : selected.delete(req.id); preview();
+      });
+      label.lastChild.append(element("span", `Published: ${req.automated_enforcement.published} · Effective: ${req.automated_enforcement.effective}`, "level"));
+      card.append(label);
+    }
+    $("specs").append(card);
+  }
+  if (activeKey) for (const input of $("specs").querySelectorAll("input")) if (input.dataset.key === activeKey) input.focus();
+}
+function svgNode(tag, attrs, text) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function renderGraph(data) {
+  $("graph").replaceChildren(); $("records").replaceChildren(); $("mermaid-source").textContent = "";
+  const byId = new Map(data.resolved.map(item => [item.id, item]));
+  const graphIds = new Map(data.resolved.map((item, i) => [item.id, `N${i}`]));
+  $("mermaid-source").textContent = ["flowchart RL", ...data.resolved.map(item => `    ${graphIds.get(item.id)}["${item.id}"]`), ...data.edges.map(edge => `    ${graphIds.get(edge.from)} --> ${graphIds.get(edge.to)}`)].join("\n");
+  $("direct-count").textContent = data.direct.length;
+  $("dependency-count").textContent = data.resolved.filter(item => item.source !== "direct").length;
+  $("whole-count").textContent = data.whole_specs.length;
+  for (const record of data.resolved) {
+    const row = element("div", undefined, "record");
+    row.append(element("code", `${record.id} · ${record.source}`));
+    row.append(element("p", `依赖：${record.context_dependencies.join(", ") || "无"}`));
+    const owner = data.provenance.sources.specs.find(s => s.path.endsWith(`/${record.spec_id}.md`));
+    row.append(element("p", record.path || (owner ? owner.path : record.spec_id)));
+    row.append(element("code", `block [${record.block.start_byte}, ${record.block.end_byte}) · SHA-256 ${record.block.sha256}`));
+    row.append(element("p", `Verification [${record.verification.start_byte}, ${record.verification.end_byte}) · SHA-256 ${record.verification.sha256}`));
+    $("records").append(row);
+  }
+  for (const spec of data.whole_specs) $("records").append(element("div", `Whole Spec: ${spec}（包含整份规范依赖闭包）`, "record"));
+  if (!byId.size) { $("graph").append(element("div", data.whole_specs.length ? "整份规范模式：请查看完整列表及 capsule。" : "选择 Requirement，查看它如何引入依赖。", "empty")); return; }
+  if (byId.size > 24) { $("graph").append(element("div", "节点超过 24 个。使用下方完整列表阅读；capsule 没有被截断。", "empty")); return; }
+  const levels = new Map();
+  function level(id) { if (levels.has(id)) return levels.get(id); const deps = byId.get(id).context_dependencies; const n = deps.length ? 1 + Math.max(...deps.map(level)) : 0; levels.set(id, n); return n; }
+  const columns = new Map(), position = new Map();
+  for (const item of data.resolved) { const col = level(item.id), row = columns.get(col) || 0; columns.set(col, row + 1); position.set(item.id, [24 + col * 290, 24 + row * 98]); }
+  const width = 48 + (Math.max(...levels.values()) + 1) * 290, height = 48 + Math.max(...columns.values()) * 98;
+  const svg = svgNode("svg", {viewBox: `0 0 ${width} ${height}`, width, role:"img", "aria-label":"Requirement 依赖图，箭头指向所需依赖"});
+  svg.append(svgNode("title", {}, "Requirement 依赖关系"));
+  const defs = svgNode("defs", {}), marker = svgNode("marker", {id:"arrow", viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:6, markerHeight:6, orient:"auto"});
+  marker.append(svgNode("path", {d:"M 0 0 L 10 5 L 0 10 z", fill:"#8aa497"})); defs.append(marker); svg.append(defs);
+  for (const edge of data.edges) { const from = position.get(edge.from), to = position.get(edge.to); if (!from || !to) continue; const x1=from[0], y1=from[1]+34, x2=to[0]+250, y2=to[1]+34; svg.append(svgNode("path", {d:`M${x1},${y1} C${x1-20},${y1} ${x2+20},${y2} ${x2},${y2}`, class:"edge", "marker-end":"url(#arrow)"})); }
+  for (const item of data.resolved) { const [x,y]=position.get(item.id); svg.append(svgNode("rect", {x,y,width:250,height:70,rx:8,class:item.source === "direct" ? "node direct" : "node"})); svg.append(svgNode("text", {x:x+14,y:y+27}, item.id)); svg.append(svgNode("text", {x:x+14,y:y+50,class:"node-label"}, item.source === "direct" ? "直接选择" : "依赖引入")); }
+  $("graph").append(svg);
+}
+function renderProvenance(p) {
+  $("provenance").replaceChildren();
+  const fields = [["CATALOG", `${p.catalog.id}\nv${p.catalog.version}\n${p.catalog.revision}`], ["LOCAL SOURCE", `HEAD: ${p.git.head || "unavailable"}\nDirty: ${p.git.dirty === null ? "unknown" : p.git.dirty}\nChecked: ${p.checked_at}`], ["ENGINE", `Router ${p.engine.router_version} · Protocol ${p.engine.protocol_version}\nSHA-256 ${p.engine.sha256}`], ["SOURCE SET SHA-256", p.source_set_sha256]];
+  for (const [label,value] of fields) { const field=element("div"); field.append(element("h3", label), element("p", value)); $("provenance").append(field); }
+  $("source-files").textContent = JSON.stringify(p.sources, null, 2);
+}
+function render(data) {
+  renderSpecs(data.specs); renderGraph(data); renderProvenance(data.provenance);
+  if (data.capsule) {
+    const c=data.capsule; lastText=c.text; $("capsule").textContent=c.text; $("copy").disabled=false;
+    $("meter").max=c.budget_bytes; $("meter").value=c.bytes;
+    $("capsule-size").textContent=`${c.bytes.toLocaleString()} / ${c.budget_bytes.toLocaleString()} bytes · ${c.mode} · 未截断`;
+    $("capsule-digest").textContent=`SHA-256 ${c.sha256}`;
+  }
+  status(data.capsule ? "预览已编译。没有创建激活 receipt，也没有修改仓库。" : "候选已验证。勾选需要探索的 Requirement；这不会正式激活规范。");
+}
+async function preview() {
+  if (!currentPaths.length) return;
+  const own=++sequence; if(pending) pending.abort(); pending=new AbortController(); resetResult();
+  status("正在验证本地源并计算预览…"); $("inspect").disabled=true;
+  try {
+    const response=await fetch("/api/preview", {method:"POST", headers:{"Content-Type":"application/json", "X-Explain-Token":token}, signal:pending.signal, body:JSON.stringify({paths:currentPaths,requirements:[...selected],whole_specs:[...whole],budget_bytes:Number($("budget").value)})});
+    const data=await response.json(); if(own!==sequence) return;
+    if(!response.ok) throw new Error(data.error || "无法生成预览。");
+    render(data);
+  } catch(error) {
+    if(own!==sequence || error.name==="AbortError") return;
+    resetResult(); status(error.message,true);
+  } finally { if(own===sequence) {$("inspect").disabled=false; pending=null;} }
+}
+$("paths-form").addEventListener("submit", event=>{event.preventDefault();currentPaths=$("paths").value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);selected.clear();whole.clear();$("specs").replaceChildren(element("div","正在读取候选…","empty"));if(!currentPaths.length){invalidatePaths();status("请输入至少一个路径。",true);return;}preview();});
+$("paths").addEventListener("input", invalidatePaths);
+$("budget").addEventListener("change", preview);
+$("wrap").addEventListener("change", ()=>$("capsule").classList.toggle("nowrap",!$("wrap").checked));
+$("copy").addEventListener("click", async()=>{try{await navigator.clipboard.writeText(lastText);status("已复制精确原文。复制结果不是激活 receipt。");}catch{status("浏览器未授予剪贴板权限。可在原文框内手动选择复制。",true);}});
+if(!token) status("请从 CLI 打印的完整本地 URL 打开页面（包含 # 后的访问令牌）。",true);
+</script>
+</body>
+</html>
