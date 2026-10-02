@@ -5,6 +5,9 @@ description: 为工程决策创建或维护 Research、专题证据与 Synthesis
 
 # Engineering Research
 
+撰写、改写或评审文档正文前，读取并应用 [受控技术写作](references/controlled-writing.md)。
+先用通用规则，再用当前制品对应的小节；保留现有语言选择和生命周期门禁。
+
 把决策相关未知转化为可审计、可多轮深化的多文档证据包。输出有界的
 Synthesis；只有 Research Owner 明确授权后才封存并交给 ADR 或实施计划。
 

@@ -5,6 +5,9 @@ description: 撰写、重构或评审 Architecture、Internals、模块设计与
 
 # Detailed Design
 
+撰写、改写或评审文档正文前，读取并应用 [受控技术写作](references/controlled-writing.md)。
+先用通用规则，再用当前制品对应的小节；保留现有语言选择和生命周期门禁。
+
 把代码、既有设计和工程约束整理成工程师能够阅读、实现和维护的技术文档。
 默认产物是一份聚焦的 Markdown 文档；不因主题复杂、章节较多或评审项较多自动创建
 目录、文档包、manifest、ID 或生命周期状态。
