@@ -136,6 +136,25 @@ docs/agent-guides/README.md
 `audit` 显式使用共享引擎，
 enforcement 为 CLI/advisory，不声称原生拦截写入。
 
+## 受控技术写作入口
+
+当前源码的 Core `1.5.5` 与 Codex adapter `2.4.2` 增加显式写作路由，尚未发布。
+新建 Codex `AGENTS.md` 和共享 project Skill 会要求：撰写、修订或评审工程正文前，
+先解析负责该工作的专业 Skill，再读取该 Skill 内的 `references/controlled-writing.md`。
+此路径相对于专业 Skill，不相对于目标仓库或共享 project Skill。
+
+规则正文仍由[共用写作指导](controlled-writing.md)及其专业 Skill 分发副本持有。
+Bootstrap 不向项目复制该文件，不安装专业 Skill，也不向 Catalog 添加 `writing/*`。
+这是 STE-inspired 写作指导，不是完整 ASD-STE100 合规验证。专业 Skill 或指导缺失时，
+报告缺口并沿用项目约定；不能为了写作风格自动安装组件或创建治理制品。
+
+Bootstrap 保留已有 `AGENTS.md`，不会静默追加路由。显式 upgrade 只替换仍等于
+已记录 `installed_sha256` 的旧 seed；定制的 `AGENTS.md` 保留，定制的生成型 Core
+Skill 报告 conflict 并要求显式合并。缺少写作路由本身不增加新的校验错误或审批门禁。
+旧项目必须采用包含本改动的 RF 源码或后续发行版，再按预览迁移；升级用户级安装
+不会自动修改任何项目。Codex `AGENTS.md` 的 100 行上限和 Core Skill 的 120 行
+预算保持不变。
+
 ## 能力与 enforcement
 
 adapter 能力由 `adapter list` 的结构化输出声明：
@@ -158,7 +177,8 @@ adapter 能力由 `adapter list` 的结构化输出声明：
 
 `docs/.engineering/harness.json` 记录独立版本面和每个文件的唯一 owner：
 
-下例使用当前源码的 Core `1.5.4`（待发布）。已发布的 `0.11.1` 使用 Core `1.5.3`。
+下例使用当前源码的 Core `1.5.5` 和 Codex `2.4.2`（待发布）。已发布的 `0.11.1`
+使用 Core `1.5.3` 和 Codex `2.4.1`。
 
 ```json
 {
@@ -169,12 +189,12 @@ adapter 能力由 `adapter list` 的结构化输出声明：
     "version": "0.11.1"
   },
   "core": {
-    "version": "1.5.4"
+    "version": "1.5.5"
   },
   "adapters": [
     {
       "id": "codex",
-      "version": "2.4.1",
+      "version": "2.4.2",
       "enforcement": "native"
     },
     {
@@ -229,8 +249,8 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 - 定制的 repository document：保留原字节并清除不可信模板 provenance；
 - schema 2 的 Codex profile 映射为 `codex@2.0.0` adapter；
 - 安装唯一的 Core activation engine，并在来源可证明时把旧 Router 改成薄 adapter；
-- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.5.4`、Codex
-  `2.4.1`、Claude `1.3.1`、Portable `1.3.2` 时按已记录 provenance 替换生成文件并记录
+- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.5.5`、Codex
+  `2.4.2`、Claude `1.3.1`、Portable `1.3.2` 时按已记录 provenance 替换生成文件并记录
   组件 migration；
 - Spec manifest、lock、managed Markdown 与 Catalog 版本不参与 Harness migration；
 - 写入后 validation 失败：恢复全部触碰文件并清理本次创建的空目录；
