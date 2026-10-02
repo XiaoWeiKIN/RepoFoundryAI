@@ -183,6 +183,17 @@ python3 <skill-dir>/scripts/benchctl.py --repo . reindex
 11. 把 `BR-NNN` 与 Manifest payload SHA-256 交给下游消费者。
    优先用 `evidence-ref` 生成已验真的标准引用。
 
+## 让测量结果便于判断
+
+Summary 先回答本次测量支持什么、相对预声明规则是否通过，以及适用的版本、负载
+和不确定性。对比旧 Run 时先检查协议与环境可比性；不兼容时列出差异，不直接排名。
+用明确主语和一致术语区分测量结果、机制解释和外推，不用 seal 或退出码代替结论。
+
+复用 Result 的 Summary、Interpretation 与 Handoff。图表按原始样本和声明的统计
+方法生成，保留单位、样本量、离散程度与阈值；交互筛选不能改变正式 outcome。
+假设模拟与实测分开标注。附加视图引用 Run、revision 和原始证据，封存后在包外
+生成阅读视图，不修改 sealed bundle。详见 [Result 契约](references/contract.md#result-contract)。
+
 ## 封存规则
 
 - 允许 outcome：`passed`、`failed`、`inconclusive`、`errored`。

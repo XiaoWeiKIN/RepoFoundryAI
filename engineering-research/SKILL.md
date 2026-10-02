@@ -147,6 +147,17 @@ python3 <skill-dir>/scripts/researchctl.py --repo . conclude-research R-001 \
 schema 1 或 1.1 package 补齐缺失入口，并只更新带完整 `RCTL:NOTES` marker 的自动目录；
 没有 marker 的人工导航保持原字节不变，未链接文档仅报告 warning。
 
+## 让研究结论便于判断
+
+Synthesis 首屏回答当前问题，给出置信边界和会改变推荐的条件。后续交接先说明
+相对已知 Round 或 revision 新增了什么证据、哪些判断因此改变，再展开必要推理。
+没有可核对基线时报告当前认识，不猜测变化；负面证据和关键未知仍留在主阅读路径。
+
+沿用读者语言，以短句和一致术语区分观察与解释。Brief、连续 Analysis、Synthesis
+和证据索引各司其职，不再维护另一份结论摘要。用图解释机制，用交互视图检验假设
+边界；演示标明假设、来源与版本，不能替代实验。源变化后重新核对派生视图，
+保留 sealed 历史。详见 [Synthesis 契约](references/research.md#synthesis)。
+
 ## 工作流程
 
 1. 先检查仓库代码、测试、已有文档和权威外部来源。

@@ -24,7 +24,7 @@ executed_by: ""
 
 ## Summary
 
-<!-- REQUIRED: State what was run, whether execution completed, and the result relative to the predeclared rule. -->
+<!-- REQUIRED: State what was run, whether execution completed, and the result relative to the predeclared rule. Lead with the claim this Run supports, the tested workload and revisions, and material uncertainty or limits. Compare earlier Runs only when their protocols and environments support the comparison. -->
 
 ## Revisions and Environment
 

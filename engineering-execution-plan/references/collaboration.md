@@ -17,6 +17,9 @@ flowchart LR
 
 ## Shared interaction rules
 
+- Present the decision's observable consequence before internal terminology.
+  Use the reader's language and link the exact source constraints. For progress,
+  revision comparisons, or acceptance explanations, use [handoff.md](handoff.md).
 - Focus one round on one material tension. Closely coupled consequences may be
   discussed together when separating them would produce a false choice.
 - Start from a concrete scenario and two or three viable shapes. State the

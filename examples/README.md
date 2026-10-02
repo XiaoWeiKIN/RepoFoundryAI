@@ -250,6 +250,36 @@ Expected boundary: completing an EP does not automatically create an article.
 The article remains a derived narrative and never becomes the architecture
 source of truth.
 
+## Example 9: make each deliverable easy to understand and verify
+
+Keep using the Skill that owns the current work, and organize its explanation
+around the reader's task:
+
+| Skill | Explain first | Expand on demand |
+|---|---|---|
+| `$repo-foundry-ai` | Repository changes, preserved customizations, conflicts | Preview actions, paths, verification |
+| `$engineering-research` | Answer, confidence limits, evidence that could change it | Analysis, counterexamples, evidence index |
+| `$detailed-design` | System behavior, boundaries, tradeoffs | Representative flows, code and test mapping |
+| `$engineering-design` | Selected shape, cost, changes against a known revision | Reading map, failure cases, exact approval revision |
+| `$engineering-benchmark` | Rule outcome, workload, uncertainty, extrapolation limits | Comparability, raw samples, diagnostics, statistics |
+| `$engineering-execution-plan` | Behavior changes, actual verification, gaps, next action | Constraint mapping, acceptance records, rollback |
+| `$engineering-case-study` | Reusable judgment and adoption conditions | Mechanism, turning points, versioned evidence |
+
+```text
+Continue the current work. Lead your explanation with material changes,
+supporting evidence, and remaining limits, then expand detail as needed.
+Compare against a known review baseline when available; otherwise describe
+current facts. Reuse existing summaries and reading routes. Link key claims
+to evidence. Use diagrams for complex relationships or interactive demonstrations
+when parameter exploration helps, and identify assumptions. Do not add required
+documents or approval steps for these explanations.
+```
+
+Derive explanations from existing facts. Choose diagrams, interactive pages, or
+videos only when they help understanding; a media suite is not a default
+deliverable. Preserve sealed sources, identify source revisions in derived
+views, and recheck them when sources change.
+
 ## A complete six-Skill journey is optional
 
 One large feature can use every Skill, but each transition must be justified:

@@ -33,7 +33,7 @@ managed package members share one review and approval boundary.
 
 ## Design Summary
 
-<!-- REQUIRED: State the selected system shape, user-visible outcome, and validity conditions. -->
+<!-- REQUIRED: State the selected system shape, user-visible outcome, main tradeoff, and validity conditions in clear, consistent terms before internal detail. For a revision, explain material changes against a known baseline; do not invent one. Link deeper explanations and evidence from existing sections. -->
 
 ## Goals and Non-goals
 

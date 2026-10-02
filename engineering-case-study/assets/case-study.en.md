@@ -34,6 +34,10 @@ relates_to:
 This is a working scaffold, not a mandatory table of contents. Select a reader
 path from article-patterns.md, replace every heading with an engineering claim,
 and remove all comments.
+Use consistent terms and concrete subjects; retain conditions and counterexamples.
+Keep the diagram only when useful. Optional interactive or video explanations
+share the article's evidence revision and label assumptions; they add no required
+deliverable or independent source of truth.
 -->
 
 ## {{WHY_THIS_PROBLEM_MATTERED}}

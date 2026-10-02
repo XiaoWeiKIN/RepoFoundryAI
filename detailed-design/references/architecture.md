@@ -71,6 +71,17 @@ A strong architecture document usually moves through:
 
 This is an ordering heuristic, not a required outline. Remove sections that do not help the selected reader.
 
+Use concrete subjects and consistent names; preserve preconditions, exceptions,
+and the distinction between current and proposed behavior. On revision, explain
+the material change against a known source version before repeating stable
+background. If no comparison is available, state the current model.
+
+Choose representations by the question: diagrams for relationships, tables
+for comparable alternatives, and optional interactive views for parameter or
+failure exploration. State a demonstration's assumptions and source version;
+simulation does not prove implementation behavior. Recheck derived views when
+their sources change, keeping the document's existing fact owners authoritative.
+
 ## Explain abstractions through behavior
 
 For each core abstraction, answer:

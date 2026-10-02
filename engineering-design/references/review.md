@@ -19,6 +19,13 @@ the selected reader can:
 
 Also confirm:
 
+- the summary explains the observable outcome, main tradeoff, and validity
+  conditions before implementation detail;
+- revision comparisons name a known baseline and explain changed boundaries
+  and evidence; absent a baseline, the account describes only the current design;
+- diagrams and optional interactive demonstrations match the declared Design
+  revision, distinguish assumptions from implementation evidence, and link back
+  to the source model; a derived view cannot authorize a Design revision;
 - decision-relevant Research findings retain their confidence limits, negative
   evidence, remaining unknowns, and validity conditions;
 - proposed ADRs do not authorize a published durable choice;

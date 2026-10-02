@@ -35,11 +35,11 @@ This ExecPlan is a bounded living document. Keep current truth synchronized. Pre
 
 ## Purpose / Big Picture
 
-<!-- REQUIRED: Explain the user-visible capability, why it matters, and how someone can observe it working. -->
+<!-- REQUIRED: Explain the user-visible capability, why it matters, and how someone can observe it working. Lead with concrete behavior before internal terminology; retain conditions and limits. -->
 
 ## Current Snapshot
 
-<!-- REQUIRED: State the current milestone, what is true now, the exact next action, and any open question. Keep this section short enough for handoff. -->
+<!-- REQUIRED: State the current milestone, what is true now, the exact next action, and any open question. Distinguish implemented behavior from verified behavior. When a known review baseline matters, explain the change and its impact. Keep this section short enough for handoff; do not duplicate evidence or invent a baseline. -->
 
 - Latest checkpoint: none.
 - Current milestone: `<milestone or phase>`.

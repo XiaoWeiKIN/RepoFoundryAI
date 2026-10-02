@@ -591,9 +591,11 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-RepoFoundry `0.11.1` uses Harness schema `3`, Harness Core `1.5.3`, Codex
+The working tree uses Harness schema `3`, Harness Core `1.5.4` (unreleased), Codex
 adapter `2.4.1`, Claude adapter `1.3.1`, Portable adapter `1.3.2`, and
 activation protocol `2`.
+Published release `0.11.1` uses Core `1.5.3`; the new handoff guidance is staged
+for the next distribution release.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
 `upgrade --to 0.11.1 --apply`. Earlier schema `3` Core and adapter contracts
