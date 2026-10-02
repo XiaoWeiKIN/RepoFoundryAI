@@ -102,9 +102,11 @@ do not silently claim that no Specification applies.
 
 ## Complete with evidence
 
-Run validation proportional to risk. Explore reports outcome, verification,
-and unresolved risk in normal prose. Build and Governed use these labels so an
-activation decision remains auditable:
+Lead with outcomes, changes since a known baseline, and decision or verification
+gaps. Use clear, consistent terms; link claims to source revisions and evidence,
+noting dirty changes. Expand detail as needed; label assumptions in optional
+diagrams or interactive views. Run checks proportional to risk. Explore uses
+normal prose; Build and Governed retain these audit labels:
 
 - `Activated specifications:`
 - `Activated requirements:`
@@ -112,7 +114,7 @@ activation decision remains auditable:
 - `Exceptions:`
 - `Compatibility or migration:`
 
-Do not mark an execution plan complete until required checks pass and its
-evidence points at the verified revision. A Governed handoff must also include the
-latest ADR maintenance state when the repository contains the initialized
-Execution Plan control plane.
+Only mark plans complete with required checks and evidence at the verified
+revision. Include the latest ADR maintenance state in Governed handoffs when
+its control plane exists. Summaries and visuals grant no authority and add no
+required artifacts; recheck them when their sources change.

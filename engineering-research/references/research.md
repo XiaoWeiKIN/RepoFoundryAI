@@ -247,6 +247,20 @@ each load-bearing claim.
 A `review_ready` Synthesis is immutable until `new-round` returns it to draft.
 It is a review checkpoint, not a terminal lifecycle state.
 
+For a human handoff, lead with the answer, its confidence limits, and what
+would change the recommendation. When a known Round or revision is available,
+explain which new evidence changed or reinforced the conclusion; otherwise
+report current knowledge without inventing a comparison. Keep counterevidence
+and unresolved decision-relevant uncertainty visible in the main reading path.
+Use consistent terms and link claims to the relevant analysis and evidence.
+
+Diagrams may explain a mechanism; interactive views may explore assumptions.
+Label simulations and source revisions, and recheck derived views after source
+changes. They do not establish experimental results or Research approval.
+Reuse the existing Synthesis and topic reading routes instead of maintaining
+another conclusion document. These are authoring guidelines, not new sections,
+schema fields, or a reason to rewrite sealed evidence.
+
 ## Review, conclusion, and cancellation
 
 Before `mark-review-ready`:

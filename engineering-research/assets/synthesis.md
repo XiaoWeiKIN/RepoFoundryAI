@@ -25,7 +25,7 @@ recorded SHA-256.
 
 ## Executive Conclusion
 
-<!-- REQUIRED: Answer the research purpose directly and state whether the evidence is decision-ready. -->
+<!-- REQUIRED: Answer the research purpose directly and state whether the evidence is decision-ready. Lead with the answer, confidence limits, and conditions that could change the recommendation. When a known Round or revision provides a comparison, explain material evidence and conclusion changes without inventing a baseline. -->
 
 ## Supported Findings
 

@@ -158,6 +158,8 @@ adapter 能力由 `adapter list` 的结构化输出声明：
 
 `docs/.engineering/harness.json` 记录独立版本面和每个文件的唯一 owner：
 
+下例使用当前源码的 Core `1.5.4`（待发布）。已发布的 `0.11.1` 使用 Core `1.5.3`。
+
 ```json
 {
   "schema_version": 3,
@@ -167,7 +169,7 @@ adapter 能力由 `adapter list` 的结构化输出声明：
     "version": "0.11.1"
   },
   "core": {
-    "version": "1.5.3"
+    "version": "1.5.4"
   },
   "adapters": [
     {
@@ -227,7 +229,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
 - 定制的 repository document：保留原字节并清除不可信模板 provenance；
 - schema 2 的 Codex profile 映射为 `codex@2.0.0` adapter；
 - 安装唯一的 Core activation engine，并在来源可证明时把旧 Router 改成薄 adapter；
-- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.5.3`、Codex
+- schema 3 的旧 Core 与 adapter 版本保持可读；升级到 Core `1.5.4`、Codex
   `2.4.1`、Claude `1.3.1`、Portable `1.3.2` 时按已记录 provenance 替换生成文件并记录
   组件 migration；
 - Spec manifest、lock、managed Markdown 与 Catalog 版本不参与 Harness migration；

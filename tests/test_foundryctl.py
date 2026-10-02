@@ -1042,7 +1042,7 @@ class FoundryctlTestCase(unittest.TestCase):
             "--apply",
         )
         migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(migrated["core"]["version"], "1.5.3")
+        self.assertEqual(migrated["core"]["version"], "1.5.4")
         self.assertEqual(
             next(
                 adapter["version"]
@@ -1054,7 +1054,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
             [
-                "core-1.5.1-to-1.5.3",
+                "core-1.5.1-to-1.5.4",
                 "adapter-portable-1.3.0-to-1.3.2",
                 f"distribution-0.8.8-to-{foundryctl.REPO_FOUNDRY_VERSION}",
             ],

@@ -546,9 +546,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.11.1` 使用 Harness schema `3`、Harness Core `1.5.3`、Codex
+当前源码使用 Harness schema `3`、Harness Core `1.5.4`（待发布）、Codex
 adapter `2.4.1`、Claude adapter `1.3.1`、Portable adapter `1.3.2` 与激活协议
-`2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
+`2`；它们与 Engineering Specs Catalog 各自独立演进。已发布的 `0.11.1` 使用 Core
+`1.5.3`；新的交接指引随下一次发行提供。schema `1` 和 `2` 继续
 可读，但只有显式执行 `upgrade --to 0.11.1 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件

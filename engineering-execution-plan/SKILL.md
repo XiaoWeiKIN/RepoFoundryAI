@@ -42,6 +42,7 @@ Explore 的有界可逆工作和 Build 的生产修改默认使用线程内契�
 | 起草、决定、修订或替代 ADR | [adr.md](references/adr.md) |
 | ADR 健康、Decision View、capsule、合并预览或 History Pack | [adr.md](references/adr.md) 的对应章节 |
 | 创建或接手 ExecPlan、维护 Task 与验收 | [template.md](references/template.md) |
+| 向负责人解释进展、取舍或验收依据 | [handoff.md](references/handoff.md) |
 | 消费 Research / Synthesis | [research.md](references/research.md) |
 | 使用 sealed Benchmark 验收 | [benchmark.md](references/benchmark.md) |
 | 建立 Checkpoint、压缩或恢复历史 | [checkpoints.md](references/checkpoints.md) |
@@ -76,6 +77,10 @@ Explore 的有界可逆工作和 Build 的生产修改默认使用线程内契�
 根 EXECPLAN.md 应足以让没有历史会话的 Agent 接手：明确目的、当前事实、路径、
 独立可验证的里程碑、恢复方式和剩余阻塞。历史、完整日志和测量输出按需归入
 Checkpoint / artifacts，不能成为继续工作的默认阅读前置。
+
+面向负责人交接时，先说明行为变化、证据和未完成边界，再给准确下一步。按
+[handoff.md](references/handoff.md) 从现有制品生成所需阅读视图；沿用用户语言，
+解释术语，保留约束原文与证据入口。摘要不新增状态、审批或必须维护的文档。
 
 按 `status` 给出的 working_set、scope 与 completion 信号维护计划。规模超限先
 收敛当前事实和封存历史，不把长度、无活动时间或 ready_to_archive 当作完成证明。

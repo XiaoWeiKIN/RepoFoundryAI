@@ -26,3 +26,9 @@ Verification needed
 - Freshness: code links do not support the prose, target/current behavior is mixed, or no owner can detect drift.
 
 For architecture documentation, also check that a contributor can follow a real request/data/state flow and then reach the relevant implementation without first reverse-engineering the repository.
+
+Check the reading path by asking whether the intended reader can explain the
+observable behavior, identify a failure or invalidating condition, and locate
+the supporting evidence. A concise summary or polished diagram is not sufficient
+if it hides those boundaries. Compare revisions only against an identified
+baseline, and distinguish a demonstration's assumptions from observed behavior.

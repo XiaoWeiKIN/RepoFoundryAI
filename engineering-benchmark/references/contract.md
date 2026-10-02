@@ -163,6 +163,17 @@ interpretation must reconcile measurement, diagnostic, and source evidence or
 state the gap; a passing behavior gate alone does not establish causality.
 Conclusions are bounded by the tested versions, architecture, and workload.
 
+Lead the Summary with the supported claim, decision-rule outcome, and its
+limits. Before comparing Runs, check that protocols, workloads, and environments
+support the comparison; otherwise explain the differences without ranking them.
+Use consistent terminology to distinguish observations from causal interpretation.
+Charts must trace to raw samples and the declared aggregation, show units,
+sample counts, dispersion or uncertainty, and relevant thresholds. Interactive
+filters must not change the official outcome or hide contradictory observations.
+Label hypothetical simulations separately from measured data. A reading view
+generated after sealing lives outside the immutable bundle and references its
+Run and revisions; it must not modify the sealed Result or artifacts.
+
 These are authoring and scientific-review requirements within the existing
 Scenario and Result sections. They do not change schema or legacy bundle
 validation: benchctl checks structure and integrity, not causal validity or
