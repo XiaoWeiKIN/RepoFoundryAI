@@ -12,7 +12,9 @@ drawVisual=state=>{
   const defs=shape('defs',{}),marker=shape('marker',{id:'arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto'});
   marker.append(shape('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'#b8c8ca'}));defs.append(marker);svg.append(defs);
   const nodes=nodeLayout(ir,frame),positions=new Map(nodes.map(n=>[n.id,{x:n.x*760+20,y:n.y*280+15}]));
-  for(const e of ir.graph.edges){const a=positions.get(e.from),b=positions.get(e.to);svg.append(shape('line',{x1:a.x,y1:a.y-20,x2:b.x,y2:b.y-20,stroke:'#b8c8ca','marker-end':'url(#arrow)'}));}
+  // Connect rectangle boundaries, not detached points above the labels.
+  const port=(a,b)=>{const dx=b.x-a.x,dy=b.y-a.y;const t=Math.min(dx?75/Math.abs(dx):Infinity,dy?22.5/Math.abs(dy):Infinity);return {x:a.x+dx*t,y:a.y+dy*t};};
+  for(const e of ir.graph.edges){const pa=positions.get(e.from),pb=positions.get(e.to),a={x:pa.x+10,y:pa.y+22.5},b={x:pb.x+10,y:pb.y+22.5},start=port(a,b),end=port(b,a);svg.append(shape('line',{x1:start.x,y1:start.y,x2:end.x,y2:end.y,stroke:'#b8c8ca','marker-end':'url(#arrow)'}));}
   for(const n of nodes){const {x,y}=positions.get(n.id);svg.append(shape('rect',{x:x-65,y,width:150,height:45,rx:7,fill:n.selected?'#233a2f':'#17242d',stroke:n.selected?'#b6f289':'#70858c'}));svg.append(shape('text',{x:x-57,y:y+18,fill:'#edf3ed','font-size':Math.min(12,210/n.id.length),'font-family':'monospace'},n.id));svg.append(shape('text',{x:x-57,y:y+34,fill:'#b8c8ca','font-size':10},n.selected?'direct':'dependency'));}
   $('visual').append(svg);
 };
