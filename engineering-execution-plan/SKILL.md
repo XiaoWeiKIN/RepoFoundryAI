@@ -5,6 +5,9 @@ description: 创建和维护 ADR、ExecPlan、Task、Checkpoint、Bugfix 与 ADR
 
 # Engineering Execution Plan
 
+撰写、改写或评审文档正文前，读取并应用 [受控技术写作](references/controlled-writing.md)。
+先用通用规则，再用当前制品对应的小节；保留现有语言选择和生命周期门禁。
+
 把需要持久跟踪的工程决定与交付组织成可追溯、可恢复、可验证的仓库制品。
 方向已明确时推进实现和验收；Owner 的决定与证据完整性由各自门禁持有。
 
