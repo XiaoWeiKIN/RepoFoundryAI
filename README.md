@@ -164,6 +164,15 @@ Bootstrap never invents repository facts. Unknown commands, owners,
 architecture, SLOs, and security controls remain explicit `BOOTSTRAP_TODO`
 markers for maintainers to resolve.
 
+New Codex `AGENTS.md` and the shared project Skill route engineering prose to
+the owning professional Skill's `references/controlled-writing.md`. That path
+is relative to the resolved Skill, not the target repository. This is
+[STE-inspired authoring guidance](./references/controlled-writing.md), not full
+ASD-STE100 conformance. Bootstrap does not copy the guide or install professional
+Skills into the project. If the Skill or guide is unavailable, report the gap
+and follow project conventions. Existing `AGENTS.md` files remain unchanged;
+explicit upgrades replace only seeds whose recorded provenance permits it.
+
 ## Install once, enable each repository explicitly
 
 RepoFoundry has two independent scopes. The **distribution installation** puts
@@ -591,11 +600,11 @@ creates missing paths and preserves repository-owned files. An agent
 instruction file registered by an adapter must stay within that adapter's line
 budget. Codex `AGENTS.md` remains capped at 100 physical lines.
 
-The working tree uses Harness schema `3`, Harness Core `1.5.4` (unreleased), Codex
-adapter `2.4.1`, Claude adapter `1.3.1`, Portable adapter `1.3.2`, and
+The working tree uses Harness schema `3`, Harness Core `1.5.5` (unreleased), Codex
+adapter `2.4.2` (unreleased), Claude adapter `1.3.1`, Portable adapter `1.3.2`, and
 activation protocol `2`.
-Published release `0.11.1` uses Core `1.5.3`; the new handoff guidance is staged
-for the next distribution release.
+Published release `0.11.1` uses Core `1.5.3` and Codex `2.4.1`; the new handoff
+and writing-route guidance is staged for the next distribution release.
 Those versions evolve independently from the Engineering Specs Catalog.
 Schemas `1` and `2` stay readable but are changed only by an explicit
 `upgrade --to 0.11.1 --apply`. Earlier schema `3` Core and adapter contracts

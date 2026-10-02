@@ -5,9 +5,10 @@ description: "Apply this repository's RepoFoundry workflow to changes, formal re
 
 # RepoFoundry AI project workflow
 
-Use this Skill for repository changes, formal review, defect diagnosis,
-engineering contracts, Harness operations, or explicit RepoFoundry requests.
-Treat repository state as the source of truth; do not depend on a user-home installation path.
+Use this Skill when a task changes the repository, performs a formal review or
+defect diagnosis, evolves an engineering contract, operates the Harness, or
+explicitly requests RepoFoundry. Treat repository state as the source of truth;
+do not depend on a user-home installation path.
 
 ## Choose the activation depth
 
@@ -28,7 +29,8 @@ Treat repository state as the source of truth; do not depend on a user-home inst
 
 ## Establish the Harness contract
 
-1. Work from the repository root and read `docs/.engineering/harness.json` when it exists.
+1. Work from the repository root and read
+   `docs/.engineering/harness.json` when it exists.
 2. Validate the Harness when changing it or diagnosing its integrity. A missing
    Harness does not authorize setup: continue work supported by repository facts,
    and bootstrap only when requested. Ask for adapters only if that choice is missing.
@@ -72,17 +74,14 @@ Treat repository state as the source of truth; do not depend on a user-home inst
 Authority, destructive or external actions, security, data integrity, locked
 content, sealed evidence, and honest verification remain hard in every mode.
 
-Use available professional Skills instead of reproducing their lifecycle rules.
-Before writing, revising, or reviewing engineering prose, read the owning
-professional Skill's `references/controlled-writing.md`, relative to that Skill,
-not this repository. This is STE-inspired guidance, not full ASD-STE100 conformance.
-If the Skill or guide is unavailable, report the gap and follow project conventions;
-do not install Skills or create artifacts solely for writing style.
+When those professional workflows are available as separate Skills, invoke
+them instead of reproducing their lifecycle rules here.
 
 ## Classify and activate Engineering Specifications
 
-Before modifying a scoped path, performing formal code review, or evaluating explicit
-Spec conformance, use `.repo-foundry/engineering-specs/spec_router.py`, the canonical repository engine:
+Before modifying a scoped path, performing a formal code review, or evaluating
+explicit Spec conformance, use the canonical repository engine at
+`.repo-foundry/engineering-specs/spec_router.py`:
 
 1. Establish one stable adapter, session, and turn identity with `begin`.
 2. Continue bounded Explore work, or use `classify --mode build|governed
@@ -98,7 +97,8 @@ Spec conformance, use `.repo-foundry/engineering-specs/spec_router.py`, the cano
 7. Run `audit` before completion so changed paths and the handoff are checked
    against the recorded receipt.
 
-If the engine is absent, report that project Spec activation is unavailable; do not silently claim that no Specification applies.
+If the engine is absent, report that project Spec activation is unavailable;
+do not silently claim that no Specification applies.
 
 ## Complete with evidence
 
