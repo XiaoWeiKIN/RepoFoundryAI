@@ -5,6 +5,9 @@ description: 创建、评审、批准或修订受治理的 DD-NNN / Design Packa
 
 # Engineering Design
 
+撰写、改写或评审文档正文前，读取并应用 [受控技术写作](references/controlled-writing.md)。
+先用通用规则，再用当前制品对应的小节；保留现有语言选择和生命周期门禁。
+
 把“已经知道什么”翻译为“系统将如何工作”。当设计仍有多种合理形态时，先与用户
 共同探索场景、取舍和失效条件，再把收敛结果写入 Design。一个模块的多篇技术文档
 共享同一设计身份、评审边界和批准修订。Design approval 确认整套解释自洽，不代替
