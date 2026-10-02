@@ -207,8 +207,13 @@ class CanonicalRouterTests(unittest.TestCase):
     def test_canonical_index_drift_is_rejected(self) -> None:
         path = self.repo / self.router.REQUIREMENT_INDEX_PATH
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("Load when changing a shared or public name.", "Forged routing text."), encoding="utf-8")
-        with self.assertRaisesRegex(self.router.RouterError, "DRIFT"):
+        original = "Load when changing a shared or public name."
+        self.assertIn(original, text)
+        # Preserve the Activation shape so this exercises source/index drift,
+        # rather than the earlier syntactic validation gate.
+        changed = text.replace(original, "Load when changing an unrelated private name.")
+        path.write_text(changed, encoding="utf-8")
+        with self.assertRaisesRegex(self.router.RouterError, "ROUTER_REQUIREMENT_INDEX_METADATA_DRIFT"):
             self.preview()
 
     def test_canonical_legacy_whole_spec_and_overlap(self) -> None:
