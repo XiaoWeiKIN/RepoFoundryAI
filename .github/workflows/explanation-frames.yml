@@ -1,0 +1,27 @@
+name: explanation-frames
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: explanation-frames-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frames:
+    name: Explanation frame model (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Test deterministic presentation frames
+        run: node --test tests/explanation_frames.test.mjs

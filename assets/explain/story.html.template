@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="@@CSP@@">
+<title>RF / Explanation Studio</title>
+<style>
+:root{--bg:#0e161d;--panel:#17242d;--ink:#edf3ed;--muted:#b8c8ca;--line:#3a4c53;--accent:#b6f289;--amber:#fed194}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,sans-serif}header{padding:22px 5vw;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;font-size:12px;letter-spacing:.09em}main{max-width:1280px;margin:auto;padding:40px 28px}h1{font-size:clamp(26px,4vw,48px);line-height:1.16;letter-spacing:-.035em;margin:12px 0 18px}h2{font-size:21px;margin:0 0 14px}.eyebrow{font-size:12px;color:var(--accent);letter-spacing:.14em}.intro{max-width:750px;color:var(--muted)}.grid{display:grid;grid-template-columns:260px minmax(0,1fr);gap:24px;margin-top:30px}.panel{min-width:0;border:1px solid var(--line);border-radius:12px;padding:24px;background:var(--panel)}nav button{width:100%;text-align:left;margin-bottom:8px;border-color:transparent;color:var(--muted)}button{cursor:pointer;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:9px 13px;font:inherit;font-size:13px}button[aria-current="step"]{color:var(--accent);background:#233a2f;border-color:#4c6c54}button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.controls{display:flex;align-items:center;gap:14px;margin:24px 0 12px}input[type=range]{width:100%;accent-color:var(--accent)}.statement{font-size:clamp(20px,2.5vw,29px);line-height:1.45;margin:24px 0}.kind{font:11px ui-monospace,monospace;color:var(--amber);text-transform:uppercase}.small{font-size:12px;color:var(--muted)}.boundary{border-left:2px solid var(--amber);padding:8px 14px;margin:20px 0;color:var(--amber);font-size:13px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.75 ui-monospace,monospace;max-height:440px;overflow:auto}details{border-top:1px solid var(--line);padding-top:16px;margin-top:20px}summary{cursor:pointer;color:var(--muted);font-size:13px}.fact{padding:14px 0;border-bottom:1px solid var(--line)}.fact p{margin:4px 0}.digest{overflow-wrap:anywhere;font:11px/1.7 ui-monospace,monospace}.visual{margin-top:22px;overflow:auto}.visual canvas{max-width:100%;height:auto!important;display:block}.error{color:var(--amber)}footer{color:var(--muted);font-size:12px;margin-top:24px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px}.meta div{min-width:0}#evidence{padding:10px 0}.frame{font:12px ui-monospace,monospace;white-space:nowrap}
+@media(max-width:800px){main{padding:24px 16px}.grid{grid-template-columns:minmax(0,1fr)}nav{display:flex;overflow:auto;gap:8px}nav button{min-width:170px;margin-bottom:0}.panel{padding:18px}.meta{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style></head>
+<body><header><strong>REPOFOUNDRY / EXPLANATION STUDIO</strong><span>DERIVED · NO AUTHORITY</span></header>
+<main><div class="eyebrow">ONE SOURCE / MULTIPLE READING SURFACES</div><h1 id="title"></h1><p class="intro">Explore a captured Spec Lab result. The same source-backed statements drive this page, the dependency diagram, and the optional video composition.</p>
+<div class="grid"><aside class="panel"><nav id="steps" aria-label="Explanation steps"></nav><p class="small">Reading sequence, not a recording of execution time. Playback is off by default.</p></aside>
+<section class="panel" aria-label="Current scene"><div id="kind" class="kind"></div><h2 id="scene-title"></h2><p id="statement" class="statement"></p>
+<div class="controls"><button id="play">Play</button><input id="seek" type="range" min="0" value="0" aria-label="Explanation frame"><span id="frame" class="frame"></span></div>
+<div id="visual" class="visual"></div><p id="visual-note" class="small"></p>
+<div class="boundary">No activation receipt, approval, or execution authority. Source references are for inspection, not proof of approval.</div>
+<details><summary>Evidence for this scene</summary><div id="evidence"></div></details></section></div>
+<section class="panel" style="margin-top:24px"><h2>Inspect the full explanation</h2><div id="facts"></div>
+<div class="meta"><div><p class="small">CAPTURED SOURCE / NOT LIVE</p><pre id="provenance"></pre></div><div><p class="small">EXPLANATION SHA-256</p><p id="digest" class="digest"></p><p class="small">Hashes establish internal consistency, not authenticity or technical correctness. Regenerate after relevant source changes.</p></div></div>
+<details><summary>Exact capsule (never a replacement for formal activation)</summary><pre id="capsule"></pre></details>
+<details><summary>Complete embedded source snapshot</summary><pre id="snapshot"></pre></details></section>
+<footer>Disposable output. No remote assets, telemetry, automatic installation, or background freshness checks.</footer></main>
+<script type="application/json" id="ir">@@IR@@</script>
+@@VENDOR@@
+<script type="module">
+@@FRAME_MODEL@@
+const ir=JSON.parse(document.getElementById('ir').textContent);
+const $=id=>document.getElementById(id);
+let frame=0, playing=false, epoch=0, startFrame=0, raf=null;
+const el=(tag,text)=>{const n=document.createElement(tag);n.textContent=text;return n;};
+const resolve=path=>path.slice(1).split('/').reduce((v,k)=>v[k.replaceAll('~1','/').replaceAll('~0','~')],ir.source.snapshot);
+$('title').textContent=ir.subject.title;
+$('seek').max=ir.timeline.duration_frames-1;
+$('digest').textContent=ir.sha256;
+$('provenance').textContent=JSON.stringify(ir.source.snapshot.provenance,null,2);
+$('snapshot').textContent=JSON.stringify(ir.source.snapshot,null,2);
+$('capsule').textContent=ir.source.snapshot.capsule?.text ?? 'No capsule was compiled. Empty selection is not a formal applicability decision.';
+for(const s of ir.statements){const card=el('div','');card.className='fact';const tag=el('span',s.kind);tag.className='kind';card.append(tag,el('p',s.text),el('code',s.refs.join(' · ')));$('facts').append(card);}
+for(const [i,s] of ir.scenes.entries()){const b=el('button',s.title);b.addEventListener('click',()=>{stop();setFrame(s.from_frame);});b.dataset.index=i;$('steps').append(b);}
+let drawVisual=()=>{};
+@@VISUAL@@
+function setFrame(value){const state=atFrame(ir,value);frame=state.frame;$('seek').value=frame;$('frame').textContent=`${frame} / ${ir.timeline.duration_frames-1}`;$('kind').textContent=state.statements.map(s=>s.kind).join(' · ');$('scene-title').textContent=state.scene.title;$('statement').textContent=state.statements.map(s=>s.text).join(' ');$('evidence').replaceChildren();for(const s of state.statements)for(const ref of s.refs){const d=el('details','');d.append(el('summary',ref),el('pre',JSON.stringify(resolve(ref),null,2)));$('evidence').append(d);}for(const b of $('steps').children)b.setAttribute('aria-current',Number(b.dataset.index)===state.index?'step':'false');drawVisual(state);}
+function stop(){playing=false;if(raf!==null)cancelAnimationFrame(raf);raf=null;$('play').textContent='Play';}
+function tick(now){raf=null;if(!playing)return;const next=startFrame+Math.floor((now-epoch)*ir.timeline.fps/1000);setFrame(next);if(next>=ir.timeline.duration_frames-1){stop();return;}raf=requestAnimationFrame(tick);}
+$('play').addEventListener('click',()=>{if(playing){stop();return;}if(frame===ir.timeline.duration_frames-1)setFrame(0);playing=true;startFrame=frame;epoch=performance.now();$('play').textContent='Pause';raf=requestAnimationFrame(tick);});
+$('seek').addEventListener('input',()=>{stop();setFrame(Number($('seek').value));});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+setFrame(0);
+</script></body></html>

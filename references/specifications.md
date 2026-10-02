@@ -35,3 +35,7 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 需要查看路径如何匹配候选、Requirement 如何引入依赖、capsule 实际包含什么时，
 使用 [Spec 激活解释界面](spec-activation-explainer.md)。它复用本地 Router 的读取与
 编译函数，不创建 receipt，也不替代正式激活、授权或交接。
+
+要把同一份预览导出为图、离线 HTML、p5.js 交互视图或可选 Remotion 源码包，
+使用 [Explanation IR 与多种阅读界面](explanation-surfaces.md)。输出默认先预览，
+显式应用后写入新的可丢弃目录，不改变规范或激活状态。
