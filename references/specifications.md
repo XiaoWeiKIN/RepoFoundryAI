@@ -29,3 +29,9 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 依赖闭包自动补齐。`spec validate` 完全离线。Bootstrap
 不替换漂移的托管文件；显式 `spec sync/update --apply` 才能在预览后恢复
 `docs/agent-guides/managed/`。
+
+## 交互理解激活流程
+
+需要查看路径如何匹配候选、Requirement 如何引入依赖、capsule 实际包含什么时，
+使用 [Spec 激活解释界面](spec-activation-explainer.md)。它复用本地 Router 的读取与
+编译函数，不创建 receipt，也不替代正式激活、授权或交接。
