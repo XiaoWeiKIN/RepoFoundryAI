@@ -152,6 +152,14 @@ RepoFoundry AI 记录证据，但不接管项目自己的测量实现。
 Bootstrap 不会编造仓库事实。未知命令、Owner、架构、SLO 和安全控制会保留为
 `BOOTSTRAP_TODO`，等待维护者确认。
 
+当前源码新建的 Codex `AGENTS.md` 和共享 project Skill 会把工程正文写作路由到
+负责该工作的专业 Skill，并要求先读取其 `references/controlled-writing.md`。
+此路径相对于专业 Skill，不相对于目标仓库。这是
+[STE-inspired 写作指导](./references/controlled-writing.md)，不是完整 ASD-STE100
+合规验证。Bootstrap 不向项目复制指导正文，也不安装专业 Skill；缺少 Skill 或指导时
+报告缺口并沿用项目约定。已有 `AGENTS.md` 保持原样；显式升级只替换来源可证明
+未修改的旧 seed。此入口尚未随稳定版发布。
+
 ## 一次安装，逐仓库启用
 
 RepoFoundry 包含两个相互独立的作用域。**发行包安装**把 CLI 和可选的个人 Skill
@@ -546,10 +554,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-当前源码使用 Harness schema `3`、Harness Core `1.5.4`（待发布）、Codex
-adapter `2.4.1`、Claude adapter `1.3.1`、Portable adapter `1.3.2` 与激活协议
+当前源码使用 Harness schema `3`、Harness Core `1.5.5`（待发布）、Codex
+adapter `2.4.2`（待发布）、Claude adapter `1.3.1`、Portable adapter `1.3.2` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。已发布的 `0.11.1` 使用 Core
-`1.5.3`；新的交接指引随下一次发行提供。schema `1` 和 `2` 继续
+`1.5.3` 和 Codex `2.4.1`；新的交接与写作路由随下一次发行提供。schema `1` 和 `2` 继续
 可读，但只有显式执行 `upgrade --to 0.11.1 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件

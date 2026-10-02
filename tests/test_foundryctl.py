@@ -667,7 +667,7 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertEqual(
             manifest["adapters"],
-            [{"id": "codex", "version": "2.4.1", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.4.2", "enforcement": "native"}],
         )
         self.assertEqual(
             manifest["governance"],
@@ -677,7 +677,7 @@ class FoundryctlTestCase(unittest.TestCase):
             manifest["instruction_files"],
             foundryctl.instruction_files_for_versions(
                 foundryctl.CORE_HARNESS_VERSION,
-                (("codex", "2.4.1"),),
+                (("codex", "2.4.2"),),
             ),
         )
         self.assertEqual(
@@ -1042,7 +1042,7 @@ class FoundryctlTestCase(unittest.TestCase):
             "--apply",
         )
         migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(migrated["core"]["version"], "1.5.4")
+        self.assertEqual(migrated["core"]["version"], "1.5.5")
         self.assertEqual(
             next(
                 adapter["version"]
@@ -1054,7 +1054,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
             [
-                "core-1.5.1-to-1.5.4",
+                "core-1.5.1-to-1.5.5",
                 "adapter-portable-1.3.0-to-1.3.2",
                 f"distribution-0.8.8-to-{foundryctl.REPO_FOUNDRY_VERSION}",
             ],
@@ -1235,7 +1235,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(migrated["schema_version"], 3)
         self.assertEqual(
             migrated["adapters"],
-            [{"id": "codex", "version": "2.4.1", "enforcement": "native"}],
+            [{"id": "codex", "version": "2.4.2", "enforcement": "native"}],
         )
         self.assertEqual(
             migrated["governance"],
@@ -1366,7 +1366,7 @@ class FoundryctlTestCase(unittest.TestCase):
             migrated["core"]["version"],
             foundryctl.CORE_HARNESS_VERSION,
         )
-        self.assertEqual(migrated["adapters"][0]["version"], "2.4.1")
+        self.assertEqual(migrated["adapters"][0]["version"], "2.4.2")
         self.assertEqual(
             migrated["governance"],
             {"policy_schema": 1, "profile": "strict"},
@@ -1376,7 +1376,7 @@ class FoundryctlTestCase(unittest.TestCase):
             [
                 "components-add-engineering-design",
                 f"core-1.0.0-to-{foundryctl.CORE_HARNESS_VERSION}",
-                "adapter-codex-2.0.0-to-2.4.1",
+                "adapter-codex-2.0.0-to-2.4.2",
             ],
         )
         self.run_cli("validate", "--harness")
@@ -1411,7 +1411,7 @@ class FoundryctlTestCase(unittest.TestCase):
             [
                 "components-add-engineering-design",
                 f"core-1.0.0-to-{foundryctl.CORE_HARNESS_VERSION}",
-                "adapter-codex-2.0.0-to-2.4.1",
+                "adapter-codex-2.0.0-to-2.4.2",
             ],
         )
         self.run_cli("validate", "--harness")
@@ -1656,7 +1656,7 @@ class FoundryctlTestCase(unittest.TestCase):
             [item["id"] for item in migrated["applied_migrations"]],
             [
                 f"core-1.3.0-to-{foundryctl.CORE_HARNESS_VERSION}",
-                "adapter-codex-2.3.0-to-2.4.1",
+                "adapter-codex-2.3.0-to-2.4.2",
                 "adapter-claude-1.2.0-to-1.3.1",
                 f"adapter-portable-1.2.0-to-{foundryctl.PORTABLE_ADAPTER_VERSION}",
                 f"distribution-0.4.0-to-{foundryctl.REPO_FOUNDRY_VERSION}",

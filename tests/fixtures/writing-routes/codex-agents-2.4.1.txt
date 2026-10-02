@@ -28,9 +28,6 @@
 - Promote to Build for bounded production work; keep a concise intent/path/acceptance contract and activate applicable Specs.
 - Promote to Governed for public contracts, security, data, irreversible operations, reliability claims, releases, or durable decisions.
 - In Governed, use Research only for decision-relevant unknowns, ADR for durable choices, and ExecPlan for resumable delivery.
-- For engineering prose, use the owning professional Skill and read its `references/controlled-writing.md` before writing, revision, or review.
-  Resolve that path relative to the Skill, not this repository. The guide is STE-inspired, not full ASD-STE100 conformance.
-  If the Skill or guide is unavailable, report the gap and follow project conventions; do not install Skills or create artifacts solely for writing style.
 - Never accept or reject an ADR without explicit authority.
 - Record a Bugfix only when persistent defect tracking is explicitly requested.
 - Convert repeated review feedback into tests, lint rules, types, or documented invariants.
