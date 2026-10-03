@@ -7,8 +7,14 @@
       "expected_output": "Produces one focused architecture document organized around the query lifecycle, core abstractions, boundaries, extension points, and a late code map; it does not create a DD package or mirror the repository tree.",
       "files": [],
       "assertions": [
-        {"name": "flow-first", "description": "Uses a real query or data lifecycle as the narrative spine before introducing source locations."},
-        {"name": "single-document-default", "description": "Defaults to one Markdown document and does not generate role-based directories, a manifest, or DD identities."}
+        {
+          "name": "flow-first",
+          "description": "Uses a real query or data lifecycle as the narrative spine before introducing source locations."
+        },
+        {
+          "name": "single-document-default",
+          "description": "Defaults to one Markdown document and does not generate role-based directories, a manifest, or DD identities."
+        }
       ]
     },
     {
@@ -17,8 +23,14 @@
       "expected_output": "Uses module plus contract concerns selectively, making state ownership, transitions, failure semantics, compatibility, and verification explicit without forcing unrelated architecture sections.",
       "files": [],
       "assertions": [
-        {"name": "contract-depth", "description": "Defines ownership and invariants deeply enough to constrain implementation."},
-        {"name": "selective-structure", "description": "Omits irrelevant template sections rather than filling a universal checklist."}
+        {
+          "name": "contract-depth",
+          "description": "Defines ownership and invariants deeply enough to constrain implementation."
+        },
+        {
+          "name": "selective-structure",
+          "description": "Omits irrelevant template sections rather than filling a universal checklist."
+        }
       ]
     },
     {
@@ -27,8 +39,14 @@
       "expected_output": "Reports evidence-backed findings ordered by engineering risk, including mental-model, ownership, boundary, evolution, verification, and freshness gaps, without mutating the document.",
       "files": [],
       "assertions": [
-        {"name": "risk-first-review", "description": "Leads with actionable findings and concrete failure modes rather than a prose rewrite."},
-        {"name": "read-only-boundary", "description": "Does not edit the document when only a review was requested."}
+        {
+          "name": "risk-first-review",
+          "description": "Leads with actionable findings and concrete failure modes rather than a prose rewrite."
+        },
+        {
+          "name": "read-only-boundary",
+          "description": "Does not edit the document when only a review was requested."
+        }
       ]
     },
     {
@@ -37,7 +55,10 @@
       "expected_output": "Routes governed DD identity, manifest, and lifecycle work to engineering-design instead of inventing those mechanics inside detailed-design.",
       "files": [],
       "assertions": [
-        {"name": "governance-boundary", "description": "Hands explicit DD lifecycle work to engineering-design."}
+        {
+          "name": "governance-boundary",
+          "description": "Hands explicit DD lifecycle work to engineering-design."
+        }
       ]
     },
     {
@@ -46,8 +67,114 @@
       "expected_output": "Uses a root README and only the needed reader-oriented Technical Architecture Docs routes such as how-it-works, core-concepts, subsystems, extension-points, deep-dives, and contributor-guide; it does not create concern buckets.",
       "files": [],
       "assertions": [
-        {"name": "reader-oriented-package", "description": "Organizes multiple documents by how contributors learn and navigate the architecture."},
-        {"name": "no-concern-buckets", "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."}
+        {
+          "name": "reader-oriented-package",
+          "description": "Organizes multiple documents by how contributors learn and navigate the architecture."
+        },
+        {
+          "name": "no-concern-buckets",
+          "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "项目文档默认中文。请把以下合成设计说明整理成面向新 contributor 的一段架构解释，不扩展未给出的事实：数据库是权威数据源；缓存只加速读取；缓存读失败时服务回退数据库；这会增加数据库负载；影响尚未测量。读者懂数据库但不了解本项目。不要建文档包。",
+      "expected_output": "Writes natural Chinese around the read path, explains the cache/database roles and fallback causality, retains the unmeasured impact, and keeps the result focused without boilerplate or a new artifact.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "reader-task-and-flow",
+          "description": "Starts with the system model for this reader, then connects normal and failed reads; does not start from files or fragment every sentence into bullets."
+        },
+        {
+          "name": "chinese-and-uncertainty",
+          "description": "Keeps Chinese and the unmeasured impact; does not add a numeric benefit or claim measured reliability."
+        },
+        {
+          "name": "no-extra-artifacts",
+          "description": "Does not create an Audience brief, mandatory sections, manifest, or DD lifecycle."
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Polish this synthetic unaccepted design proposal using Google-style clarity and STE-inspired precision. Preserve the quoted requirement exactly: `On a cache-read failure, the service SHOULD read from the database unless the request deadline has expired.` Outside the quote, explain the proposal, which is not approved, implemented, or tested. The project requires the heading `Proposed Behavior`.",
+      "expected_output": "Improves surrounding explanation without editing the quoted requirement, its exception, project-required heading, or proposal state. Does not use present-tense guidance or advice about should to manufacture authority.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "modal-and-quote-fidelity",
+          "description": "Preserves SHOULD and the deadline exception byte-for-byte inside the quote; no escalation to MUST or weakening to MAY."
+        },
+        {
+          "name": "project-heading-and-status",
+          "description": "Retains Proposed Behavior despite sentence-case defaults and explicitly retains unaccepted, unimplemented, untested state."
+        },
+        {
+          "name": "no-conformance-claim",
+          "description": "Does not claim full ASD-STE100 compliance or Google endorsement."
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "请只改进这段合成操作说明，不执行命令。接口事实：工作目录为项目根目录；`tool plan --target <environment>` 只读预览；只有用户授权后才可 `tool apply --target <environment>`；只有 apply 成功后运行 `tool verify --target <environment>`；任何失败都停止并记录，不自动重试；environment 由操作者提供。三个命令都还没实际运行。给出可跟随的步骤。",
+      "expected_output": "Produces ordered Chinese steps with working directory, placeholder meaning, preview/apply/verify distinction, authorization, success prerequisites, and stop branches. Labels examples unexecuted without trying the synthetic commands.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "procedure-order",
+          "description": "Places prerequisites and conditions before dependent actions and expected results after them; explains environment."
+        },
+        {
+          "name": "authority-and-stop",
+          "description": "Does not convert documentation into apply permission, skip the verify prerequisite, or invent retry/recovery commands."
+        },
+        {
+          "name": "no-false-execution",
+          "description": "Does not execute commands or describe the examples as tested."
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "只评审以下合成说明，不生成文件、网页、图片或视频：『绿色表示完成，红色表示阻塞；鼠标悬停看证据。右侧无标签滑块控制播放，键盘不可达。事实仅在动画中显示，视频没有字幕或转录。团队仍需要读者理解失败条件，但正文没有。』指出阻碍读者判断的问题和最小修正；你还没有运行界面。",
+      "expected_output": "Returns read-only findings about missing failure conditions and inaccessible access to facts, controls, and evidence. Proposes text equivalents, explicit status labels, keyboard access, and media alternatives without claiming rendered accessibility checks.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "accessible-reading-path",
+          "description": "Finds color/hover-only information, missing control label and keyboard access, missing text equivalents, and missing caption/transcript."
+        },
+        {
+          "name": "risk-before-style",
+          "description": "Explains decision or reader-task impact before cosmetic preferences and proposes bounded corrections."
+        },
+        {
+          "name": "review-not-render",
+          "description": "Does not generate or edit artifacts and explicitly leaves live rendering and assistive-technology behavior unverified."
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "离线审校一份使用项目英文拼写约定的架构草稿。已有 ADR accepted 且封存。仅优化草稿可读性，不访问网络或改历史记录。草稿写着『The cache significantly improves reliability; this should work.』唯一已知事实是缓存读失败会回退数据库，可靠性影响未测量。没有历史基线。",
+      "expected_output": "Uses the locally packaged guide offline and project conventions. Replaces unsupported reliability prose with the supported fallback fact, reports the ambiguous should, and retains uncertainty without rewriting the accepted ADR or inventing a before/after comparison.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "offline-local-guidance",
+          "description": "Uses the local common guide without fetching Google or ASD pages or installing another Skill."
+        },
+        {
+          "name": "no-historical-rewrite",
+          "description": "Leaves accepted/sealed ADRs and project writing conventions intact."
+        },
+        {
+          "name": "no-invented-baseline",
+          "description": "Does not invent prior behavior, measurement, or certainty to replace ambiguous prose."
+        }
       ]
     }
   ]
