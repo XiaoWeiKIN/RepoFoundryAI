@@ -15,6 +15,14 @@ Choose the primary reader before choosing sections:
 
 If audiences need incompatible detail, keep one overview and link focused deep dives. Do not interleave beginner orientation with implementation minutiae.
 
+For the chosen reader, identify what they already know and the question they
+must answer after reading. For a contributor, that might be where to add a
+behavior without violating an invariant; for a reviewer, which failure makes
+an option unacceptable. Explain unfamiliar project concepts before using them.
+This is planning for the existing document, not a new brief or required section.
+Use the local [controlled-writing guide](controlled-writing.md) for common
+organization, procedures, formatting, and accessibility rules.
+
 ## Scale to a documentation set only when needed
 
 One focused Markdown document is the default. When a topic has genuinely
@@ -71,16 +79,16 @@ A strong architecture document usually moves through:
 
 This is an ordering heuristic, not a required outline. Remove sections that do not help the selected reader.
 
-Use concrete subjects and consistent names; preserve preconditions, exceptions,
-and the distinction between current and proposed behavior. On revision, explain
-the material change against a known source version before repeating stable
-background. If no comparison is available, state the current model.
+On revision, explain the material change against a known source version before
+repeating stable background. If no comparison is available, state the current
+model. A summary must retain the conditions that make that model valid.
 
 Choose representations by the question: diagrams for relationships, tables
 for comparable alternatives, and optional interactive views for parameter or
-failure exploration. State a demonstration's assumptions and source version;
-simulation does not prove implementation behavior. Recheck derived views when
-their sources change, keeping the document's existing fact owners authoritative.
+failure exploration. Apply the common guide's text-alternative and interaction
+checks. State a demonstration's assumptions and source version; simulation does
+not prove implementation behavior. Recheck derived views when their sources
+change, keeping the document's existing fact owners authoritative.
 
 ## Explain abstractions through behavior
 
@@ -95,6 +103,13 @@ For each core abstraction, answer:
 
 Do not lead with a package tree. A code map is useful only after the reader understands the concepts it maps.
 
+A representative example needs an input, the relevant state or ownership
+transition, and an observable result. Add the failure branch that limits the
+explanation. Mark hypothetical inputs, pseudocode, and unexecuted examples;
+they cannot establish performance or reliability claims. Link maintained current
+behavior to implementation evidence, and use historical decisions only for the
+rationale they actually record.
+
 ## Architecture review questions
 
 - Can a reader redraw the system after the overview?
@@ -103,3 +118,6 @@ Do not lead with a package tree. A code map is useful only after the reader unde
 - Are extension points distinguished from internal implementation seams?
 - Are examples clearly examples rather than normative owners?
 - Do source links support the claim, and is likely drift visible?
+
+Before handoff, use [the design review](review.md) to test this reading path,
+including what remains understandable without the chosen visual presentation.

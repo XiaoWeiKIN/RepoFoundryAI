@@ -1,35 +1,72 @@
 # Controlled technical writing
 
-This is RepoFoundry authoring guidance, not a Catalog Specification. It uses
-selected clarity principles associated with ASD-STE100 Simplified Technical
-English. It does not reproduce that standard or its dictionary, and does not
-claim full ASD-STE100 conformance. The official standard is available from
-https://www.asd-ste100.org/.
+This is RepoFoundry authoring guidance, not a Catalog Specification. It combines
+selected Google developer-documentation principles with STE-inspired clarity.
+It does not reproduce ASD-STE100 or its dictionary, claim full ASD-STE100
+conformance, or imply endorsement by Google or ASD.
 
 Read the common guidance and the section for the artifact being written. Apply
 it to new prose and authorized revisions, not to an entire repository at once.
 Artifact contracts, installed Specifications, evidence, and authority boundaries
-remain controlling. This guide adds no approval step or lifecycle gate.
+remain controlling. Project-specific writing conventions take precedence over
+these editorial defaults. This guide adds no approval step or lifecycle gate.
+
+The sources at the end explain the editorial background. This local guide is
+self-contained: do not fetch external guides for each writing task or treat a
+later upstream edit as an automatic change to the project's contract.
 
 ## Language and fidelity
 
 Keep the user's requested language; otherwise follow the Skill and repository
 language conventions. Use STE-inspired English for English prose. For Chinese
 and other languages, use the clarity principles without imposing English
-vocabulary, grammar, or word-count rules. Do not translate a document merely to
-apply this guide. Keep bilingual versions aligned in meaning and evidence.
+vocabulary, grammar, capitalization, or word-count rules. Do not translate a
+document merely to apply this guide. Keep bilingual versions aligned in meaning
+and evidence.
 
 Preserve conditions, negation, quantifiers, uncertainty, units, and requirement
-strength. Do not replace `MUST` with `SHOULD`, turn a possibility into a fact, or
-remove a qualification to shorten a sentence. Keep technical terms, identifiers,
-commands, paths, interface names, schema fields, and evidence references exact.
-Do not replace distinct operations with one word just because they look similar.
+strength. Preserve the defined meanings of `MUST`, `SHOULD`, and `MAY`; do not
+replace them as a style edit. Clarify ambiguous advice in ordinary prose only
+when the source establishes whether it is required, recommended, or optional.
+Otherwise report the ambiguity. Keep technical terms, identifiers, commands,
+paths, interface names, schema fields, and evidence references exact. Do not
+replace distinct operations with one word just because they look similar.
+
+Use present tense for established behavior, not to turn a proposed feature into
+current behavior. Distinguish historical, proposed, approved, implemented, and
+verified states. A public product guide need not describe unreleased features;
+a design proposal must still describe its intended behavior as a proposal.
 
 Do not rewrite quoted source text, raw logs, code, or normative source excerpts
 for style. Do not change metadata, IDs, required headings, generator markers,
 digests, or lifecycle fields. Do not rewrite accepted ADRs, approved snapshots,
 sealed Checkpoints, sealed Benchmark bundles, or archived plans in place. Use
 the owning workflow's revision or supersession process when a change is needed.
+
+## Reader and document structure
+
+Before drafting, identify the reader's task, existing knowledge, and what they
+need to understand, decide, or do next. Use the request and project context;
+ask only when missing information would change the result. Keep this planning
+lightweight. It does not require a separate brief or an Audience section.
+
+Open with the answer, system model, or actionable result the reader needs, and
+its material limits. Define scope and relevant exclusions without filling a
+universal outline. Introduce concepts before implementation details. Give one
+representative flow or example, then link to deeper explanations as needed.
+Do not substitute a directory inventory for a system explanation.
+
+Give each paragraph one main point, then explain its mechanism, evidence, or
+consequence. Preserve useful transitions and causal links. Use lists for steps
+or parallel items and tables for repeated comparable fields, not as a way to
+split every explanation into fragments. A shorter document is not necessarily
+a clearer one. Omit empty headings and unrelated template sections.
+
+Keep one owner for a normative fact and link to it from other documents. When
+an authorized code change affects maintained documentation, update the relevant
+current explanation with that change. Historical design records remain history,
+not proof of current implementation. Report drift; do not rewrite sealed history
+or expand a local edit into a repository-wide cleanup.
 
 ## Common guidance
 
@@ -41,7 +78,9 @@ Prefer short, complete sentences with one main claim or action. Keep conditions
 and exceptions with the claim they limit. Split a sentence when that makes the
 logic clearer; do not enforce an arbitrary word limit or produce fragments.
 Use connected paragraphs to explain mechanisms and trade-offs, rather than a
-sequence of disconnected bullets.
+sequence of disconnected bullets. Use a direct, respectful tone; avoid both
+bureaucratic phrasing and forced informality. Address the reader as "you" in
+instructions when helpful, without changing the actor in a system description.
 
 Name the actor when several components or people could perform the action.
 Use a direct verb when it is clearer than an abstract noun phrase. Imperatives
@@ -62,6 +101,59 @@ Separate observations, interpretations, proposals, decisions, and unknowns.
 Keep the evidence and its limits near the claim. Retain negative evidence and
 uncertainty. Clear prose must not imply acceptance, approval, completion, or
 verification that did not occur.
+
+## Procedures and examples
+
+Before an action, state the necessary environment, working directory, inputs,
+permissions, and prerequisites. Use numbered steps when order matters, normally
+one action per step. Put a condition before the action it controls, and describe
+the expected result after the action. Label optional steps and failure branches.
+Choose the procedure supported by project evidence; do not invent a preferred
+method or recovery command merely to make the instructions look complete.
+
+Introduce each command's purpose. Explain placeholders and which values the
+reader must supply; distinguish commands from output. Show only relevant output
+and identify illustrative output as such. Separate preview, apply, verification,
+and release. Documenting a command does not authorize executing it. Check examples
+against the stated interface or implementation, and report whether they were
+actually run. Never label an unexecuted example as tested.
+
+## Headings, code, and links
+
+Use specific headings that help the reader find a task or concept. Prefer action
+headings for tasks and noun phrases for concepts. In English, use sentence case
+unless the project requires otherwise; preserve proper names and identifiers.
+Keep a logical heading hierarchy without renaming contract-required headings or
+breaking existing anchors just to change style.
+
+Use code formatting for identifiers, paths, commands, and literal values. Refer
+to UI controls by their actual labels, typically in bold. Use descriptive link
+text that identifies the destination, not "click here". Prefer repository-relative
+links for local documentation. Pin evidence to an appropriate revision or stable
+locator when a changing page would no longer support the claim.
+
+## Accessible explanation surfaces
+
+Choose a diagram only when it explains a relationship or process; prefer Mermaid
+for editable technical diagrams. State the conclusion and essential relationships
+in prose or a readable list or table as well. Mermaid source alone is not a text
+alternative for a reader unfamiliar with its syntax. Provide purposeful alt text
+for informative images and empty alt text for purely decorative images. Keep code
+and command output as selectable text rather than screenshots.
+
+Do not communicate state solely through color, position, animation, or sound.
+For HTML or interactive views, use semantic headings, labeled controls, visible
+keyboard focus, and keyboard-accessible actions. Keep the reading order coherent
+and provide a static explanation when interaction is unavailable. For video,
+provide captions or a transcript and a description of essential visual changes.
+Offer pause or reduced-motion behavior where animation is used; avoid flashing.
+
+Keep source revisions, assumptions, uncertainty, and authority limits visible in
+all formats. Mark simulation and illustrative timing as such; animation is not
+measurement evidence. A view is disposable and is not a second fact owner.
+Check the actual rendered output when tools permit. Report unchecked keyboard,
+screen-reader, media, or rendering behavior as unverified, not accessible by
+assertion. These authoring instructions do not certify existing renderers.
 
 ## ADR
 
@@ -140,15 +232,50 @@ now more robust" or omit its status, failure branch, or evidence limitation.
 
 ## Review before handoff
 
-Compare the revision with its sources. Check terminology, actors, references,
-conditions, uncertainty, requirement strength, evidence, and lifecycle status.
-Correct misleading prose within the authorized scope. Report unresolved gaps
-without filling them with invented facts. Then run the artifact's existing
-validators; writing review is not a substitute for them.
+Review technical correctness first, then follow the document as its intended
+reader. Can the reader find the answer, follow the procedure or mechanism, and
+locate its limits and evidence? Compare the revision with its sources. Check
+terminology, actors, references, conditions, uncertainty, requirement strength,
+and lifecycle status. Check the applicable formatting and accessibility guidance.
+Correct misleading prose within the authorized scope; report unresolved gaps
+without invented facts. Run the artifact's existing validators and distinguish
+editorial review from command execution, rendering tests, and acceptance.
 
 Sentence length and keyword matches can identify review candidates. They cannot
 prove clarity, truth, authorization, or ASD-STE100 compliance. Do not label a
 heuristic pass as semantic verification or add a blocking style gate.
+
+## Sources and local adaptations
+
+The following public sources inform these editorial defaults. RF's precedence,
+lifecycle, source-integrity, and offline-use boundaries are local adaptations;
+these sources do not define RF artifact contracts or Google's internal ADR format.
+They are optional references, not task-time dependencies.
+
+Google Developer Documentation Style Guide: reference hierarchy and formatting
+highlights: https://developers.google.com/style/ and
+https://developers.google.com/style/highlights
+
+Google Technical Writing: audience needs and document organization:
+https://developers.google.com/tech-writing/one/audience and
+https://developers.google.com/tech-writing/one/documents
+
+Google guidance on procedures, voice, and accessibility:
+https://developers.google.com/style/procedures,
+https://developers.google.com/style/tone, and
+https://developers.google.com/style/accessibility
+
+Google guidance on modal wording and tense (adapted to preserve RF requirements
+and proposal states): https://developers.google.com/style/prescriptive-documentation
+and https://developers.google.com/style/tense
+
+Google repository documentation maintenance:
+https://google.github.io/styleguide/docguide/best_practices.html
+
+ASD-STE100 official information: https://www.asd-ste100.org/.
+STE permits technical names and technical verbs under its rules; retaining
+software terminology is not itself a departure from STE. This guide selects
+clarity principles rather than implementing the full standard or its dictionary.
 
 ## Distribution maintenance
 
