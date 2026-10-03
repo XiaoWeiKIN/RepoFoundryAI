@@ -1,6 +1,10 @@
 # Detailed design review
 
 Review engineering risk before prose quality. Group repeated symptoms under one root finding.
+Use [controlled technical writing](controlled-writing.md) as the shared editorial
+baseline, including project precedence and language, state, and authority safeguards.
+Use this review for drafts and revisions as well as explicit review requests.
+An explicit review-only request produces findings, not file modifications.
 
 ## Finding format
 
@@ -32,3 +36,29 @@ observable behavior, identify a failure or invalidating condition, and locate
 the supporting evidence. A concise summary or polished diagram is not sufficient
 if it hides those boundaries. Compare revisions only against an identified
 baseline, and distinguish a demonstration's assumptions from observed behavior.
+
+## Reader-task walkthrough
+
+Start with one task the intended reader must understand or perform, not a word
+count. Check that the opening establishes the model or answer, prerequisites
+precede dependent details, and transitions preserve causal reasoning. A reader
+should reach the relevant source or test after the conceptual explanation.
+
+When examples contain procedures, check environment, purpose, placeholders,
+ordering, expected output, and stop conditions against evidence. Mark unexecuted
+examples as untested. Do not run destructive or external commands just to review
+their wording. Preserve normative keywords, qualifications, and proposal status
+when suggesting tense or sentence changes.
+
+Inspect headings and links as a navigation route, respecting required headings
+and stable anchors. For diagrams and requested media, follow the shared
+accessibility guidance: check the equivalent text explanation, non-color status,
+keyboard paths, and captions, transcript, or content description as applicable.
+Test the rendered view when available; otherwise identify the unchecked behavior.
+
+Separate editorial suggestions from factual or design defects. For a wording
+issue, describe the reader's concrete misunderstanding and a local correction;
+do not call an optional style preference a blocker. Missing evidence, unsafe
+instructions, or an inaccessible required task can have substantive impact, but
+neither a checklist nor a readable paragraph proves correctness or certification.
+Do not invent a uniform compliance score or new approval gate.
