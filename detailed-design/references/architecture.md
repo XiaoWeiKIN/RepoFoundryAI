@@ -4,7 +4,9 @@ Use this reference for system architecture, internals, contributor architecture,
 
 ## Start from the reader
 
-Choose the primary reader before choosing sections:
+Apply [controlled technical writing](controlled-writing.md) for shared editorial
+rules; this reference adds architecture-specific methods rather than another style
+policy. Choose the primary reader before choosing sections:
 
 | Reader | Needs first |
 |---|---|
@@ -14,6 +16,12 @@ Choose the primary reader before choosing sections:
 | reviewer | selected shape, alternatives, risks, verification |
 
 If audiences need incompatible detail, keep one overview and link focused deep dives. Do not interleave beginner orientation with implementation minutiae.
+
+Before drafting, state the reader's existing knowledge and intended outcome in
+working notes. For example: "A new contributor knows Go but not this planner;
+after reading, they can trace one query and locate the test for a rewrite rule."
+This is an illustrative reader task, not a claim about the target repository.
+Use known context without requiring a separate audience document or form.
 
 ## Scale to a documentation set only when needed
 
@@ -82,6 +90,23 @@ failure exploration. State a demonstration's assumptions and source version;
 simulation does not prove implementation behavior. Recheck derived views when
 their sources change, keeping the document's existing fact owners authoritative.
 
+## Walk through one example
+
+Choose one supported request, input, or failure and follow it through the model.
+Introduce unfamiliar terms before using them to explain an invariant. Connect
+each transition to its cause and consequence instead of listing components.
+Place source and test links near the claims they support; keep the code map last.
+
+For a runnable example, apply the shared procedure guidance: identify its context,
+inputs, placeholders, expected observations, and failure branch. Distinguish
+observed results from illustrative output. If execution is unavailable or outside
+authority, report that limitation rather than claiming the example passed.
+
+Explain a diagram's important relationships in adjacent text. A contributor must
+still be able to trace the example without the image, animation, or color. Link
+optional views to the same facts and identify assumptions rather than letting a
+simulation establish implementation behavior.
+
 ## Explain abstractions through behavior
 
 For each core abstraction, answer:
@@ -95,6 +120,14 @@ For each core abstraction, answer:
 
 Do not lead with a package tree. A code map is useful only after the reader understands the concepts it maps.
 
+## Maintain the current explanation
+
+When an authorized implementation change invalidates the walkthrough, update its
+current documentation and examples together or identify the documentation gap.
+Keep the historical rationale separate: link accepted decisions without editing
+their history. Follow the project's existing owner and revision process; do not
+create another manual source of truth or a mandatory freshness field.
+
 ## Architecture review questions
 
 - Can a reader redraw the system after the overview?
@@ -103,3 +136,5 @@ Do not lead with a package tree. A code map is useful only after the reader unde
 - Are extension points distinguished from internal implementation seams?
 - Are examples clearly examples rather than normative owners?
 - Do source links support the claim, and is likely drift visible?
+- Can the intended reader explain the walkthrough without images or color?
+- Are example commands verified or explicitly untested, and can the reader distinguish current behavior from historical rationale?

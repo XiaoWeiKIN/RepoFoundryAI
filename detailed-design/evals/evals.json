@@ -49,6 +49,86 @@
         {"name": "reader-oriented-package", "description": "Organizes multiple documents by how contributors learn and navigate the architecture."},
         {"name": "no-concern-buckets", "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."}
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "为刚加入的 Go 工程师把这些已确认事实整理成一份中文模块说明：入口收到查询，parser 生成语法树，analyzer 解析名称，planner 生成计划，executor 执行。读者知道 Go 但不了解该引擎；目标是跟踪一次查询并定位名称解析阶段。没有源码路径或测试证据。不要创建文档包。",
+      "expected_output": "Explains one query lifecycle for the specified reader, introduces unfamiliar stages before internals, and connects their causes and boundaries. Reports missing source/test locators instead of inventing them; keeps one natural Chinese document.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "reader-task-and-prior-knowledge",
+          "description": "Targets the named reader and outcome without an audience form or new required sections."
+        },
+        {
+          "name": "progressive-causal-explanation",
+          "description": "Uses a connected walkthrough before code navigation, not a list of directory names or disconnected short sentences."
+        },
+        {
+          "name": "no-invented-evidence",
+          "description": "Leaves missing implementation and test references explicit; does not claim the example was verified."
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "评审这段操作说明，不修改文件或运行命令：\"运行 tool apply --target <ENV> 就好了，点击右边绿色按钮看结果。\" 已知文档用于预生产，apply 会写入配置，<ENV> 是环境名；尚未核实该工具的接口、预览命令、恢复过程和预期输出。",
+      "expected_output": "Provides review-only findings about authority, environment, placeholders, unsafe ambiguity and visual-only directions. Proposes a bounded procedural structure but marks unverified commands and missing output/recovery details; does not invent flags or run apply.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "purpose-before-command",
+          "description": "Requests context and prerequisites before dependent actions and separates action, placeholder explanation, result and failure branch."
+        },
+        {
+          "name": "no-fabricated-procedure",
+          "description": "Does not invent preview/recovery flags, sample success output, or verification results."
+        },
+        {
+          "name": "review-only-authority",
+          "description": "Does not execute the mutation or edit the document; names controls by labels rather than position or color."
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "评审一个设计说明：所有依赖只画在红绿节点图里，没有图外文字；HTML 的说明只在鼠标悬停时出现；配套视频仅靠旁白解释失败条件。没有可用浏览器或音视频工具。只给评审意见，不生成新媒体。",
+      "expected_output": "Identifies the missing equivalent text, color-only meaning, keyboard-inaccessible explanation and audio-only failure conditions. Recommends an accessible reading route while explicitly leaving rendering, keyboard and caption/transcript verification unperformed.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "equivalent-text-and-keyboard",
+          "description": "Requires a readable explanation of graph relationships, non-color state and keyboard-accessible controls for requested interactive media."
+        },
+        {
+          "name": "audio-video-alternative",
+          "description": "Calls for captions, a transcript or a content description that preserves the failure condition."
+        },
+        {
+          "name": "honest-accessibility-review",
+          "description": "Does not claim browser/screen-reader/media checks were run, issue certification, or create an unsolicited HTML/video artifact."
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "按 Google 文风评审以下材料，只给建议：项目契约要求标题 \"Decision\" 保持原样；一份已接受 ADR 写着 \"The service SHOULD retry only if the request is idempotent.\"；当前未批准草稿写着 \"We propose to use one queue per tenant. The latency effect has not been measured.\" 正文语言保持中文。请不要修改受保护文件。",
+      "expected_output": "Uses the shared Google-informed and STE-inspired guidance selectively. Preserves the required heading, normative SHOULD, idempotency condition, unapproved proposal, lack of measurements and Chinese output. Does not rewrite accepted history for present tense or claim full standards compliance.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "project-contract-before-style",
+          "description": "Preserves the exact required heading and normative keyword; an editorial preference cannot weaken or strengthen the contract."
+        },
+        {
+          "name": "language-and-state-fidelity",
+          "description": "Keeps Chinese prose natural and the proposal and uncertainty explicit rather than rewriting them as current, verified behavior."
+        },
+        {
+          "name": "historical-owner-boundary",
+          "description": "Provides findings only, preserves accepted history and routes any authorized lifecycle revision through its owning workflow."
+        }
+      ]
     }
   ]
 }
