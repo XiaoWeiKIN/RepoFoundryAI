@@ -518,7 +518,7 @@ repofoundry --repo . upgrade --to 0.11.1 --apply
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.5.0 --spec languages/go --apply
+  spec update --spec-version 1.7.0 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -573,8 +573,8 @@ adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned 
 Engineering Specs 来自独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发布版本。
-新仓库默认选择固定 Catalog `1.5.0`，manifest 记录
-`refs/tags/v1.5.0`。生产升级通过
+新仓库默认选择固定 Catalog `1.7.0`，manifest 记录
+`refs/tags/v1.7.0`。生产升级通过
 `spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
 `--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。安装 RepoFoundry
 `0.4.1` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
