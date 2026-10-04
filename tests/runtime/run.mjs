@@ -121,7 +121,13 @@ for(const language of ['zh-CN','en'])for(const kind of ['html','p5'])for(const v
         const capture=async i=>{
           await page.locator('#steps button').nth(i).click();
           await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
-          return hash(await page.locator('canvas').screenshot());
+          // A natural-size canvas can extend outside the scroll viewport.
+          // Locator screenshots may capture only the visible (unchanged) region;
+          // compare the complete backing bitmap, not a viewport crop.
+          const data=await page.locator('canvas').evaluate(c=>c.toDataURL('image/png'));
+          const png=Buffer.from(data.slice(data.indexOf(',')+1),'base64');
+          await fs.writeFile(path.join(evidence,`${name}-canvas-${i}.png`),png);
+          return hash(png);
         };
         canvasHash=await capture(3);const other=await capture(5);assert.notEqual(canvasHash,other);
         assert.equal(await capture(3),canvasHash,'Canvas depends on playback history');
