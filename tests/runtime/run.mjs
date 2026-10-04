@@ -131,6 +131,26 @@ for(const language of ['zh-CN','en'])for(const kind of ['html','p5'])for(const v
           report.canvas_fonts.push({name,fonts:[...new Set(log.filter(x=>/[\u3400-\u9fff]/u.test(x.text)).map(x=>x.font))]});
         }
       }
+      if(kind==='p5'){
+        const dimensions=await page.locator('canvas').evaluate(c=>({
+          cssWidth:c.getBoundingClientRect().width,bitmapWidth:c.width,
+          scrollWidth:c.parentElement.scrollWidth,clientWidth:c.parentElement.clientWidth}));
+        assert.equal(dimensions.cssWidth,800,'Canvas text was scaled with the viewport');
+        const drawLog=await page.evaluate(()=>window.__canvas);
+        const roles=drawLog.filter(x=>x.text===reading.labels.direct||x.text===reading.labels.dependency);
+        assert(roles.length>0,'No actual role-label draws');
+        assert(roles.every(x=>Number(x.font.match(/([0-9.]+)px/)[1])*dimensions.cssWidth/dimensions.bitmapWidth>=15.9),
+          'Effective canvas label size is below 16 CSS pixels');
+        if(viewport.width===390){
+          assert(dimensions.scrollWidth>dimensions.clientWidth,'Graph is not scrollable');
+          assert.equal(await page.locator('#relationships').evaluate(n=>n.closest('details').open),true);
+          const relationships=await page.locator('#relationships li').allTextContents();
+          assert.deepEqual(relationships,ir.graph.edges.map(e=>`${e.from} ${reading.labels.requires} ${e.to}`));
+          await page.locator('#visual').focus();await page.keyboard.press('ArrowRight');
+          await page.waitForFunction(()=>document.querySelector('#visual').scrollLeft>0);
+          await page.screenshot({path:path.join(evidence,name+'-pan.png'),fullPage:true});
+        }
+      }
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Viewport overflow');
       assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
       violations.push(...await page.evaluate(()=>window.__csp));assert.deepEqual(violations,[]);
