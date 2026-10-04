@@ -87,8 +87,12 @@ jobs:
       - name: Generate Chinese and English bundles with real pinned p5
         run: python -B tests/runtime/prepare.py
       - name: Exercise real p5, fonts and full Remotion MP4 renders
+        timeout-minutes: 15
         working-directory: ${{ env.RF_RUNTIME_WORK }}
-        run: node run.mjs
+        # Exit only after every top-level awaited check and result write finishes.
+        # Preserve the test's nonzero exit code; do not let optional library handles
+        # keep a completed evaluation alive until the whole job loses its artifacts.
+        run: node --input-type=module -e "import('./run.mjs').then(() => process.exit(process.exitCode || 0))"
       - name: Verify actual assigned Chinese glyphs in local font tables
         if: ${{ !cancelled() }}
         run: python -B tests/runtime/fonts.py
