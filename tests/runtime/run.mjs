@@ -24,6 +24,7 @@ for(const p of ['remotion','p5','playwright','react'])report.versions[p]=(await 
 const save=()=>fs.writeFile(path.join(evidence,'runtime-results.json'),JSON.stringify(report,null,2));
 await save();
 async function test(name,fn){
+  console.log('START',name);
   try{const data=await fn();report.tests.push({name,ok:true,...data});console.log('PASS',name);}
   catch(e){report.tests.push({name,ok:false,error:e.stack||String(e)});console.error('FAIL',name,e);}
   await save();
@@ -143,12 +144,16 @@ for(const language of ['zh-CN','en'])for(const kind of ['html','p5'])for(const v
 for(const language of ['zh-CN','en'])await test(`remotion-mp4-${language}`,async()=>{
   const directory=path.join(work,'generated',`${language}-remotion`);
   const serveUrl=await bundle({entryPoint:path.join(directory,'index.mjs'),outDir:path.join(work,`bundled-${language}`)});
-  const options={serveUrl,browserExecutable:chromium.executablePath(),logLevel:'error'};
+  // Playwright's executablePath points to full modern Chromium, not the separate
+  // old-headless shell. Explicit mode prevents an invalid --headless=old launch.
+  const options={serveUrl,browserExecutable:chromium.executablePath(),chromeMode:'chrome-for-testing',logLevel:'error'};
   const composition=await selectComposition({...options,id:'RFExplanation'});
   assert.equal(composition.width,1920);assert.equal(composition.height,1080);
   assert.equal(composition.fps,30);assert.equal(composition.durationInFrames,1080);
   const output=path.join(evidence,`${language}.mp4`);
-  await renderMedia({...options,composition,outputLocation:output,codec:'h264',crf:24,x264Preset:'ultrafast',concurrency:2});
+  let milestone=-1;
+  await renderMedia({...options,composition,outputLocation:output,codec:'h264',crf:24,x264Preset:'ultrafast',concurrency:2,
+    onProgress:({progress})=>{const next=Math.floor(progress*4);if(next!==milestone){milestone=next;console.log('RENDER',language,next*25+'%');}}});
   const probe=spawnSync(ffprobe.path,['-v','error','-count_frames','-show_streams','-show_format','-of','json',output],{encoding:'utf8',timeout:120000});
   assert.equal(probe.status,0,probe.stderr);
   const metadata=JSON.parse(probe.stdout),video=metadata.streams.find(s=>s.codec_type==='video');
@@ -162,10 +167,12 @@ for(const language of ['zh-CN','en'])await test(`remotion-mp4-${language}`,async
   await renderStill({...options,composition,frame:540,output:duplicate});
   assert.equal(hash(await fs.readFile(duplicate)),hash(await fs.readFile(path.join(evidence,`${language}-frame-540.png`))));
   assert.deepEqual(await fs.readFile(path.join(directory,'explanation.json')),original);
+  await fs.copyFile(path.join(directory,'presentation.json'),path.join(evidence,`${language}-presentation.json`));
   return {sha256:hash(await fs.readFile(output)),frames:1080,duration:36,width:1920,height:1080,
-    codec:'h264',audio:false,repeat_frame_identical:true};
+    codec:'h264',audio:false,repeat_frame_identical:true,chrome_mode:options.chromeMode};
 });
 assert.deepEqual(await fs.readFile(path.join(work,'input/explanation.json')),original);
+await fs.writeFile(path.join(evidence,'source-explanation.json'),original);
 await fs.copyFile(path.join(work,'package-lock.json'),path.join(evidence,'package-lock.json'));
 report.success=report.tests.length===10&&report.tests.every(t=>t.ok);
 await save();console.log(JSON.stringify({success:report.success,tests:report.tests.length,versions:report.versions,platform:report.os}));
