@@ -47,8 +47,6 @@ jobs:
         os: [ubuntu-24.04, windows-2022, macos-14]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    env:
-      RF_RUNTIME_WORK: ${{ runner.temp }}/rf-render-eval
     steps:
       - uses: actions/checkout@v6
         with:
@@ -62,7 +60,15 @@ jobs:
       - name: Prepare isolated evaluation workspace
         shell: bash
         run: |
-          python -c "import os,pathlib,shutil; p=pathlib.Path(os.environ['RF_RUNTIME_WORK']); p.mkdir(); [shutil.copy2('tests/runtime/'+n,p/n) for n in ('package.json','run.mjs')]"
+          python - <<'PY'
+          import os, pathlib, shutil
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'rf-render-eval'
+          p.mkdir()
+          for name in ('package.json', 'run.mjs'):
+              shutil.copy2('tests/runtime/' + name, p / name)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write('RF_RUNTIME_WORK=' + str(p) + '\n')
+          PY
       - uses: actions/download-artifact@v4
         with:
           name: runtime-source
