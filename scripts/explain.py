@@ -8,12 +8,14 @@ import hashlib
 import html
 import json
 import os
+import re
 from pathlib import Path
 import stat
 import sys
 
 sys.dont_write_bytecode = True
-from explanation_ir import BOUNDARY, IRError, MAX_BYTES, canonical, from_preview, parse, sha256, validate
+from explanation_i18n import LANGUAGES, FONT_FAMILY, presentation
+from explanation_ir import IRError, MAX_BYTES, canonical, from_preview, parse, sha256, validate
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets/explain"
@@ -55,26 +57,32 @@ def safe_json(ir: dict) -> str:
         "\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 
-def mermaid(ir: dict) -> bytes:
+def mermaid(ir: dict, lang: str = "en") -> bytes:
+    reading = presentation(ir, lang)
+    ui = reading["labels"]
     # Generated identifiers, inert entity-encoded labels; no user directive syntax.
     def label(text: str) -> str:
         return "".join(c if c.isalnum() or c in " -_./" else f"#{ord(c)};" for c in text)
     ids = {n["id"]: f"N{i}" for i, n in enumerate(ir["graph"]["nodes"])}
-    lines = [f"%% {BOUNDARY}", f"%% Explanation SHA-256: {ir['sha256']}", "flowchart RL"]
+    lines = [f"%% {ui['boundary']}", f"%% {ui['digest']}: {ir['sha256']}", "flowchart RL"]
     for node in ir["graph"]["nodes"]:
-        lines.append(f'    {ids[node["id"]]}["{label(node["id"])} / {node["role"]}"]')
+        lines.append(f'    {ids[node["id"]]}["{label(node["id"])} / {label(ui["direct" if node["role"] == "direct" else "dependency"])}"]')
     for edge in ir["graph"]["edges"]:
         lines.append(f'    {ids[edge["from"]]} --> {ids[edge["to"]]}')
     if not ids:
-        lines.append('    EMPTY["No Requirement dependency graph; inspect the source for whole-Spec or empty selection."]')
+        lines.append(f'    EMPTY["{label(ui["empty_graph"])}"]')
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
-def story_html(ir: dict, *, p5: bool = False) -> bytes:
+def story_html(ir: dict, *, p5: bool = False, lang: str = "en") -> bytes:
+    reading = presentation(ir, lang)
     page = (ASSETS / "story.html.template").read_text(encoding="utf-8")
     frame_model = (ASSETS / "frame-model.mjs").read_text(encoding="utf-8")
     visual = (ASSETS / ("p5-visual.mjs" if p5 else "svg-visual.mjs")).read_text(encoding="utf-8")
     page = page.replace("@@FRAME_MODEL@@", frame_model).replace("@@VISUAL@@", visual)
+    page = page.replace("@@LANG@@", reading["language"]).replace("@@FONT@@", FONT_FAMILY)
+    page = re.sub(r"@@UI_([a-z_]+)@@",
+                  lambda m: html.escape(reading["labels"][m[1]], quote=True), page)
     page = page.replace("@@VENDOR@@", '<script src="./p5.js"></script>' if p5 else "")
     # Hash the entire inline module after expansion. Source data is JSON, not code.
     module = page.split('<script type="module">', 1)[1].split("</script>", 1)[0]
@@ -84,19 +92,25 @@ def story_html(ir: dict, *, p5: bool = False) -> bytes:
            f"script-src 'sha256-{module_hash}'" + (" 'self'" if p5 else ""))
     page = page.replace("@@CSP@@", html.escape(csp, quote=True))
     # Replace user JSON last: its strings must never become template directives.
-    return page.replace("@@IR@@", safe_json(ir)).encode("utf-8")
+    # One pass: source strings containing template markers stay inert data.
+    data = {"IR": ir, "PRESENTATION": reading}
+    return re.sub(r"@@(IR|PRESENTATION)@@",
+                  lambda m: safe_json(data[m[1]]), page).encode("utf-8")
 
 
-def render_files(ir: dict, output_format: str, p5_js: Path | None = None) -> dict[str, bytes]:
-    validate(ir)
+def render_files(ir: dict, output_format: str, p5_js: Path | None = None,
+                 *, lang: str = "en") -> dict[str, bytes]:
+    reading = presentation(ir, lang)
+    ui = reading["labels"]
     if output_format not in FORMATS:
         raise IRError("Unsupported renderer.")
     if p5_js is not None and output_format != "p5":
         raise IRError("--p5-js is only valid with --format p5.")
-    files = {"explanation.json": canonical(ir) + b"\n"}
-    runtime = "none"
+    files = {"explanation.json": canonical(ir) + b"\n",
+             "presentation.json": canonical(reading) + b"\n"}
+    runtime = ui["runtime_none"]
     if output_format == "mermaid":
-        files["diagram.mmd"] = mermaid(ir)
+        files["diagram.mmd"] = mermaid(ir, lang)
     elif output_format in ("html", "p5"):
         if output_format == "p5":
             if p5_js is None:
@@ -106,29 +120,20 @@ def render_files(ir: dict, output_format: str, p5_js: Path | None = None) -> dic
                 raise IRError("The supplied p5 runtime is empty.")
             runtime_bytes.decode("utf-8")
             files["p5.js"] = runtime_bytes
-            runtime = "user-supplied p5; SHA-256 " + sha256(runtime_bytes)
-        files["index.html"] = story_html(ir, p5=output_format == "p5")
+            runtime = ui["runtime_p5"] + " " + sha256(runtime_bytes)
+        files["index.html"] = story_html(ir, p5=output_format == "p5", lang=lang)
     elif output_format == "remotion":
         files["index.mjs"] = (ASSETS / "remotion-entry.mjs").read_bytes()
         files["frame-model.mjs"] = (ASSETS / "frame-model.mjs").read_bytes()
-        runtime = "existing Remotion + React project; no installation or video render performed"
-    instructions = {
-        "json": "Read explanation.json. It includes the captured source snapshot.\n",
-        "mermaid": "Open diagram.mmd with your existing Mermaid viewer. Retain explanation.json beside it.\n",
-        "html": "Open index.html in your browser. No web server or network is required.\n",
-        "p5": "From this directory run `python3 -m http.server 8000 --bind 127.0.0.1`, then open http://127.0.0.1:8000/. Stop with Ctrl-C. The supplied p5.js is executable code; only use a runtime you trust and have permission to redistribute.\n",
-        "remotion": "Place this bundle inside an existing local Remotion project. From that project run `npx --no-install remotion render ./BUNDLE/index.mjs RFExplanation ./out.mp4`. Replace BUNDLE with this directory. Review the current Remotion license first. No dependencies are installed and no MP4 or narration has been created by this export.\n",
-    }[output_format]
+        runtime = ui["runtime_remotion"]
+    instructions = ui[output_format + "_help"]
     files["README.txt"] = (
-        f"RepoFoundry derived explanation / {output_format}\n\n{instructions}\n"
-        f"{BOUNDARY}\nTimeline: reading order, not observed execution time.\n"
-        "Source data may be confidential. Sharing a bundle shares its embedded source.\n"
-        "There is no automatic freshness check. Regenerate after source changes.\n"
-        "Hashes verify internal consistency, not authenticity or semantic correctness.\n"
-        "Do not edit the generated IR or treat it as an ADR, approval, or sealed evidence.\n"
-        f"Explanation SHA-256: {ir['sha256']}\nRuntime: {runtime}\n"
+        f"{ui['brand']} / {output_format} / {lang}\n\n{instructions}\n\n"
+        + "\n".join(ui[key] for key in (
+            "boundary", "source_note", "timeline", "confidential", "hash_note", "do_not_edit"))
+        + f"\n{ui['digest']}: {ir['sha256']}\n{ui['runtime']}: {runtime}\n"
     ).encode("utf-8")
-    manifest = {"kind": "derived-render-bundle", "authority": "none", "format": output_format,
+    manifest = {"kind": "derived-render-bundle", "authority": "none", "format": output_format, "language": lang,
                 "ir_sha256": ir["sha256"], "source_sha256": ir["source"]["sha256"],
                 "runtime": runtime, "files": {name: sha256(raw) for name, raw in sorted(files.items())}}
     files["render-manifest.json"] = canonical(manifest) + b"\n"
@@ -158,7 +163,7 @@ def publish(output: Path, files: dict[str, bytes]) -> None:
     The caller must choose a new directory for a retry.
     """
     allowed = {"explanation.json", "diagram.mmd", "index.html", "p5.js",
-               "index.mjs", "frame-model.mjs", "README.txt", "render-manifest.json"}
+               "index.mjs", "frame-model.mjs", "presentation.json", "README.txt", "render-manifest.json"}
     if (not isinstance(files, dict) or not files or set(files) - allowed
             or "render-manifest.json" not in files
             or any(not isinstance(raw, bytes) for raw in files.values())):
@@ -192,6 +197,8 @@ def main(argv: list[str] | None = None) -> int:
                              help="Captured Spec Lab JSON" if command == "from-preview" else "Validated Explanation IR JSON")
         sub.add_argument("--format", choices=["auto", *FORMATS], default="auto")
         sub.add_argument("--goal", choices=["overview", "relationships", "exploration", "sequence"], default="overview")
+        sub.add_argument("--lang", choices=LANGUAGES, default="en",
+                         help="Reading language; exact IR/source bytes are never translated (default: en)")
         sub.add_argument("--p5-js", type=Path)
         sub.add_argument("--output", required=True, type=Path)
         sub.add_argument("--apply", action="store_true", help="Create a NEW output bundle; default is read-only preview")
@@ -212,12 +219,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             value = parse(read_regular(args.input, MAX_BYTES))
             ir = from_preview(value) if args.command == "from-preview" else validate(value)
-        files = render_files(ir, selected_format, args.p5_js)
+        files = render_files(ir, selected_format, args.p5_js, lang=args.lang)
         if args.apply:
             # Recheck after compilation; preview never grants overwrite authority.
             destination(output, protected)
             publish(output, files)
         print(json.dumps({"mode": "apply" if args.apply else "dry-run", "format": selected_format,
+            "language": args.lang,
             "reason": reason, "output": str(output), "ir_sha256": ir["sha256"],
             "files": [{"path": name, "bytes": len(raw), "sha256": sha256(raw)} for name, raw in files.items()],
             "authority": "none", "video_rendered": False}, ensure_ascii=False, indent=2))

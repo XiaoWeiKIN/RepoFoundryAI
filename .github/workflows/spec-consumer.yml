@@ -1,0 +1,50 @@
+name: spec-consumer
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  real-documentation-catalog:
+    name: Real Catalog consumer (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: rf
+          persist-credentials: false
+      - name: Check out immutable upstream test input
+        uses: actions/checkout@v6
+        with:
+          repository: XiaoWeiKIN/EngineeringSpecifications
+          # Merged #20; development 1.7.1 snapshot, not a release tag.
+          ref: 05905e03cafe2ecf7ebfa06f5354c0838ee7e62b
+          path: upstream-spec
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run installed consumer CLIs against both pinned Catalogs
+        working-directory: rf
+        env:
+          RF_REAL_SPEC_REPO: ${{ github.workspace }}/upstream-spec
+          RF_SPEC_ARTIFACT_DIR: ${{ runner.temp }}/rf-spec-consumer-evidence
+        run: python3 -B tests/integration/test_documentation_catalog.py
+      - name: Preserve scripted results and source-bound HTML example
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-catalog-python-${{ matrix.python }}
+          path: ${{ runner.temp }}/rf-spec-consumer-evidence
+          retention-days: 14
+          if-no-files-found: warn
