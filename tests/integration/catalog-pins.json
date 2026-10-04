@@ -1,0 +1,14 @@
+{
+  "repository": "XiaoWeiKIN/EngineeringSpecifications",
+  "catalog_id": "io.github.xiaoweikin.engineering-specifications",
+  "baseline": {
+    "revision": "5deda62dbacdbc753b9edbb00d1a891c76415b4a",
+    "version": "1.7.0",
+    "role": "prepared release commit; tag publication is not asserted"
+  },
+  "candidate": {
+    "revision": "05905e03cafe2ecf7ebfa06f5354c0838ee7e62b",
+    "version": "1.7.1",
+    "role": "merged editorial changes; development snapshot, not a release"
+  }
+}
