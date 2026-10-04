@@ -166,10 +166,39 @@ for(const language of ['zh-CN','en'])await test(`remotion-mp4-${language}`,async
   const duplicate=path.join(evidence,`${language}-repeat-540.png`);
   await renderStill({...options,composition,frame:540,output:duplicate});
   assert.equal(hash(await fs.readFile(duplicate)),hash(await fs.readFile(path.join(evidence,`${language}-frame-540.png`))));
+  // Compare only the diagram board; headers, captions and playback progress
+  // cannot make a text slideshow pass this motion regression.
+  const motionBrowser=await chromium.launch({headless:true});
+  const motionPage=await motionBrowser.newPage();
+  const motion=[];
+  try {
+    const pixels=async file=>{
+      const data=(await fs.readFile(file)).toString('base64');
+      return motionPage.evaluate(async data=>{
+        const image=new Image();image.src='data:image/png;base64,'+data;await image.decode();
+        const canvas=document.createElement('canvas');canvas.width=1760;canvas.height=540;
+        const ctx=canvas.getContext('2d');ctx.drawImage(image,80,245,1760,540,0,0,1760,540);
+        return canvas.toDataURL();
+      },data);
+    };
+    for(let stage=0;stage<6;stage++){
+      const early=stage*180+12, settled=stage*180+120;
+      const first=path.join(evidence,`${language}-motion-${early}.png`);
+      const second=path.join(evidence,`${language}-motion-${settled}.png`);
+      await renderStill({...options,composition,frame:early,output:first});
+      await renderStill({...options,composition,frame:settled,output:second});
+      const a=hash(await pixels(first)),b=hash(await pixels(second));
+      assert.notEqual(a,b,`No diagram motion in stage ${stage}`);
+      motion.push({stage,frames:[early,settled],board_sha256:[a,b]});
+    }
+    const repeat=path.join(evidence,`${language}-repeat-settled.png`);
+    await renderStill({...options,composition,frame:660,output:repeat});
+    assert.equal(hash(await pixels(repeat)),motion[3].board_sha256[1]);
+  } finally {await motionBrowser.close();}
   assert.deepEqual(await fs.readFile(path.join(directory,'explanation.json')),original);
   await fs.copyFile(path.join(directory,'presentation.json'),path.join(evidence,`${language}-presentation.json`));
   return {sha256:hash(await fs.readFile(output)),frames:1080,duration:36,width:1920,height:1080,
-    codec:'h264',audio:false,repeat_frame_identical:true,chrome_mode:options.chromeMode};
+    codec:'h264',audio:false,repeat_frame_identical:true,chrome_mode:options.chromeMode,mechanism_motion:motion};
 });
 assert.deepEqual(await fs.readFile(path.join(work,'input/explanation.json')),original);
 await fs.writeFile(path.join(evidence,'source-explanation.json'),original);
