@@ -5,13 +5,11 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import {createRequire} from 'node:module';
 import {spawnSync} from 'node:child_process';
 import {chromium} from 'playwright';
 import {bundle} from '@remotion/bundler';
 import {selectComposition, renderMedia, renderStill} from '@remotion/renderer';
 import ffprobe from 'ffprobe-static';
-const require=createRequire(import.meta.url);
 const work=process.cwd(), evidence=path.join(work,'evidence');
 await fs.mkdir(evidence,{recursive:true});
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -22,8 +20,9 @@ const report={kind:'actual-optional-runtime-evaluation',rf_revision:process.env.
   os:os.platform(),release:os.release(),arch:os.arch(),node:process.version,
   versions:{},tests:[],font_samples:[],canvas_fonts:[],sources:{ir:ir.sha256,capsule:ir.source.snapshot.capsule.sha256},
   commercial_render:false,production_conformance:false};
-for(const p of ['remotion','p5','playwright','react'])report.versions[p]=require(`${p}/package.json`).version;
+for(const p of ['remotion','p5','playwright','react'])report.versions[p]=(await json(path.join(work,'node_modules',p,'package.json'))).version;
 const save=()=>fs.writeFile(path.join(evidence,'runtime-results.json'),JSON.stringify(report,null,2));
+await save();
 async function test(name,fn){
   try{const data=await fn();report.tests.push({name,ok:true,...data});console.log('PASS',name);}
   catch(e){report.tests.push({name,ok:false,error:e.stack||String(e)});console.error('FAIL',name,e);}
