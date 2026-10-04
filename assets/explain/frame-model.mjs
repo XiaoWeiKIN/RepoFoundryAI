@@ -24,3 +24,22 @@ export function nodeLayout(ir, frame) {
     y: 0.18 + Math.floor(i / 4) * 0.15,
     selected: node.role === 'direct', visible: view.index >= 3}));
 }
+
+/** A source-bound reading projection; exact IR fields and timings remain intact. */
+export function atPresentedFrame(ir, reading, frame) {
+  if (reading.schema !== 'repofoundry.presentation/v1' ||
+      !['en', 'zh-CN'].includes(reading.language) || reading.authority !== 'none' ||
+      !ir.sha256 || reading.ir_sha256 !== ir.sha256 ||
+      !ir.source?.sha256 || reading.source_sha256 !== ir.source.sha256) {
+    throw new Error('Presentation does not match the source IR');
+  }
+  const view = atFrame(ir, frame);
+  const title = reading.scenes?.[view.scene.id];
+  if (typeof title !== 'string' || !title) throw new Error('Missing localized scene');
+  const statements = view.statements.map(s => {
+    const text = reading.statements?.[s.id];
+    if (typeof text !== 'string' || !text) throw new Error('Missing localized statement');
+    return {...s, text};
+  });
+  return {...view, scene: {...view.scene, title}, statements};
+}

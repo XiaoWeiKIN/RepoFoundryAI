@@ -32,6 +32,51 @@ python3 -B <repo-foundry-ai-dir>/scripts/explain.py spec \
 `--whole-spec ID`。该命令复用 Spec Lab 的 `build_preview`，不重写 Router 的路径
 匹配或依赖算法。超限或源漂移时原样失败，不截断规范。
 
+## 中文和英文阅读输出
+
+`spec`、`from-preview` 和 `render` 都接受 `--lang zh-CN` 或 `--lang en`。
+为保持旧脚本兼容，省略参数时仍输出英文；不读取系统区域或猜测浏览器语言。
+Agent 调用导出工具时，按用户明确要求或项目语言约定传入 `--lang`。中文请求使用
+`--lang zh-CN`，英文请求使用 `--lang en`；不支持的语言明确报错，不静默回退。
+
+例如，先预览中文导出，再确认写入新目录。`<repo-foundry-ai-dir>` 是 RF 安装目录，
+`<target-repository>` 是已经安装并锁定规范的目标仓库，路径和 ID 应取自实际候选。
+
+```bash
+python3 -B <repo-foundry-ai-dir>/scripts/explain.py spec \
+  --repo <target-repository> --path docs/design.md \
+  --requirement DOC-STATE-001 --lang zh-CN \
+  --format html --output /tmp/rf-reading-zh
+```
+
+确认预览后，在相同命令末尾加 `--apply`。目标目录必须尚不存在；输出规则与上节相同。
+已有英文文件包也可以直接生成新的中文副本，无需再次读取目标仓库：
+
+```bash
+python3 -B <repo-foundry-ai-dir>/scripts/explain.py render \
+  --input /path/to/explanation.json --lang zh-CN \
+  --format html --output /tmp/rf-reading-zh-copy --apply
+```
+
+将 `/path/to/explanation.json` 替换为原文件包中的 IR 文件。也可将 `html` 改为
+`mermaid`、`p5` 或 `remotion`；可选运行时要求不变。这是生成时的语言选择，页面内
+不提供切换；需要另一种语言时重新导出到新目录。此参数不改变独立 Spec Lab 服务
+页面的语言，也不翻译 CLI 错误码、规范正文或代码标识符。
+
+所有输出携带相同、未经修改的 `explanation.json`，其 v1 字段和摘要保持兼容。
+新增的 `presentation.json` 承载所选语言的标题、分镜、统计、限制和共用界面文案，
+并绑定 IR 与来源摘要。`render-manifest.json` 记录语言及每个文件的摘要。JSON 格式
+也通过这份配套文件提供中文阅读文本，不改写原 IR 的英文投影字段。
+
+HTML/SVG、Mermaid、p5 与 Remotion 共用同一套文案。中文解释属于派生阅读层，不能
+替换精确 capsule、来源快照、Requirement ID、路径、规范强度或证据。导出器只映射
+已支持的 Spec Lab 统计和状态，不调用翻译 API，也不猜测或翻译任意规范内容。
+
+页面提供中文控件、屏幕阅读器标签和依赖关系文字列表。字体使用本地 CJK 回退，
+不下载、嵌入或分发字体。视频渲染机器必须已有合适的中文字形；Remotion 源码包的
+生成测试不等于实际视频或所有平台的字体渲染测试。两种语言仍受相同的 CSP、来源
+一致性、只读预览、私有目录和禁止覆盖保护。
+
 ## 已捕获的预览与中间格式
 
 可以用 Spec Lab 的 `--json` 先捕获预览，再编译为任意输出：
@@ -67,7 +112,8 @@ JSON 解析拒绝重复键、非有限数字、过大数据和未知 IR 版本�
 | `p5` | 同一播放器，加可拖动时间轴的依赖画布 | 显式提供可信的本地 p5.js |
 | `remotion` | 1920×1080、30 fps 的可渲染源码包 | 使用现有 Remotion/React 工程；本工具不渲染 MP4 |
 
-每个目录都有 `explanation.json`、`render-manifest.json` 和 `README.txt`。Manifest
+每个目录都有 `explanation.json`、`presentation.json`、`render-manifest.json` 和
+`README.txt`。Manifest
 记录 IR 摘要和每个输出文件的摘要；p5 还记录用户提供运行时的摘要。所有后端显示
 相同的解释事实与无授权边界，完整源码证据仍在伴随 JSON 中。视频画面是摘要，不能
 代替可检索原文。
@@ -128,6 +174,7 @@ CLI 是本地受信任用户工具，不是多租户服务或安全沙箱。
 - [IR 编译与验证](../scripts/explanation_ir.py)
 - [共享逐帧模型](../assets/explain/frame-model.mjs)
 - [Python 回归测试](../tests/test_explanation_ir.py)
+- [中文／英文输出测试](../tests/test_explanation_i18n.py)
 - [可选 Node 逐帧测试](../tests/explanation_frames.test.mjs)
 
 ```bash
