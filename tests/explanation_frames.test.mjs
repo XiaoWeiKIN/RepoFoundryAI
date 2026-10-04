@@ -132,3 +132,74 @@ test('selection motion starts at its captured owning Spec, never an unrelated ca
   assert.deepEqual(end.candidates.map(c=>c.selected),[false,true]);
   assert.deepEqual(mechanismFrame(m,300).candidates.map(c=>c.selected),[false,false]);
 });
+
+import fs from 'node:fs';
+import vm from 'node:vm';
+const p5Source=fs.readFileSync(new URL('../assets/explain/p5-visual.mjs',import.meta.url),'utf8');
+function p5Unit(count=5,{width=320,longLabel=false,runtime=true}={}){
+  // Unit-only drawing recorder. Real p5 coverage lives in tests/runtime/run.mjs.
+  const nodes=Array.from({length:count},(_,i)=>({id:longLabel&&i===0?'长'.repeat(100):`DOC-STATE-${i}`,role:i?'context_dependency':'direct'}));
+  const source={graph:{nodes,edges:nodes.slice(1).map(n=>({from:nodes[0].id,to:n.id}))}};
+  const disclosure={open:false}, visual={clientWidth:width};
+  const elements={visual,'visual-note':{textContent:''},relationships:{closest:()=>disclosure}};
+  const recorded={text:[],lines:[],canvas:null,description:null,observer:null};
+  const p={LEFT:'left',TOP:'top',
+    textFont:()=>{},textSize:size=>{recorded.size=size;},textLeading:()=>{},textAlign:()=>{},
+    textWidth:text=>[...text].length*8,createCanvas:(w,h)=>{recorded.canvas={width:w,height:h};},
+    resizeCanvas:(w,h,noRedraw)=>{assert.equal(noRedraw,true);recorded.canvas={width:w,height:h};},
+    noLoop:()=>{},describe:text=>{recorded.description=text;},background:()=>{},
+    noStroke:()=>{},stroke:()=>{},strokeWeight:()=>{},fill:()=>{},rect:()=>{},
+    line:(...args)=>recorded.lines.push(args),
+    text:(text,x,y)=>recorded.text.push({text,x,y,size:recorded.size})};
+  function P5(sketch){sketch(p);p.setup();this.redraw=()=>{recorded.text=[];recorded.lines=[];p.draw();};}
+  const context={window:{p5:runtime?P5:undefined},ir:source,frame:540,drawVisual:()=>{},
+    $:id=>elements[id],reading:{font_family:'fixture-font'},
+    ui:{direct:'直接选择',dependency:'上下文依赖',p5_missing:'missing',large_graph:'large',
+      graph_note:'graph',p5_pan_hint:'pan',empty_graph:'empty',p5_description:'description',seek_hint:'seek'},
+    ResizeObserver:class{constructor(fn){recorded.observer=fn;}observe(){ }},
+    atFrame:(_,frame)=>({index:Math.floor(frame/180),overall:(frame+1)/1080})};
+  const before=structuredClone(source);vm.runInNewContext(p5Source,context);context.drawVisual();
+  return {context,source,before,recorded,disclosure,visual,elements};
+}
+test('p5 canvas is not CSS-scaled below readable font size',()=>{
+  const css=fs.readFileSync(new URL('../assets/explain/story.html.template',import.meta.url),'utf8');
+  assert.match(css,/\.visual canvas\{max-width:none;display:block\}/);
+  const {recorded}=p5Unit();assert.equal(recorded.canvas.width,800);
+  assert(recorded.text.length>0);assert(recorded.text.every(t=>t.size===16));
+});
+test('p5 wraps full IDs and separates rows for 24 nodes',()=>{
+  const {source,recorded}=p5Unit(24);
+  assert.equal(recorded.text.length,24);
+  recorded.text.forEach((item,i)=>{
+    assert.equal(item.text.split('\n').slice(0,-1).join(''),source.graph.nodes[i].id);
+    assert(item.x>=0&&item.x+144<=800);
+    assert(item.y+item.text.split('\n').length*22<recorded.canvas.height-20);
+  });
+  assert(recorded.text[4].y>recorded.text[0].y+recorded.text[0].text.split('\n').length*22);
+  assert.equal(recorded.lines.length,source.graph.edges.length*3);
+  assert(recorded.lines.every(line=>line.every(Number.isFinite)));
+});
+test('p5 reveals the text alternative once on narrow layout or later resize',()=>{
+  const a=p5Unit();assert.equal(a.disclosure.open,true);
+  a.disclosure.open=false;a.recorded.observer();assert.equal(a.disclosure.open,false);
+  const b=p5Unit(5,{width:900});assert.equal(b.disclosure.open,false);
+  b.visual.clientWidth=320;b.recorded.observer();assert.equal(b.disclosure.open,true);
+});
+test('p5 long labels and oversized graphs use an explicit complete-source fallback',()=>{
+  for(const a of [p5Unit(25),p5Unit(5,{longLabel:true})]){
+    assert.equal(a.elements['visual-note'].textContent,'large');
+    assert.equal(a.recorded.text.length,0);assert.deepEqual(a.source,a.before);
+    assert.equal(a.disclosure.open,true);
+  }
+});
+test('p5 reverse seeking preserves exact source and drawing positions',()=>{
+  const a=p5Unit(),first={text:structuredClone(a.recorded.text),lines:structuredClone(a.recorded.lines)};
+  a.context.frame=900;a.context.drawVisual();a.context.frame=540;a.context.drawVisual();
+  assert.deepEqual(a.recorded.text,first.text);assert.deepEqual(a.recorded.lines,first.lines);
+  assert.deepEqual(a.source,a.before);
+});
+test('p5 empty and unavailable-runtime states remain explicit',()=>{
+  const empty=p5Unit(0);assert.equal(empty.elements['visual-note'].textContent,'empty');
+  const missing=p5Unit(2,{runtime:false});assert.equal(missing.elements['visual-note'].textContent,'missing');
+  assert.equal(missing.recorded.canvas,null);
+});

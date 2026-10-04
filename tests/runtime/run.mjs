@@ -121,7 +121,13 @@ for(const language of ['zh-CN','en'])for(const kind of ['html','p5'])for(const v
         const capture=async i=>{
           await page.locator('#steps button').nth(i).click();
           await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
-          return hash(await page.locator('canvas').screenshot());
+          // A natural-size canvas can extend outside the scroll viewport.
+          // Locator screenshots may capture only the visible (unchanged) region;
+          // compare the complete backing bitmap, not a viewport crop.
+          const data=await page.locator('canvas').evaluate(c=>c.toDataURL('image/png'));
+          const png=Buffer.from(data.slice(data.indexOf(',')+1),'base64');
+          await fs.writeFile(path.join(evidence,`${name}-canvas-${i}.png`),png);
+          return hash(png);
         };
         canvasHash=await capture(3);const other=await capture(5);assert.notEqual(canvasHash,other);
         assert.equal(await capture(3),canvasHash,'Canvas depends on playback history');
@@ -129,6 +135,26 @@ for(const language of ['zh-CN','en'])for(const kind of ['html','p5'])for(const v
         if(language==='zh-CN'){
           assert(log.some(x=>/[\u3400-\u9fff]/u.test(x.text)),'No actual Chinese canvas draw');
           report.canvas_fonts.push({name,fonts:[...new Set(log.filter(x=>/[\u3400-\u9fff]/u.test(x.text)).map(x=>x.font))]});
+        }
+      }
+      if(kind==='p5'){
+        const dimensions=await page.locator('canvas').evaluate(c=>({
+          cssWidth:c.getBoundingClientRect().width,bitmapWidth:c.width,
+          scrollWidth:c.parentElement.scrollWidth,clientWidth:c.parentElement.clientWidth}));
+        assert.equal(dimensions.cssWidth,800,'Canvas text was scaled with the viewport');
+        const drawLog=await page.evaluate(()=>window.__canvas);
+        const roles=drawLog.filter(x=>x.text===reading.labels.direct||x.text===reading.labels.dependency);
+        assert(roles.length>0,'No actual role-label draws');
+        assert(roles.every(x=>Number(x.font.match(/([0-9.]+)px/)[1])*dimensions.cssWidth/dimensions.bitmapWidth>=15.9),
+          'Effective canvas label size is below 16 CSS pixels');
+        if(viewport.width===390){
+          assert(dimensions.scrollWidth>dimensions.clientWidth,'Graph is not scrollable');
+          assert.equal(await page.locator('#relationships').evaluate(n=>n.closest('details').open),true);
+          const relationships=await page.locator('#relationships li').allTextContents();
+          assert.deepEqual(relationships,ir.graph.edges.map(e=>`${e.from} ${reading.labels.requires} ${e.to}`));
+          await page.locator('#visual').focus();await page.keyboard.press('ArrowRight');
+          await page.waitForFunction(()=>document.querySelector('#visual').scrollLeft>0);
+          await page.screenshot({path:path.join(evidence,name+'-pan.png'),fullPage:true});
         }
       }
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Viewport overflow');
