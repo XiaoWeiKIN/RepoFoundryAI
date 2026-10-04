@@ -1,0 +1,95 @@
+name: explanation-runtime-evaluation
+on:
+  pull_request:
+    paths:
+      - 'tests/runtime/**'
+      - '.github/workflows/explanation-runtime.yml'
+      - 'assets/explain/**'
+      - 'scripts/explain*.py'
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: rf
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: XiaoWeiKIN/EngineeringSpecifications
+          ref: 05905e03cafe2ecf7ebfa06f5354c0838ee7e62b
+          path: upstream-spec
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Capture real Catalog with synthetic target using existing acceptance
+        working-directory: rf
+        env:
+          RF_REAL_SPEC_REPO: ${{ github.workspace }}/upstream-spec
+          RF_SPEC_ARTIFACT_DIR: ${{ runner.temp }}/runtime-source
+        run: python -B tests/integration/test_documentation_catalog.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-source
+          path: ${{ runner.temp }}/runtime-source/real-catalog-html/explanation.json
+          retention-days: 7
+          if-no-files-found: error
+  runtime:
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      RF_RUNTIME_WORK: ${{ runner.temp }}/rf-render-eval
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Prepare isolated evaluation workspace
+        shell: bash
+        run: |
+          python -c "import os,pathlib,shutil; p=pathlib.Path(os.environ['RF_RUNTIME_WORK']); p.mkdir(); [shutil.copy2('tests/runtime/'+n,p/n) for n in ('package.json','run.mjs')]"
+      - uses: actions/download-artifact@v4
+        with:
+          name: runtime-source
+          path: ${{ env.RF_RUNTIME_WORK }}/input
+      - name: Install test-only runtimes (no package lifecycle scripts or paid service)
+        working-directory: ${{ env.RF_RUNTIME_WORK }}
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Provision Linux CJK fallback explicitly
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y fonts-noto-cjk
+      - name: Install evaluation browser
+        working-directory: ${{ env.RF_RUNTIME_WORK }}
+        run: npx --no-install playwright install chromium
+      - name: Install font inspection tooling
+        run: python -m pip install --disable-pip-version-check fonttools==4.60.1
+      - name: Generate Chinese and English bundles with real pinned p5
+        run: python -B tests/runtime/prepare.py
+      - name: Exercise real p5, fonts and full Remotion MP4 renders
+        working-directory: ${{ env.RF_RUNTIME_WORK }}
+        run: node run.mjs
+      - name: Verify actual assigned Chinese glyphs in local font tables
+        if: ${{ !cancelled() }}
+        run: python -B tests/runtime/fonts.py
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: runtime-${{ matrix.os }}
+          path: ${{ env.RF_RUNTIME_WORK }}/evidence/
+          retention-days: 7
+          if-no-files-found: error
