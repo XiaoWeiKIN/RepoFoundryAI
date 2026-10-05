@@ -136,6 +136,131 @@ requested, keep its source revision, assumptions, and limits visible. It does no
 become a second fact owner. Source changes require rechecking or regeneration;
 a polished view is not proof of actual behavior or approval.
 
+## Rewrite scope and fidelity review
+
+Choose the requested operation before editing. Polishing changes expression,
+not the factual model, headings, anchors or evidence. Rebuilding may change that
+model only from inspected sources and within the requested scope; identify factual
+corrections separately. Review-only work returns findings, not edits. Apply these
+rules to technical passages in mixed documents without flattening the surrounding
+narrative. Do not expand a prose request into project migration or artifact approval.
+
+Treat meaning preservation as a constraint, not a percentage score. Sentence
+length, active voice and list use are editorial defaults. An exception can preserve
+a causal explanation or an unknown actor; report material exceptions, not a quota
+of rules satisfied. Use ordered instructions for an operator's procedure, but do
+not turn a description of automatic software events into commands for the reader.
+
+Before rewriting, locate existing terminology in project glossaries, writing
+conventions, entry instructions and the affected source. Use those names. If no
+term owner exists, keep a small working vocabulary for this document; define only
+unfamiliar concepts. Do not create a repository glossary, rename code or revise
+historical terms without authorization. A linter match never overrides a term.
+
+After rewriting, compare the original and revision using these review prompts.
+These are author checks, not new Spec Requirement IDs or lifecycle gates:
+
+| Prompt | Compare before and after |
+|---|---|
+| Fidelity: branches | Preconditions, only-if clauses, empty inputs, failure paths and exceptions remain attached to their claims. |
+| Fidelity: actors | The same component or person owns the action; caller-controlled state is not described as internally owned. |
+| Fidelity: strength | Negation, quantities, units, uncertainty and normative keywords retain their force. |
+| Fidelity: status | Proposal, authorization, implementation and verification remain distinct; historical observations keep their scope. |
+| Fidelity: protected bytes | Code, quotations, logs, IDs, links, required headings and sealed sources remain exact. |
+
+Use a counterexample when a sentence loses a condition. In a constructed list
+navigator, an empty enabled list returns no selection. An absent current item makes
+Down choose the first enabled item. Otherwise Down advances with wraparound.
+Rewriting this as "Down selects the first item" is incorrect even though it is
+shorter. Compare all three branches; do not declare semantic equivalence from a
+keyword check. This example is illustrative, not a report about a target project.
+
+## Chinese precision in practice
+
+中文说明先给读者当前需要的结论，再解释条件和原因。拆句时保留条件的作用范围；
+不用短句代替完整推理。主语改变时写出组件或人的名称，避免让读者猜谁负责动作。
+
+先沿用项目术语，再消除同一段中的无意混称。“建议面板”可以是项目名词，不因其中
+含有“建议”就改名。“统计显著性”也不等于空泛的程度词。代码名和测试名保持原样；
+不为中英文空格、标点或措辞改写代码、命令、原始输出和引文。
+
+以下是构造的措辞例子，不声明任何项目行为或测试结果：
+
+| 问题 | 改写方向 |
+|---|---|
+| 对缓存进行检查 | 缓存模块检查缓存条目。仅在来源确实指定该主体时这样写。 |
+| 客户端调用重试器，它保留计数 | 如果重试器是主体，写“客户端调用重试器。重试器保留计数”。 |
+| 校验失败后仍在某些情况下继续 | 保留来源给出的失败分支和具体条件；缺失时报告，不猜测条件。 |
+| 恢复选区、重挂节点和通知调用方挤在一句 | 按实际事件顺序拆句；每句保留主体，不重新排序有依赖的动作。 |
+
+新写的中文要求在项目没有约定时，可用“应／不应”表达要求，“宜／不宜”表达推荐，
+“可／不必”表达许可或不作要求。已有契约的 MUST/SHOULD/MAY 及项目固定译名优先；
+不通过替换情态词增强或减弱原意。“能／不能”描述能力时，不改成授权或禁止。
+
+技术说明优先使用主动、完整的句子。包装动词、长定语、指代和句长都是复核入口，
+不是要求作者删除全部命中词。给操作人员的步骤把前提放在动作之前，结果单独说明；
+机制文档保留连贯段落，Case Study 保留叙事，不强制每三项就拆成列表。
+
+## Optional mechanical writing check
+
+The full RF checkout includes `scripts/check_writing.py`. It reads only explicitly
+named UTF-8 text/Markdown files and prints review candidates with source SHA-256
+and line locations. It does not edit files, recurse through a project, call a model,
+fetch a policy or prove factual correctness. Independently installed professional
+Skills do not require this script: use this guide manually and report the tool as
+unavailable rather than installing another package solely for style.
+
+From the full RF checkout, replace `PATH` with the authored file to inspect:
+
+```bash
+python3 -B scripts/check_writing.py PATH --lang zh --json
+python3 -B scripts/check_writing.py PATH --lang zh --line-range 12:35 --json
+```
+
+The second command checks an explicitly selected inclusive line range of one file;
+it does not discover Git changes. Read the surrounding conditions during semantic
+review. Repeat `--line-range` for additional ranges. Omit `--lang` for per-line
+Chinese/English detection, or use `--lang en` for English. Mixed-language detection
+is a heuristic; it does not translate text or validate other languages.
+
+Use `--length-hints` only when useful. Its 40/50 Chinese-unit and 20/25 English-word
+triggers distinguish step-like and descriptive line fragments. They are review
+hints, not sentence limits or a compliance score. Protected spans are omitted and
+soft-wrapped sentences are not reconstructed, so these counts are not linguistic
+measurements. Project conventions and meaning take precedence.
+
+The scanner conservatively skips code fences, inline code, quotations, metadata,
+link targets and HTML blocks. It is not a complete Markdown parser and may omit
+prose. Findings return exit status 0; unreadable files, invalid ranges, invalid
+UTF-8 and files larger than 1 MiB return 2. Tool errors must not be reported as a
+clean scan. No `--fix`, recursive scan or blocking style mode is provided.
+
+Keep checker unit tests in repository CI, not stylistic findings as a merge gate.
+Review matches in context, then perform the separate fidelity and reader-task
+reviews. A successful process or zero candidates is not semantic verification,
+accessibility certification, model adherence or ASD-STE100 conformance.
+
+## Separate document and author handoff
+
+Deliver a readable document and a short author note only where needed. Keep
+execution-critical prerequisites, risks and stopping conditions beside the action
+in the document; place missing evidence and noncritical editorial questions in the
+note. Use placeholders only when a reader cannot complete the task without the
+missing value. Never invent a recovery command, measurement or owner to fill one.
+
+Report the actual command, input revision or digest, exit status, candidate counts
+and unperformed checks when a checker ran. If it did not run, say so; reading its
+source is not execution. Do not claim a count of rules applied without a traceable
+basis. Keep factual corrections distinct from wording changes. Preserve unsupported
+claims at their original strength during polishing and flag them for the author;
+do not knowingly publish a contradicted statement as a verified fact.
+
+For comparative writing evaluations, fix source material, task, model settings and
+output budget before generation. Use isolated runs and hide treatment labels from
+reviewers when possible. Freeze assertions before scoring and retain failures.
+Packaging tests and an eval catalog do not execute an LLM. Same-session reconstructions
+are demonstrations, not blind experiments or evidence of a quality improvement.
+
 ## Documentation maintenance
 
 When authorized code changes affect documentation, update the current explanation
@@ -264,6 +389,24 @@ Use the packaged guidance offline; do not fetch the full guides for every task.
 Google Developers prose is licensed under CC BY 4.0 unless otherwise noted:
 https://creativecommons.org/licenses/by/4.0/. The adaptations here are identified
 above. No Google code samples or ASD-STE100 dictionary entries are reproduced.
+
+### Hai adaptation notice
+
+The sections "Rewrite scope and fidelity review", "Chinese precision in practice"
+and "Separate document and author handoff" adapt selected methods from Hai
+Simplified Technical by hylarucoder, Copyright (c) 2026 hylarucoder, under
+CC BY-NC 4.0: https://creativecommons.org/licenses/by-nc/4.0/ .
+Source revision: `a6c7ed23aee5fe9a3d9cb7e162cd8a6c0862ce8c`.
+Source and license: https://github.com/hylarucoder/hai-stack/tree/a6c7ed23aee5fe9a3d9cb7e162cd8a6c0862ce8c/skills/hai-simplified-technical
+and https://github.com/hylarucoder/hai-stack/blob/a6c7ed23aee5fe9a3d9cb7e162cd8a6c0862ce8c/LICENSE .
+
+RF changes: integrate scope/fidelity review with existing evidence and authority
+boundaries; use original bilingual examples; treat length and keyword matches as
+non-blocking hints; preserve project terms, independent Skill use and historical
+sources. The RF checker is a separate implementation, not a copy of Hai's script.
+The adapted material retains the noncommercial restriction and this attribution
+in each packaged guide. This notice does not relicense unrelated RF code, endorse
+RF on behalf of the upstream author or certify full ASD-STE100 conformance.
 
 ## Distribution maintenance
 
