@@ -20,56 +20,56 @@ SPEC.loader.exec_module(CHECK)
 
 class WritingCheckTests(unittest.TestCase):
     def hints(self, text: str, lang: str = "zh", **kwargs):
-        return CHECK.review(text, lang, kwargs.get("ranges", []), kwargs.get("length", False))
+        return CHECK.review(text, lang, kwargs.get("ranges", []))
 
     def cli(self, *args: str):
         return subprocess.run([sys.executable, "-B", str(SCRIPT), *args],
                               text=True, encoding="utf-8", capture_output=True, timeout=10)
 
-    def test_chinese_wrapper_and_vague_words_are_candidates(self):
-        found = self.hints("缓存模块进行检查。\n性能显著提升。")
-        self.assertEqual([f["rule"] for f in found], ["CW-ZH-VERB", "CW-ZH-VAGUE"])
+    def test_chinese_action_and_scope_phrases_are_candidates(self):
+        found = self.hints("缓存模块进行检查。\n在适当条件下重试。")
+        self.assertEqual([f["rule"] for f in found], ["CW-ZH-ACTION", "CW-ZH-SCOPE"])
         self.assertTrue(all(f["kind"] == "review" for f in found))
         self.assertEqual(found[0]["line"], 1)
         self.assertEqual(found[0]["column"], 5)
 
     def test_english_candidates(self):
         found = self.hints("Perform a validation before reading various files.", "en")
-        self.assertEqual({f["rule"] for f in found}, {"CW-EN-VERB", "CW-EN-VAGUE"})
+        self.assertEqual({f["rule"] for f in found}, {"CW-EN-ACTION", "CW-EN-SCOPE"})
 
     def test_domain_terms_and_normative_keywords_are_not_banned(self):
-        text = "建议面板不具有统计显著性。\nThe service MUST retain the SHOULD clause."
+        text = "建议面板展示统计显著性结果。\nThe service MUST retain the SHOULD clause."
         self.assertEqual(self.hints(text, "auto"), [])
 
     def test_quoted_examples_are_protected(self):
-        self.assertEqual(self.hints('“进行检查”与「显著提升」是原文。\n"various"', "auto"), [])
+        self.assertEqual(self.hints('“进行检查”与「适当条件」是原文。\n"various"', "auto"), [])
 
     def test_inline_code_including_multiple_backticks_is_protected(self):
-        self.assertEqual(self.hints('`进行检查` 与 ``a ` 显著提升``。'), [])
+        self.assertEqual(self.hints('`进行检查` 与 ``a ` 适当条件``。'), [])
 
     def test_multiline_code_span_is_protected(self):
         self.assertEqual(self.hints('`开始\n进行检查\n结束`'), [])
 
     def test_fence_length_and_type_are_respected(self):
-        text = "````text\n进行检查\n```\n显著提升\n~~~~\n````\n进行检查。"
+        text = "````text\n进行检查\n```\n适当条件\n~~~~\n````\n进行检查。"
         found = self.hints(text)
-        self.assertEqual([(f["line"], f["rule"]) for f in found], [(7, "CW-ZH-VERB")])
+        self.assertEqual([(f["line"], f["rule"]) for f in found], [(7, "CW-ZH-ACTION")])
 
     def test_tilde_fence_is_protected(self):
         self.assertEqual(self.hints("~~~log\n进行检查\n~~~"), [])
 
     def test_frontmatter_and_indented_code_are_protected(self):
-        self.assertEqual(self.hints("---\nlabel: 进行检查\n---\n    进行检查\n\t显著提升"), [])
+        self.assertEqual(self.hints("---\nlabel: 进行检查\n---\n    进行检查\n\t适当条件"), [])
 
     def test_blockquotes_and_link_definitions_are_protected(self):
-        self.assertEqual(self.hints("> 进行检查。\n[ref]: ./进行检查.md\n[other]: https://example.invalid/显著提升"), [])
+        self.assertEqual(self.hints("> 进行检查。\n[ref]: ./进行检查.md\n[other]: https://example.invalid/适当条件"), [])
 
     def test_links_keep_label_and_ignore_nested_destination(self):
-        found = self.hints('[进行检查](./topic(显著提升).md "进行检查")')
-        self.assertEqual([(f["rule"], f["column"]) for f in found], [("CW-ZH-VERB", 2)])
+        found = self.hints('[进行检查](./topic(适当条件).md "进行检查")')
+        self.assertEqual([(f["rule"], f["column"]) for f in found], [("CW-ZH-ACTION", 2)])
 
     def test_comments_html_and_raw_urls_are_protected(self):
-        text = "<!-- 进行检查\n显著提升 -->\n\n<div>进行检查</div>\n\nhttps://example.invalid/进行检查"
+        text = "<!-- 进行检查\n适当条件 -->\n\n<div>进行检查</div>\n\nhttps://example.invalid/进行检查"
         self.assertEqual(self.hints(text), [])
 
     def test_masking_preserves_line_and_column(self):
@@ -81,32 +81,12 @@ class WritingCheckTests(unittest.TestCase):
         self.assertEqual([f["line"] for f in found], [4])
 
     def test_nonselected_lines_do_not_produce_hints(self):
-        found = self.hints("进行检查\n执行检查\n显著提升", ranges=[(2, 2)])
+        found = self.hints("进行检查\n执行检查\n适当条件", ranges=[(2, 2)])
         self.assertEqual(found, [])
-
-    def test_length_hints_are_opt_in_not_limits(self):
-        text = "甲" * 51 + "。"
-        self.assertEqual(self.hints(text), [])
-        self.assertEqual(self.hints(text, length=True)[0]["kind"], "info")
-
-    def test_step_length_and_table_exception(self):
-        text = "1. " + "甲" * 41 + "。\n| " + "甲" * 60 + " |"
-        found = self.hints(text, length=True)
-        self.assertEqual(len(found), 1)
-        self.assertEqual(found[0]["threshold"], 40)
-
-    def test_english_length_hint(self):
-        text = " ".join(["word"] * 26) + "."
-        self.assertEqual(self.hints(text, "en", length=True)[0]["units"], 26)
 
     def test_language_auto_is_per_line(self):
         found = self.hints("进行检查。\nPerform a validation.", "auto")
-        self.assertEqual({f["rule"] for f in found}, {"CW-ZH-VERB", "CW-EN-VERB"})
-
-    def test_spacing_and_punctuation_are_reviewable(self):
-        found = self.hints("使用Redis,请重试。")
-        self.assertIn("CW-ZH-SPACING", [f["rule"] for f in found])
-        self.assertIn("CW-ZH-PUNCT", [f["rule"] for f in found])
+        self.assertEqual({f["rule"] for f in found}, {"CW-ZH-ACTION", "CW-EN-ACTION"})
 
     def test_conditional_loss_is_outside_mechanical_verification(self):
         # Both scan clean: this demonstrates why a semantic reviewer is required.
@@ -146,7 +126,7 @@ class WritingCheckTests(unittest.TestCase):
     def test_multiple_files_and_ranges(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "draft.md"
-            path.write_text("进行检查\n执行检查\n显著提升", encoding="utf-8")
+            path.write_text("进行检查\n执行检查\n适当条件", encoding="utf-8")
             data = json.loads(self.cli(str(path), "--line-range", "1:1",
                                        "--line-range", "3:3", "--json").stdout)
             self.assertEqual([f["line"] for f in data["documents"][0]["findings"]], [1, 3])

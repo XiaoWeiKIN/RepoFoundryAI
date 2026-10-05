@@ -7,8 +7,14 @@
       "expected_output": "Produces one focused architecture document organized around the query lifecycle, core abstractions, boundaries, extension points, and a late code map; it does not create a DD package or mirror the repository tree.",
       "files": [],
       "assertions": [
-        {"name": "flow-first", "description": "Uses a real query or data lifecycle as the narrative spine before introducing source locations."},
-        {"name": "single-document-default", "description": "Defaults to one Markdown document and does not generate role-based directories, a manifest, or DD identities."}
+        {
+          "name": "flow-first",
+          "description": "Uses a real query or data lifecycle as the narrative spine before introducing source locations."
+        },
+        {
+          "name": "single-document-default",
+          "description": "Defaults to one Markdown document and does not generate role-based directories, a manifest, or DD identities."
+        }
       ]
     },
     {
@@ -17,8 +23,14 @@
       "expected_output": "Uses module plus contract concerns selectively, making state ownership, transitions, failure semantics, compatibility, and verification explicit without forcing unrelated architecture sections.",
       "files": [],
       "assertions": [
-        {"name": "contract-depth", "description": "Defines ownership and invariants deeply enough to constrain implementation."},
-        {"name": "selective-structure", "description": "Omits irrelevant template sections rather than filling a universal checklist."}
+        {
+          "name": "contract-depth",
+          "description": "Defines ownership and invariants deeply enough to constrain implementation."
+        },
+        {
+          "name": "selective-structure",
+          "description": "Omits irrelevant template sections rather than filling a universal checklist."
+        }
       ]
     },
     {
@@ -27,8 +39,14 @@
       "expected_output": "Reports evidence-backed findings ordered by engineering risk, including mental-model, ownership, boundary, evolution, verification, and freshness gaps, without mutating the document.",
       "files": [],
       "assertions": [
-        {"name": "risk-first-review", "description": "Leads with actionable findings and concrete failure modes rather than a prose rewrite."},
-        {"name": "read-only-boundary", "description": "Does not edit the document when only a review was requested."}
+        {
+          "name": "risk-first-review",
+          "description": "Leads with actionable findings and concrete failure modes rather than a prose rewrite."
+        },
+        {
+          "name": "read-only-boundary",
+          "description": "Does not edit the document when only a review was requested."
+        }
       ]
     },
     {
@@ -37,7 +55,10 @@
       "expected_output": "Routes governed DD identity, manifest, and lifecycle work to engineering-design instead of inventing those mechanics inside detailed-design.",
       "files": [],
       "assertions": [
-        {"name": "governance-boundary", "description": "Hands explicit DD lifecycle work to engineering-design."}
+        {
+          "name": "governance-boundary",
+          "description": "Hands explicit DD lifecycle work to engineering-design."
+        }
       ]
     },
     {
@@ -46,8 +67,14 @@
       "expected_output": "Uses a root README and only the needed reader-oriented Technical Architecture Docs routes such as how-it-works, core-concepts, subsystems, extension-points, deep-dives, and contributor-guide; it does not create concern buckets.",
       "files": [],
       "assertions": [
-        {"name": "reader-oriented-package", "description": "Organizes multiple documents by how contributors learn and navigate the architecture."},
-        {"name": "no-concern-buckets", "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."}
+        {
+          "name": "reader-oriented-package",
+          "description": "Organizes multiple documents by how contributors learn and navigate the architecture."
+        },
+        {
+          "name": "no-concern-buckets",
+          "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."
+        }
       ]
     },
     {
@@ -152,17 +179,17 @@
     },
     {
       "id": 11,
-      "prompt": "项目术语表把 suggestion panel 固定为“建议面板”。只润色正文：“建议面板展示缓存结果。统计显著性按实验协议解释。” 一个正则检查器因为“建议”和“显著”报错。保留原词还是改名？给出正文和简短理由；不要修改全仓术语表。",
-      "expected_output": "Retains established domain terms, distinguishes hints from verdicts, and avoids an unauthorized glossary migration.",
+      "prompt": "项目术语表把 recovery window 固定为“恢复窗口”。只润色正文：“恢复窗口由快照策略决定。恢复任务读取最近的有效快照。” 一个启发式检查器把“恢复”识别成动作候选。保留项目术语还是为了清除提示而改名？给出正文和简短理由；不要修改全仓术语表。",
+      "expected_output": "Retains the established 恢复窗口 term, treats heuristic matches as review candidates rather than verdicts, and avoids an unauthorized glossary migration.",
       "files": [],
       "assertions": [
         {
           "name": "term-over-linter",
-          "description": "Keeps 建议面板 and 统计显著性 as domain concepts, not vague requirement words."
+          "description": "Keeps the established 恢复窗口 term instead of renaming it only to silence a heuristic."
         },
         {
           "name": "no-registry-mutation",
-          "description": "Does not create or rewrite a project-wide glossary to clear matches."
+          "description": "Does not create or rewrite a project-wide glossary to clear a prose hint."
         }
       ]
     },

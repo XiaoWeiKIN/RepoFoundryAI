@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Read-only writing review hints; never a truth, approval or STE conformance gate.
+"""Read-only RF prose hints; never a truth, approval, or standards-conformance gate.
 
 Only explicit UTF-8 Markdown/text files are read. No directory traversal, network,
-model call, source mutation or autofix. Findings return 0; input/tool errors return
-2. Markdown handling is conservative, not a complete CommonMark parser. This is
-an RF implementation, not the Hai checker. See the packaged writing guide for
-editorial sources and for the separate, mandatory semantic review by the author.
+model call, source mutation, or autofix. Findings return 0; input/tool errors return
+2. Markdown handling is conservative, not a complete CommonMark parser.
+Semantic fidelity remains a separate author review defined by the writing guide.
 """
 from __future__ import annotations
 
@@ -18,11 +17,10 @@ import stat
 import sys
 from typing import NamedTuple
 
-VERSION = "1"
+VERSION = "2"
 MAX_BYTES = 1024 * 1024
 CJK = r"[\u3400-\u4dbf\u4e00-\u9fff]"
 CJK_RE = re.compile(CJK)
-WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['_-][A-Za-z0-9]+)*")
 
 
 class Rule(NamedTuple):
@@ -32,22 +30,38 @@ class Rule(NamedTuple):
 
 
 ZH_RULES = (
-    Rule("CW-ZH-VERB", r"进行(?:验证|检查|恢复|更新|压缩)|加以(?:检查|验证)|予以(?:删除|保留)",
-         "Check whether a direct verb preserves the actor and meaning."),
-    Rule("CW-ZH-VAGUE", r"适当|若干|较为|基本上|一定程度上|显著提升|大幅提高",
-         "Check scope/conditions; keep supported claims and never invent a number."),
-    Rule("CW-ZH-SPACING", rf"{CJK}[A-Za-z0-9]|[A-Za-z0-9]{CJK}",
-         "Check Chinese/Latin spacing against the project convention."),
-    Rule("CW-ZH-PUNCT", rf"{CJK}[,;:?!]|[,;:?!]{CJK}",
-         "Check punctuation in Chinese prose; do not rewrite literal output."),
+    Rule(
+        "CW-ZH-ACTION",
+        r"(?:进行|实施)(?:校验|验证|检查|迁移|恢复|更新)",
+        "Check whether a direct verb is clearer without changing the actor or scope.",
+    ),
+    Rule(
+        "CW-ZH-SCOPE",
+        r"适当|若干|较为|基本上|一定程度上",
+        "Check whether the source provides a more exact condition or scope.",
+    ),
+    Rule(
+        "CW-ZH-REFERENCE",
+        r"(?:该|其)(?:组件|模块|流程|状态|对象)",
+        "Check whether the reference has exactly one possible antecedent.",
+    ),
 )
 EN_RULES = (
-    Rule("CW-EN-VERB", r"\b(?:perform|conduct) (?:a|an|the) (?:validation|inspection|comparison)\b",
-         "Consider the direct verb without changing scope or authority."),
-    Rule("CW-EN-VAGUE", r"\b(?:appropriate|various|basically|substantially improved)\b",
-         "Check the intended condition or scope; a match is not a defect."),
-    Rule("CW-EN-SUBJECT", r"\b(?:it is|there is|there are)\b",
-         "Check whether naming the actor clarifies this sentence; do not invent one."),
+    Rule(
+        "CW-EN-ACTION",
+        r"\b(?:perform|conduct) (?:a|an|the) (?:validation|inspection|comparison)\b",
+        "Consider a direct verb only if it preserves scope and authority.",
+    ),
+    Rule(
+        "CW-EN-SCOPE",
+        r"\b(?:appropriate|various|basically)\b",
+        "Check whether the source provides a more exact condition or scope.",
+    ),
+    Rule(
+        "CW-EN-SUBJECT",
+        r"\b(?:it is|there is|there are)\b",
+        "Check whether naming the actor clarifies the sentence; do not invent one.",
+    ),
 )
 
 
@@ -141,8 +155,7 @@ def selected(number: int, ranges: list[tuple[int, int]]) -> bool:
     return not ranges or any(start <= number <= end for start, end in ranges)
 
 
-def review(text: str, lang: str, ranges: list[tuple[int, int]],
-           length_hints: bool = False) -> list[dict[str, object]]:
+def review(text: str, lang: str, ranges: list[tuple[int, int]]) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     for number, line in enumerate(prose_lines(text), 1):
         if not selected(number, ranges):
@@ -154,16 +167,6 @@ def review(text: str, lang: str, ranges: list[tuple[int, int]],
                 findings.append({"line": number, "column": match.start() + 1,
                                  "rule": rule.identifier, "kind": "review",
                                  "match": match.group(), "message": rule.message})
-        if not length_hints or line.lstrip().startswith(("|", "#")):
-            continue
-        step = re.match(r"^\s*[0-9]+[.)、]\s", line) is not None
-        threshold = (40 if step else 50) if language == "zh" else (20 if step else 25)
-        for fragment in re.split(r"[。！？；]|(?<=[.!?;])\s+", line):
-            units = len(WORD_RE.findall(fragment)) + len(CJK_RE.findall(fragment))
-            if units > threshold:
-                findings.append({"line": number, "column": 1, "rule": "CW-LENGTH",
-                                 "kind": "info", "units": units, "threshold": threshold,
-                                 "message": "Line-fragment length hint, not a sentence limit."})
     return sorted(findings, key=lambda x: (x["line"], x["column"], x["rule"]))
 
 
@@ -184,8 +187,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="Print source-bound JSON")
     parser.add_argument("--line-range", action="append", type=parse_range, default=[],
                         help="Check explicit inclusive lines of one file; repeatable")
-    parser.add_argument("--length-hints", action="store_true",
-                        help="Show approximate per-line prose length hints (not limits)")
     args = parser.parse_args(argv)
     if args.line_range and len(args.files) != 1:
         parser.error("--line-range requires exactly one file")
@@ -199,8 +200,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError(f"Line range exceeds file length: {path}")
             documents.append({"path": str(path), "sha256": hashlib.sha256(raw).hexdigest(),
                               "line_ranges": args.line_range,
-                              "findings": review(text, args.lang, args.line_range,
-                                                 args.length_hints)})
+                              "findings": review(text, args.lang, args.line_range)})
     except (OSError, ValueError, UnicodeError) as exc:
         print(json.dumps({"status": "input_error", "error": str(exc)}, ensure_ascii=False),
               file=sys.stderr)
@@ -208,9 +208,9 @@ def main(argv: list[str] | None = None) -> int:
     report = {"schema_version": 1, "tool_version": VERSION, "status": "review_hints_only",
               "language": args.lang, "source_files_modified": False,
               "semantic_verification": "not_performed", "documents": documents,
-              "limitations": ["No truth, terminology, authority or STE conformance verdict.",
+              "limitations": ["No truth, terminology, authority, accessibility, or standards verdict.",
                               "Markdown masking is conservative and may omit prose.",
-                              "Length hints count unprotected line fragments, not wrapped sentences."]}
+                              "A clean scan does not compare source and rewritten meaning."]}
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

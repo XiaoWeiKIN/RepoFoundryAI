@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 GUIDE = Path("references/controlled-writing.md")
 SKILLS = ("detailed-design", "engineering-benchmark", "engineering-research",
           "engineering-design", "engineering-execution-plan", "engineering-case-study")
-SECTIONS = ("Rewrite scope and fidelity review", "Chinese precision in practice",
-            "Optional mechanical writing check", "Separate document and author handoff")
+SECTIONS = ("Preserve meaning while editing", "Precise Chinese technical prose",
+            "Optional source-bound prose hints", "Report writing verification")
 EXPECTED_ASSERTIONS = {
     10: {"branch-preservation", "no-shortening-loss", "polish-scope"},
     11: {"term-over-linter", "no-registry-mutation"},
@@ -35,32 +35,38 @@ class WritingFidelityTests(unittest.TestCase):
                     self.assertLess(text.index("## " + heading), text.index("## Documentation maintenance"))
                 self.assertEqual(re.findall(r"\]\(([^)]+)\)", text), [])
 
-    def test_attribution_and_noncommercial_boundary_travel_with_copies(self):
-        for relative in [GUIDE, *(Path(skill) / GUIDE for skill in SKILLS)]:
-            text = (ROOT / relative).read_text(encoding="utf-8")
-            for phrase in ("Copyright (c) 2026 hylarucoder", "CC BY-NC 4.0",
-                           "https://creativecommons.org/licenses/by-nc/4.0/",
-                           "a6c7ed23aee5fe9a3d9cb7e162cd8a6c0862ce8c",
-                           "RF changes:", "does not relicense unrelated RF code"):
-                self.assertIn(phrase, " ".join(text.split()))
+    def test_native_extension_uses_rf_source_model(self):
+        text = " ".join((ROOT / GUIDE).read_text(encoding="utf-8").split())
+        for phrase in (
+            "project terminology before editorial preferences",
+            "same actor owns each action",
+            "A keyword scan cannot establish equivalence",
+            "do not make prose findings a merge gate",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
 
     def test_fidelity_and_editorial_scope_are_distinct(self):
         text = " ".join((ROOT / GUIDE).read_text(encoding="utf-8").split())
-        for phrase in ("not a percentage score", "Fidelity: branches", "Fidelity: actors",
-                       "Fidelity: strength", "Fidelity: status", "Fidelity: protected bytes",
-                       "Review-only work returns findings, not edits",
-                       "not new Spec Requirement IDs or lifecycle gates",
-                       "A linter match never overrides a term",
-                       "without flattening the surrounding narrative"):
+        for phrase in (
+            "Polishing may change wording and organization but not the factual model",
+            "Review-only work returns findings instead of editing the artifact",
+            "Keep negation, quantities, units, uncertainty, and normative strength unchanged",
+            "Keep proposal, authorization, implementation, verification, and historical status distinct",
+            "zero candidates do not prove semantic fidelity",
+            "Reading the script is not execution",
+        ):
             self.assertIn(phrase, text)
 
     def test_checker_is_optional_nonblocking_and_has_no_model_verdict(self):
         text = " ".join((ROOT / GUIDE).read_text(encoding="utf-8").split())
-        for phrase in ("Skills do not require this script", "Findings return exit status 0",
-                       "Tool errors must not be reported as a clean scan",
-                       "No `--fix`, recursive scan or blocking style mode",
-                       "Same-session reconstructions are demonstrations",
-                       "reading its source is not execution"):
+        for phrase in (
+            "Skills do not require the script",
+            "Findings return exit status 0",
+            "Tool errors must not be described as a clean scan",
+            "There is no autofix, recursive scan, compliance score, or blocking style mode",
+            "same-session reconstructions are demonstrations",
+        ):
             self.assertIn(phrase, text)
 
     def test_checker_imports_no_execution_or_network_client(self):
