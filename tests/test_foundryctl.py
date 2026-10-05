@@ -52,7 +52,7 @@ class FoundryctlTestCase(unittest.TestCase):
         )
         self.assertIsNotNone(source)
         assert source is not None
-        self.assertEqual(source["ref"], "refs/tags/v1.7.0")
+        self.assertEqual(source["ref"], "refs/tags/v1.7.1")
 
     def run_cli(
         self,
