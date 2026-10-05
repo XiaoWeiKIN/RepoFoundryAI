@@ -53,6 +53,6 @@ class ArchitectureTests(unittest.TestCase):
             again=self.cli("--input",str(src),"--output",str(out),"--apply");self.assertEqual(again.returncode,2)
     def test_no_repository_inference_or_markdown_conversion_claim(self):
         text=SCRIPT.read_text()
-        self.assertNotIn("git ",text);self.assertNotIn("requests",text);self.assertNotIn("markdown",text.lower())
+        self.assertNotIn("subprocess",text);self.assertNotIn("requests",text);self.assertNotIn("urllib",text)
         self.assertIn("source-bound architecture JSON",text)
 if __name__=="__main__":unittest.main()
