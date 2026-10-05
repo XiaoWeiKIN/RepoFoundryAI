@@ -9,13 +9,13 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
   --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec sync --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  spec update --spec-version 1.7.0 --spec languages/go --apply
+  spec update --spec-version 1.7.1 --spec languages/go --apply
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 ```
 
 默认 Catalog 来自
 `https://github.com/XiaoWeiKIN/EngineeringSpecifications.git`，默认固定版本为
-`1.7.0`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
+`1.7.1`。`--spec-version MAJOR.MINOR.PATCH` 规范化为
 `refs/tags/vMAJOR.MINOR.PATCH`，解析器必须验证 tag 与 `catalog_version` 一致。
 首次初始化可用 `--spec-repository` 选择其他仓库；`--spec-ref` 只用于显式开发
 分支、tag 或 commit。manifest 保存 Git URL/ref。`sync` 使用已有 lock 的 commit；

@@ -561,7 +561,7 @@ repofoundry --repo . upgrade --to 0.11.1 --apply
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.7.0 --spec languages/go --apply
+  spec update --spec-version 1.7.1 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -627,7 +627,7 @@ Engineering Specs come from the independent
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog. `sync` follows the locked commit; `update` explicitly resolves the
 selected release again. New repositories default to fixed Catalog version
-`1.7.0`, represented as `refs/tags/v1.7.0`; production upgrades name another
+`1.7.1`, represented as `refs/tags/v1.7.1`; production upgrades name another
 version with `spec update --spec-version MAJOR.MINOR.PATCH`. `--spec-ref`
 remains an explicit development-source escape hatch. `spec validate` is
 offline. Installing RepoFoundry `0.4.1` or upgrading only the Harness does not
