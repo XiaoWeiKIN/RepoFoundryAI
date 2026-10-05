@@ -922,7 +922,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
             foundryctl,
         )
-        self.assertIn('DEFAULT_SPEC_VERSION = "1.5.0"', foundryctl)
+        self.assertIn('DEFAULT_SPEC_VERSION = "1.7.0"', foundryctl)
         self.assertNotIn('DEFAULT_SPEC_REF = "main"', foundryctl)
         self.assertIn("--spec-version", foundryctl)
         self.assertIn('"upgrade"', foundryctl)
