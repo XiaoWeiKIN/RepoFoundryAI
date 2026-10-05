@@ -6,6 +6,8 @@ on:
       - '.github/workflows/explanation-runtime.yml'
       - 'assets/explain/**'
       - 'scripts/explain*.py'
+      - 'detailed-design/references/architecture.md'
+      - 'tests/test_architecture_explanation.py'
 permissions:
   contents: read
 jobs:
