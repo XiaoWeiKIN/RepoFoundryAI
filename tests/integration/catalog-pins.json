@@ -4,11 +4,11 @@
   "baseline": {
     "revision": "5deda62dbacdbc753b9edbb00d1a891c76415b4a",
     "version": "1.7.0",
-    "role": "prepared release commit; tag publication is not asserted"
+    "role": "published release commit"
   },
   "candidate": {
-    "revision": "05905e03cafe2ecf7ebfa06f5354c0838ee7e62b",
+    "revision": "e2919c1d205372ad1d1c70808a000a7e80390c8b",
     "version": "1.7.1",
-    "role": "merged editorial changes; development snapshot, not a release"
+    "role": "published release commit"
   }
 }

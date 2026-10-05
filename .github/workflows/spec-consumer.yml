@@ -26,8 +26,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: XiaoWeiKIN/EngineeringSpecifications
-          # Merged #20; development 1.7.1 snapshot, not a release tag.
-          ref: 05905e03cafe2ecf7ebfa06f5354c0838ee7e62b
+          # Published EngineeringSpecifications 1.7.1 release commit.
+          ref: e2919c1d205372ad1d1c70808a000a7e80390c8b
           path: upstream-spec
           fetch-depth: 0
           persist-credentials: false
