@@ -138,3 +138,32 @@ create another manual source of truth or a mandatory freshness field.
 - Do source links support the claim, and is likely drift visible?
 - Can the intended reader explain the walkthrough without images or color?
 - Are example commands verified or explicitly untested, and can the reader distinguish current behavior from historical rationale?
+
+
+## Optional architecture reading view
+
+A completed architecture explanation can have a disposable offline HTML reading
+view when the user asks for a visual or interactive surface. The Markdown/design
+artifact and its inspected sources remain the fact owners. Do not generate HTML
+merely to satisfy this guide.
+
+The renderer accepts an explicit source-bound JSON document with schema
+`repofoundry.architecture-explanation/v1`. The authoring step must supply the
+subject, source repository/revision and source-set digest, components, flows,
+invariants, limitations, and evidence locators. The renderer does not inspect a
+repository, infer architecture, convert arbitrary Markdown, or add claims.
+
+From a full RepoFoundry checkout, preview the output inventory before writing:
+
+```bash
+python3 -B scripts/explain_architecture.py \
+  --input architecture-explanation.json \
+  --output /tmp/architecture-view
+```
+
+Add `--apply` only when the destination is new and the derived view is wanted.
+The output is a self-contained offline `index.html`, the exact input
+`architecture.json`, and a render manifest with hashes. The view has
+`authority=none`; it is not approval evidence and does not replace the source
+document. Keep limitations visible in the input so the HTML cannot present an
+unverified behavior as a measured result.
