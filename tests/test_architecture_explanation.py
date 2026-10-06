@@ -21,6 +21,7 @@ def fixture():
        "limitations":[{"text":"No browser behavior was measured.","refs":["tests/editor.py"]}],
        "evidence":[{"id":"source-editor","kind":"source","label":"Editor source","locator":"src/editor.py"},
                    {"id":"test-editor","kind":"test","label":"Editor test","locator":"tests/editor.py"}]}
+    d["source"]["source_set_sha256"]=ARCH.sha256(ARCH.canonical(d["source"]["files"]))
     raw=ARCH.canonical(d);d["sha256"]=ARCH.sha256(raw);return d
 
 class ArchitectureTests(unittest.TestCase):
@@ -32,6 +33,8 @@ class ArchitectureTests(unittest.TestCase):
         with self.assertRaises(ARCH.ArchitectureError):ARCH.validate(bad)
         bad=copy.deepcopy(d);bad["subject"]["summary"]="edited"
         with self.assertRaisesRegex(ARCH.ArchitectureError,"digest"):ARCH.validate(bad)
+        bad=copy.deepcopy(d);bad["source"]["files"][0]["digest"]="9"*64
+        with self.assertRaisesRegex(ARCH.ArchitectureError,"source_set"):ARCH.validate(bad)
     def test_duplicate_json_and_nonfinite_values_are_rejected(self):
         for raw in (b'{"a":1,"a":2}',b'{"x":NaN}'):
             with self.subTest(raw=raw),self.assertRaises(ARCH.ArchitectureError):ARCH.parse(raw)
@@ -40,7 +43,9 @@ class ArchitectureTests(unittest.TestCase):
         d["sha256"]=ARCH.sha256(ARCH.canonical(d))
         page=ARCH.page(d).decode()
         self.assertNotIn("<img src=x",page);self.assertIn("\\u003c/script>",page)
-        self.assertIn("connect-src 'none'",page);self.assertNotIn("fetch(",page)
+        self.assertIn("connect-src &#x27;none&#x27;",page);self.assertIn("sha256-",page)
+        self.assertNotIn("script-src &#x27;unsafe-inline&#x27;",page);self.assertNotIn("fetch(",page)
+        self.assertIn('<html lang="en">',page)
     def test_dry_run_then_apply_preserves_input_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);src=root/"architecture.json";out=root/"view";raw=ARCH.canonical(fixture());src.write_bytes(raw)
