@@ -76,6 +76,7 @@ try{
       assert(language==='zh-CN'?playLabel==='暂停':playLabel==='Pause');
       await page.locator('#play').click();
 
+      await buttons.nth(1).click();
       const transition=await page.locator('.bar').first().evaluate(n=>getComputedStyle(n).transitionDuration);
       assert.equal(transition,'0s');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
