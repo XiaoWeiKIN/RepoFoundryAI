@@ -35,6 +35,7 @@ try{
       document.addEventListener('securitypolicyviolation',e=>window.__csp.push(e.violatedDirective));
     });
     await page.goto(origin+'/index.html',{waitUntil:'networkidle'});
+    assert.equal(await page.locator('html').getAttribute('lang'),payload.language);
     assert.equal(await page.locator('h1').textContent(),payload.subject.title);
     const buttons=page.locator('#nav button');
     assert.equal(await buttons.count(),4);
