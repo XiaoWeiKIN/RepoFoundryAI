@@ -66,7 +66,7 @@ jobs:
           import os, pathlib, shutil
           p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'rf-render-eval'
           p.mkdir()
-          for name in ('package.json', 'run.mjs'):
+          for name in ('package.json', 'run.mjs', 'architecture-view.mjs'):
               shutil.copy2('tests/runtime/' + name, p / name)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
               env.write('RF_RUNTIME_WORK=' + str(p) + '\n')
@@ -88,6 +88,11 @@ jobs:
         run: python -m pip install --disable-pip-version-check fonttools==4.60.1
       - name: Generate Chinese and English bundles with real pinned p5
         run: python -B tests/runtime/prepare.py
+      - name: Generate synthetic architecture HTML fixture
+        run: python -B tests/runtime/prepare_architecture.py
+      - name: Exercise architecture HTML in a real browser
+        working-directory: ${{ env.RF_RUNTIME_WORK }}
+        run: node architecture-view.mjs
       - name: Exercise real p5, fonts and full Remotion MP4 renders
         timeout-minutes: 15
         working-directory: ${{ env.RF_RUNTIME_WORK }}
