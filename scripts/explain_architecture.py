@@ -79,7 +79,7 @@ def source_files(source: dict) -> list[dict]:
         raise ArchitectureError("source.files must contain at least one inspected source.")
     if len(paths) != len(set(paths)):
         raise ArchitectureError("source file paths must be unique.")
-    return normalized
+    return sorted(normalized, key=lambda item: item["path"])
 
 
 def read_regular(path: Path) -> bytes:
