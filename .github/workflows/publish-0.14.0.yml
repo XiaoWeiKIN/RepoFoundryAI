@@ -1,11 +1,11 @@
-name: publish-0.13.0
+name: publish-0.14.0
 
 on:
   pull_request:
     branches: [main]
     paths:
       - VERSION
-      - .github/workflows/publish-0.13.0.yml
+      - .github/workflows/publish-0.14.0.yml
       - README.md
       - README.zh-CN.md
       - references/bootstrap.md
@@ -15,7 +15,7 @@ on:
     branches: [main]
     paths:
       - VERSION
-      - .github/workflows/publish-0.13.0.yml
+      - .github/workflows/publish-0.14.0.yml
       - README.md
       - README.zh-CN.md
       - references/bootstrap.md
@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-0.13.0-${{ github.event_name }}
+  group: publish-0.14.0-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Verify distribution identity and canonical repository contract
         run: |
-          test "$(cat VERSION)" = "0.13.0"
+          test "$(cat VERSION)" = "0.14.0"
           python3 -B scripts/check.py
 
   frames:
@@ -95,7 +95,7 @@ jobs:
         run: python3 -B tests/integration/test_documentation_catalog.py
 
   publish:
-    name: publish v0.13.0
+    name: publish v0.14.0
     needs: [integrity, frames, real-catalog]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'XiaoWeiKIN/RepoFoundryAI'
     runs-on: ubuntu-latest
@@ -104,8 +104,8 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: v0.13.0
-      PREVIOUS_TAG: v0.12.0
+      RELEASE_TAG: v0.14.0
+      PREVIOUS_TAG: v0.13.0
     steps:
       - uses: actions/checkout@v6
         with:
@@ -116,8 +116,10 @@ jobs:
         run: |
           set -euo pipefail
           release_commit="$GITHUB_SHA"
-          test "$(cat VERSION)" = "0.13.0"
-          git merge-base --is-ancestor e33688eea2f61c571dbcb2bd681fc0c8487c9be5 "$release_commit"
+          test "$(cat VERSION)" = "0.14.0"
+
+          # The release must contain the merged progressive Benchmark explanation feature.
+          git merge-base --is-ancestor 90d1a6cd9c216b9035d7b4bab48536037ebc6009 "$release_commit"
 
           mapfile -t remote_lines < <(git ls-remote --tags origin             "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")
           tag_object=""
@@ -131,38 +133,50 @@ jobs:
 
           if [[ -n "$tag_object" ]]; then
             test -n "$peeled" || { echo "Existing $RELEASE_TAG is not annotated"; exit 1; }
-            test "$peeled" = "$release_commit" || { echo "Existing $RELEASE_TAG targets $peeled, expected $release_commit"; exit 1; }
+            test "$peeled" = "$release_commit" || {
+              echo "Existing $RELEASE_TAG targets $peeled, expected $release_commit"
+              exit 1
+            }
             git fetch --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
             test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = tag
           else
-            git -c user.name='github-actions[bot]'                 -c user.email='41898282+github-actions[bot]@users.noreply.github.com'                 tag -a "$RELEASE_TAG" "$release_commit" -m 'RepoFoundry AI 0.13.0'
+            git -c user.name='github-actions[bot]'               -c user.email='41898282+github-actions[bot]@users.noreply.github.com'               tag -a "$RELEASE_TAG" "$release_commit" -m 'RepoFoundry AI 0.14.0'
             git -c push.followTags=false push origin               "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           fi
 
-          remote="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")"
+          remote="$(git ls-remote --tags origin             "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")"
           remote_object="$(printf '%s\n' "$remote" | awk -v r="refs/tags/$RELEASE_TAG" '$2==r {print $1}')"
           remote_peeled="$(printf '%s\n' "$remote" | awk -v r="refs/tags/$RELEASE_TAG^{}" '$2==r {print $1}')"
           test -n "$remote_object"
           test "$remote_peeled" = "$release_commit"
 
-          if gh release view "$RELEASE_TAG" --json tagName,name,isDraft,isPrerelease,url > "$RUNNER_TEMP/release.json" 2>/dev/null; then
+          if gh release view "$RELEASE_TAG"             --json tagName,name,isDraft,isPrerelease,url             > "$RUNNER_TEMP/release.json" 2>/dev/null; then
             python3 - "$RUNNER_TEMP/release.json" <<'PY'
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
-          if data['tagName'] != 'v0.13.0' or data['name'] != 'RepoFoundry AI 0.13.0' or data['isDraft'] or data['isPrerelease']:
-              raise SystemExit('Existing GitHub Release does not match the approved stable release identity')
+          if (
+              data['tagName'] != 'v0.14.0'
+              or data['name'] != 'RepoFoundry AI 0.14.0'
+              or data['isDraft']
+              or data['isPrerelease']
+          ):
+              raise SystemExit(
+                  'Existing GitHub Release does not match the approved stable release identity'
+              )
           PY
           else
             cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           ## Highlights
 
-          - Adds source-bound Architecture HTML reading views for Detailed Design through `repofoundry.architecture-explanation/v1`.
-          - Adds explicit source-file identities, order-independent source-set hashing, evidence/invariant/limitation surfaces, and offline English/Chinese rendering with hashed CSP.
-          - Adds real-browser architecture-view smoke coverage on Ubuntu, Windows, and macOS while keeping the existing Spec-activation Explanation IR unchanged.
+          - Adds progressive, source-bound Benchmark explanation views for sealed Engineering Benchmark Runs through `repofoundry.benchmark-explanation/v1`.
+          - Preserves predeclared predictions, falsifiers, and supported / falsified / inconclusive status while separating observation, derived result, hypothesis, and mechanism interpretation.
+          - Requires sealed measurement + diagnostic + version-matched source evidence references before a claim can be rendered as a mechanism interpretation; the structural check does not certify causality.
+          - Adds self-contained offline English/Chinese progressive HTML with five evidence stages and real-browser smoke coverage on Ubuntu, Windows, and macOS.
+          - Keeps sealed Scenario/Result/artifacts immutable: the derived view cannot change the Benchmark outcome, invent unmeasured values, or create decision authority.
 
           ## Version contract
 
-          - RepoFoundry distribution: 0.13.0
+          - RepoFoundry distribution: 0.14.0
           - Harness schema: 3
           - Harness Core: 1.5.5
           - Codex adapter: 2.4.2
@@ -175,24 +189,27 @@ jobs:
 
           Release target: $release_commit
 
-          Full Changelog: https://github.com/XiaoWeiKIN/RepoFoundryAI/compare/v0.12.0...v0.13.0
+          Full Changelog: https://github.com/XiaoWeiKIN/RepoFoundryAI/compare/v0.13.0...v0.14.0
           EOF
-            gh release create "$RELEASE_TAG" --verify-tag               --title 'RepoFoundry AI 0.13.0'               --notes-file "$RUNNER_TEMP/release-notes.md"
+            gh release create "$RELEASE_TAG"               --verify-tag               --title 'RepoFoundry AI 0.14.0'               --notes-file "$RUNNER_TEMP/release-notes.md"
           fi
 
-          python3 install.py --version 0.13.0             --prefix "$RUNNER_TEMP/repofoundry-install"             --bin-dir "$RUNNER_TEMP/repofoundry-bin"             --host none --json > "$RUNNER_TEMP/install.json"
+          python3 install.py             --version 0.14.0             --prefix "$RUNNER_TEMP/repofoundry-install"             --bin-dir "$RUNNER_TEMP/repofoundry-bin"             --host none             --json > "$RUNNER_TEMP/install.json"
+
           python3 - "$RUNNER_TEMP/install.json" "$release_commit" <<'PY'
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
-          if data['version'] != '0.13.0':
+          if data['version'] != '0.14.0':
               raise SystemExit('Post-publication installer resolved the wrong version')
           if data.get('project_harnesses_modified') is not False:
-              raise SystemExit('Installer unexpectedly reports project Harness modification')
+              raise SystemExit(
+                  'Installer unexpectedly reports project Harness modification'
+              )
           print(json.dumps({'release_commit': sys.argv[2], 'install': data}, indent=2))
           PY
 
           {
-            echo '## RepoFoundry AI 0.13.0 published and verified'
+            echo '## RepoFoundry AI 0.14.0 published and verified'
             echo
             echo "- tag object: $remote_object"
             echo "- commit: $release_commit"
