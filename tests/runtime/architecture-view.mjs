@@ -46,7 +46,7 @@ try{
 
       await buttons.nth(1).focus();await page.keyboard.press('Enter');
       const flowText=await page.locator('#view').textContent();
-      assert(flowText.includes('caller'));assert(flowText.includes('editor'));
+      assert(flowText.includes(payload.components[0].label));assert(flowText.includes(payload.components[1].label));
       assert(flowText.includes(payload.flows[0].steps[1].condition));
 
       await buttons.nth(2).click();
