@@ -85,6 +85,15 @@ base = {
         {"id": "s1", "kind": "source", "label": "Version-matched source", "path": "artifacts/source.txt"},
         {"id": "scenario", "kind": "scenario", "label": "Scenario", "path": "SCENARIO.md"},
     ],
+    "predictions": [
+        {
+            "id": "P1",
+            "text": "Candidate latency is lower than baseline under the fixed workload.",
+            "falsifier": "Candidate latency is not lower under the declared comparison.",
+            "status": "supported",
+            "evidence_ids": ["scenario", "m1"],
+        }
+    ],
     "claims": [
         {"id": "obs", "kind": "observation", "text": "Candidate latency is lower.", "evidence_ids": ["m1"]},
         {"id": "delta", "kind": "derived", "text": "Median decreases by 46 ms.", "derivation": "120 - 74 = 46 ms", "evidence_ids": ["m1"]},
@@ -121,6 +130,15 @@ translations = {
             {"id": "d1", "kind": "diagnostic", "label": "分配诊断", "path": "artifacts/profile.txt"},
             {"id": "s1", "kind": "source", "label": "对应版本源码", "path": "artifacts/source.txt"},
             {"id": "scenario", "kind": "scenario", "label": "预声明 Scenario", "path": "SCENARIO.md"},
+        ],
+        "predictions": [
+            {
+                "id": "P1",
+                "text": "在固定工作负载下，候选延迟低于基线。",
+                "falsifier": "候选延迟在声明的比较中没有低于基线。",
+                "status": "supported",
+                "evidence_ids": ["scenario", "m1"],
+            }
         ],
         "claims": [
             {"id": "obs", "kind": "observation", "text": "候选实现的实测延迟更低。", "evidence_ids": ["m1"]},
