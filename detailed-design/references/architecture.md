@@ -149,8 +149,9 @@ merely to satisfy this guide.
 
 The renderer accepts an explicit source-bound JSON document with schema
 `repofoundry.architecture-explanation/v1`. The authoring step must supply the
-subject, source repository/revision and source-set digest, components, flows,
-invariants, limitations, and evidence locators. The renderer does not inspect a
+subject, language, source repository/revision, an explicit source-file list with
+per-file digests, components, flows, invariants, limitations, and evidence locators.
+The renderer recomputes the source-set SHA-256 from that list. The renderer does not inspect a
 repository, infer architecture, convert arbitrary Markdown, or add claims.
 
 From a full RepoFoundry checkout, preview the output inventory before writing:
