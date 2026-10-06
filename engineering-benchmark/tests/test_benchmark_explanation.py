@@ -114,6 +114,15 @@ def explanation(run, manifest):
                 "path": "RESULT.md",
             },
         ],
+        "predictions": [
+            {
+                "id": "P1",
+                "text": "Candidate latency is lower than baseline under the fixed workload.",
+                "falsifier": "Candidate latency is not lower under the declared comparison.",
+                "status": "supported",
+                "evidence_ids": ["scenario", "m1"],
+            }
+        ],
         "claims": [
             {
                 "id": "obs",
@@ -195,6 +204,17 @@ class BenchmarkExplanationTests(unittest.TestCase):
             document.pop("sha256")
             with self.assertRaisesRegex(EXPLAIN.ExplanationError, "diagnostic"):
                 EXPLAIN.validate(document, run, manifest)
+
+    def test_falsified_prediction_remains_renderable_and_visible(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run, manifest = sealed_fixture(Path(directory))
+            document = explanation(run, manifest)
+            document["predictions"][0]["status"] = "falsified"
+            document.pop("sha256")
+            self.assertIs(EXPLAIN.validate(document, run, manifest), document)
+            page = EXPLAIN.html_page(document).decode("utf-8")
+            self.assertIn("Falsified", page)
+            self.assertIn(document["predictions"][0]["falsifier"], page)
 
     def test_hypothesis_stays_permitted_without_mechanism_certification(self):
         with tempfile.TemporaryDirectory() as directory:
