@@ -8,9 +8,9 @@ migration。schema 迁移必须走 upgrade；schema 3 中追加 adapter 时，bo
 
 ```bash
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.13.0
+  upgrade --to 0.14.0
 python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . \
-  upgrade --to 0.13.0 --apply
+  upgrade --to 0.14.0 --apply
 ```
 
 必须先展示 dry-run 结果。只有用户已要求实施升级且计划无 conflict 时才使用
