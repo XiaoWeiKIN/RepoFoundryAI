@@ -227,14 +227,20 @@ def safe_json(value: object) -> str:
 
 
 SCRIPT = """const d=JSON.parse(document.getElementById('data').textContent),$=x=>document.getElementById(x),el=(t,s,c)=>{const n=document.createElement(t);n.textContent=s;if(c)n.className=c;return n};
+const ui=d.language==='zh-CN'?{model:'系统模型',invariants:'不变量',evidence:'证据',condition:'条件'}:{model:'System model',invariants:'Invariants',evidence:'Evidence',condition:'Condition'};
 $('title').textContent=d.subject.title;$('summary').textContent=d.subject.summary;$('source').textContent=JSON.stringify(d.source,null,2);$('digest').textContent='document sha256: '+(d.sha256||'not supplied');
-const sec=[['model','System model',()=>{const x=el('div','');d.components.forEach(c=>{const n=el('div','', 'card');n.append(el('b',c.label),el('p',c.responsibility),el('code',c.paths.join(' · ')));x.append(n)});return x}],...d.flows.map(f=>['flow:'+f.id,f.title,()=>{const x=el('div','');f.steps.forEach(s=>{const n=el('div','', 'step');n.append(el('b',s.actor),el('span',' — '+s.action));if(s.condition)n.append(el('div','Condition: '+s.condition,'condition'));x.append(n)});return x}]),['invariants','Invariants',()=>{const x=el('div','');d.invariants.forEach(i=>{const n=el('div','', 'card');n.append(el('p',i.text),el('code',i.refs.join(' · ')));x.append(n)});return x}],['evidence','Evidence',()=>{const x=el('div','');d.evidence.forEach(e=>{const n=el('div','', 'card');n.append(el('b',e.label),el('p',e.kind),el('code',e.locator));x.append(n)});return x}]];
+const sec=[['model',ui.model,()=>{const x=el('div','');d.components.forEach(c=>{const n=el('div','', 'card');n.append(el('b',c.label),el('p',c.responsibility),el('code',c.paths.join(' · ')));x.append(n)});return x}],...d.flows.map(f=>['flow:'+f.id,f.title,()=>{const x=el('div','');f.steps.forEach(s=>{const n=el('div','', 'step');n.append(el('b',s.actor),el('span',' — '+s.action));if(s.condition)n.append(el('div',ui.condition+': '+s.condition,'condition'));x.append(n)});return x}]),['invariants',ui.invariants,()=>{const x=el('div','');d.invariants.forEach(i=>{const n=el('div','', 'card');n.append(el('p',i.text),el('code',i.refs.join(' · ')));x.append(n)});return x}],['evidence',ui.evidence,()=>{const x=el('div','');d.evidence.forEach(e=>{const n=el('div','', 'card');n.append(el('b',e.label),el('p',e.kind),el('code',e.locator));x.append(n)});return x}]];
 function show(i){$('view').replaceChildren(sec[i][2]());[...$('nav').children].forEach((b,j)=>b.setAttribute('aria-current',j===i?'true':'false'))}sec.forEach((s,i)=>{const b=el('button',s[1]);b.onclick=()=>show(i);$('nav').append(b)});d.limitations.forEach(i=>$('limits').append(el('p',i.text+' '+i.refs.join(' · '),'limit')));show(0);"""
 
 
 def html_page(document: dict) -> bytes:
     validate(document)
     title = html.escape(document["subject"]["title"], quote=True)
+    labels = (
+        {"badge": "派生阅读视图 · 无授权", "limits": "限制", "source": "来源标识", "nav": "架构章节"}
+        if document["language"] == "zh-CN"
+        else {"badge": "Derived view · authority none", "limits": "Limits", "source": "Source identity", "nav": "Architecture sections"}
+    )
     script_hash = base64.b64encode(hashlib.sha256(SCRIPT.encode("utf-8")).digest()).decode("ascii")
     csp = (
         "default-src 'none'; base-uri 'none'; form-action 'none'; connect-src 'none'; "
@@ -242,12 +248,16 @@ def html_page(document: dict) -> bytes:
     )
     template = """<!doctype html><html lang="@@LANG@@"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="@@CSP@@"><title>@@TITLE@@</title><style>
 body{margin:0;background:#0e161d;color:#edf3ed;font:15px/1.65 system-ui}header,main{max-width:1200px;margin:auto;padding:24px}.grid{display:grid;grid-template-columns:240px minmax(0,1fr);gap:20px}.panel{background:#17242d;border:1px solid #3a4c53;border-radius:12px;padding:20px;min-width:0}button{width:100%;text-align:left;padding:9px;margin:4px 0;background:transparent;color:#b8c8ca;border:1px solid transparent;border-radius:6px;cursor:pointer}button[aria-current=true]{color:#b6f289;border-color:#3a4c53}.card{padding:14px 0;border-bottom:1px solid #3a4c53}.step{border-left:2px solid #b6f289;padding:10px 14px;margin:10px 0}.condition,.limit{color:#fed194}.small,code{font-size:12px;color:#b8c8ca;overflow-wrap:anywhere}button:focus-visible,summary:focus-visible{outline:2px solid #b6f289;outline-offset:3px}pre{white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:760px){.grid{grid-template-columns:1fr}}</style></head>
-<body><header><b>RepoFoundry / Architecture view</b><span>Derived view · authority none</span></header><main><h1 id="title"></h1><p id="summary"></p><div class="grid"><nav class="panel" id="nav" aria-label="Architecture sections"></nav><section class="panel" id="view"></section></div><section class="panel" style="margin-top:20px"><h2>Limits</h2><div id="limits"></div><details><summary>Source identity</summary><pre id="source"></pre></details><p class="small" id="digest"></p></section></main>
+<body><header><b>RepoFoundry / Architecture view</b><span>@@BADGE@@</span></header><main><h1 id="title"></h1><p id="summary"></p><div class="grid"><nav class="panel" id="nav" aria-label="@@NAV@@"></nav><section class="panel" id="view"></section></div><section class="panel" style="margin-top:20px"><h2>@@LIMITS@@</h2><div id="limits"></div><details><summary>@@SOURCE@@</summary><pre id="source"></pre></details><p class="small" id="digest"></p></section></main>
 <script type="application/json" id="data">@@DATA@@</script><script>@@SCRIPT@@</script></body></html>"""
     return (
         template.replace("@@LANG@@", document["language"])
         .replace("@@CSP@@", html.escape(csp, quote=True))
         .replace("@@TITLE@@", title)
+        .replace("@@BADGE@@", html.escape(labels["badge"]))
+        .replace("@@NAV@@", html.escape(labels["nav"], quote=True))
+        .replace("@@LIMITS@@", html.escape(labels["limits"]))
+        .replace("@@SOURCE@@", html.escape(labels["source"]))
         .replace("@@DATA@@", safe_json(document))
         .replace("@@SCRIPT@@", SCRIPT)
         .encode("utf-8")
