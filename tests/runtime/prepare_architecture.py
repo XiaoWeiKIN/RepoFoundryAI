@@ -40,7 +40,9 @@ base={
 }
 
 def canonical(v):return json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()
-base["source"]["source_set_sha256"]=hashlib.sha256(canonical(base["source"]["files"])).hexdigest()
+base["source"]["source_set_sha256"]=hashlib.sha256(
+    canonical(sorted(base["source"]["files"], key=lambda item: item["path"]))
+).hexdigest()
 
 variants={
   "en":base,
