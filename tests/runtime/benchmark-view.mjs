@@ -43,8 +43,11 @@ try{
       assert.equal(await buttons.count(),5);
 
       await buttons.nth(0).click();
-      assert((await page.locator('#view').textContent()).includes(data.subject.question));
-      assert((await page.locator('#view').textContent()).includes(data.claims.find(c=>c.kind==='hypothesis').text));
+      const question=await page.locator('#view').textContent();
+      assert(question.includes(data.subject.question));
+      assert(question.includes(data.predictions[0].text));
+      assert(question.includes(data.predictions[0].falsifier));
+      assert(question.includes(data.claims.find(c=>c.kind==='hypothesis').text));
 
       await buttons.nth(1).focus();await page.keyboard.press('Enter');
       const measured=await page.locator('#view').textContent();
