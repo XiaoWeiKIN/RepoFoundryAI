@@ -184,6 +184,30 @@
           "description": "Run 前固定环境、指标、falsifier、decision rule、安全和清理协议"
         }
       ]
+    },
+    {
+      "id": 10,
+      "prompt": "把已经 sealed 的 BR-021 做成类似 3b1b 的逐步机制动画。Result 只证明 candidate p50 更低，profile 显示 allocations/op 下降；Run 里没有绑定对应版本源码证据。不要重跑 benchmark，也不要修改 sealed bundle。",
+      "expected_output": "生成或准备 sealed Run 之外的派生解释视图，保留 Run outcome、样本/不确定性和 Manifest 绑定。p50 差异作为 observation，allocation profile 作为 diagnostic；因为缺少 version-matched source evidence，不把 allocation reduction 写成已确认 mechanism，而是保留 hypothesis/limitation。动画不修改 Run、不模拟未测量数据，也不形成架构决定。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "preserves_scientific_source",
+          "description": "派生视图绑定 sealed Run 与 Manifest，不改 Result、Scenario snapshot、artifacts 或 outcome"
+        },
+        {
+          "name": "keeps_claim_strength",
+          "description": "只有 measurement+diagnostic 而无 version-matched source 时，不把假说升级为已确认 mechanism"
+        },
+        {
+          "name": "does_not_invent_animation_data",
+          "description": "逐步动画只展示已有 observation、diagnostic、hypothesis 与 limits，不插值或制造未测量数据"
+        },
+        {
+          "name": "keeps_decision_boundary",
+          "description": "可视化解释证据，但不接受架构方向或把阅读效果当作科学验证"
+        }
+      ]
     }
   ]
 }

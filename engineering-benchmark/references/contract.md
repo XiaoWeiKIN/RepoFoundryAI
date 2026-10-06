@@ -174,6 +174,13 @@ Label hypothetical simulations separately from measured data. A reading view
 generated after sealing lives outside the immutable bundle and references its
 Run and revisions; it must not modify the sealed Result or artifacts.
 
+A progressive Benchmark explanation is one such derived view. It binds to the
+sealed Run's Manifest payload digest and may classify claims as observation,
+derived, hypothesis, or mechanism. The renderer may require a complete
+measurement + diagnostic + version-matched source evidence chain before it
+accepts a mechanism claim, but this structural check does not certify causality
+or replace scientific review. See [explanation.md](explanation.md).
+
 These are authoring and scientific-review requirements within the existing
 Scenario and Result sections. They do not change schema or legacy bundle
 validation: benchctl checks structure and integrity, not causal validity or

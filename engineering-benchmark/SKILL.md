@@ -194,6 +194,12 @@ Summary 先回答本次测量支持什么、相对预声明规则是否通过，
 假设模拟与实测分开标注。附加视图引用 Run、revision 和原始证据，封存后在包外
 生成阅读视图，不修改 sealed bundle。详见 [Result 契约](references/contract.md#result-contract)。
 
+用户要求把 sealed Run 做成逐步可视化、机制动画或交互解释时，读取
+[Progressive Benchmark explanations](references/explanation.md)。解释层按
+question → measurement → diagnostic → mechanism → limits 展开，并保持
+observation / derived / hypothesis / mechanism 的证据强度。动画不重新运行实验，
+不改变 outcome，也不能把只有 timing 的相关性升级为因果机制。
+
 ## 封存规则
 
 - 允许 outcome：`passed`、`failed`、`inconclusive`、`errored`。
