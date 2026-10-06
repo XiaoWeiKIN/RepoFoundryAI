@@ -12,8 +12,15 @@ WORK=Path(os.environ["RF_RUNTIME_WORK"]).resolve()
 payload={
   "schema":"repofoundry.architecture-explanation/v1",
   "authority":"none",
+  "language":"en",
   "subject":{"title":"Synthetic architecture fixture","summary":"Browser-only fixture for the derived architecture reading surface."},
-  "source":{"repository":"synthetic/runtime","revision":"fixture","source_set_sha256":"a"*64},
+  "source":{"repository":"synthetic/runtime","revision":"fixture",
+            "files":[
+              {"path":"src/caller.py","digest_algorithm":"sha256","digest":"1"*64},
+              {"path":"src/editor.py","digest_algorithm":"sha256","digest":"2"*64},
+              {"path":"tests/editor.py","digest_algorithm":"sha256","digest":"3"*64},
+              {"path":"tests/runtime/prepare_architecture.py","digest_algorithm":"sha256","digest":"4"*64}],
+            "source_set_sha256":""},
   "components":[
     {"id":"caller","label":"Caller","responsibility":"Owns controlled state.","paths":["src/caller.py"]},
     {"id":"editor","label":"Editor","responsibility":"Owns the editing surface.","paths":["src/editor.py"]}
@@ -30,6 +37,7 @@ payload={
   ]
 }
 def canonical(v):return json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()
+payload["source"]["source_set_sha256"]=hashlib.sha256(canonical(payload["source"]["files"])).hexdigest()
 payload["sha256"]=hashlib.sha256(canonical(payload)).hexdigest()
 source=WORK/"architecture-input.json"
 source.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
