@@ -136,6 +136,114 @@ requested, keep its source revision, assumptions, and limits visible. It does no
 become a second fact owner. Source changes require rechecking or regeneration;
 a polished view is not proof of actual behavior or approval.
 
+## Preserve meaning while editing
+
+Decide whether the task is polishing, rebuilding, or review before changing prose.
+Polishing may change wording and organization but not the factual model, source
+status, headings, anchors, commands, or evidence. Rebuilding may correct facts
+only from inspected sources and within the requested scope. Review-only work
+returns findings instead of editing the artifact.
+
+After an edit, compare the revision with its source rather than checking style in
+isolation. Confirm that every material condition, exception, failure branch, and
+empty-input behavior still limits the same claim. Confirm that the same actor owns
+each action and that caller-controlled state has not become component-owned state.
+Keep negation, quantities, units, uncertainty, and normative strength unchanged.
+Keep proposal, authorization, implementation, verification, and historical status
+distinct. Preserve code, quotations, raw output, IDs, links, required headings,
+digests, and sealed content exactly.
+
+Shorter wording is useful only when it preserves the decision tree. For example,
+consider a constructed configuration loader with three outcomes: a missing file
+uses defaults, an invalid file stops with an error, and a valid file is parsed.
+The sentence "the loader uses defaults" loses two branches even though every word
+is clear. A keyword scan cannot establish equivalence; compare the branches.
+
+Use project terminology before editorial preferences. Read the repository's
+glossary, writing conventions, entry instructions, and affected sources when they
+exist. If the project has no terminology owner, keep terms stable within the
+document and define only unfamiliar concepts. Do not create a repository-wide
+glossary, rename code, or rewrite historical terms merely to make prose uniform.
+
+
+## Precise Chinese technical prose
+
+中文技术说明应保留完整的条件、主体和因果关系。拆句后，条件仍应约束原来的动作；
+主语改变时，应写出组件、工具或操作人的名称。不要为了句子更短而省略失败分支。
+
+优先使用项目已经采用的术语。代码名、命令、测试名和规范关键词保持原样。同一个概念
+在一个说明中不应为了文风变化而反复换名；但不同概念也不应为了统一措辞被合并。
+
+抽象动词和长修饰语可作为复核线索。只有在来源明确主体和动作时，才把“对配置进行
+检查”改成“加载器检查配置”。如果来源没有说明主体，应报告缺口，而不是猜一个主体。
+指代词可能造成两个解释时，直接写出被指代的对象。
+
+新写要求应先采用项目已有的规范关键词。项目没有规定时，用明确措辞区分硬性要求、
+推荐、许可和能力，但不要为了文风统一发明新的规范词表。已有的 MUST、SHOULD、MAY
+及项目固定译名保持原有强度。
+
+操作步骤和机制说明使用不同结构。给操作人员的步骤应把前提和停止条件放在依赖它们的
+动作旁边。描述软件自动事件时，说明触发条件、组件动作和结果，不要改写成给读者执行的
+命令。Architecture、Research 和 Case Study 可以保留连贯段落来解释机制和取舍。
+
+
+## Optional source-bound prose hints
+
+The full RF checkout includes `scripts/check_writing.py`. The script reads only
+explicitly named UTF-8 Markdown or text files. It reports source-bound review
+candidates with line locations and an input SHA-256. It does not edit files,
+traverse a project, fetch policy, call a model, or decide whether a statement is
+true. Independently installed professional Skills do not require the script.
+
+Run it only when a mechanical pass is useful:
+
+```bash
+python3 -B scripts/check_writing.py PATH --lang zh --json
+python3 -B scripts/check_writing.py PATH --lang zh --line-range 12:35 --json
+```
+
+The second command limits hints to an explicitly selected inclusive range while
+still reading the file for Markdown context. Repeat `--line-range` for additional
+ranges. Omit `--lang` for per-line Chinese/English detection. The detector is a
+heuristic and does not translate or validate other languages.
+
+The checker looks for a small set of patterns already covered by this guide, such
+as abstract action phrases, vague scope words, and potentially ambiguous English
+subjects. A match is a review candidate, not a defect. The scanner masks code
+fences, inline code, quotations, metadata, link destinations, and HTML blocks
+conservatively, so it can also omit prose.
+
+Findings return exit status 0. Unreadable files, invalid ranges, invalid UTF-8, and
+files larger than 1 MiB return 2. Tool errors must not be described as a clean
+scan. There is no autofix, recursive scan, compliance score, or blocking style
+mode. Keep checker unit tests in repository CI; do not make prose findings a merge
+gate.
+
+
+## Report writing verification
+
+Report what actually happened. If a checker ran, record its command, input revision
+or digest, exit status, candidate count, and unperformed checks. If it did not run,
+say so. Reading the script is not execution, and zero candidates do not prove
+semantic fidelity, accessibility, model adherence, or ASD-STE100 conformance.
+
+Keep the document readable. Execution-critical prerequisites, risks, and stop
+conditions belong beside the action they control. Missing evidence or noncritical
+editorial questions can go in a short author handoff. Use a placeholder only when
+the reader cannot perform the task without the missing value. Never invent a
+command, measurement, owner, recovery path, or successful result to fill a gap.
+
+Keep factual corrections separate from wording changes. During polishing, retain
+an unsupported claim at its original strength and flag the evidence gap; if an
+inspected source contradicts the claim, do not present it as verified current
+behavior.
+
+For comparative writing evaluations, fix the source material, task, model settings,
+output budget, and scoring assertions before generation. Prefer isolated runs and
+hidden treatment labels when practical. Retain failures. Packaging tests and eval
+catalogs do not run a model, and same-session reconstructions are demonstrations
+rather than blind evidence of quality improvement.
+
 ## Documentation maintenance
 
 When authorized code changes affect documentation, update the current explanation
