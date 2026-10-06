@@ -46,6 +46,10 @@ class ArchitectureTests(unittest.TestCase):
         self.assertIn("connect-src &#x27;none&#x27;",page);self.assertIn("sha256-",page)
         self.assertNotIn("script-src &#x27;unsafe-inline&#x27;",page);self.assertNotIn("fetch(",page)
         self.assertIn('<html lang="en">',page)
+        zh=fixture();zh["language"]="zh-CN";zh["subject"]["title"]="合成架构";zh.pop("sha256")
+        zh["sha256"]=ARCH.sha256(ARCH.canonical(zh))
+        page=ARCH.html_page(zh).decode()
+        self.assertIn('<html lang="zh-CN">',page);self.assertIn("限制",page);self.assertIn("来源标识",page)
     def test_dry_run_then_apply_preserves_input_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);src=root/"architecture.json";out=root/"view";raw=ARCH.canonical(fixture());src.write_bytes(raw)
