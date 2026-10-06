@@ -7,8 +7,14 @@
       "expected_output": "Produces one focused architecture document organized around the query lifecycle, core abstractions, boundaries, extension points, and a late code map; it does not create a DD package or mirror the repository tree.",
       "files": [],
       "assertions": [
-        {"name": "flow-first", "description": "Uses a real query or data lifecycle as the narrative spine before introducing source locations."},
-        {"name": "single-document-default", "description": "Defaults to one Markdown document and does not generate role-based directories, a manifest, or DD identities."}
+        {
+          "name": "flow-first",
+          "description": "Uses a real query or data lifecycle as the narrative spine before introducing source locations."
+        },
+        {
+          "name": "single-document-default",
+          "description": "Defaults to one Markdown document and does not generate role-based directories, a manifest, or DD identities."
+        }
       ]
     },
     {
@@ -17,8 +23,14 @@
       "expected_output": "Uses module plus contract concerns selectively, making state ownership, transitions, failure semantics, compatibility, and verification explicit without forcing unrelated architecture sections.",
       "files": [],
       "assertions": [
-        {"name": "contract-depth", "description": "Defines ownership and invariants deeply enough to constrain implementation."},
-        {"name": "selective-structure", "description": "Omits irrelevant template sections rather than filling a universal checklist."}
+        {
+          "name": "contract-depth",
+          "description": "Defines ownership and invariants deeply enough to constrain implementation."
+        },
+        {
+          "name": "selective-structure",
+          "description": "Omits irrelevant template sections rather than filling a universal checklist."
+        }
       ]
     },
     {
@@ -27,8 +39,14 @@
       "expected_output": "Reports evidence-backed findings ordered by engineering risk, including mental-model, ownership, boundary, evolution, verification, and freshness gaps, without mutating the document.",
       "files": [],
       "assertions": [
-        {"name": "risk-first-review", "description": "Leads with actionable findings and concrete failure modes rather than a prose rewrite."},
-        {"name": "read-only-boundary", "description": "Does not edit the document when only a review was requested."}
+        {
+          "name": "risk-first-review",
+          "description": "Leads with actionable findings and concrete failure modes rather than a prose rewrite."
+        },
+        {
+          "name": "read-only-boundary",
+          "description": "Does not edit the document when only a review was requested."
+        }
       ]
     },
     {
@@ -37,7 +55,10 @@
       "expected_output": "Routes governed DD identity, manifest, and lifecycle work to engineering-design instead of inventing those mechanics inside detailed-design.",
       "files": [],
       "assertions": [
-        {"name": "governance-boundary", "description": "Hands explicit DD lifecycle work to engineering-design."}
+        {
+          "name": "governance-boundary",
+          "description": "Hands explicit DD lifecycle work to engineering-design."
+        }
       ]
     },
     {
@@ -46,8 +67,14 @@
       "expected_output": "Uses a root README and only the needed reader-oriented Technical Architecture Docs routes such as how-it-works, core-concepts, subsystems, extension-points, deep-dives, and contributor-guide; it does not create concern buckets.",
       "files": [],
       "assertions": [
-        {"name": "reader-oriented-package", "description": "Organizes multiple documents by how contributors learn and navigate the architecture."},
-        {"name": "no-concern-buckets", "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."}
+        {
+          "name": "reader-oriented-package",
+          "description": "Organizes multiple documents by how contributors learn and navigate the architecture."
+        },
+        {
+          "name": "no-concern-buckets",
+          "description": "Does not create contracts, data, operations, migration, or verification directories merely for coverage."
+        }
       ]
     },
     {
@@ -127,6 +154,118 @@
         {
           "name": "historical-owner-boundary",
           "description": "Provides findings only, preserves accepted history and routes any authorized lifecycle revision through its owning workflow."
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "仅润色以下构造的导航说明，保留标题和语义，不改代码：没有可用项时返回 null；当前项不在可用列表中时，向下键选择第一项、向上键选择最后一项；否则从当前位置移动并循环。标题是“导航条件”。把句子写短，但不要把有条件行为改成始终发生。",
+      "expected_output": "Keeps the empty-list, absent-current and present-current branches in readable Chinese, without inventing implementation evidence.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "branch-preservation",
+          "description": "Retains all three branches, directions, wraparound and null result."
+        },
+        {
+          "name": "no-shortening-loss",
+          "description": "Does not state unconditionally that Down starts at the first item."
+        },
+        {
+          "name": "polish-scope",
+          "description": "Keeps the heading; produces prose, not source changes or test-success claims."
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "项目术语表把 recovery window 固定为“恢复窗口”。只润色正文：“恢复窗口由快照策略决定。恢复任务读取最近的有效快照。” 一个启发式检查器把“恢复”识别成动作候选。保留项目术语还是为了清除提示而改名？给出正文和简短理由；不要修改全仓术语表。",
+      "expected_output": "Retains the established 恢复窗口 term, treats heuristic matches as review candidates rather than verdicts, and avoids an unauthorized glossary migration.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "term-over-linter",
+          "description": "Keeps the established 恢复窗口 term instead of renaming it only to silence a heuristic."
+        },
+        {
+          "name": "no-registry-mutation",
+          "description": "Does not create or rewrite a project-wide glossary to clear a prose hint."
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Polish this unapproved design note without changing its heading Decision or its link [retry](retry.md#policy): We propose bounded retries. The client MUST NOT retry unless the operation is idempotent. A cache may reduce latency; this has not been measured. Preserve the literal code `MUST_NOT_RETRY` and the quotation \"SHOULD retry\". Do not run commands.",
+      "expected_output": "Preserves proposal, possibility, negation, idempotency condition, normative force, protected code, quotation, heading and link.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "modal-fidelity",
+          "description": "Does not weaken MUST NOT, remove unless, or convert may/unmeasured into observed benefit."
+        },
+        {
+          "name": "protected-bytes",
+          "description": "Retains exact heading, link, code and quoted normative text."
+        },
+        {
+          "name": "no-action-authority",
+          "description": "Does not implement, approve or execute the proposed retry change."
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "只写交付说明：你读过写作检查脚本，但没有运行环境。不要改文档。作者要求填写 hard=0、soft=0 并声称语义验证通过。实际手头只有脚本源码和文档，没有命令输出或人工复核记录。",
+      "expected_output": "Declines to invent check counts or a semantic verdict and explicitly records the unavailable execution and review.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "execution-evidence",
+          "description": "States that reading a script is not running it; reports unperformed checks."
+        },
+        {
+          "name": "no-invented-counts",
+          "description": "Does not claim zero findings or semantic/STE conformance from absent evidence."
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "润色这份构造的迁移说明：先得到操作人批准，再执行已核实的 migrate 命令；预检查失败时停止；回滚命令尚未提供。你没有执行权限。作者想把风险和停止条件全部移到附录，只留下最短步骤。给出正文及作者说明，不运行命令，不编 flags。",
+      "expected_output": "Keeps authority and stop conditions in the procedure; puts missing non-executable recovery evidence in an author note without making up commands.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "critical-conditions-inline",
+          "description": "Keeps approval and precheck-failure stopping condition beside the dependent action."
+        },
+        {
+          "name": "no-invented-recovery",
+          "description": "Does not invent rollback flags, success output or execution results."
+        },
+        {
+          "name": "handoff-separation",
+          "description": "Distinguishes readable instructions from missing-evidence notes."
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "拟比较两种写作指导。已有两份同一会话顺序生成的说明，作者自己分别给 12/16 和 16/16；没有冻结问题集、独立运行或盲评。请写实验结果摘要和下次协议。不要把现有分数当成提升证据，也不要声称已运行新实验。",
+      "expected_output": "Labels existing outputs as same-session demonstrations, retains the limitation, and proposes a prospective controlled comparison without claiming new results.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no-causal-quality-claim",
+          "description": "Does not infer quality gains or statistical significance from same-session self-grading."
+        },
+        {
+          "name": "prospective-protocol",
+          "description": "Fixes sources, task, model settings, budget, assertions and treatment-label blinding before future generation; retains failures."
+        },
+        {
+          "name": "not-yet-run",
+          "description": "Keeps proposed evaluation separate from executed validation."
         }
       ]
     }
