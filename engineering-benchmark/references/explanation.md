@@ -51,6 +51,7 @@ Run through:
 It also contains:
 
 - the reader question and summary;
+- predeclared predictions, falsifiers, and supported / falsified / inconclusive status;
 - evidence labels and their sealed paths;
 - typed claims and evidence references;
 - measured baseline/candidate metric summaries with sample counts and uncertainty;
@@ -89,7 +90,7 @@ render-manifest.json
 The HTML is self-contained and offline. It uses a SHA-256 CSP for executable
 script, makes no network request, and displays five reading stages:
 
-1. question and predictions;
+1. question, predeclared predictions, falsifiers, and prediction status;
 2. measured difference;
 3. measurement / diagnostic / source evidence chain;
 4. baseline/candidate mechanism explanation;
@@ -106,6 +107,7 @@ Start from the sealed Result and Scenario rather than from the visual story you
 want to tell.
 
 - Keep the Run outcome exactly as sealed.
+- Copy prediction meaning and falsifiers from the predeclared Scenario; do not reconstruct them from the Result.
 - Keep falsified and inconclusive predictions visible.
 - Use the same units, sample counts, aggregation, and uncertainty definition as
   the Result.
