@@ -21,7 +21,9 @@ def fixture():
        "limitations":[{"text":"No browser behavior was measured.","refs":["tests/editor.py"]}],
        "evidence":[{"id":"source-editor","kind":"source","label":"Editor source","locator":"src/editor.py"},
                    {"id":"test-editor","kind":"test","label":"Editor test","locator":"tests/editor.py"}]}
-    d["source"]["source_set_sha256"]=ARCH.sha256(ARCH.canonical(d["source"]["files"]))
+    d["source"]["source_set_sha256"]=ARCH.sha256(
+        ARCH.canonical(sorted(d["source"]["files"], key=lambda item: item["path"]))
+    )
     raw=ARCH.canonical(d);d["sha256"]=ARCH.sha256(raw);return d
 
 class ArchitectureTests(unittest.TestCase):
@@ -35,6 +37,16 @@ class ArchitectureTests(unittest.TestCase):
         with self.assertRaisesRegex(ARCH.ArchitectureError,"digest"):ARCH.validate(bad)
         bad=copy.deepcopy(d);bad["source"]["files"][0]["digest"]="9"*64
         with self.assertRaisesRegex(ARCH.ArchitectureError,"source_set"):ARCH.validate(bad)
+
+        reordered=copy.deepcopy(d);reordered.pop("sha256")
+        reordered["source"]["files"].reverse()
+        reordered["sha256"]=ARCH.sha256(ARCH.canonical(reordered))
+        self.assertIs(ARCH.validate(reordered),reordered)
+
+        bad=copy.deepcopy(d);bad["components"][0]["paths"]=["src/missing.py"]
+        with self.assertRaisesRegex(ARCH.ArchitectureError,"not in source.files"):ARCH.validate(bad)
+        bad=copy.deepcopy(d);bad["evidence"][0]["locator"]="tests/missing.py"
+        with self.assertRaisesRegex(ARCH.ArchitectureError,"not in source.files"):ARCH.validate(bad)
     def test_duplicate_json_and_nonfinite_values_are_rejected(self):
         for raw in (b'{"a":1,"a":2}',b'{"x":NaN}'):
             with self.subTest(raw=raw),self.assertRaises(ARCH.ArchitectureError):ARCH.parse(raw)
