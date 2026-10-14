@@ -1,11 +1,9 @@
 name: publish-0.15.0
 
+# Retired one-time publisher: v0.15.0 is immutable and must never be retagged.
+# PR edits may verify the historical workflow, but no main push can republish it.
 on:
   pull_request:
-    branches: [main]
-    paths:
-      - .github/workflows/publish-0.15.0.yml
-  push:
     branches: [main]
     paths:
       - .github/workflows/publish-0.15.0.yml
