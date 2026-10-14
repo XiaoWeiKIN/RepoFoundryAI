@@ -4,23 +4,11 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - VERSION
       - .github/workflows/publish-0.15.0.yml
-      - README.md
-      - README.zh-CN.md
-      - references/bootstrap.md
-      - references/upgrades.md
-      - tests/test_repository_contracts.py
   push:
     branches: [main]
     paths:
-      - VERSION
       - .github/workflows/publish-0.15.0.yml
-      - README.md
-      - README.zh-CN.md
-      - references/bootstrap.md
-      - references/upgrades.md
-      - tests/test_repository_contracts.py
 
 permissions:
   contents: read
