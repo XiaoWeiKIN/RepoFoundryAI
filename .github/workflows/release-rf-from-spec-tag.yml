@@ -55,6 +55,7 @@ jobs:
           test "$(git -C "$root" cat-file -t "$tag")" = tag
           object="$(git -C "$root" rev-parse "$tag")"
           commit="$(git -C "$root" rev-parse "$tag^{commit}")"
+          git -C "$root" merge-base --is-ancestor "$commit" origin/main
           test -z "$ANNOUNCED_COMMIT" || test "$ANNOUNCED_COMMIT" = "$commit"
           test -z "$ANNOUNCED_TAG_OBJECT" || test "$ANNOUNCED_TAG_OBJECT" = "$object"
           remote="$(git -C "$root" ls-remote --tags origin "$tag" "$tag^{}")"
