@@ -1,0 +1,47 @@
+name: spec-release-preflight
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/spec-release-preflight.yml
+      - .github/workflows/release-rf-from-spec-tag.yml
+      - scripts/prepare_spec_release.py
+      - tests/test_prepare_spec_release.py
+      - tests/test_foundryctl.py
+      - tests/test_repository_contracts.py
+
+permissions:
+  contents: read
+
+jobs:
+  simulated-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Simulate the next version bump without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location(
+              "prepare_spec_release", "scripts/prepare_spec_release.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          import re
+          text = Path("scripts/foundryctl.py").read_text()
+          major, minor, patch = map(int, re.search(
+              r'DEFAULT_SPEC_VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"', text)[1].split("."))
+          print(f"{major}.{minor+1}.0")
+          PY
+          )"
+          python3 -B scripts/prepare_spec_release.py "$version"
+          git diff --check
+          python3 -B scripts/check.py
