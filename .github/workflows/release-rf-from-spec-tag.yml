@@ -1,0 +1,194 @@
+name: release-rf-from-spec-tag
+
+on:
+  repository_dispatch:
+    types: [spec-catalog-published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Already-published EngineeringSpecifications version
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rf-spec-driven-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'XiaoWeiKIN/RepoFoundryAI'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SPEC_VERSION: ${{ github.event.client_payload.version || inputs.version }}
+      ANNOUNCED_COMMIT: ${{ github.event.client_payload.commit || '' }}
+      ANNOUNCED_TAG_OBJECT: ${{ github.event.client_payload.tag_object || '' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Verify the published upstream Git tag and Catalog
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SPEC_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+            echo 'Invalid Catalog version' >&2; exit 1
+          }
+          root="$RUNNER_TEMP/upstream-spec"
+          git clone --quiet --no-checkout \
+            https://github.com/XiaoWeiKIN/EngineeringSpecifications.git "$root"
+          git -C "$root" fetch --quiet --no-tags origin \
+            "refs/tags/v$SPEC_VERSION:refs/tags/v$SPEC_VERSION"
+          tag="refs/tags/v$SPEC_VERSION"
+          test "$(git -C "$root" cat-file -t "$tag")" = tag
+          object="$(git -C "$root" rev-parse "$tag")"
+          commit="$(git -C "$root" rev-parse "$tag^{commit}")"
+          test -z "$ANNOUNCED_COMMIT" || test "$ANNOUNCED_COMMIT" = "$commit"
+          test -z "$ANNOUNCED_TAG_OBJECT" || test "$ANNOUNCED_TAG_OBJECT" = "$object"
+          remote="$(git -C "$root" ls-remote --tags origin "$tag" "$tag^{}")"
+          test "$(printf '%s\n' "$remote" | awk -v r="$tag" '$2==r {print $1}')" = "$object"
+          test "$(printf '%s\n' "$remote" | awk -v r="$tag^{}" '$2==r {print $1}')" = "$commit"
+          git -C "$root" checkout --quiet --detach "$commit"
+          SPEC_ROOT="$root" python3 - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "scripts")
+          import spec_manager
+          catalog = spec_manager.load_catalog(Path(os.environ["SPEC_ROOT"]))
+          assert catalog.catalog_version == os.environ["SPEC_VERSION"]
+          print(f"Verified {len(catalog.ordered_specs)} published Specifications")
+          PY
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tag_object=$object" >> "$GITHUB_OUTPUT"
+          echo "root=$root" >> "$GITHUB_OUTPUT"
+      - name: Prepare the next RF patch release
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/prepare_spec_release.py "$SPEC_VERSION" > "$RUNNER_TEMP/release-plan.json"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import subprocess
+          plan = json.load(open(os.environ["RUNNER_TEMP"] + "/release-plan.json", encoding="utf-8"))
+          if plan["action"] == "skip":
+              subject = subprocess.check_output(["git", "log", "-1", "--format=%s"], text=True).strip()
+              expected = "chore(release): adopt Spec v" + os.environ["SPEC_VERSION"]
+              if subject == expected:
+                  plan["action"] = "publish"  # Recover a prior tag/release failure.
+                  plan["rf_version"] = open("VERSION", encoding="utf-8").read().strip()
+          for key, value in plan.items():
+              print(f"{key}={value}")
+          PY
+      - name: Check RF distribution and real Spec consumption
+        if: steps.prepare.outputs.action == 'publish'
+        env:
+          UPSTREAM_ROOT: ${{ steps.upstream.outputs.root }}
+          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -B scripts/check.py
+          node --test tests/explanation_frames.test.mjs
+          project="$RUNNER_TEMP/rf-candidate-project"
+          mkdir -p "$project"
+          git -C "$project" init -q
+          printf 'sample\n' > "$project/README.md"
+          python3 -B scripts/foundryctl.py --repo "$project" \
+            bootstrap --adapter portable --required-only \
+            --spec-repository "file://$UPSTREAM_ROOT" \
+            --spec-ref "$UPSTREAM_COMMIT" --apply
+          python3 -B scripts/foundryctl.py --repo "$project" spec validate
+          SPEC_ROOT="$UPSTREAM_ROOT" PROJECT_ROOT="$project" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          upstream = json.loads((Path(os.environ["SPEC_ROOT"]) / "catalog.json").read_text())
+          installed = json.loads((Path(os.environ["PROJECT_ROOT"]) /
+                                 "docs/agent-guides/managed/requirements.json").read_text())
+          required = {x["id"] for x in upstream["specs"] if x["required"]}
+          # Inspect the managed Spec index rather than assume a fixed number of Core Specs.
+          index = (Path(os.environ["PROJECT_ROOT"]) /
+                   "docs/agent-guides/managed/index.md").read_text()
+          assert all(spec_id in index for spec_id in required)
+          assert installed["schema_version"] == 2
+          print("Verified required Spec adoption:", sorted(required))
+          PY
+      - name: Publish a verified RF commit, annotated tag and GitHub Release
+        if: steps.prepare.outputs.action == 'publish'
+        env:
+          RF_VERSION: ${{ steps.prepare.outputs.rf_version }}
+          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
+          TAG_OBJECT: ${{ steps.upstream.outputs.tag_object }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="v$RF_VERSION"
+          initial="$(git rev-parse HEAD)"
+          git fetch --quiet origin main
+          test "$(git rev-parse origin/main)" = "$initial" || {
+            echo 'RF main advanced; retry against the new head' >&2; exit 1
+          }
+          if ! git diff --quiet; then
+            git add VERSION scripts/foundryctl.py \
+              tests/test_foundryctl.py tests/test_repository_contracts.py \
+              README.md README.zh-CN.md references/specifications.md \
+              references/bootstrap.md references/upgrades.md
+            git -c user.name='github-actions[bot]' \
+                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+                commit -m "chore(release): adopt Spec v$SPEC_VERSION"
+            git -c push.followTags=false push origin HEAD:refs/heads/main
+          fi
+          release_commit="$(git rev-parse HEAD)"
+          ref="refs/tags/$release_tag"
+          remote="$(git ls-remote --tags origin "$ref" "$ref^{}")"
+          old="$(printf '%s\n' "$remote" | awk -v r="$ref^{}" '$2==r {print $1}')"
+          if [[ -n "$remote" ]]; then
+            test "$old" = "$release_commit" || {
+              echo 'Existing RF tag has a different release commit' >&2; exit 1
+            }
+          else
+            git -c user.name='github-actions[bot]' \
+                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+                tag -a "$release_tag" "$release_commit" -m "RepoFoundry AI $RF_VERSION"
+            git -c push.followTags=false push origin "$ref:$ref"
+          fi
+          remote="$(git ls-remote --tags origin "$ref" "$ref^{}")"
+          test "$(printf '%s\n' "$remote" | awk -v r="$ref^{}" '$2==r {print $1}')" = "$release_commit"
+          if ! gh release view "$release_tag" >/dev/null 2>&1; then
+            cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          ## EngineeringSpecifications adoption
+          
+          - RF distribution: $RF_VERSION
+          - Default Catalog: $SPEC_VERSION
+          - Published Spec tag: v$SPEC_VERSION
+          - Spec commit: $UPSTREAM_COMMIT
+          - Spec tag object: $TAG_OBJECT
+          - Verified RF integrity, real required-Spec bootstrap, and Node explanation tests.
+          
+          Existing consumer projects retain their pinned manifest and lock until explicitly upgraded.
+          EOF
+            gh release create "$release_tag" --verify-tag \
+              --title "RepoFoundry AI $RF_VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+          echo "Published RF $release_tag for Spec v$SPEC_VERSION" >> "$GITHUB_STEP_SUMMARY"
+      - name: Report unchanged or older Catalog
+        if: steps.prepare.outputs.action == 'skip'
+        run: echo 'Catalog is already the RF default or older; nothing to publish.' >> "$GITHUB_STEP_SUMMARY"
