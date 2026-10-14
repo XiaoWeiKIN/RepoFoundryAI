@@ -66,4 +66,3 @@ Read and write**。缺少凭据时 Spec Tag 仍有效，但事件通知失败；
 
 此链路不自动迁移已有项目的 Spec manifest/lock。发生兼容性失败时
 不会生成新的 RF Tag，应修复消费端并重新验证。
-

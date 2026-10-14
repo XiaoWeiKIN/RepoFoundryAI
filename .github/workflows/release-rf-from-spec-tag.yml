@@ -175,14 +175,14 @@ jobs:
           if ! gh release view "$release_tag" >/dev/null 2>&1; then
             cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           ## EngineeringSpecifications adoption
-          
+
           - RF distribution: $RF_VERSION
           - Default Catalog: $SPEC_VERSION
           - Published Spec tag: v$SPEC_VERSION
           - Spec commit: $UPSTREAM_COMMIT
           - Spec tag object: $TAG_OBJECT
           - Verified RF integrity, real required-Spec bootstrap, and Node explanation tests.
-          
+
           Existing consumer projects retain their pinned manifest and lock until explicitly upgraded.
           EOF
             gh release create "$release_tag" --verify-tag \
