@@ -39,3 +39,31 @@ python3 <repo-foundry-ai-dir>/scripts/foundryctl.py --repo . spec validate
 要把同一份预览导出为图、离线 HTML、p5.js 交互视图或可选 Remotion 源码包，
 使用 [Explanation IR 与多种阅读界面](explanation-surfaces.md)。输出默认先预览，
 显式应用后写入新的可丢弃目录，不改变规范或激活状态。
+
+## Spec Tag 驱动的 RF 发行
+
+正式 Catalog Tag 发布后，EngineeringSpecifications 的
+`notify-rf-on-spec-tag` 工作流通过 `repository_dispatch` 通知 RF。
+RF 的 `release-rf-from-spec-tag` 工作流独立验证远端 annotated Tag、
+所属 main 提交及 Catalog/Spec 摘要。仅在新版本高于当前默认 Catalog 时，
+才准备新的 RF patch 版本、修改默认 Spec pin，并运行完整仓库检查、
+Node 视图测试及使用真实 Spec 的临时项目 Bootstrap/Validate。
+任何步骤失败都停止，不发布 RF Tag。
+
+全部验证通过后，由同一受控工作流提交 RF 版本变更、发布独立的
+annotated RF Tag 和 GitHub Release。重复事件不得回退 Catalog，也不应
+创建重复版本。RF 使用内置 `GITHUB_TOKEN` 发布的提交不会触发其他
+push CI，因此发布工作流自身必须完成上述检查。
+旧版一次性 `publish-0.15.0` 工作流仍保留历史发布身份。
+
+跨仓库通知需要在 **EngineeringSpecifications** 的 GitHub Actions
+Secrets 配置 `RF_DISPATCH_TOKEN`，权限仅限 **RepoFoundryAI / Contents:
+Read and write**。缺少凭据时 Spec Tag 仍有效，但事件通知失败；
+修复后可对已发布的 Spec Tag 手动触发通知工作流重试。
+如果 Spec Tag 是被默认 `GITHUB_TOKEN` 的发布工作流创建，
+发布者需在成功验证 Tag 后显式调用该 `workflow_dispatch` 入口，
+因为 GitHub 不会为该 Token 创建的 Tag 再触发普通 push 工作流。
+
+此链路不自动迁移已有项目的 Spec manifest/lock。发生兼容性失败时
+不会生成新的 RF Tag，应修复消费端并重新验证。
+
