@@ -65,7 +65,7 @@ jobs:
           catalog = json.loads((Path(os.environ["SPEC_ROOT"]) / "catalog.json").read_text())
           required = {x["id"] for x in catalog["specs"] if x["required"]}
           root = Path(os.environ["PROJECT_ROOT"])
-          index = json.loads((root / "docs/agent-guides/managed/spec-index.json").read_text())
+          index = json.loads((root / "docs/agent-guides/managed/requirements.json").read_text())
           installed = {x["id"] for x in index["specs"]}
           assert required <= installed, (required, installed)
           print("Required Specs installed:", sorted(required))
