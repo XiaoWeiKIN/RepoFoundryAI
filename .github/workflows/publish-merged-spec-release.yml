@@ -43,7 +43,7 @@ jobs:
           PY
           )"
           test "$(git show HEAD^:VERSION)" != "$version"
-          git diff --name-only HEAD^ HEAD | grep -qx VERSION
+          test "$(git show HEAD^:scripts/foundryctl.py | grep '^DEFAULT_SPEC_VERSION = ')" != "$(grep '^DEFAULT_SPEC_VERSION = ' scripts/foundryctl.py)"
           python3 -B scripts/check.py
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "spec=$spec" >> "$GITHUB_OUTPUT"
