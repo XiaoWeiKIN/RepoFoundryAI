@@ -509,7 +509,7 @@ class RepositoryContractTestCase(unittest.TestCase):
         )
         self.assertEqual(
             (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
-            "0.15.0",
+            "0.15.1",
         )
         for relative in (
             "SKILL.md",
@@ -922,7 +922,7 @@ class RepositoryContractTestCase(unittest.TestCase):
             "https://github.com/XiaoWeiKIN/EngineeringSpecifications.git",
             foundryctl,
         )
-        self.assertIn('DEFAULT_SPEC_VERSION = "1.7.1"', foundryctl)
+        self.assertIn('DEFAULT_SPEC_VERSION = "1.9.0"', foundryctl)
         self.assertNotIn('DEFAULT_SPEC_REF = "main"', foundryctl)
         self.assertIn("--spec-version", foundryctl)
         self.assertIn('"upgrade"', foundryctl)

@@ -259,11 +259,11 @@ curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/insta
 暂存包。
 
 项目迁移保持独立，并且默认只预览。发行包升级后，在每个既有项目中执行以下命令；
-需要迁移到其他版本时，把 `0.15.0` 替换为已安装的目标版本：
+需要迁移到其他版本时，把 `0.15.1` 替换为已安装的目标版本：
 
 ```bash
-repofoundry --repo . upgrade --to 0.15.0
-repofoundry --repo . upgrade --to 0.15.0 --apply
+repofoundry --repo . upgrade --to 0.15.1
+repofoundry --repo . upgrade --to 0.15.1 --apply
 repofoundry --repo . validate
 ```
 
@@ -511,14 +511,14 @@ repofoundry --repo . \
 repofoundry --repo . validate --harness
 repofoundry --repo . validate --adapter codex
 repofoundry --repo . validate --adapter claude
-repofoundry --repo . upgrade --to 0.15.0
-repofoundry --repo . upgrade --to 0.15.0 --governance-profile adaptive
-repofoundry --repo . upgrade --to 0.15.0 --apply
+repofoundry --repo . upgrade --to 0.15.1
+repofoundry --repo . upgrade --to 0.15.1 --governance-profile adaptive
+repofoundry --repo . upgrade --to 0.15.1 --apply
 
 repofoundry --repo . spec plan
 repofoundry --repo . spec sync --apply
 repofoundry --repo . \
-  spec update --spec-version 1.7.1 --spec languages/go --apply
+  spec update --spec-version 1.9.0 --spec languages/go --apply
 repofoundry --repo . spec validate
 
 python3 "$BENCHCTL" --repo . validate
@@ -554,10 +554,10 @@ Bootstrap、Harness 升级与 Spec 写操作默认先预览。Bootstrap 只创�
 保留仓库已有文件。adapter 注册的 instruction file 必须满足自身预算；Codex
 `AGENTS.md` 仍不得超过 100 个物理行。
 
-RepoFoundry `0.15.0` 使用 Harness schema `3`、Harness Core `1.5.5`、Codex
+RepoFoundry `0.15.1` 使用 Harness schema `3`、Harness Core `1.5.5`、Codex
 adapter `2.4.2`、Claude adapter `1.3.1`、Portable adapter `1.3.2` 与激活协议
 `2`；它们与 Engineering Specs Catalog 各自独立演进。schema `1` 和 `2` 继续
-可读，但只有显式执行 `upgrade --to 0.15.0 --apply` 才会迁移。较早的 schema `3`
+可读，但只有显式执行 `upgrade --to 0.15.1 --apply` 才会迁移。较早的 schema `3`
 Core 与 adapter 契约也继续可读；显式 upgrade 或一次预览过的
 adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned seed 只有在文件
 字节仍匹配记录的 installed SHA-256 时才自动替换；定制文件或来源未知文件保持
@@ -572,8 +572,8 @@ adapter 追加 bootstrap 会记录组件迁移并补齐项目 Skill。versioned 
 Engineering Specs 来自独立的
 [EngineeringSpecifications](https://github.com/XiaoWeiKIN/EngineeringSpecifications)
 Git catalog。`sync` 遵循锁定 commit；`update` 才会重新解析所选发布版本。
-新仓库默认选择固定 Catalog `1.7.1`，manifest 记录
-`refs/tags/v1.7.1`。生产升级通过
+新仓库默认选择固定 Catalog `1.9.0`，manifest 记录
+`refs/tags/v1.9.0`。生产升级通过
 `spec update --spec-version MAJOR.MINOR.PATCH` 明确选择新版本；
 `--spec-ref` 只作为显式开发源入口。`spec validate` 完全离线。安装 RepoFoundry
 `0.4.1` 或只升级 Harness，不会改写既有项目的 Spec manifest、lock、索引或本地
