@@ -1,0 +1,72 @@
+name: real-spec-1.9.0-dry-run
+
+on:
+  pull_request:
+    paths: [.github/workflows/real-spec-1.9.0-dry-run.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  real-catalog-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: rf
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: XiaoWeiKIN/EngineeringSpecifications
+          ref: df012e59bd4ec53ecc01b55702195ee03972d66e
+          path: spec
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Verify exact upstream 1.9.0 source and Spec digests
+        working-directory: spec
+        run: |
+          test "$(python3 -c 'import json; print(json.load(open("catalog.json"))["catalog_version"])')" = 1.9.0
+          python3 -B scripts/check.py
+      - name: Simulate distribution upgrade, no writes to remote
+        working-directory: rf
+        run: |
+          set -euo pipefail
+          python3 -B scripts/prepare_spec_release.py 1.9.0
+          test "$(cat VERSION)" = 0.15.1
+          grep -q 'DEFAULT_SPEC_VERSION = "1.9.0"' scripts/foundryctl.py
+          git diff --check
+          python3 -B scripts/check.py
+          node --test tests/explanation_frames.test.mjs
+      - name: Test real required-only bootstrap and validation
+        working-directory: rf
+        env:
+          SPEC_DIR: ${{ github.workspace }}/spec
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/real-spec-project"
+          mkdir -p "$project"
+          git -C "$project" init -q
+          printf 'sample\n' > "$project/README.md"
+          python3 -B scripts/foundryctl.py --repo "$project" \
+            bootstrap --adapter portable --required-only \
+            --spec-repository "file://$SPEC_DIR" \
+            --spec-ref df012e59bd4ec53ecc01b55702195ee03972d66e --apply
+          python3 -B scripts/foundryctl.py --repo "$project" spec validate
+          PROJECT_ROOT="$project" SPEC_ROOT="$SPEC_DIR" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          catalog = json.loads((Path(os.environ["SPEC_ROOT"]) / "catalog.json").read_text())
+          required = {x["id"] for x in catalog["specs"] if x["required"]}
+          root = Path(os.environ["PROJECT_ROOT"])
+          index = json.loads((root / "docs/agent-guides/managed/spec-index.json").read_text())
+          installed = {x["id"] for x in index["specs"]}
+          assert required <= installed, (required, installed)
+          print("Required Specs installed:", sorted(required))
+          PY
