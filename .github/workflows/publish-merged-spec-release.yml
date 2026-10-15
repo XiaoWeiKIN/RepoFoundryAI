@@ -1,0 +1,85 @@
+name: publish-merged-spec-release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - VERSION
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rf-spec-driven-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'XiaoWeiKIN/RepoFoundryAI'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify the merged release candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          version="$(cat VERSION)"
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || exit 1
+          spec="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("scripts/foundryctl.py").read_text()
+          print(re.search(r'^DEFAULT_SPEC_VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"$', text, re.M)[1])
+          PY
+          )"
+          test "$(git show HEAD^:VERSION)" != "$version"
+          old_spec="$(git show HEAD^:scripts/foundryctl.py | grep '^DEFAULT_SPEC_VERSION = ')"
+          new_spec="$(grep '^DEFAULT_SPEC_VERSION = ' scripts/foundryctl.py)"
+          test "$old_spec" != "$new_spec"
+          python3 -B scripts/check.py
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "spec=$spec" >> "$GITHUB_OUTPUT"
+      - name: Verify exact published upstream Spec release
+        env:
+          SPEC_VERSION: ${{ steps.candidate.outputs.spec }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/upstream-spec"
+          git clone --quiet --no-checkout https://github.com/XiaoWeiKIN/EngineeringSpecifications.git "$root"
+          git -C "$root" fetch --quiet --no-tags origin "refs/tags/v$SPEC_VERSION:refs/tags/v$SPEC_VERSION"
+          ref="refs/tags/v$SPEC_VERSION"
+          test "$(git -C "$root" cat-file -t "$ref")" = tag
+          git -C "$root" checkout --quiet --detach "$ref^{commit}"
+          (cd "$root" && python3 -B scripts/check.py && python3 -B scripts/check_release.py "$SPEC_VERSION" --require-tag)
+      - name: Publish annotated RF tag and GitHub Release
+        env:
+          RF_VERSION: ${{ steps.candidate.outputs.version }}
+          SPEC_VERSION: ${{ steps.candidate.outputs.spec }}
+          GH_TOKEN: ${{ github.token }}
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v$RF_VERSION"
+          ref="refs/tags/$tag"
+          test -z "$(git ls-remote --tags origin "$ref" "$ref^{}")" || {
+            echo "Tag already exists; refusing to move it" >&2; exit 1
+          }
+          git tag -a "$tag" -m "RepoFoundry AI $RF_VERSION"
+          git -c push.followTags=false push origin "$ref:$ref"
+          remote="$(git ls-remote --tags origin "$ref" "$ref^{}")"
+          test "$(printf '%s\n' "$remote" | awk -v r="$ref^{}" '$2==r {print $1}')" = "$(git rev-parse HEAD)"
+          gh release create "$tag" --verify-tag --title "RepoFoundry AI $RF_VERSION" \
+            --notes "Adopt published EngineeringSpecifications v$SPEC_VERSION. Existing consumer locks remain pinned."

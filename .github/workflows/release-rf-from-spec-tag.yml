@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: rf-spec-driven-release
@@ -131,65 +132,36 @@ jobs:
           assert installed["schema_version"] == 2
           print("Verified required Spec adoption:", sorted(required))
           PY
-      - name: Publish a verified RF commit, annotated tag and GitHub Release
+      - name: Open protected-branch release PR
         if: steps.prepare.outputs.action == 'publish'
         env:
           RF_VERSION: ${{ steps.prepare.outputs.rf_version }}
-          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
-          TAG_OBJECT: ${{ steps.upstream.outputs.tag_object }}
         shell: bash
         run: |
           set -euo pipefail
-          release_tag="v$RF_VERSION"
-          initial="$(git rev-parse HEAD)"
+          branch="release/spec-$SPEC_VERSION"
+          base="$(git rev-parse HEAD)"
           git fetch --quiet origin main
-          test "$(git rev-parse origin/main)" = "$initial" || {
-            echo 'RF main advanced; retry against the new head' >&2; exit 1
+          test "$(git rev-parse origin/main)" = "$base" || {
+            echo 'RF main advanced; retry event on the current main' >&2; exit 1
           }
-          if ! git diff --quiet; then
-            git add VERSION scripts/foundryctl.py \
-              tests/test_foundryctl.py tests/test_repository_contracts.py \
-              README.md README.zh-CN.md references/specifications.md \
-              references/bootstrap.md references/upgrades.md
-            git -c user.name='github-actions[bot]' \
-                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-                commit -m "chore(release): adopt Spec v$SPEC_VERSION"
-            git -c push.followTags=false push origin HEAD:refs/heads/main
+          git add VERSION scripts/foundryctl.py \
+            tests/test_foundryctl.py tests/test_repository_contracts.py \
+            README.md README.zh-CN.md references/specifications.md \
+            references/bootstrap.md references/upgrades.md
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "chore(release): adopt Spec v$SPEC_VERSION"
+          candidate="$(git rev-parse HEAD)"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Release branch already exists; do not overwrite it: $branch" >&2
+            exit 1
           fi
-          release_commit="$(git rev-parse HEAD)"
-          ref="refs/tags/$release_tag"
-          remote="$(git ls-remote --tags origin "$ref" "$ref^{}")"
-          old="$(printf '%s\n' "$remote" | awk -v r="$ref^{}" '$2==r {print $1}')"
-          if [[ -n "$remote" ]]; then
-            test "$old" = "$release_commit" || {
-              echo 'Existing RF tag has a different release commit' >&2; exit 1
-            }
-          else
-            git -c user.name='github-actions[bot]' \
-                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-                tag -a "$release_tag" "$release_commit" -m "RepoFoundry AI $RF_VERSION"
-            git -c push.followTags=false push origin "$ref:$ref"
-          fi
-          remote="$(git ls-remote --tags origin "$ref" "$ref^{}")"
-          test "$(printf '%s\n' "$remote" | awk -v r="$ref^{}" '$2==r {print $1}')" = "$release_commit"
-          if ! gh release view "$release_tag" >/dev/null 2>&1; then
-            cat > "$RUNNER_TEMP/release-notes.md" <<EOF
-          ## EngineeringSpecifications adoption
-
-          - RF distribution: $RF_VERSION
-          - Default Catalog: $SPEC_VERSION
-          - Published Spec tag: v$SPEC_VERSION
-          - Spec commit: $UPSTREAM_COMMIT
-          - Spec tag object: $TAG_OBJECT
-          - Verified RF integrity, real required-Spec bootstrap, and Node explanation tests.
-
-          Existing consumer projects retain their pinned manifest and lock until explicitly upgraded.
-          EOF
-            gh release create "$release_tag" --verify-tag \
-              --title "RepoFoundry AI $RF_VERSION" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
-          fi
-          echo "Published RF $release_tag for Spec v$SPEC_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          git -c push.followTags=false push origin "HEAD:refs/heads/$branch"
+          gh pr create --base main --head "$branch" \
+            --title "release: adopt Spec v$SPEC_VERSION (RF v$RF_VERSION)" \
+            --body "Automated candidate from the verified Spec v$SPEC_VERSION event. Canonical integrity and real Spec bootstrap passed in the dispatch workflow. Merge only after required PR checks pass. RF tag publication runs separately on the merged main commit."
+          echo "Prepared release PR branch $branch ($candidate); no tag published" >> "$GITHUB_STEP_SUMMARY"
       - name: Report unchanged or older Catalog
         if: steps.prepare.outputs.action == 'skip'
         run: echo 'Catalog is already the RF default or older; nothing to publish.' >> "$GITHUB_STEP_SUMMARY"
