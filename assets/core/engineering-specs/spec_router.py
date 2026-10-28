@@ -92,7 +92,6 @@ class RouterError(RuntimeError):
     """Raised when local routing state violates its boundary contract."""
 
 
-
 SESSION_CONTEXT_BUDGET_BYTES = 8 * 1024
 MAX_SESSION_CONTEXT_BUDGET_BYTES = 128 * 1024
 
@@ -114,8 +113,8 @@ def plan_session_context(
 ) -> dict[str, object]:
     """Select bounded session context without truncating any section.
 
-    Reserve all mandatory content and optional source pointers first. A large
-    early section must not consume the space needed to name later sources.
+    Reserve mandatory content and the shorter of each optional section or its
+    source pointer first. A large early section must not hide later sources.
     This planner never handles the normative Engineering Spec capsule.
     """
     if (
@@ -157,7 +156,12 @@ def plan_session_context(
 
     # Two newlines separate adjacent sections, including references.
     baseline_bytes = 2 * max(0, len(ordered) - 1) + sum(
-        len((section.content if section.mandatory else pointer(section)).encode("utf-8"))
+        min(
+            len(section.content.encode("utf-8")),
+            len(pointer(section).encode("utf-8")),
+        )
+        if not section.mandatory
+        else len(section.content.encode("utf-8"))
         for section in ordered
     )
     if baseline_bytes > budget_bytes:
@@ -172,7 +176,9 @@ def plan_session_context(
     selections: list[dict[str, object]] = []
     for section in ordered:
         short = pointer(section)
-        extra = len(section.content.encode("utf-8")) - len(short.encode("utf-8"))
+        content_size = len(section.content.encode("utf-8"))
+        pointer_size = len(short.encode("utf-8"))
+        extra = max(0, content_size - pointer_size)
         include = section.mandatory or extra <= remaining
         chosen = section.content if include else short
         if not section.mandatory and include:
