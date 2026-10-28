@@ -8833,7 +8833,7 @@ def checkpoint_plan(
             # questions. Preserve them verbatim rather than silently replacing
             # them with the three fields used to render the CP summary.
             existing_snapshot = section(text, "Current Snapshot") or ""
-            latest_pattern = r"(?m)^-[ \\t]+Latest checkpoint:[^\\r\\n]*$"
+            latest_pattern = r"(?m)^-[ \t]+Latest checkpoint:[^\r\n]*$"
             latest_lines = re.findall(latest_pattern, existing_snapshot)
             if len(latest_lines) > 1:
                 raise EpctlError(
@@ -8850,7 +8850,7 @@ def checkpoint_plan(
                     count=1,
                 )
                 if latest_lines
-                else latest_line + "\\n" + existing_snapshot
+                else latest_line + "\n" + existing_snapshot
             )
             new_root = replace_section(text, "Current Snapshot", new_snapshot)
         else:
