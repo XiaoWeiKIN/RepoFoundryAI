@@ -3770,6 +3770,49 @@ updated: 2026-07-28
             json.loads(self.run_cli("validate").stdout)["errors"], 0
         )
 
+
+    def test_auto_checkpoint_preserves_extended_snapshot_and_chains_repeats(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        epctl = self.load_epctl()
+        current_snapshot = epctl.section(
+            plan.read_text(encoding="utf-8"), "Current Snapshot"
+        )
+        self.replace_section_body(
+            plan, "Current Snapshot",
+            current_snapshot + "\n"
+            "- Open questions: The access policy remains under review.\n"
+            "  Keep the original context until the owner decides.",
+        )
+        self.add_checkpoint_trigger_history(plan)
+        first = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(first["checkpoint"]["checkpoint_id"], "CP-001")
+        root = plan.read_text(encoding="utf-8")
+        self.assertIn("Open questions: The access policy", root)
+        self.assertIn("Keep the original context until the owner decides.", root)
+        self.assertIn("[CP-001](history/cp-001_auto-history.md)", root)
+
+        self.add_checkpoint_trigger_history(plan)
+        second = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(second["checkpoint"]["checkpoint_id"], "CP-002")
+        checkpoint = self.repo / second["checkpoint"]["path"]
+        self.assertIn(
+            "previous_checkpoint: CP-001",
+            checkpoint.read_text(encoding="utf-8"),
+        )
+        root = plan.read_text(encoding="utf-8")
+        self.assertIn("Open questions: The access policy", root)
+        self.assertIn("Keep the original context until the owner decides.", root)
+        self.assertIn("[CP-002](history/cp-002_auto-history.md)", root)
+        self.assertEqual(
+            json.loads(self.run_cli("validate").stdout)["errors"], 0
+        )
+
     def test_auto_checkpoint_rollback_restores_high_water_and_index_bytes(self) -> None:
         self.init()
         plan = self.new_ep()
