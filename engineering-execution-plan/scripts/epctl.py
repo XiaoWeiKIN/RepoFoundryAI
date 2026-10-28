@@ -2248,21 +2248,15 @@ def restore_managed_indexes(snapshots: dict[Path, str | None]) -> None:
     restore_file_snapshots(snapshots)
 
 
-def rebuild_indexes(repo: Path) -> dict[str, int]:
-    init_repo(repo)
+def rebuild_plan_index(repo: Path) -> int:
     plan_index = repo / "docs" / "PLANS.md"
-    research_index = repo / "docs" / "RESEARCH.md"
-    decision_index = repo / "docs" / "DECISIONS.md"
-    bugfix_index = repo / "docs" / "BUGFIXES.md"
     active_plans = plan_files(repo, "active")
     completed_plans = plan_files(repo, "completed")
-    active_research = research_files(repo, "active")
-    completed_research = research_files(repo, "completed")
-    adrs = adr_sources(repo)
-    active_bugfixes = bugfix_files(repo, "active")
-    completed_bugfixes = bugfix_files(repo, "completed")
-
-    plans_text = plan_index.read_text(encoding="utf-8")
+    plans_text = (
+        plan_index.read_text(encoding="utf-8")
+        if plan_index.exists()
+        else render_asset("plans-index.md", {"DATE": date_string()})
+    )
     plans_text = replace_index_rows(
         plans_text,
         "EP",
@@ -2276,6 +2270,20 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
         (plan_index_row(repo, path) for path in completed_plans),
     )
     atomic_write(plan_index, plans_text)
+    return len(active_plans) + len(completed_plans)
+
+
+def rebuild_indexes(repo: Path) -> dict[str, int]:
+    init_repo(repo)
+    research_index = repo / "docs" / "RESEARCH.md"
+    decision_index = repo / "docs" / "DECISIONS.md"
+    bugfix_index = repo / "docs" / "BUGFIXES.md"
+    active_research = research_files(repo, "active")
+    completed_research = research_files(repo, "completed")
+    adrs = adr_sources(repo)
+    active_bugfixes = bugfix_files(repo, "active")
+    completed_bugfixes = bugfix_files(repo, "completed")
+    plan_count = rebuild_plan_index(repo)
 
     research_text = research_index.read_text(encoding="utf-8")
     research_text = replace_index_rows(
@@ -2326,7 +2334,7 @@ def rebuild_indexes(repo: Path) -> dict[str, int]:
         )
     save_state(repo, state)
     return {
-        "plans": len(active_plans) + len(completed_plans),
+        "plans": plan_count,
         "research": len(active_research) + len(completed_research),
         "adrs": len(adrs),
         "decision_views": len(decision_views),
@@ -12029,6 +12037,7 @@ def archive_ep(
                 "--verified-revision and --evidence are valid only "
                 "for completed EPs"
             )
+        original_plan_bytes = path.read_bytes()
         text = path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
         schema_version = data.get("schema_version")
@@ -12105,20 +12114,29 @@ def archive_ep(
                 new_text,
                 {"archive_sha256": archive_digest},
             )
-        snapshots = managed_index_snapshots(repo)
-        atomic_write(path, new_text)
-        errors, _ = validate_plan(path, archive_status=outcome)
-        if errors:
-            atomic_write(path, text)
-            raise EpctlError("Archive blocked:\n- " + "\n- ".join(errors))
+        plan_index = repo / "docs" / "PLANS.md"
+        reject_symlink_path(repo, plan_index)
+        original_index_bytes = (
+            plan_index.read_bytes() if plan_index.exists() else None
+        )
+        index_write_attempted = False
         try:
+            atomic_write(path, new_text)
+            errors, _ = validate_plan(path, archive_status=outcome)
+            if errors:
+                raise EpctlError("Archive blocked:\n- " + "\n- ".join(errors))
             os.replace(container, destination)
-            rebuild_indexes(repo)
+            index_write_attempted = True
+            rebuild_plan_index(repo)
         except Exception:
             if destination.exists() and not container.exists():
                 os.replace(destination, container)
-            atomic_write(path, text)
-            restore_managed_indexes(snapshots)
+            atomic_write_bytes(path, original_plan_bytes)
+            if index_write_attempted:
+                if original_index_bytes is None:
+                    plan_index.unlink(missing_ok=True)
+                else:
+                    atomic_write_bytes(plan_index, original_index_bytes)
             raise
         return destination / "EXECPLAN.md"
 
