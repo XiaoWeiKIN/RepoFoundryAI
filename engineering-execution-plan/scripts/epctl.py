@@ -8815,9 +8815,13 @@ def checkpoint_plan(
             )
         )
         if not remaining_progress.strip():
+            # The automatic path must not invent unfinished work after all
+            # historical progress has been completed.
             remaining_progress = (
-                f"- [ ] ({timestamp_string()}) "
-                f"Continue with: {inline_text(next_action)}"
+                "- None."
+                if preserve_current_context
+                else f"- [ ] ({timestamp_string()}) "
+                     f"Continue with: {inline_text(next_action)}"
             )
         revision_note = (
             f"- {timestamp_string()} — Sealed {checkpoint_id}; "
