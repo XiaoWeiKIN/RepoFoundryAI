@@ -8688,6 +8688,9 @@ def checkpoint_plan(
     next_action: str,
     revision: str,
     dry_run: bool,
+    *,
+    preserve_current_context: bool = False,
+    expected_source_sha256: str | None = None,
 ) -> dict[str, object]:
     validate_slug(slug)
     if not inline_text(title):
@@ -8709,6 +8712,13 @@ def checkpoint_plan(
         plan_path = find_plan(repo, plan_id, "active")
         if plan_path.name != "EXECPLAN.md":
             raise EpctlError("checkpoint requires a v2 EXECPLAN.md")
+        reject_symlink_path(repo, plan_path)
+        original_plan_bytes = plan_path.read_bytes()
+        if expected_source_sha256 is not None:
+            if hashlib.sha256(original_plan_bytes).hexdigest() != expected_source_sha256:
+                raise EpctlError("AUTO_CHECKPOINT_SOURCE_CHANGED: inspect the current EP and retry")
+            if b"\r" in original_plan_bytes:
+                raise EpctlError("AUTO_CHECKPOINT_UNSUPPORTED_NEWLINES: normalize the EP explicitly")
         text = plan_path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
         if data.get("schema_version") not in {
@@ -8738,20 +8748,15 @@ def checkpoint_plan(
         history_dir = plan_path.parent / "history"
         reject_symlink_path(repo, history_dir)
         state_key = f"CP:{plan_id.upper()}"
-        if dry_run:
-            checkpoint_id = peek_next_id(
-                repo,
-                "CP",
-                history_dir,
-                state_key=state_key,
-            )
-        else:
-            checkpoint_id = next_id(
-                repo,
-                "CP",
-                history_dir,
-                state_key=state_key,
-            )
+        # Candidate ID calculation is always read-only. Persist the high-water
+        # mark only inside the write transaction after the complete candidate
+        # has been rendered and reviewed.
+        checkpoint_id = peek_next_id(
+            repo,
+            "CP",
+            history_dir,
+            state_key=state_key,
+        )
         number = int(checkpoint_id.split("-")[1])
         filename = f"cp-{number:03d}_{slug}.md"
         checkpoint_path = history_dir / filename
@@ -8762,11 +8767,17 @@ def checkpoint_plan(
         archived_progress, remaining_progress = partition_completed_progress(
             section(text, "Progress") or ""
         )
-        archived_discoveries = archive_or_none(
-            section(text, "Surprises & Discoveries") or ""
+        # Auto mode never guesses which discoveries or decisions have been
+        # promoted into the current design. Keep them in the live root.
+        archived_discoveries = (
+            "- None."
+            if preserve_current_context
+            else archive_or_none(section(text, "Surprises & Discoveries") or "")
         )
-        archived_decisions = archive_or_none(
-            section(text, "Decision Log") or ""
+        archived_decisions = (
+            "- None."
+            if preserve_current_context
+            else archive_or_none(section(text, "Decision Log") or "")
         )
         archived_revisions = archive_or_none(
             section(text, "Revision Notes") or ""
@@ -8815,16 +8826,17 @@ def checkpoint_plan(
 
         new_root = replace_section(text, "Current Snapshot", snapshot)
         new_root = replace_section(new_root, "Progress", remaining_progress)
-        new_root = replace_section(
-            new_root,
-            "Surprises & Discoveries",
-            f"- None since {checkpoint_id}.",
-        )
-        new_root = replace_section(
-            new_root,
-            "Decision Log",
-            f"- None since {checkpoint_id}.",
-        )
+        if not preserve_current_context:
+            new_root = replace_section(
+                new_root,
+                "Surprises & Discoveries",
+                f"- None since {checkpoint_id}.",
+            )
+            new_root = replace_section(
+                new_root,
+                "Decision Log",
+                f"- None since {checkpoint_id}.",
+            )
         new_root = replace_section(new_root, "Blockers", remaining_blockers)
         new_root = replace_section(new_root, "Revision Notes", revision_note)
         new_root = update_frontmatter(
@@ -8889,8 +8901,23 @@ def checkpoint_plan(
         if dry_run:
             return payload
 
-        snapshots = managed_index_snapshots(repo)
+        # Checkpointing owns only this EP, its CP high-water, and PLANS.md.
+        # Save exact bytes before allocating the next CP ID so a failed write
+        # cannot advance the high-water or rewrite unrelated governance indexes.
+        plan_index = repo / "docs" / "PLANS.md"
+        state_file = state_path(repo)
+        reject_symlink_path(repo, plan_index)
+        reject_symlink_path(repo, state_file)
+        snapshots = {
+            item: item.read_bytes() if item.is_file() else None
+            for item in (state_file, plan_index)
+        }
         try:
+            allocated = next_id(
+                repo, "CP", history_dir, state_key=state_key
+            )
+            if allocated != checkpoint_id:
+                raise EpctlError("Checkpoint high-water changed during allocation")
             atomic_write(checkpoint_path, candidate)
             atomic_write(plan_path, new_root)
             post_errors, _ = validate_plan(plan_path)
@@ -8899,16 +8926,173 @@ def checkpoint_plan(
                     "Checkpoint produced invalid plan:\n- "
                     + "\n- ".join(post_errors)
                 )
-            rebuild_indexes(repo)
+            rebuild_plan_index(repo)
         except Exception:
-            atomic_write(plan_path, text)
+            atomic_write_bytes(plan_path, original_plan_bytes)
             if checkpoint_path.exists():
                 checkpoint_path.unlink()
             if history_dir.exists() and not any(history_dir.iterdir()):
                 history_dir.rmdir()
-            restore_managed_indexes(snapshots)
+            for item, previous in snapshots.items():
+                if previous is None:
+                    if item.is_file() and not item.is_symlink():
+                        item.unlink()
+                else:
+                    atomic_write_bytes(item, previous)
             raise
         return payload
+
+
+
+AUTO_CHECKPOINT_THRESHOLDS = ("recommended", "required")
+AUTO_SNAPSHOT_FIELD_LIMIT = 1024
+
+
+def _auto_checkpoint_snapshot_fields(text: str) -> dict[str, str] | None:
+    """Consume authored Current Snapshot facts; never synthesize task state."""
+    snapshots = section_values(text, "Current Snapshot")
+    if len(snapshots) != 1:
+        return None
+    result: dict[str, str] = {}
+    for name in ("Current milestone", "Current state", "Next action"):
+        matches = re.findall(
+            rf"(?m)^-\s+{re.escape(name)}:\s*(.*?)\s*$", snapshots[0]
+        )
+        if len(matches) != 1:
+            return None
+        value = inline_text(matches[0])
+        if (
+            not value
+            or len(value.encode("utf-8")) > AUTO_SNAPSHOT_FIELD_LIMIT
+            or any(token in value for token in ("REQUIRED", "BOOTSTRAP_TODO", "<", ">"))
+            or value.lower() in {"none", "none.", "unknown", "todo", "tbd", "n/a"}
+        ):
+            return None
+        result[name] = value
+    return result
+
+
+def auto_checkpoint_plan(
+    repo: Path,
+    plan_id: str,
+    *,
+    apply: bool = False,
+    when: str = "recommended",
+    revision: str = "",
+) -> dict[str, object]:
+    """Checkpoint *eligible* finished history without authoring new decisions.
+
+    The command never treats a large EP as permission to discard live
+    discoveries or change decisions. A no-op is an explicit recorded result.
+    """
+    if when not in AUTO_CHECKPOINT_THRESHOLDS:
+        raise EpctlError("AUTO_CHECKPOINT_THRESHOLD_INVALID")
+    normalized = normalize_reference_ids((plan_id,), "EP")[0]
+    plan_path = find_plan(repo, normalized, "active")
+    reject_symlink_path(repo, plan_path)
+    if plan_path.name != "EXECPLAN.md":
+        raise EpctlError("auto-checkpoint requires a v2 EXECPLAN.md")
+    original_bytes = plan_path.read_bytes()
+    try:
+        text = original_bytes.decode("utf-8")
+        data, _, _ = parse_frontmatter(text)
+    except (UnicodeError, EpctlError) as exc:
+        raise EpctlError(f"AUTO_CHECKPOINT_INVALID_PLAN: {exc}") from exc
+    if data.get("status") not in PLAN_ACTIVE_STATUSES:
+        raise EpctlError(f"AUTO_CHECKPOINT_NOT_ACTIVE: {normalized}")
+    lifecycle = plan_lifecycle_metrics(text, data["status"], [])
+    working_set = str(lifecycle["working_set"])
+    base = {
+        "plan_id": normalized,
+        "path": plan_path.relative_to(repo).as_posix(),
+        "working_set": working_set,
+        "threshold": when,
+        "apply": apply,
+    }
+    if working_set == "bounded" or (
+        when == "required" and working_set != "checkpoint_required"
+    ):
+        return {**base, "status": "skipped", "reason": "below_threshold"}
+
+    archived_progress, _ = partition_completed_progress(
+        section(text, "Progress") or ""
+    )
+    archived_blockers, _ = partition_blockers(
+        section(text, "Blockers") or ""
+    )
+    if not archived_progress.strip() and not archived_blockers.strip():
+        return {
+            **base, "status": "skipped",
+            "reason": "no_safe_history",
+            "next": "Preserve unfinished work; review plan scope or manually promote history.",
+        }
+    fields = _auto_checkpoint_snapshot_fields(text)
+    if fields is None:
+        return {
+            **base, "status": "skipped",
+            "reason": "current_snapshot_incomplete",
+            "next": "Complete Current Snapshot with milestone, state, and next action.",
+        }
+    source_digest = hashlib.sha256(original_bytes).hexdigest()
+    # This is an EP working-set snapshot identity, not evidence that the
+    # entire Git worktree or its implementation passed acceptance.
+    revision_value = inline_text(revision) or f"snapshot:ep-sha256-{source_digest}"
+    checkpoint = checkpoint_plan(
+        repo,
+        normalized,
+        slug="auto-history",
+        title=f"Automatic {normalized} history checkpoint",
+        current_milestone=fields["Current milestone"],
+        summary=fields["Current state"],
+        next_action=fields["Next action"],
+        revision=revision_value,
+        dry_run=not apply,
+        preserve_current_context=True,
+        expected_source_sha256=source_digest,
+    )
+    return {
+        **base,
+        "status": "compacted" if apply else "ready",
+        "source_sha256": source_digest,
+        "checkpoint": checkpoint,
+    }
+
+
+def auto_checkpoint_active_plans(
+    repo: Path,
+    *,
+    apply: bool,
+    when: str,
+) -> dict[str, object]:
+    """Run safely bounded, independent per-EP checks for explicit --all."""
+    results: list[dict[str, object]] = []
+    failures = 0
+    for path in plan_files(repo, "active"):
+        if path.name != "EXECPLAN.md":
+            continue
+        try:
+            reject_symlink_path(repo, path)
+            data, _, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+            plan_id = data.get("id", "")
+            if not ID_RE["EP"].fullmatch(plan_id):
+                raise EpctlError("invalid active EP identity")
+            result = auto_checkpoint_plan(
+                repo, plan_id, apply=apply, when=when
+            )
+        except (EpctlError, OSError, UnicodeError) as exc:
+            failures += 1
+            result = {
+                "path": path.relative_to(repo).as_posix(),
+                "status": "blocked",
+                "reason": str(exc),
+            }
+        results.append(result)
+    return {
+        "apply": apply,
+        "threshold": when,
+        "results": results,
+        "blocked": failures,
+    }
 
 
 def path_id_number(path: Path, prefix: str) -> int | None:
@@ -13003,6 +13187,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     checkpoint.add_argument("--dry-run", action="store_true")
 
+    auto = sub.add_parser(
+        "auto-checkpoint",
+        help="Automatically seal safe finished EP history when size thresholds trigger",
+    )
+    auto.add_argument("plan_id", nargs="?", help="Target EP-NNN (omit only with --all)")
+    auto.add_argument("--all", action="store_true", dest="all_plans",
+                      help="Inspect every active EP; changes require --apply")
+    auto.add_argument("--apply", action="store_true",
+                      help="Apply eligible checkpoints; otherwise preview only")
+    auto.add_argument("--when", choices=AUTO_CHECKPOINT_THRESHOLDS,
+                      default="recommended")
+    auto.add_argument("--revision", default="",
+                      help="Explicit repository/workspace revision; otherwise EP-source snapshot")
     validate_parser = sub.add_parser(
         "validate",
         help="Validate repository plan artifacts",
@@ -13317,6 +13514,27 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
+        elif args.command == "auto-checkpoint":
+            if bool(args.plan_id) == bool(args.all_plans):
+                raise EpctlError(
+                    "auto-checkpoint requires exactly one EP-NNN or --all"
+                )
+            if args.all_plans:
+                if args.revision:
+                    raise EpctlError(
+                        "--revision is supported only for one selected EP"
+                    )
+                result = auto_checkpoint_active_plans(
+                    repo, apply=args.apply, when=args.when
+                )
+            else:
+                result = auto_checkpoint_plan(
+                    repo, args.plan_id, apply=args.apply,
+                    when=args.when, revision=args.revision,
+                )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            if result.get("blocked", 0):
+                return 2
         elif args.command == "validate":
             if args.fix_index:
                 with repo_lock(repo):
