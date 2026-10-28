@@ -2252,7 +2252,11 @@ def rebuild_plan_index(repo: Path) -> int:
     plan_index = repo / "docs" / "PLANS.md"
     active_plans = plan_files(repo, "active")
     completed_plans = plan_files(repo, "completed")
-    plans_text = plan_index.read_text(encoding="utf-8")
+    plans_text = (
+        plan_index.read_text(encoding="utf-8")
+        if plan_index.exists()
+        else render_asset("plans-index.md", {"DATE": date_string()})
+    )
     plans_text = replace_index_rows(
         plans_text,
         "EP",
@@ -12033,6 +12037,7 @@ def archive_ep(
                 "--verified-revision and --evidence are valid only "
                 "for completed EPs"
             )
+        original_plan_bytes = path.read_bytes()
         text = path.read_text(encoding="utf-8")
         data, _, _ = parse_frontmatter(text)
         schema_version = data.get("schema_version")
@@ -12111,19 +12116,27 @@ def archive_ep(
             )
         plan_index = repo / "docs" / "PLANS.md"
         reject_symlink_path(repo, plan_index)
-        index_text = plan_index.read_text(encoding="utf-8")
+        original_index_bytes = (
+            plan_index.read_bytes() if plan_index.exists() else None
+        )
+        index_write_attempted = False
         try:
             atomic_write(path, new_text)
             errors, _ = validate_plan(path, archive_status=outcome)
             if errors:
                 raise EpctlError("Archive blocked:\n- " + "\n- ".join(errors))
             os.replace(container, destination)
+            index_write_attempted = True
             rebuild_plan_index(repo)
         except Exception:
             if destination.exists() and not container.exists():
                 os.replace(destination, container)
-            atomic_write(path, text)
-            atomic_write(plan_index, index_text)
+            atomic_write_bytes(path, original_plan_bytes)
+            if index_write_attempted:
+                if original_index_bytes is None:
+                    plan_index.unlink(missing_ok=True)
+                else:
+                    atomic_write_bytes(plan_index, original_index_bytes)
             raise
         return destination / "EXECPLAN.md"
 

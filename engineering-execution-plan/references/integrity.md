@@ -95,8 +95,9 @@ attribution、revision/evidence 被
 它不重建 Research、ADR、Bugfix、Decision View 索引，也不修复 ID 高水位；
 全仓投影修复仍须显式执行 `reindex`。这一区分避免归档一个已验收 EP 时，
 连带改写无关治理文档或因无关 Decision View 状态而失败。
-目标 EP 的验收、架构输入、任务状态和证据校验保持生效；校验、移动或计划索引
-写入失败时，恢复原 EP 内容、目录位置与计划索引。
+目标 EP 的验收、架构输入、任务状态和证据校验保持生效。若 `docs/PLANS.md`
+缺失，归档时仅重建该索引，不初始化无关索引；校验、移动或计划索引写入失败时，
+恢复原 EP 内容和目录位置，并按字节还原原索引（原索引缺失时维持缺失状态）。
 
 completed/cancelled EP 中的 `adr_evidence` 同样属于 sealed 历史。当前 ADR payload
 与归档记录不同时，不得改 EP 或重算 archive seal。使用 preview-first 的

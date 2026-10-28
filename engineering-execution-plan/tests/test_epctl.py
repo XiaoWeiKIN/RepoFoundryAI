@@ -3019,6 +3019,119 @@ updated: 2026-07-28
         self.assertNotIn("| EP-001 |", active)
         self.assertIn("| EP-001 |", plans_index)
 
+
+    def test_archive_ep_recreates_missing_plan_index(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.complete_all_placeholders(plan)
+        index = self.repo / "docs/PLANS.md"
+        index.unlink()
+
+        archived = Path(
+            self.run_cli(
+                "archive-ep", "EP-001", *COMPLETION_ATTESTATION_ARGS
+            ).stdout.strip()
+        )
+
+        self.assertTrue(archived.is_file())
+        self.assertFalse(plan.exists())
+        self.assertIn("| EP-001 |", index.read_text(encoding="utf-8"))
+        self.run_cli("validate")
+
+    def test_archive_ep_removes_recreated_index_on_write_failure(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.complete_all_placeholders(plan)
+        index = self.repo / "docs/PLANS.md"
+        index.unlink()
+        original_plan = plan.read_bytes()
+        destination = self.repo / "docs/exec-plans/completed" / plan.parent.name
+        epctl = self.load_epctl()
+        original_write = epctl.atomic_write
+
+        def fail_after_index_write(path: Path, text: str) -> None:
+            original_write(path, text)
+            if path == index:
+                raise OSError("index write failed")
+
+        with patch.object(epctl, "atomic_write", side_effect=fail_after_index_write):
+            with self.assertRaisesRegex(OSError, "index write failed"):
+                epctl.archive_ep(
+                    self.repo,
+                    "EP-001",
+                    "completed",
+                    "",
+                    "test:revision",
+                    ["test:evidence"],
+                )
+
+        self.assertFalse(index.exists())
+        self.assertFalse(destination.exists())
+        self.assertEqual(plan.read_bytes(), original_plan)
+
+    def test_archive_ep_validation_failure_preserves_crlf_snapshots(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.complete_all_placeholders(plan)
+        index = self.repo / "docs/PLANS.md"
+        for path in (plan, index):
+            path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        original = {path: path.read_bytes() for path in (plan, index)}
+        epctl = self.load_epctl()
+
+        with patch.object(
+            epctl, "validate_plan", side_effect=epctl.EpctlError("validation failed")
+        ):
+            with self.assertRaisesRegex(epctl.EpctlError, "validation failed"):
+                epctl.archive_ep(
+                    self.repo,
+                    "EP-001",
+                    "completed",
+                    "",
+                    "test:revision",
+                    ["test:evidence"],
+                )
+
+        self.assertEqual(
+            {path: path.read_bytes() for path in original},
+            original,
+        )
+        self.run_cli("validate")
+
+    def test_archive_ep_index_write_failure_restores_crlf_bytes(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.complete_all_placeholders(plan)
+        index = self.repo / "docs/PLANS.md"
+        index.write_bytes(index.read_bytes().replace(b"\n", b"\r\n"))
+        original = {path: path.read_bytes() for path in (plan, index)}
+        destination = self.repo / "docs/exec-plans/completed" / plan.parent.name
+        epctl = self.load_epctl()
+        original_write = epctl.atomic_write
+
+        def fail_after_index_write(path: Path, text: str) -> None:
+            original_write(path, text)
+            if path == index:
+                raise OSError("index write failed")
+
+        with patch.object(epctl, "atomic_write", side_effect=fail_after_index_write):
+            with self.assertRaisesRegex(OSError, "index write failed"):
+                epctl.archive_ep(
+                    self.repo,
+                    "EP-001",
+                    "completed",
+                    "",
+                    "test:revision",
+                    ["test:evidence"],
+                )
+
+        self.assertFalse(destination.exists())
+        self.assertEqual(
+            {path: path.read_bytes() for path in original},
+            original,
+        )
+        self.run_cli("validate")
+
     def test_archive_ep_preserves_unrelated_governance_files(self) -> None:
         self.init()
         for outcome in ("completed", "cancelled"):
