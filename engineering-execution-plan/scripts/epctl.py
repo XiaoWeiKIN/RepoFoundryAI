@@ -8956,7 +8956,7 @@ def _auto_checkpoint_snapshot_fields(text: str) -> dict[str, str] | None:
     result: dict[str, str] = {}
     for name in ("Current milestone", "Current state", "Next action"):
         matches = re.findall(
-            rf"(?m)^-\s+{re.escape(name)}:\s*(.*?)\s*$", snapshots[0]
+            rf"(?m)^-[ \t]+{re.escape(name)}:[ \t]*([^\r\n]*)[ \t]*$", snapshots[0]
         )
         if len(matches) != 1:
             return None
