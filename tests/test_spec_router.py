@@ -599,6 +599,41 @@ class SpecRouterTestCase(unittest.TestCase):
         self.assertEqual(explicit_none["decision"], "none")
         self.assertEqual(explicit_none["activated_specs"], [])
 
+
+    def test_session_context_budget_uses_routing_index_pointer_when_large(self) -> None:
+        index = self.repo / "docs/agent-guides/managed/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8") + "\n" + "UNRELATED_CONTEXT_PADDING\n" * 900,
+            encoding="utf-8",
+        )
+        result = json.loads(
+            self.run_core(
+                "event",
+                stdin={
+                    "protocol_version": 2,
+                    "event": "session_start",
+                    "adapter_id": "portable",
+                    "session_id": "budget-session",
+                    "turn_id": "budget-turn",
+                    "prompt": "Inspect the cache module",
+                },
+            ).stdout
+        )
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("Governance mode:", result["context"])
+        self.assertIn(
+            "[ContextRef:routing-index] docs/agent-guides/managed/index.md",
+            result["context"],
+        )
+        self.assertNotIn("UNRELATED_CONTEXT_PADDING", result["context"])
+        budget = result["context_plan"]
+        self.assertLessEqual(budget["used_bytes"], budget["budget_bytes"])
+        self.assertEqual(
+            [section["selection"] for section in budget["selections"]],
+            ["content", "reference"],
+        )
+        self.assertEqual(len(result["context"].encode("utf-8")), budget["used_bytes"])
+
     def test_normalized_protocol_fails_closed_on_future_version(self) -> None:
         result = self.run_core(
             "event",

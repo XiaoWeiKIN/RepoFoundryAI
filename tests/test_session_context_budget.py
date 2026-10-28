@@ -1,0 +1,159 @@
+from __future__ import annotations
+
+import importlib.util
+import sys
+import unittest
+from pathlib import Path
+
+
+CORE = (
+    Path(__file__).resolve().parents[1]
+    / "assets/core/engineering-specs/spec_router.py"
+)
+module_spec = importlib.util.spec_from_file_location("session_context_test_core", CORE)
+assert module_spec is not None and module_spec.loader is not None
+core = importlib.util.module_from_spec(module_spec)
+sys.modules[module_spec.name] = core
+module_spec.loader.exec_module(core)
+
+
+class SessionContextBudgetTestCase(unittest.TestCase):
+    def section(
+        self,
+        name: str,
+        content: str,
+        *,
+        priority: int = 10,
+        mandatory: bool = False,
+        source: str | None = None,
+    ):
+        return core.SessionContextSection(
+            id=name,
+            priority=priority,
+            content=content,
+            source=source or f"docs/{name}.md",
+            mandatory=mandatory,
+        )
+
+    def test_budget_keeps_mandatory_content_and_references_large_optional(self) -> None:
+        sections = (
+            self.section("rules", "Mandatory rules", priority=0, mandatory=True),
+            self.section("index", "large content" * 2000),
+        )
+        result = core.plan_session_context(sections, budget_bytes=120)
+        self.assertIn("Mandatory rules", result["text"])
+        self.assertIn("[ContextRef:index] docs/index.md", result["text"])
+        self.assertNotIn("large content", result["text"])
+        self.assertEqual(
+            [item["selection"] for item in result["selections"]],
+            ["content", "reference"],
+        )
+        self.assertEqual(result["used_bytes"], len(result["text"].encode("utf-8")))
+        self.assertLessEqual(result["used_bytes"], 120)
+
+    def test_priority_and_id_ties_produce_deterministic_order(self) -> None:
+        values = (
+            self.section("zeta", "Z"),
+            self.section("alpha", "A"),
+            self.section("first", "First", priority=0, mandatory=True),
+        )
+        first = core.plan_session_context(values, budget_bytes=100)
+        reversed_plan = core.plan_session_context(reversed(values), budget_bytes=100)
+        self.assertEqual(first, reversed_plan)
+        self.assertEqual([item["id"] for item in first["selections"]],
+                         ["first", "alpha", "zeta"])
+
+    def test_source_pointers_are_reserved_for_later_optional_sections(self) -> None:
+        sections = (
+            self.section("first", "X" * 1000, priority=0),
+            self.section("second", "Y" * 1000, priority=1),
+            self.section("third", "Z" * 1000, priority=2),
+        )
+        baseline = "\n\n".join(
+            f"[ContextRef:{item.id}] {item.source}" for item in sections
+        )
+        result = core.plan_session_context(
+            sections, budget_bytes=len(baseline.encode("utf-8"))
+        )
+        self.assertEqual(result["text"], baseline)
+        self.assertEqual(
+            [item["selection"] for item in result["selections"]],
+            ["reference", "reference", "reference"],
+        )
+
+    def test_exact_byte_boundary_and_unicode(self) -> None:
+        section = self.section("unicode", "中文日本語", source="docs/unicode.md")
+        full = len(section.content.encode("utf-8"))
+        self.assertGreater(full, len(section.content))
+        selected = core.plan_session_context([section], budget_bytes=full)
+        self.assertEqual(selected["text"], section.content)
+        self.assertEqual(selected["used_bytes"], full)
+        with self.assertRaisesRegex(core.RouterError, "BUDGET_EXCEEDED"):
+            core.plan_session_context(
+                [self.section("required", "中文日本語", mandatory=True)],
+                budget_bytes=full - 1,
+            )
+
+    def test_mandatory_and_pointers_over_budget_fail_explicitly(self) -> None:
+        with self.assertRaisesRegex(core.RouterError, "BUDGET_EXCEEDED"):
+            core.plan_session_context(
+                (
+                    self.section("must", "M" * 64, mandatory=True),
+                    self.section("optional", "O" * 500),
+                ),
+                budget_bytes=80,
+            )
+
+    def test_duplicate_id_and_duplicate_source_fail_closed(self) -> None:
+        with self.assertRaisesRegex(core.RouterError, "SECTION_INVALID"):
+            core.plan_session_context([
+                self.section("same", "A"),
+                self.section("same", "B"),
+            ])
+        with self.assertRaisesRegex(core.RouterError, "SOURCE_DUPLICATE"):
+            core.plan_session_context([
+                self.section("first", "A", source="docs/one.md"),
+                self.section("second", "B", source="docs/one.md"),
+            ])
+
+    def test_invalid_inputs_fail_closed(self) -> None:
+        for budget in (0, True, -1, core.MAX_SESSION_CONTEXT_BUDGET_BYTES + 1):
+            with self.subTest(budget=budget):
+                with self.assertRaisesRegex(core.RouterError, "BUDGET_INVALID"):
+                    core.plan_session_context([], budget_bytes=budget)
+        for value in (
+            self.section("Bad Name", "A"),
+            self.section("ok", ""),
+            self.section("ok", "A", source="docs/x.md\ninjection"),
+            core.SessionContextSection("ok", True, "A", "docs/x.md"),
+            core.SessionContextSection("ok", 1, "A", "docs/x.md", mandatory=1),
+            object(),
+        ):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(core.RouterError, "SECTION_INVALID"):
+                    core.plan_session_context([value])
+
+    def test_empty_plan_is_deterministic(self) -> None:
+        self.assertEqual(
+            core.plan_session_context([], budget_bytes=40),
+            {"text": "", "budget_bytes": 40, "used_bytes": 0, "selections": []},
+        )
+
+    def test_optional_shorter_than_pointer_can_free_more_budget(self) -> None:
+        sections = (
+            self.section("short", "S", priority=0),
+            self.section("next", "Next", priority=1),
+        )
+        full = "S\n\nNext"
+        chosen = core.plan_session_context(
+            sections, budget_bytes=len(full.encode("utf-8"))
+        )
+        self.assertEqual(chosen["text"], full)
+        self.assertEqual(
+            [item["selection"] for item in chosen["selections"]],
+            ["content", "content"],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

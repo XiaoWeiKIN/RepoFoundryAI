@@ -92,6 +92,111 @@ class RouterError(RuntimeError):
     """Raised when local routing state violates its boundary contract."""
 
 
+
+SESSION_CONTEXT_BUDGET_BYTES = 8 * 1024
+MAX_SESSION_CONTEXT_BUDGET_BYTES = 128 * 1024
+
+
+@dataclass(frozen=True)
+class SessionContextSection:
+    """Non-normative context offered for one agent session."""
+
+    id: str
+    priority: int
+    content: str
+    source: str
+    mandatory: bool = False
+
+
+def plan_session_context(
+    sections: Iterable[SessionContextSection],
+    budget_bytes: int = SESSION_CONTEXT_BUDGET_BYTES,
+) -> dict[str, object]:
+    """Select bounded session context without truncating any section.
+
+    Reserve all mandatory content and optional source pointers first. A large
+    early section must not consume the space needed to name later sources.
+    This planner never handles the normative Engineering Spec capsule.
+    """
+    if (
+        type(budget_bytes) is not int
+        or budget_bytes < 1
+        or budget_bytes > MAX_SESSION_CONTEXT_BUDGET_BYTES
+    ):
+        raise RouterError("ROUTER_SESSION_CONTEXT_BUDGET_INVALID")
+    values = tuple(sections)
+    seen: set[str] = set()
+    sources: set[str] = set()
+    for section in values:
+        if not isinstance(section, SessionContextSection):
+            raise RouterError("ROUTER_SESSION_CONTEXT_SECTION_INVALID")
+        if (
+            not isinstance(section.id, str)
+            or not re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", section.id)
+            or section.id in seen
+            or type(section.priority) is not int
+            or section.priority < 0
+            or type(section.mandatory) is not bool
+            or not isinstance(section.content, str)
+            or not section.content.strip()
+            or not isinstance(section.source, str)
+            or not section.source.strip()
+            or len(section.source) > 512
+            or "\n" in section.source
+            or "\r" in section.source
+        ):
+            raise RouterError("ROUTER_SESSION_CONTEXT_SECTION_INVALID")
+        if section.source in sources:
+            raise RouterError("ROUTER_SESSION_CONTEXT_SOURCE_DUPLICATE")
+        seen.add(section.id)
+        sources.add(section.source)
+    ordered = tuple(sorted(values, key=lambda section: (section.priority, section.id)))
+
+    def pointer(section: SessionContextSection) -> str:
+        return f"[ContextRef:{section.id}] {section.source}"
+
+    # Two newlines separate adjacent sections, including references.
+    baseline_bytes = 2 * max(0, len(ordered) - 1) + sum(
+        len((section.content if section.mandatory else pointer(section)).encode("utf-8"))
+        for section in ordered
+    )
+    if baseline_bytes > budget_bytes:
+        raise RouterError(
+            "ROUTER_SESSION_CONTEXT_BUDGET_EXCEEDED: "
+            f"mandatory content and source pointers need {baseline_bytes} bytes; "
+            f"budget is {budget_bytes} bytes"
+        )
+
+    remaining = budget_bytes - baseline_bytes
+    parts: list[str] = []
+    selections: list[dict[str, object]] = []
+    for section in ordered:
+        short = pointer(section)
+        extra = len(section.content.encode("utf-8")) - len(short.encode("utf-8"))
+        include = section.mandatory or extra <= remaining
+        chosen = section.content if include else short
+        if not section.mandatory and include:
+            remaining -= extra
+        parts.append(chosen)
+        selections.append(
+            {
+                "id": section.id,
+                "source": section.source,
+                "selection": "content" if include else "reference",
+                "bytes": len(chosen.encode("utf-8")),
+            }
+        )
+    text = "\n\n".join(parts)
+    used_bytes = len(text.encode("utf-8"))
+    assert used_bytes <= budget_bytes
+    return {
+        "text": text,
+        "budget_bytes": budget_bytes,
+        "used_bytes": used_bytes,
+        "selections": selections,
+    }
+
+
 @dataclass(frozen=True)
 class SpecEntry:
     key: str
@@ -2191,7 +2296,9 @@ def _router_command(adapter_id: str, session_id: str, turn_id: str) -> str:
     )
 
 
-def _route_context(root: Path, payload: dict[str, object]) -> str:
+def _route_context(
+    root: Path, payload: dict[str, object]
+) -> tuple[str, dict[str, object]]:
     runtime = _initialize_turn(root, payload)
     adapter_id = str(runtime["adapter_id"])
     session_id = str(runtime["session_id"])
@@ -2218,7 +2325,7 @@ def _route_context(root: Path, payload: dict[str, object]) -> str:
             "justified no-Spec decision before mutation; Governed work also "
             "retains its full evidence and authority gates."
         )
-    context = (
+    routing_contract = (
         governance_context
         + " File scope creates candidates; Applicability chooses Specs; bounded "
         "cards choose exact Requirements and code resolves their context "
@@ -2229,9 +2336,26 @@ def _route_context(root: Path, payload: dict[str, object]) -> str:
         f"Governance reasons: `{json.dumps(reasons, ensure_ascii=False)}`\n\n"
         f"Adapter ID: `{adapter_id}`\nSession ID: `{session_id}`\n"
         f"Turn ID: `{turn_id}`\nContext epoch: `{runtime['context_epoch']}`\n\n"
-        f"Commands:\n{_router_command(adapter_id, session_id, turn_id)}\n\n"
-        "Current locked routing index:\n\n" + index
+        f"Commands:\n{_router_command(adapter_id, session_id, turn_id)}"
     )
+    context_plan = plan_session_context(
+        (
+            SessionContextSection(
+                id="routing-contract",
+                priority=0,
+                content=routing_contract,
+                source=".repo-foundry/engineering-specs/spec_router.py",
+                mandatory=True,
+            ),
+            SessionContextSection(
+                id="routing-index",
+                priority=20,
+                content="Current locked routing index:\n\n" + index,
+                source=INDEX_PATH,
+            ),
+        )
+    )
+    context = str(context_plan["text"])
     activation = runtime.get("activation")
     if isinstance(activation, dict):
         capsule = _context_for_activation(root, activation)
@@ -2244,7 +2368,10 @@ def _route_context(root: Path, payload: dict[str, object]) -> str:
             "\n\nExact activation capsule rehydrated for this context epoch:\n\n"
             + capsule
         )
-    return context
+    # Exact activated Spec capsules remain outside the session routing budget.
+    return context, {
+        key: value for key, value in context_plan.items() if key != "text"
+    }
 
 
 def _context_for_activation(root: Path, activation: dict[str, object]) -> str:
@@ -2552,7 +2679,12 @@ def process_event(root: Path, payload: dict[str, object]) -> dict[str, object]:
         raise RouterError(f"ROUTER_EVENT_UNSUPPORTED: {event!r}")
     _event_identity(payload)
     if event in {"session_start", "subagent_start", "context_resume"}:
-        return {"decision": "allow", "context": _route_context(root, payload)}
+        context, context_plan = _route_context(root, payload)
+        return {
+            "decision": "allow",
+            "context": context,
+            "context_plan": context_plan,
+        }
     if event == "before_mutation":
         return _before_mutation(root, payload)
     return _stop(root, payload)

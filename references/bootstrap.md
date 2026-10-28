@@ -345,6 +345,20 @@ Requirement 的旧 Spec、迁移和全库审计可用带理由的 whole-Spec
 未实现。依赖闭包、explicit-none、digest
 verification、changed-path audit 与五字段 handoff 对所有 adapter 完全相同。
 
+## SessionStart 上下文预算
+
+Core 的 Session Context Planner 对 `session_start`、`subagent_start`、
+`context_resume` 的**非规范性路由说明**使用统一的 8 KiB UTF-8 字节预算。
+它按稳定优先级选择必须内容与可选内容；预算不足时，可选的 routing index
+改为 `[ContextRef:routing-index] docs/agent-guides/managed/index.md` 指针，
+而不是截断或摘要索引。输出 `context_plan` 记录预算、实际使用字节数及各片段
+是正文还是引用。必须内容和全部来源指针超预算时显式失败。
+
+**此预算不约束**已激活的精确 Requirement Capsule：它仍按 32 KiB 默认预算、
+摘要和完整源码范围验证来注入，不能被 Planner 截断、降级为摘要或静默省略。
+Adapter 自己的引导前缀不计入 Core 的路由预算；该预算不是 Agent 整个上下文
+窗口的上限。Planner 不产生新持久文件或第二套 Spec 权威。
+
 ## 非破坏性与验证
 
 Bootstrap/upgrade 的 action 包括 `create_directory`、`create_file`、`register`、
