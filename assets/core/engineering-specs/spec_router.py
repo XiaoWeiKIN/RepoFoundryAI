@@ -1284,6 +1284,7 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
     governance_mode, governance_reasons = _initial_governance(
         governance_profile
     )
+    ep_refs, adr_refs = _session_requested_refs(payload.get("prompt", ""))
     value: dict[str, object] = {
         "version": ROUTER_VERSION,
         "protocol_version": PROTOCOL_VERSION,
@@ -1291,9 +1292,9 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
         "session_id": session_id,
         "turn_id": turn_id,
         "prompt_sha256": _sha256(str(payload.get("prompt", "")).encode("utf-8")),
-        "context_ep_ref": _session_requested_refs(payload.get("prompt", ""))[0][0]
-        if _session_requested_refs(payload.get("prompt", ""))[0] else None,
-        "context_adr_refs": _session_requested_refs(payload.get("prompt", ""))[1],
+        "context_ep_ref": ep_refs[0] if ep_refs else None,
+        "context_adr_refs": adr_refs[:_SESSION_MAX_ADR_LINKS],
+        "context_adr_omitted_count": max(0, len(adr_refs) - _SESSION_MAX_ADR_LINKS),
         "baseline": _baseline(root),
         "governance_profile": governance_profile,
         "governance_mode": governance_mode,
@@ -2378,7 +2379,7 @@ def _session_ep_snapshot(
 
 
 def _session_adr_navigation(
-    root: Path, adr_ids: Iterable[str]
+    root: Path, adr_ids: Iterable[str], additional_omitted: int = 0
 ) -> SessionContextSection | None:
     all_ids = tuple(sorted(set(adr_ids)))
     requested = all_ids[:_SESSION_MAX_ADR_LINKS]
@@ -2429,9 +2430,10 @@ def _session_adr_navigation(
                     f"- {adr_id}: not in the current-effect projection; "
                     "verify history or amendments before use."
                 )
-        if len(all_ids) > len(requested):
+        missing_count = len(all_ids) - len(requested) + additional_omitted
+        if missing_count:
             lines.append(
-                f"- {len(all_ids) - len(requested)} additional ADR references: "
+                f"- {missing_count} additional ADR references: "
                 f"inspect {source}; not individually materialized."
             )
         return SessionContextSection(
@@ -2457,7 +2459,9 @@ def _session_artifact_sections(
         snapshot, plan_adrs = _session_ep_snapshot(root, plan)
         sections.append(snapshot)
         ids.extend(plan_adrs)
-    navigation = _session_adr_navigation(root, ids)
+    extra = runtime.get("context_adr_omitted_count", 0)
+    omitted = extra if type(extra) is int and extra > 0 else 0
+    navigation = _session_adr_navigation(root, ids, additional_omitted=omitted)
     if navigation is not None:
         sections.append(navigation)
     return tuple(sections)
