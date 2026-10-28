@@ -3745,6 +3745,31 @@ updated: 2026-07-28
         )
         self.assertIsNone(epctl._auto_checkpoint_snapshot_fields(duplicate))
 
+
+    def test_auto_checkpoint_does_not_invent_new_unfinished_progress(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        self.replace_section_body(
+            plan,
+            "Progress",
+            "\n".join(
+                f"- [x] (2026-07-28T03:00:00Z) Completed step {i}."
+                for i in range(36)
+            ),
+        )
+        result = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(result["status"], "compacted")
+        progress = self.load_epctl().section(
+            plan.read_text(encoding="utf-8"), "Progress"
+        )
+        self.assertEqual(progress, "- None.")
+        self.assertEqual(
+            json.loads(self.run_cli("validate").stdout)["errors"], 0
+        )
+
     def test_auto_checkpoint_rollback_restores_high_water_and_index_bytes(self) -> None:
         self.init()
         plan = self.new_ep()
