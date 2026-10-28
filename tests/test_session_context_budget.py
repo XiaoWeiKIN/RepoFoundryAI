@@ -224,6 +224,45 @@ class SessionContextBudgetTestCase(unittest.TestCase):
             self.assertIsNotNone(section)
             self.assertIn("3 additional ADR references", section.content)
             self.assertIn("docs/DECISIONS.md", section.content)
+
+    def test_adr_navigation_supports_custom_roots_and_rejects_escape(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "docs/DECISIONS.md"
+            source.parent.mkdir(parents=True)
+            custom = root / "docs/architecture/decision-current.md"
+            custom.parent.mkdir(parents=True)
+            custom.write_text(
+                "---\nid: ADR-023\nstatus: accepted\n---\n"
+                "# Architecture decision\n",
+                encoding="utf-8",
+            )
+            source.write_text(
+                "<!-- ADRCTL:CURRENT:START -->\n"
+                "| ADR-023 | Decision | accepted | current | — | — | — | "
+                "[ADR](architecture/decision-current.md) |\n"
+                "<!-- ADRCTL:CURRENT:END -->\n",
+                encoding="utf-8",
+            )
+            current = core._session_adr_navigation(root, ["ADR-023"])
+            self.assertIsNotNone(current)
+            self.assertIn(
+                "ADR-023: docs/architecture/decision-current.md",
+                current.content,
+            )
+            source.write_text(
+                "<!-- ADRCTL:CURRENT:START -->\n"
+                "| ADR-023 | Decision | accepted | current | — | — | — | "
+                "[ADR](../outside.md) |\n"
+                "<!-- ADRCTL:CURRENT:END -->\n",
+                encoding="utf-8",
+            )
+            unsafe = core._session_adr_navigation(root, ["ADR-023"])
+            self.assertIsNotNone(unsafe)
+            self.assertIn("unavailable", unsafe.content)
+            self.assertNotIn("docs/../", unsafe.content)
+
     def test_empty_plan_is_deterministic(self) -> None:
         self.assertEqual(
             core.plan_session_context([], budget_bytes=40),

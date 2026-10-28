@@ -2409,13 +2409,12 @@ def _session_adr_navigation(
             row = re.match(r"^\|\s*(ADR-[0-9]{3,8})\s*\|", line)
             if row is None or row.group(1) not in requested:
                 continue
-            matches = re.findall(
-                r"\[ADR\]\((adr/adr-[0-9]{3,8}_[a-zA-Z0-9_-]+\.md)\)",
-                line,
-            )
+            matches = re.findall(r"\[ADR\]\(([^()\s]+\.md)\)", line)
             if len(matches) != 1 or row.group(1) in current:
                 raise ValueError("ambiguous ADR projection")
-            relative = "docs/" + matches[0]
+            relative = _safe_relative(
+                "docs/" + matches[0], "ROUTER_ADR_CONTEXT_INVALID"
+            )
             _resolve_regular(root, relative, "ROUTER_ADR_CONTEXT_INVALID")
             current[row.group(1)] = relative
         lines = [
