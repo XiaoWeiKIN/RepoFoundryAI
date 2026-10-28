@@ -3611,6 +3611,12 @@ updated: 2026-07-28
         self.add_checkpoint_trigger_history(plan)
         state = self.repo / "docs/.epctl/state.json"
         index = self.repo / "docs/PLANS.md"
+        unrelated_indexes = (
+            self.repo / "docs/RESEARCH.md",
+            self.repo / "docs/DECISIONS.md",
+            self.repo / "docs/BUGFIXES.md",
+        )
+        before_unrelated = {path: path.read_bytes() for path in unrelated_indexes}
         before = {path: path.read_bytes() for path in (plan, state, index)}
 
         preview = json.loads(self.run_cli("auto-checkpoint", "EP-001").stdout)
@@ -3640,6 +3646,10 @@ updated: 2026-07-28
         )
         self.assertIn("Completed historical step 0", sealed)
         self.assertNotIn("Completed historical step 0", updated)
+        self.assertEqual(
+            {path: path.read_bytes() for path in unrelated_indexes},
+            before_unrelated,
+        )
         self.assertIn("Milestone 1 is complete", updated)
         self.assertIn("service/handler.py", updated)
         self.assertIn("Keep compatibility at the boundary", updated)
@@ -3715,6 +3725,25 @@ updated: 2026-07-28
         self.assertEqual(result["reason"], "current_snapshot_incomplete")
         self.assertEqual(plan.read_bytes(), before)
         self.assertFalse((plan.parent / "history").exists())
+
+
+    def test_auto_checkpoint_does_not_fold_missing_snapshot_fields(self) -> None:
+        epctl = self.load_epctl()
+        invalid = (
+            "## Current Snapshot\n\n"
+            "- Current milestone:\n"
+            "- Current state: Work remains.\n"
+            "- Next action: Add tests.\n"
+        )
+        self.assertIsNone(epctl._auto_checkpoint_snapshot_fields(invalid))
+        duplicate = (
+            "## Current Snapshot\n\n"
+            "- Current milestone: Phase 1\n"
+            "- Current milestone: Phase 2\n"
+            "- Current state: Work remains.\n"
+            "- Next action: Add tests.\n"
+        )
+        self.assertIsNone(epctl._auto_checkpoint_snapshot_fields(duplicate))
 
     def test_auto_checkpoint_rollback_restores_high_water_and_index_bytes(self) -> None:
         self.init()
