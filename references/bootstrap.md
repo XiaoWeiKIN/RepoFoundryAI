@@ -359,6 +359,23 @@ Core 的 Session Context Planner 对 `session_start`、`subagent_start`、
 Adapter 自己的引导前缀不计入 Core 的路由预算；该预算不是 Agent 整个上下文
 窗口的上限。Planner 不产生新持久文件或第二套 Spec 权威。
 
+
+### 按任务引用 EP 和 ADR，不扫描无关历史
+
+SessionStart / SubagentStart 的任务文本中只有**一个明确的 `EP-NNN` 引用**时，
+Core 才只读该 active EP 的 `## Current Snapshot`，连同 `adr_refs`
+在 `docs/DECISIONS.md` 的 `ADRCTL:CURRENT` 投影中查找对应的当前决策导航。
+任务文本显式包含的 `ADR-NNN` 也参与导航。没有 EP 引用或引用了多个不同 EP
+时，不猜测“当前”计划，也不扫描所有 EP / ADR。Resume 使用同一会话先前记录
+的 ID 重新读取源文件，不把旧快照当作最新事实。
+
+上述片段作为 **optional** 内容加入 Session Context Planner：源路径必须在仓库内，
+拒绝 symlink、损坏索引和不匹配的 EP 状态；过大的 Snapshot 自动降为文件指针，
+不自动生成摘要，也不写入 EP / ADR。ADR 导航来自可重建投影，**不等同于**
+当前效力的最终验证；在决定或实施前仍须读取并校验原始 ADR / Constraint。
+缺失来源只提供“不可用”提示，不阻止普通 Explore 工作。所有规范性 Requirement
+Capsule 与 `before_mutation` 门禁保持原样。
+
 ## 非破坏性与验证
 
 Bootstrap/upgrade 的 action 包括 `create_directory`、`create_file`、`register`、

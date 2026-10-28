@@ -133,6 +133,61 @@ class SessionContextBudgetTestCase(unittest.TestCase):
                 with self.assertRaisesRegex(core.RouterError, "SECTION_INVALID"):
                     core.plan_session_context([value])
 
+
+    def test_ep_snapshot_is_reference_when_context_overflows(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / "docs/exec-plans/active/ep-001_large"
+            directory.mkdir(parents=True)
+            (directory / "EXECPLAN.md").write_text(
+                "---\nid: EP-001\nstatus: active\nadr_refs: []\n---\n"
+                "## Current Snapshot\n\n" + "LONG_SNAPSHOT\n" * 2000
+                + "\n## Progress\n\nNot in snapshot\n",
+                encoding="utf-8",
+            )
+            values = core._session_artifact_sections(
+                root,
+                {"context_ep_ref": "EP-001", "context_adr_refs": []},
+            )
+            self.assertEqual([v.id for v in values], ["ep-snapshot"])
+            result = core.plan_session_context(values, budget_bytes=100)
+            self.assertIn("[ContextRef:ep-snapshot]", result["text"])
+            self.assertNotIn("LONG_SNAPSHOT", result["text"])
+
+    def test_absent_symlink_and_ambiguous_ep_are_safe(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "docs/exec-plans/active"
+            base.mkdir(parents=True)
+            one = base / "ep-003_valid"
+            one.mkdir()
+            external = root / "outside.md"
+            external.write_text("secret data", encoding="utf-8")
+            (one / "EXECPLAN.md").symlink_to(external)
+            snapshot, refs = core._session_ep_snapshot(root, "EP-003")
+            self.assertEqual(refs, [])
+            self.assertIn("unavailable", snapshot.content)
+            self.assertNotIn("secret data", snapshot.content)
+            self.assertEqual(
+                core._session_requested_refs("Compare EP-003 to EP-004")[0],
+                [],
+            )
+            self.assertEqual(
+                core._session_requested_refs("Implement ADR-012 with EP-003"),
+                (["EP-003"], ["ADR-012"]),
+            )
+
+    def test_unavailable_decision_index_never_claims_currentness(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            section = core._session_adr_navigation(root, ["ADR-012"])
+            self.assertIsNotNone(section)
+            self.assertIn("unavailable", section.content)
+            self.assertNotIn("accepted", section.content)
+
     def test_empty_plan_is_deterministic(self) -> None:
         self.assertEqual(
             core.plan_session_context([], budget_bytes=40),

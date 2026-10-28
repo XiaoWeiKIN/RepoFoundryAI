@@ -1291,6 +1291,9 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
         "session_id": session_id,
         "turn_id": turn_id,
         "prompt_sha256": _sha256(str(payload.get("prompt", "")).encode("utf-8")),
+        "context_ep_ref": _session_requested_refs(payload.get("prompt", ""))[0][0]
+        if _session_requested_refs(payload.get("prompt", ""))[0] else None,
+        "context_adr_refs": _session_requested_refs(payload.get("prompt", ""))[1],
         "baseline": _baseline(root),
         "governance_profile": governance_profile,
         "governance_mode": governance_mode,
@@ -2302,6 +2305,158 @@ def _router_command(adapter_id: str, session_id: str, turn_id: str) -> str:
     )
 
 
+
+# Session context is an optional navigation surface, never an EP/ADR validator.
+# Only explicit references in the task select artifacts; no background corpus scan.
+_SESSION_EP_RE = re.compile(r"(?<![A-Za-z0-9])EP-([0-9]{3,8})(?![A-Za-z0-9])", re.IGNORECASE)
+_SESSION_ADR_RE = re.compile(r"(?<![A-Za-z0-9])ADR-([0-9]{3,8})(?![A-Za-z0-9])", re.IGNORECASE)
+_SESSION_MAX_ADR_LINKS = 12
+
+
+def _session_requested_refs(prompt: object) -> tuple[list[str], list[str]]:
+    if not isinstance(prompt, str):
+        return [], []
+    plans = sorted({f"EP-{int(n):03d}" for n in _SESSION_EP_RE.findall(prompt)})
+    adrs = sorted({f"ADR-{int(n):03d}" for n in _SESSION_ADR_RE.findall(prompt)})
+    # A multi-plan task needs explicit scoping; never guess which plan is current.
+    return plans[:1] if len(plans) == 1 else [], adrs[:_SESSION_MAX_ADR_LINKS]
+
+
+def _session_ep_snapshot(
+    root: Path, plan_id: str
+) -> tuple[SessionContextSection, list[str]]:
+    number = int(plan_id.split("-", 1)[1])
+    active_root = root / "docs/exec-plans/active"
+    matches = sorted(active_root.glob(f"ep-{number:03d}_*/EXECPLAN.md"))
+    source = "docs/PLANS.md"
+    unavailable = f"{plan_id}: active EP snapshot unavailable; inspect {source} and validate EP."
+    refs: list[str] = []
+    if len(matches) != 1:
+        return SessionContextSection(
+            id="ep-snapshot", priority=5, content=unavailable, source=source
+        ), refs
+    relative = matches[0].relative_to(root).as_posix()
+    try:
+        file_path = _resolve_regular(root, relative, "ROUTER_EP_CONTEXT_INVALID")
+        document = _read_bytes(
+            file_path, "ROUTER_EP_CONTEXT_INVALID", MAX_CONTEXT_BYTES
+        ).decode("utf-8")
+        front = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", document, re.DOTALL)
+        if front is None:
+            raise ValueError("missing frontmatter")
+        identity = re.search(r"(?m)^id:\s*(EP-[0-9]{3,8})\s*$", front.group(1))
+        status = re.search(r"(?m)^status:\s*active\s*$", front.group(1))
+        if identity is None or identity.group(1) != plan_id or status is None:
+            raise ValueError("identity/status does not match the active plan")
+        snapshots = re.findall(
+            r"(?ms)^## Current Snapshot[ \t]*\r?\n(.*?)(?=^## [^\r\n]+|\Z)",
+            document,
+        )
+        if len(snapshots) != 1 or not snapshots[0].strip():
+            raise ValueError("missing unique Current Snapshot")
+        raw_refs = re.search(r"(?m)^adr_refs:\s*(\[[^\r\n]*\])\s*$", front.group(1))
+        if raw_refs is not None:
+            parsed = json.loads(raw_refs.group(1))
+            if not isinstance(parsed, list) or not all(
+                isinstance(value, str) and _SESSION_ADR_RE.fullmatch(value)
+                for value in parsed
+            ):
+                raise ValueError("invalid ADR references")
+            refs = sorted(set(parsed))[:_SESSION_MAX_ADR_LINKS]
+        content = (
+            f"Current Snapshot for {plan_id} (informational, not an acceptance "
+            f"or validation result; source: {relative}):\n\n"
+            + snapshots[0].strip()
+        )
+        return SessionContextSection(
+            id="ep-snapshot", priority=5, content=content, source=relative
+        ), refs
+    except (OSError, UnicodeError, ValueError, RouterError):
+        return SessionContextSection(
+            id="ep-snapshot", priority=5, content=unavailable, source=source
+        ), []
+
+
+def _session_adr_navigation(
+    root: Path, adr_ids: Iterable[str]
+) -> SessionContextSection | None:
+    requested = tuple(sorted(set(adr_ids)))[:_SESSION_MAX_ADR_LINKS]
+    if not requested:
+        return None
+    source = "docs/DECISIONS.md"
+    unavailable = (
+        "ADR navigation is unavailable or not validated; inspect "
+        f"{source} and run epctl validate before relying on current effect."
+    )
+    try:
+        index_path = _resolve_regular(root, source, "ROUTER_ADR_CONTEXT_INVALID")
+        text = _read_bytes(
+            index_path, "ROUTER_ADR_CONTEXT_INVALID", MAX_CONTEXT_BYTES
+        ).decode("utf-8")
+        start, end = (
+            "<!-- ADRCTL:CURRENT:START -->",
+            "<!-- ADRCTL:CURRENT:END -->",
+        )
+        if text.count(start) != 1 or text.count(end) != 1:
+            raise ValueError("missing or duplicate current projection markers")
+        body = text.split(start, 1)[1].split(end, 1)[0]
+        if end not in text.split(start, 1)[1]:
+            raise ValueError("malformed projection markers")
+        current: dict[str, str] = {}
+        for line in body.splitlines():
+            row = re.match(r"^\|\s*(ADR-[0-9]{3,8})\s*\|", line)
+            if row is None or row.group(1) not in requested:
+                continue
+            matches = re.findall(
+                r"\[ADR\]\((adr/adr-[0-9]{3,8}_[a-zA-Z0-9_-]+\.md)\)",
+                line,
+            )
+            if len(matches) != 1 or row.group(1) in current:
+                raise ValueError("ambiguous ADR projection")
+            relative = "docs/" + matches[0]
+            _resolve_regular(root, relative, "ROUTER_ADR_CONTEXT_INVALID")
+            current[row.group(1)] = relative
+        lines = [
+            "Current-effect ADR navigation (derived index only; validate the "
+            "ADR sources before relying on any constraint):"
+        ]
+        for adr_id in requested:
+            if adr_id in current:
+                lines.append(f"- {adr_id}: {current[adr_id]}")
+            else:
+                lines.append(
+                    f"- {adr_id}: not in the current-effect projection; "
+                    "verify history or amendments before use."
+                )
+        return SessionContextSection(
+            id="adr-navigation",
+            priority=10,
+            content="\n".join(lines),
+            source=source,
+        )
+    except (OSError, UnicodeError, ValueError, RouterError):
+        return SessionContextSection(
+            id="adr-navigation", priority=10, content=unavailable, source=source
+        )
+
+
+def _session_artifact_sections(
+    root: Path, runtime: dict[str, object]
+) -> tuple[SessionContextSection, ...]:
+    sections: list[SessionContextSection] = []
+    plan = runtime.get("context_ep_ref")
+    adrs = runtime.get("context_adr_refs", [])
+    ids = [value for value in adrs if isinstance(value, str)] if isinstance(adrs, list) else []
+    if isinstance(plan, str) and _SESSION_EP_RE.fullmatch(plan):
+        snapshot, plan_adrs = _session_ep_snapshot(root, plan)
+        sections.append(snapshot)
+        ids.extend(plan_adrs)
+    navigation = _session_adr_navigation(root, ids)
+    if navigation is not None:
+        sections.append(navigation)
+    return tuple(sections)
+
+
 def _route_context(
     root: Path, payload: dict[str, object]
 ) -> tuple[str, dict[str, object]]:
@@ -2359,6 +2514,7 @@ def _route_context(
                 content="Current locked routing index:\n\n" + index,
                 source=INDEX_PATH,
             ),
+            *_session_artifact_sections(root, runtime),
         )
     )
     context = str(context_plan["text"])
