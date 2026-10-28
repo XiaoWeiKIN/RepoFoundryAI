@@ -188,6 +188,42 @@ class SessionContextBudgetTestCase(unittest.TestCase):
             self.assertIn("unavailable", section.content)
             self.assertNotIn("accepted", section.content)
 
+
+    def test_blocked_ep_current_snapshot_is_allowed(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "docs/exec-plans/active/ep-007_waiting"
+            folder.mkdir(parents=True)
+            (folder / "EXECPLAN.md").write_text(
+                "---\nid: EP-007\nstatus: blocked\nadr_refs: []\n---\n"
+                "## Current Snapshot\n\n"
+                "- Current milestone: Waiting for a required approval.\n"
+                "- Next action: Resume after authorization.\n\n"
+                "## Blockers\n\nOpen blocker retained.\n",
+                encoding="utf-8",
+            )
+            section, refs = core._session_ep_snapshot(root, "EP-007")
+            self.assertEqual(refs, [])
+            self.assertIn("Waiting for a required approval", section.content)
+            self.assertNotIn("Open blocker retained", section.content)
+
+    def test_many_adr_references_remain_discoverable_via_index(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "docs/DECISIONS.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "<!-- ADRCTL:CURRENT:START -->\n"
+                "<!-- ADRCTL:CURRENT:END -->\n",
+                encoding="utf-8",
+            )
+            ids = [f"ADR-{number:03d}" for number in range(1, 16)]
+            section = core._session_adr_navigation(root, ids)
+            self.assertIsNotNone(section)
+            self.assertIn("3 additional ADR references", section.content)
+            self.assertIn("docs/DECISIONS.md", section.content)
     def test_empty_plan_is_deterministic(self) -> None:
         self.assertEqual(
             core.plan_session_context([], budget_bytes=40),

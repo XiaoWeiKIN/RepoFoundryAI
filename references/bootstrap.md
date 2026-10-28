@@ -138,7 +138,7 @@ enforcement 为 CLI/advisory，不声称原生拦截写入。
 
 ## 受控技术写作入口
 
-当前源码的 Core `1.5.5` 与 Codex adapter `2.4.2` 增加显式写作路由，尚未发布。
+当前源码的 Core `1.5.6` 与 Codex adapter `2.4.2` 增加显式写作路由，尚未发布。
 新建 Codex `AGENTS.md` 和共享 project Skill 会要求：撰写、修订或评审工程正文前，
 先解析负责该工作的专业 Skill，再读取该 Skill 内的 `references/controlled-writing.md`。
 此路径相对于专业 Skill，不相对于目标仓库或共享 project Skill。

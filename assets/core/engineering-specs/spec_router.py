@@ -2319,7 +2319,7 @@ def _session_requested_refs(prompt: object) -> tuple[list[str], list[str]]:
     plans = sorted({f"EP-{int(n):03d}" for n in _SESSION_EP_RE.findall(prompt)})
     adrs = sorted({f"ADR-{int(n):03d}" for n in _SESSION_ADR_RE.findall(prompt)})
     # A multi-plan task needs explicit scoping; never guess which plan is current.
-    return plans[:1] if len(plans) == 1 else [], adrs[:_SESSION_MAX_ADR_LINKS]
+    return plans[:1] if len(plans) == 1 else [], adrs
 
 
 def _session_ep_snapshot(
@@ -2345,7 +2345,7 @@ def _session_ep_snapshot(
         if front is None:
             raise ValueError("missing frontmatter")
         identity = re.search(r"(?m)^id:\s*(EP-[0-9]{3,8})\s*$", front.group(1))
-        status = re.search(r"(?m)^status:\s*active\s*$", front.group(1))
+        status = re.search(r"(?m)^status:\s*(active|blocked)\s*$", front.group(1))
         if identity is None or identity.group(1) != plan_id or status is None:
             raise ValueError("identity/status does not match the active plan")
         snapshots = re.findall(
@@ -2362,7 +2362,7 @@ def _session_ep_snapshot(
                 for value in parsed
             ):
                 raise ValueError("invalid ADR references")
-            refs = sorted(set(parsed))[:_SESSION_MAX_ADR_LINKS]
+            refs = sorted(set(parsed))
         content = (
             f"Current Snapshot for {plan_id} (informational, not an acceptance "
             f"or validation result; source: {relative}):\n\n"
@@ -2380,7 +2380,8 @@ def _session_ep_snapshot(
 def _session_adr_navigation(
     root: Path, adr_ids: Iterable[str]
 ) -> SessionContextSection | None:
-    requested = tuple(sorted(set(adr_ids)))[:_SESSION_MAX_ADR_LINKS]
+    all_ids = tuple(sorted(set(adr_ids)))
+    requested = all_ids[:_SESSION_MAX_ADR_LINKS]
     if not requested:
         return None
     source = "docs/DECISIONS.md"
@@ -2428,6 +2429,11 @@ def _session_adr_navigation(
                     f"- {adr_id}: not in the current-effect projection; "
                     "verify history or amendments before use."
                 )
+        if len(all_ids) > len(requested):
+            lines.append(
+                f"- {len(all_ids) - len(requested)} additional ADR references: "
+                f"inspect {source}; not individually materialized."
+            )
         return SessionContextSection(
             id="adr-navigation",
             priority=10,
