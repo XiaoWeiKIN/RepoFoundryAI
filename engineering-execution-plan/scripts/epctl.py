@@ -8828,7 +8828,33 @@ def checkpoint_plan(
             "refreshed Current Snapshot and preserved historical detail."
         )
 
-        new_root = replace_section(text, "Current Snapshot", snapshot)
+        if preserve_current_context:
+            # The authored Snapshot may contain multi-line facts or additional
+            # questions. Preserve them verbatim rather than silently replacing
+            # them with the three fields used to render the CP summary.
+            existing_snapshot = section(text, "Current Snapshot") or ""
+            latest_pattern = r"(?m)^-[ \\t]+Latest checkpoint:[^\\r\\n]*$"
+            latest_lines = re.findall(latest_pattern, existing_snapshot)
+            if len(latest_lines) > 1:
+                raise EpctlError(
+                    "AUTO_CHECKPOINT_SNAPSHOT_AMBIGUOUS: multiple Latest checkpoint fields"
+                )
+            latest_line = (
+                f"- Latest checkpoint: [{checkpoint_id}]({relative_checkpoint})."
+            )
+            new_snapshot = (
+                re.sub(
+                    latest_pattern,
+                    lambda _match: latest_line,
+                    existing_snapshot,
+                    count=1,
+                )
+                if latest_lines
+                else latest_line + "\\n" + existing_snapshot
+            )
+            new_root = replace_section(text, "Current Snapshot", new_snapshot)
+        else:
+            new_root = replace_section(text, "Current Snapshot", snapshot)
         new_root = replace_section(new_root, "Progress", remaining_progress)
         if not preserve_current_context:
             new_root = replace_section(
