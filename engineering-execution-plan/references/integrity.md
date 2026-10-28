@@ -91,6 +91,13 @@ python3 <skill-dir>/scripts/epctl.py --repo . archive-ep EP-001 \
 attribution、revision/evidence 被
 事后改写。CI 应在包含归档变更的最终 revision 上再次运行 canonical check。
 
+`archive-ep` 只写入目标 EP、移动其目录，并刷新 `docs/PLANS.md` 的 EP 投影。
+它不重建 Research、ADR、Bugfix、Decision View 索引，也不修复 ID 高水位；
+全仓投影修复仍须显式执行 `reindex`。这一区分避免归档一个已验收 EP 时，
+连带改写无关治理文档或因无关 Decision View 状态而失败。
+目标 EP 的验收、架构输入、任务状态和证据校验保持生效；校验、移动或计划索引
+写入失败时，恢复原 EP 内容、目录位置与计划索引。
+
 completed/cancelled EP 中的 `adr_evidence` 同样属于 sealed 历史。当前 ADR payload
 与归档记录不同时，不得改 EP 或重算 archive seal。使用 preview-first 的
 `register-adr-revision` 把可验证旧 ADR 文档登记到

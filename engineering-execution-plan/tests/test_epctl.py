@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -3017,6 +3018,204 @@ updated: 2026-07-28
         active = plans_index.split("<!-- EPCTL:ACTIVE:END -->", 1)[0]
         self.assertNotIn("| EP-001 |", active)
         self.assertIn("| EP-001 |", plans_index)
+
+    def test_archive_ep_preserves_unrelated_governance_files(self) -> None:
+        self.init()
+        for outcome in ("completed", "cancelled"):
+            with self.subTest(outcome=outcome):
+                plan = self.new_ep(f"{outcome}-plan")
+                self.complete_all_placeholders(plan)
+                unrelated = [
+                    self.repo / "docs" / name
+                    for name in (
+                        "RESEARCH.md",
+                        "DECISIONS.md",
+                        "BUGFIXES.md",
+                        "DECISION-VIEWS.md",
+                    )
+                ]
+                for index in unrelated:
+                    index.write_text(
+                        f"# Pending independent refresh: {index.name}\n",
+                        encoding="utf-8",
+                    )
+                view = self.repo / "docs/decision-views/unrelated.md"
+                view.parent.mkdir(exist_ok=True)
+                view.write_bytes(b"Unrelated view pending repair.\n")
+                state = self.repo / "docs/.epctl/state.json"
+                state.write_text(
+                    json.dumps(
+                        json.loads(state.read_text(encoding="utf-8")),
+                        separators=(",", ":"),
+                    ),
+                    encoding="utf-8",
+                )
+                unrelated.extend(
+                    [view, state, self.repo / "docs/.epctl/decision-views.json"]
+                )
+                before = {path: path.read_bytes() for path in unrelated}
+                arguments = (
+                    COMPLETION_ATTESTATION_ARGS
+                    if outcome == "completed"
+                    else ("--reason", "Cancelled fixture work.")
+                )
+
+                archived = Path(
+                    self.run_cli(
+                        "archive-ep",
+                        self.artifact_id(plan),
+                        "--outcome",
+                        outcome,
+                        *arguments,
+                    ).stdout.strip()
+                )
+
+                self.assertEqual(
+                    before, {path: path.read_bytes() for path in unrelated}
+                )
+                self.assertFalse(plan.exists())
+                self.assertIn(
+                    f"status: {outcome}", archived.read_text(encoding="utf-8")
+                )
+                errors, _ = self.load_epctl().validate_plan(archived)
+                self.assertEqual(errors, [])
+
+    def test_archive_ep_does_not_require_decision_view_infrastructure(self) -> None:
+        self.init()
+        for condition in ("missing", "malformed"):
+            with self.subTest(condition=condition):
+                plan = self.new_ep(f"{condition}-view-infrastructure")
+                self.complete_all_placeholders(plan)
+                registry = self.repo / "docs/.epctl/decision-views.json"
+                index = self.repo / "docs/DECISION-VIEWS.md"
+                if condition == "missing":
+                    registry.unlink()
+                    index.unlink()
+                else:
+                    registry.write_text("invalid unrelated JSON\n", encoding="utf-8")
+                    index.write_bytes(b"\xff unrelated non-UTF-8 view index")
+                before = {
+                    path: path.read_bytes() if path.exists() else None
+                    for path in (registry, index)
+                }
+
+                self.run_cli(
+                    "archive-ep", self.artifact_id(plan), *COMPLETION_ATTESTATION_ARGS
+                )
+
+                self.assertEqual(
+                    before,
+                    {
+                        path: path.read_bytes() if path.exists() else None
+                        for path in (registry, index)
+                    },
+                )
+
+    def test_archive_ep_keeps_plan_projection_canonical(self) -> None:
+        self.init()
+        plans = [self.new_ep(f"plan-{number}") for number in range(3)]
+        for plan in reversed(plans):
+            self.complete_all_placeholders(plan)
+            self.run_cli(
+                "archive-ep", self.artifact_id(plan), *COMPLETION_ATTESTATION_ARGS
+            )
+        index = self.repo / "docs/PLANS.md"
+        before = index.read_bytes()
+
+        rebuilt = json.loads(self.run_cli("reindex").stdout)
+
+        self.assertEqual(rebuilt["plans"], 3)
+        self.assertEqual(index.read_bytes(), before)
+        self.run_cli("validate")
+
+    def test_archive_ep_rejects_symlinked_plan_index_before_writing(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.complete_all_placeholders(plan)
+        original_plan = plan.read_bytes()
+        index = self.repo / "docs/PLANS.md"
+        original_index = index.read_bytes()
+        target = self.repo / "unrelated-index.md"
+        index.rename(target)
+        try:
+            index.symlink_to(target)
+        except OSError as error:
+            self.skipTest(f"symlinks unavailable: {error}")
+
+        result = self.run_cli(
+            "archive-ep", "EP-001", *COMPLETION_ATTESTATION_ARGS, expected=2
+        )
+
+        self.assertIn("symbolic link", result.stderr)
+        self.assertEqual(plan.read_bytes(), original_plan)
+        self.assertTrue(index.is_symlink())
+        self.assertEqual(target.read_bytes(), original_index)
+        self.assertFalse(
+            (self.repo / "docs/exec-plans/completed" / plan.parent.name).exists()
+        )
+
+    def test_archive_ep_restores_bytes_when_validation_raises(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.complete_all_placeholders(plan)
+        index = self.repo / "docs/PLANS.md"
+        before = {path: path.read_bytes() for path in (plan, index)}
+        destination = self.repo / "docs/exec-plans/completed" / plan.parent.name
+        epctl = self.load_epctl()
+
+        with patch.object(
+            epctl, "validate_plan", side_effect=epctl.EpctlError("validation failed")
+        ):
+            with self.assertRaisesRegex(epctl.EpctlError, "validation failed"):
+                epctl.archive_ep(
+                    self.repo,
+                    "EP-001",
+                    "completed",
+                    "",
+                    "test:revision",
+                    ["test:evidence"],
+                )
+
+        self.assertFalse(destination.exists())
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+        self.run_cli("validate")
+
+    def test_archive_ep_restores_directory_and_index_after_write_failure(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.complete_all_placeholders(plan)
+        artifact = plan.parent / "artifacts" / "evidence.bin"
+        artifact.parent.mkdir()
+        artifact.write_bytes(b"\x00\xff archived evidence\n")
+        index = self.repo / "docs/PLANS.md"
+        before = {path: path.read_bytes() for path in (plan, artifact, index)}
+        destination = self.repo / "docs/exec-plans/completed" / plan.parent.name
+        epctl = self.load_epctl()
+        original_write = epctl.atomic_write
+        failed = False
+
+        def fail_after_index_write(path: Path, text: str) -> None:
+            nonlocal failed
+            original_write(path, text)
+            if path == index and not failed:
+                failed = True
+                raise OSError("index write failed")
+
+        with patch.object(epctl, "atomic_write", side_effect=fail_after_index_write):
+            with self.assertRaisesRegex(OSError, "index write failed"):
+                epctl.archive_ep(
+                    self.repo,
+                    "EP-001",
+                    "completed",
+                    "",
+                    "test:revision",
+                    ["test:evidence"],
+                )
+
+        self.assertTrue(failed)
+        self.assertFalse(destination.exists())
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+        self.run_cli("validate")
 
     def test_cancelled_ep_requires_reason_and_terminal_tasks(self) -> None:
         self.init()
