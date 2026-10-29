@@ -78,6 +78,93 @@ nonzero exit and an `incomplete` JSON envelope with **no actions**.
 That result does not mean "nothing needs maintenance". No source file, seal,
 index, lock, status, Git history or user config is modified.
 
+## Deduplicated ADR review packets
+
+The original per-ADR actions and source digests remain in `actions[]` for
+backwards compatibility. An additional `review_packets[]` contains **one
+review entry per identical, source-bound resolver impact**. Identity covers
+the resolved ADR closure, amendment edges, active-plan consumers, proposed
+overlap, digests and the resolver recommendation. Same closure with changed
+source bytes or different consumer impact is **not** merged. Every packet
+records all member ADR IDs, their source paths/digests, one primary preview
+command, and an explicit Decision Owner gate.
+
+`actions[].review_packet_id` links members to their packet; only the primary
+sets `review_packet_primary=true`. Human output prints each packet once,
+instead of presenting multiple copies of the same impact review. The summary
+reports `adr_consolidation_packets` and `adr_consolidation_deduplicated`.
+
+**Review packet identity is not semantic equivalence.** Each decision's exact
+constraints and original effect remain distinct; grouping does not authorize
+a consolidated ADR, acceptance, retirement or supersession.
+
+## Optional release / CI milestone evidence
+
+Supply `--milestones <repository-relative-json>` only for an explicit
+maintenance audit. **No automatic Git or network access is added.** The
+input declares which active EP's authored *Current Snapshot → Next action*
+should be compared to an exported Release or successful CI run. Both the
+declared source SHA-256 and the parsed source metadata must match, or the
+whole run fails closed.
+
+~~~bash
+python3 -B engineering-execution-plan/scripts/memory_maintenance.py \
+  --repo . --as-of 2026-10-29T00:00:00Z \
+  --milestones .repo-foundry/local/milestones.json --json
+~~~
+
+For example, an explicitly saved GitHub Release API response for v0.8.3
+might be stored at `.repo-foundry/local/release-v0.8.3.json`, with fields
+`tag_name`, `published_at`, `draft: false`, `prerelease: false` and its
+`html_url`. The caller must verify provenance separately. The companion
+declaration would look like:
+
+~~~json
+{
+  "schema_version": 1,
+  "records": [{
+    "artifact_id": "EP-094",
+    "event": "release_published",
+    "version": "0.8.3",
+    "at": "2026-09-03T08:50:04Z",
+    "source": {
+      "path": ".repo-foundry/local/release-v0.8.3.json",
+      "sha256": "REPLACE_WITH_ACTUAL_LOWERCASE_64_HEX_SHA256",
+      "revision": "release:v0.8.3"
+    }
+  }]
+}
+~~~
+
+The source is **not created or downloaded** by the CLI. The release tag,
+publication timestamp, non-draft/non-prerelease status, URL shape and
+version in the EP's authored next action must all agree. The last property
+requires an explicit publication verb (for example `publish` or `发布`)
+in the Next action. Evidence of a published release can suggest that
+*this exact next action* needs review; it is **not** evidence that related
+deployment, external migration or owner approval steps were completed.
+
+For a CI export, use `event: "ci_succeeded"` with `match_text` matching
+the authored next action and the run's `name`, source revision
+`git:<full-40-hex-head_sha>` and a source JSON with matching
+`head_sha`, `conclusion: "success"` and `completed_at`. This is evidence
+for a review prompt, **not** current HEAD validation or EP acceptance.
+
+The resulting action type is `review_milestone_evidence`. It keeps the
+P0 assessment unchanged, sets `completion_inferred=false` and
+`progress_observation_created=false`, and requires the Plan Owner to
+review or update the authored Snapshot using existing lifecycle workflow.
+`milestone_evidence.external_authenticity` explicitly states
+`not_verified_offline`: matching locally supplied bytes and metadata does
+not authenticate an external service's claim.
+
+For audit integrity, both `source_snapshot_sha256` (existing P0) and
+`milestone_source_snapshot_sha256` (optional evidence inputs) are recorded.
+The evidence source, policy and derived actions are checked against the
+repository's source snapshot before success. Absence of the optional
+milestone file causes no probing, no auto-discovery and no change to
+default maintenance routing.
+
 ## Owner workflow
 
 1. Run the preview with explicit evaluation time and review reason codes.
