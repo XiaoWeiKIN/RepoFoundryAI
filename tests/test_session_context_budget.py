@@ -234,8 +234,8 @@ class SessionContextBudgetTestCase(unittest.TestCase):
             plan = root / "docs/exec-plans/active/ep-001_scope/EXECPLAN.md"
             plan.parent.mkdir(parents=True)
             plan.write_text(
-                f"---\\nid: EP-001\\nstatus: active\\nadr_refs: {refs_json}\\n---\\n"
-                "## Current Snapshot\\n\\n- Next action: Continue scoped work.\\n",
+                f"---\nid: EP-001\nstatus: active\nadr_refs: {refs_json}\n---\n"
+                "## Current Snapshot\n\n- Next action: Continue scoped work.\n",
                 encoding="utf-8",
             )
             decision_index = root / "docs/DECISIONS.md"
@@ -245,15 +245,15 @@ class SessionContextBudgetTestCase(unittest.TestCase):
                 name = identity.lower() + ".md"
                 artifact = root / "docs/adr" / name
                 artifact.parent.mkdir(parents=True, exist_ok=True)
-                artifact.write_text(f"# {identity}\\n", encoding="utf-8")
+                artifact.write_text(f"# {identity}\n", encoding="utf-8")
                 rows.append(
                     f"| {identity} | Decision | accepted | current | "
                     f"[ADR](adr/{name}) |"
                 )
             decision_index.write_text(
-                "<!-- ADRCTL:CURRENT:START -->\\n"
-                + "\\n".join(rows)
-                + "\\n<!-- ADRCTL:CURRENT:END -->\\n",
+                "<!-- ADRCTL:CURRENT:START -->\n"
+                + "\n".join(rows)
+                + "\n<!-- ADRCTL:CURRENT:END -->\n",
                 encoding="utf-8",
             )
             sections = core._session_artifact_sections(
