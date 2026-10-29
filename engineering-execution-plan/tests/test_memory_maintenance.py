@@ -303,6 +303,35 @@ class MaintenanceIntegrationTests(unittest.TestCase):
         self.assertFalse(actions[0]["automatic_mutation_allowed"])
         self.assertFalse(first["current_code_verified"])
 
+
+    def test_real_adr_amendment_uses_existing_consolidation_resolver(self):
+        research = self.fixture.new_research("maintenance-review")
+        self.fixture.conclude_research(research)
+        base = self.fixture.new_adr("current-decision")
+        self.fixture.accept_adr(base)
+        amendment = Path(
+            self.fixture.run_cli(
+                "new-adr", "--slug", "current-amendment",
+                "--title", "Current amendment", "--research", "R-001",
+                "--amends", "ADR-001", "--amends-constraint", "ADR-001#C-001",
+            ).stdout.strip()
+        )
+        self.fixture.accept_adr(amendment, "ADR-002")
+        before = self.snapshot()
+        plan = maintenance.build_plan(self.root, as_of=AS_OF)
+        previews = [a for a in plan["actions"]
+                    if a["type"] == "preview_adr_consolidation"]
+        self.assertTrue(previews)
+        self.assertTrue(all(a["preview_only"] for a in previews))
+        self.assertTrue(all(not a["automatic_mutation_allowed"]
+                            for a in previews))
+        for candidate in previews:
+            resolver = candidate["impact"]["resolver_preview"]
+            self.assertIn("source_digests", resolver)
+            self.assertIn("amendment_edges", resolver)
+            self.assertIn("resolved_adrs", resolver)
+        self.assertEqual(self.snapshot(), before)
+
     def test_invalid_artifact_produces_no_partial_action_plan(self):
         plan = self.prep_ep()
         self.fixture.replace_frontmatter(plan, "status", "invalid")
