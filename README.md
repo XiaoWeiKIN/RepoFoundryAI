@@ -1,20 +1,22 @@
-# RepoFoundry AI
+# RepoHarnessKit
 
 [简体中文](README.zh-CN.md) | English
 
 <p align="center">
-  <img src="./assets/brand/repofoundry-icon.svg" alt="RepoFoundry AI icon" width="128">
+  <img src="./assets/brand/repofoundry-icon.svg" alt="Repository harness icon (legacy artwork)" width="128">
 </p>
 
 <p align="center"><strong>The Agent-Native Engineering System</strong></p>
 
 <p align="center">Turn any repository into an AI-ready engineering system.</p>
 
-**RepoFoundry AI** turns an ordinary software repository into an environment
+**RepoHarnessKit** turns an ordinary software repository into an environment
 that humans and coding agents can navigate, govern, and verify together. It
 installs durable engineering context close to the code: short agent
 entrypoints, architecture maps, composable specifications, evidence contracts,
 decisions, execution plans, and one deterministic validation path.
+
+RepoHarnessKit is a repository-native engineering harness toolkit for AI coding agents. It provides repository-local context, guarded workflows, evidence contracts, and deterministic checks without replacing the agent runtime.
 
 The repository remains the source of truth. RepoFoundry does not depend on one
 model, agent, editor, or Git hosting provider.
@@ -23,7 +25,7 @@ model, agent, editor, or Git hosting provider.
 
 ```mermaid
 flowchart LR
-    F["RepoFoundry AI<br/>Agent-Native Engineering System"]
+    F["RepoHarnessKit<br/>Agent-Native Engineering System"]
     F --> I["Inventory<br/>discover facts and gaps"]
     I --> S["Scaffold<br/>install missing entrypoints"]
     S --> H["Repository Harness<br/>navigate, constrain, validate"]
@@ -157,7 +159,7 @@ target-repository/
 ```
 
 Benchmark Scenarios reference project-owned executables under
-`scripts/bench/`; RepoFoundry AI records their evidence without owning the
+`scripts/bench/`; RepoHarnessKit records their evidence without owning the
 project's measurement implementation.
 
 Bootstrap never invents repository facts. Unknown commands, owners,
@@ -195,7 +197,7 @@ The installer supports macOS and Linux and requires Python 3.10+ plus `curl`.
 1. Install the latest stable release. Run the same command later to upgrade:
 
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 -
    ```
 
 2. From the target repository, preview the Agent-neutral Core and every bundled
@@ -261,9 +263,9 @@ portable project adapter without either host directory.
 Examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.1 --host codex
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 - --version 0.4.1 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 - --host claude
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 - --host none
 ```
 
 The installer backs up an existing non-managed target before replacing it.
@@ -458,7 +460,7 @@ If your environment prohibits piping downloaded code to an interpreter,
 download and inspect the installer before running it:
 
 ```bash
-curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
+curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py
 less /tmp/repofoundry-install.py
 python3 /tmp/repofoundry-install.py
 ```
@@ -466,7 +468,7 @@ python3 /tmp/repofoundry-install.py
 Maintainers can install an explicit checkout without downloading a release:
 
 ```bash
-git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
+git clone https://github.com/XiaoWeiKIN/RepoHarnessKit.git /absolute/path/to/RepoFoundryAI
 python3 /absolute/path/to/RepoFoundryAI/install.py --source /absolute/path/to/RepoFoundryAI
 export REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
 ```
@@ -708,7 +710,7 @@ mechanical gate.
 
 ## Boundaries keep the system trustworthy
 
-- RepoFoundry AI does not run a general agent runtime or hide orchestration state
+- RepoHarnessKit does not run a general agent runtime or hide orchestration state
   outside the repository.
 - The root Skill does not create Benchmark Runs, Research packages, Design
   Packages, ADRs, ExecPlans, or Case Studies.
@@ -726,7 +728,7 @@ mechanical gate.
 
 ## Migration from EngineeringWorkflow
 
-RepoFoundry AI replaces the former product identity with one current
+RepoHarnessKit replaces the former product identity with one current
 entrypoint:
 
 | Former surface | Current surface |
@@ -762,7 +764,7 @@ this command.
 
 ## Reference map
 
-RepoFoundry AI:
+RepoHarnessKit:
 
 - [Root Skill](./SKILL.md)
 - [Bootstrap contract](./references/bootstrap.md)
@@ -797,10 +799,10 @@ Professional capabilities:
 Decision and implementation:
 
 - [ADR-007 — Adopt RepoFoundry](./docs/adr/adr-007_repo-foundry-identity.md)
-- [ADR-008 — Use RepoFoundry AI externally](./docs/adr/adr-008_repofoundry-ai-brand.md)
-- [ADR-009 — Align the root Skill name with RepoFoundry AI](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
+- [ADR-008 — Use RepoHarnessKit externally](./docs/adr/adr-008_repofoundry-ai-brand.md)
+- [ADR-009 — Align the root Skill name with RepoHarnessKit](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
 - [ADR-011 — Separate Core from Agent adapters](./docs/adr/adr-011_agent-neutral-harness-adapters.md)
 - [ADR-012 — Separate Spec activation from runtime adapters](./docs/adr/adr-012_agent-neutral-spec-activation.md)
 - [ADR-014 — Governed artifact metadata contract (proposed)](./docs/adr/adr-014_governed-artifact-metadata-contract.md)
-- [EP-006 — Migrate to RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
+- [EP-006 — Migrate to RepoHarnessKit](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
 - [EP-010 — Implement Agent-neutral adapters](./docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md)
