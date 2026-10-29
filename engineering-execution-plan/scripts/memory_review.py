@@ -368,7 +368,10 @@ def assess(node: dict[str, Any], observations: list[dict[str, Any]],
         reasons.append("FUTURE_OBSERVATION_IGNORED")
     holds = [r for r in valid if r["event"] in {"pause", "retain"}]
     hold = max(holds, key=lambda r: (instant(r["at"]), r["event"]), default=None)
-    deferred = bool(hold and instant(hold["next_review_at"]) > as_of)
+    # A subsequent evidence-backed review fulfills an earlier hold. A new
+    # hold after that review still creates its own independent deadline.
+    hold_satisfied = bool(hold and review and instant(review["at"]) > instant(hold["at"]))
+    deferred = bool(hold and not hold_satisfied and instant(hold["next_review_at"]) > as_of)
     historical = (node["status"] in {"completed", "cancelled", "rejected", "retired", "superseded"})
     kind = node["kind"]
     status = "historical" if historical else "insufficient_evidence"
@@ -411,9 +414,12 @@ def assess(node: dict[str, Any], observations: list[dict[str, Any]],
             else:
                 due.append(aged)
         if hold:
-            reasons.append("EXPLICIT_REVIEW_HOLD" if deferred else "REVIEW_HOLD_ELAPSED")
-            if not deferred:
-                due.append("SCHEDULED_REVIEW_DUE")
+            if hold_satisfied:
+                reasons.append("REVIEW_HOLD_SATISFIED")
+            else:
+                reasons.append("EXPLICIT_REVIEW_HOLD" if deferred else "REVIEW_HOLD_ELAPSED")
+                if not deferred:
+                    due.append("SCHEDULED_REVIEW_DUE")
         version = latest["spec_version"]
         if version and kind in {"spec", "requirement"}:
             window = policy["version_snapshot_days"]
