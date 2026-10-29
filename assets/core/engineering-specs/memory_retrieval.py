@@ -215,12 +215,24 @@ def shadow_context(router: Any, candidates: Iterable[MemoryCandidate], *,
             )
 
     baseline = router.plan_session_context(sections(False), budget_bytes)
-    proposal = router.plan_session_context(sections(True), budget_bytes)
+    proposal_status = "rendered"
+    proposal_warning = None
+    try:
+        proposal = router.plan_session_context(sections(True), budget_bytes)
+    except router.RouterError as exc:
+        # A source pointer can be longer than a very short optional body.
+        # An unrenderable optimization must not invalidate a valid baseline.
+        if not str(exc).startswith("ROUTER_SESSION_CONTEXT_BUDGET_EXCEEDED"):
+            raise
+        proposal = baseline
+        proposal_status = "baseline_fallback"
+        proposal_warning = "PROPOSAL_POINTERS_EXCEED_BUDGET"
     return {
         "schema_version": SCHEMA_VERSION, "policy_id": POLICY_ID, "mode": "shadow",
         "scope": "supplemental_artifact_context_only", "read_only": True,
         "effective_context": baseline["text"], "baseline": baseline, "proposal": proposal,
         "selection": rows, "effective_changed": False,
+        "proposal_status": proposal_status, "proposal_warning": proposal_warning,
         "baseline_sha256": sha256(baseline["text"].encode("utf-8")),
         "proposal_sha256": sha256(proposal["text"].encode("utf-8")),
         "byte_delta": proposal["used_bytes"] - baseline["used_bytes"],
