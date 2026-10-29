@@ -426,14 +426,14 @@ class RepositoryContractTestCase(unittest.TestCase):
             self.run_cli(DESIGNCTL, repository, "validate")
             self.run_cli(EPCTL, repository, "validate")
 
-    def test_repofoundry_ai_project_and_skill_names_are_aligned(self) -> None:
+    def test_repoharnesskit_external_brand_preserves_legacy_skill_contract(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         chinese_readme = (ROOT / "README.zh-CN.md").read_text(
             encoding="utf-8"
         )
-        self.assertTrue(readme.startswith("# RepoFoundry AI\n"))
+        self.assertTrue(readme.startswith("# RepoHarnessKit\n"))
         self.assertTrue(
-            chinese_readme.startswith("# RepoFoundry AI\n")
+            chinese_readme.startswith("# RepoHarnessKit\n")
         )
         self.assertIn(
             "[简体中文](README.zh-CN.md) | English",
@@ -443,10 +443,10 @@ class RepositoryContractTestCase(unittest.TestCase):
             "简体中文 | [English](README.md)",
             chinese_readme.splitlines()[:5],
         )
-        repository_url = "https://github.com/XiaoWeiKIN/RepoFoundryAI"
+        repository_url = "https://github.com/XiaoWeiKIN/RepoHarnessKit"
         installer_url = (
             "https://raw.githubusercontent.com/"
-            "XiaoWeiKIN/RepoFoundryAI/main/install.py"
+            "XiaoWeiKIN/RepoHarnessKit/main/install.py"
         )
         self.assertIn(repository_url, readme)
         self.assertIn(repository_url, chinese_readme)
@@ -556,7 +556,7 @@ class RepositoryContractTestCase(unittest.TestCase):
     def test_one_command_installer_has_a_stable_neutral_contract(self) -> None:
         installer_path = ROOT / "install.py"
         installer = installer_path.read_text(encoding="utf-8")
-        self.assertIn('DEFAULT_REPOSITORY = "XiaoWeiKIN/RepoFoundryAI"', installer)
+        self.assertIn('DEFAULT_REPOSITORY = "XiaoWeiKIN/RepoHarnessKit"', installer)
         self.assertIn('"project_harnesses_modified": False', installer)
         self.assertIn(
             'choices=("auto", "codex", "claude", "none")',
@@ -588,7 +588,7 @@ class RepositoryContractTestCase(unittest.TestCase):
 
         command = (
             "curl -fsSL https://raw.githubusercontent.com/"
-            "XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -"
+            "XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 -"
         )
         for document in (
             ROOT / "README.md", ROOT / "README.zh-CN.md",

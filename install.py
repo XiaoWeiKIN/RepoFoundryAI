@@ -32,7 +32,7 @@ except ImportError:  # pragma: no cover - Windows is rejected by this release
 
 PRODUCT_ID = "repo-foundry-ai"
 PRODUCT_NAME = "RepoFoundry AI"
-DEFAULT_REPOSITORY = "XiaoWeiKIN/RepoFoundryAI"
+DEFAULT_REPOSITORY = "XiaoWeiKIN/RepoHarnessKit"
 INSTALL_SCHEMA_VERSION = 1
 MINIMUM_PYTHON = (3, 10)
 MAX_JSON_BYTES = 1 * 1024 * 1024
