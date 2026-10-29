@@ -255,6 +255,14 @@ def build_plan(
     else:
         maintenance = {"actions": [], "policy": {"id": "default-v1"}}
     actions = plan_actions(report, status, maintenance)
+    for action in actions:
+        if action["kind"] == "adr-corpus":
+            # Grouped maintenance actions also need a concrete source digest;
+            # the report-level inventory hash alone is not an artifact ID.
+            projection_digest = captured.get("docs/DECISIONS.md")
+            if not isinstance(projection_digest, str):
+                raise MaintenanceError("ADR_CORPUS_SOURCE_UNAVAILABLE")
+            action["source"]["sha256"] = projection_digest
     _decorate_consolidations(ep, root, actions)
     if review.inventory(root, extras + sorted(evidence_paths)) != captured:
         raise MaintenanceError("MEMORY_SOURCE_CHANGED_DURING_MAINTENANCE")
