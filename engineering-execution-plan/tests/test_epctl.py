@@ -3590,6 +3590,295 @@ updated: 2026-07-28
 
         self.assertIn("ep-001_without-git", result.stdout)
 
+
+    def add_checkpoint_trigger_history(self, plan: Path, count: int = 35) -> None:
+        """Create a true completed-history threshold without changing scope."""
+        text = plan.read_text(encoding="utf-8")
+        current = self.load_epctl().section(text, "Progress") or ""
+        self.replace_section_body(
+            plan,
+            "Progress",
+            current + "\n" + "\n".join(
+                f"- [x] (2026-07-28T03:00:00Z) Completed historical step {index}."
+                for index in range(count)
+            ),
+        )
+
+    def test_auto_checkpoint_previews_and_seals_only_safe_history(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        self.add_checkpoint_trigger_history(plan)
+        state = self.repo / "docs/.epctl/state.json"
+        index = self.repo / "docs/PLANS.md"
+        unrelated_indexes = (
+            self.repo / "docs/RESEARCH.md",
+            self.repo / "docs/DECISIONS.md",
+            self.repo / "docs/BUGFIXES.md",
+        )
+        before_unrelated = {path: path.read_bytes() for path in unrelated_indexes}
+        before = {path: path.read_bytes() for path in (plan, state, index)}
+
+        preview = json.loads(self.run_cli("auto-checkpoint", "EP-001").stdout)
+        self.assertEqual(preview["status"], "ready")
+        self.assertEqual(preview["working_set"], "checkpoint_recommended")
+        self.assertEqual(preview["checkpoint"]["checkpoint_id"], "CP-001")
+        self.assertTrue(preview["checkpoint"]["dry_run"])
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        self.assertFalse((plan.parent / "history").exists())
+
+        applied = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(applied["status"], "compacted")
+        self.assertEqual(applied["checkpoint"]["checkpoint_id"], "CP-001")
+        self.assertGreaterEqual(
+            applied["checkpoint"]["archived"]["progress_blocks"], 35
+        )
+        checkpoint = self.repo / applied["checkpoint"]["path"]
+        sealed = checkpoint.read_text(encoding="utf-8")
+        updated = plan.read_text(encoding="utf-8")
+        self.assertIn("status: sealed", sealed)
+        self.assertIn(
+            f"repository_revision: "
+            f"\"snapshot:ep-sha256-{hashlib.sha256(before[plan]).hexdigest()}\"",
+            sealed,
+        )
+        self.assertIn("Completed historical step 0", sealed)
+        self.assertNotIn("Completed historical step 0", updated)
+        self.assertEqual(
+            {path: path.read_bytes() for path in unrelated_indexes},
+            before_unrelated,
+        )
+        self.assertIn("Milestone 1 is complete", updated)
+        self.assertIn("service/handler.py", updated)
+        self.assertIn("Keep compatibility at the boundary", updated)
+        self.assertIn("The adapter already normalizes IDs", updated)
+        self.assertIn("BLK-002 | open", updated)
+        self.assertNotIn("BLK-001 | resolved", updated)
+        self.assertNotIn("Keep compatibility at the boundary", sealed)
+        self.assertEqual(json.loads(self.run_cli("validate").stdout)["errors"], 0)
+        after = {path: path.read_bytes() for path in (plan, state, index)}
+        repeated = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(repeated["status"], "skipped")
+        self.assertIn(repeated["reason"], {"below_threshold", "no_safe_history"})
+        self.assertEqual({path: path.read_bytes() for path in after}, after)
+        self.assertEqual(len(list((plan.parent / "history").glob("cp-*.md"))), 1)
+
+    def test_auto_checkpoint_respects_required_threshold(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        self.add_checkpoint_trigger_history(plan)
+        before = plan.read_bytes()
+        result = json.loads(
+            self.run_cli(
+                "auto-checkpoint", "EP-001",
+                "--when", "required", "--apply",
+            ).stdout
+        )
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "below_threshold")
+        self.assertEqual(plan.read_bytes(), before)
+
+    def test_auto_checkpoint_skips_unfinished_and_uncompressible_oversize(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        plan.write_text(
+            plan.read_text(encoding="utf-8")
+            + "\n" + "\n".join(f"unrelated long line {i}" for i in range(810)),
+            encoding="utf-8",
+        )
+        before = plan.read_bytes()
+        result = json.loads(
+            self.run_cli(
+                "auto-checkpoint", "EP-001",
+                "--when", "required", "--apply",
+            ).stdout
+        )
+        self.assertEqual(result["working_set"], "checkpoint_required")
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "no_safe_history")
+        self.assertEqual(plan.read_bytes(), before)
+        self.assertFalse((plan.parent / "history").exists())
+
+    def test_auto_checkpoint_skips_incomplete_current_snapshot(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        self.add_checkpoint_trigger_history(plan)
+        text = plan.read_text(encoding="utf-8")
+        self.replace_section_body(
+            plan, "Current Snapshot",
+            "- Current milestone: Milestone 2.\n"
+            "- Current state: Milestone 1 is complete.\n"
+            "- Next action: <unknown next step>\n"
+            "- Open blockers: BLK-002.",
+        )
+        before = plan.read_bytes()
+        result = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "current_snapshot_incomplete")
+        self.assertEqual(plan.read_bytes(), before)
+        self.assertFalse((plan.parent / "history").exists())
+
+
+    def test_auto_checkpoint_does_not_fold_missing_snapshot_fields(self) -> None:
+        epctl = self.load_epctl()
+        invalid = (
+            "## Current Snapshot\n\n"
+            "- Current milestone:\n"
+            "- Current state: Work remains.\n"
+            "- Next action: Add tests.\n"
+        )
+        self.assertIsNone(epctl._auto_checkpoint_snapshot_fields(invalid))
+        duplicate = (
+            "## Current Snapshot\n\n"
+            "- Current milestone: Phase 1\n"
+            "- Current milestone: Phase 2\n"
+            "- Current state: Work remains.\n"
+            "- Next action: Add tests.\n"
+        )
+        self.assertIsNone(epctl._auto_checkpoint_snapshot_fields(duplicate))
+
+
+    def test_auto_checkpoint_does_not_invent_new_unfinished_progress(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        self.replace_section_body(
+            plan,
+            "Progress",
+            "\n".join(
+                f"- [x] (2026-07-28T03:00:00Z) Completed step {i}."
+                for i in range(36)
+            ),
+        )
+        result = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(result["status"], "compacted")
+        progress = self.load_epctl().section(
+            plan.read_text(encoding="utf-8"), "Progress"
+        )
+        self.assertEqual(progress, "- None.")
+        self.assertEqual(
+            json.loads(self.run_cli("validate").stdout)["errors"], 0
+        )
+
+
+    def test_auto_checkpoint_preserves_extended_snapshot_and_chains_repeats(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        epctl = self.load_epctl()
+        current_snapshot = epctl.section(
+            plan.read_text(encoding="utf-8"), "Current Snapshot"
+        )
+        self.replace_section_body(
+            plan, "Current Snapshot",
+            current_snapshot + "\n"
+            "- Open questions: The access policy remains under review.\n"
+            "  Keep the original context until the owner decides.",
+        )
+        self.add_checkpoint_trigger_history(plan)
+        first = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(first["checkpoint"]["checkpoint_id"], "CP-001")
+        root = plan.read_text(encoding="utf-8")
+        self.assertIn("Open questions: The access policy", root)
+        self.assertIn("Keep the original context until the owner decides.", root)
+        self.assertIn("[CP-001](history/cp-001_auto-history.md)", root)
+
+        self.add_checkpoint_trigger_history(plan)
+        second = json.loads(
+            self.run_cli("auto-checkpoint", "EP-001", "--apply").stdout
+        )
+        self.assertEqual(second["checkpoint"]["checkpoint_id"], "CP-002")
+        checkpoint = self.repo / second["checkpoint"]["path"]
+        self.assertIn(
+            "previous_checkpoint: CP-001",
+            checkpoint.read_text(encoding="utf-8"),
+        )
+        root = plan.read_text(encoding="utf-8")
+        self.assertIn("Open questions: The access policy", root)
+        self.assertIn("Keep the original context until the owner decides.", root)
+        self.assertIn("[CP-002](history/cp-002_auto-history.md)", root)
+        self.assertEqual(
+            json.loads(self.run_cli("validate").stdout)["errors"], 0
+        )
+
+    def test_auto_checkpoint_rollback_restores_high_water_and_index_bytes(self) -> None:
+        self.init()
+        plan = self.new_ep()
+        self.prepare_checkpoint_plan(plan)
+        self.add_checkpoint_trigger_history(plan)
+        index = self.repo / "docs/PLANS.md"
+        state = self.repo / "docs/.epctl/state.json"
+        index.write_bytes(index.read_bytes().replace(b"\n", b"\r\n"))
+        before = {path: path.read_bytes() for path in (plan, index, state)}
+        epctl = self.load_epctl()
+        with patch.object(
+            epctl, "rebuild_plan_index",
+            side_effect=OSError("injected index failure"),
+        ):
+            with self.assertRaisesRegex(OSError, "injected index failure"):
+                epctl.auto_checkpoint_plan(self.repo, "EP-001", apply=True)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        self.assertFalse((plan.parent / "history").exists())
+        self.assertEqual(
+            json.loads(
+                self.run_cli("auto-checkpoint", "EP-001").stdout
+            )["checkpoint"]["checkpoint_id"],
+            "CP-001",
+        )
+
+    def test_auto_checkpoint_all_scopes_each_active_plan(self) -> None:
+        self.init()
+        ready = self.new_ep("ready-to-compact")
+        self.prepare_checkpoint_plan(ready)
+        self.add_checkpoint_trigger_history(ready)
+        other = self.new_ep("untouched-plan")
+        before_other = other.read_bytes()
+        batch_preview = json.loads(
+            self.run_cli("auto-checkpoint", "--all").stdout
+        )
+        self.assertEqual(batch_preview["blocked"], 0)
+        self.assertEqual(
+            [item["status"] for item in batch_preview["results"]],
+            ["ready", "skipped"],
+        )
+        self.assertFalse((ready.parent / "history").exists())
+        batch_apply = json.loads(
+            self.run_cli("auto-checkpoint", "--all", "--apply").stdout
+        )
+        self.assertEqual(
+            [item["status"] for item in batch_apply["results"]],
+            ["compacted", "skipped"],
+        )
+        self.assertEqual(other.read_bytes(), before_other)
+        self.assertEqual(len(list((ready.parent / "history").glob("cp-*.md"))), 1)
+        self.assertEqual(json.loads(self.run_cli("validate").stdout)["errors"], 0)
+
+    def test_auto_checkpoint_rejects_unscoped_revision_and_legacy_input(self) -> None:
+        self.init()
+        self.new_ep()
+        invalid = self.run_cli(
+            "auto-checkpoint", "--all", "--revision", "git:abc", expected=2
+        )
+        self.assertIn("--revision is supported only", invalid.stderr)
+        unscoped = self.run_cli("auto-checkpoint", expected=2)
+        self.assertIn("exactly one EP-NNN or --all", unscoped.stderr)
+        ambiguous = self.run_cli(
+            "auto-checkpoint", "EP-001", "--all", expected=2
+        )
+        self.assertIn("exactly one EP-NNN or --all", ambiguous.stderr)
+
     def test_checkpoint_dry_run_does_not_mutate_plan_or_state(self) -> None:
         self.init()
         plan = self.new_ep()

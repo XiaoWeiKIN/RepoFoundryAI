@@ -114,6 +114,47 @@ checkpoint 不能成为恢复工作的必读前置。只有调查历史原因或
 
 `checkpoint` 使用仓库锁、编号高水位和原子文件替换。普通失败会回滚根文档和索引；若进程在索引更新前崩溃，制品仍是事实源，运行 `validate --fix-index` 恢复投影。
 
+
+## 自动按阈值压缩 EP
+
+`auto-checkpoint` 无需手工填写 slug、里程碑、摘要或下一动作。它从当前
+`## Current Snapshot` 中读取已经由作者维护的 `Current milestone`、
+`Current state`、`Next action`；只有工作集达到阈值且存在**已勾选 Progress**
+或已解决的 Blocker，才使用现有 sealed Checkpoint 机制封存安全的历史。
+
+```bash
+# 默认只预览；不会更改 EP、ID 高水位或索引
+python3 <skill-dir>/scripts/epctl.py --repo . auto-checkpoint EP-023
+
+# 实际触发：达到 recommended 阈值才压缩；未达到或无可归档内容时不写入
+python3 <skill-dir>/scripts/epctl.py --repo . auto-checkpoint EP-023 --apply
+
+# 仅在 required 阈值触发，适合更保守的维护策略
+python3 <skill-dir>/scripts/epctl.py --repo . auto-checkpoint EP-023 --when required --apply
+
+# 对显式选中的全部 active EP 分别检查；单个 EP 失败不会隐式修复其他制品
+python3 <skill-dir>/scripts/epctl.py --repo . auto-checkpoint --all --apply
+```
+
+`--apply` 可由 Agent 在**正在维护的 EP** 触达阈值、里程碑完成或交接时自动调用，
+无需手工提供压缩字段。它不会启动后台守护进程，也不会在只读的 `status` /
+`validate` 中修改文件。可选 `--revision` 显式指定已验证的仓库版本；
+缺省 `snapshot:ep-sha256-<digest>` 仅标识压缩前 EP 原文字节，不证明代码或整个
+工作树的验收。正常完成/归档仍需要真实验证证据。
+
+自动模式**始终保留** `Surprises & Discoveries`、`Decision Log`、
+所有未完成 Progress、Open Blocker、当前 Snapshot 和未完成验收在根 EP。
+这些内容中可能存在仍然有效的约束，不能依赖字符串规则自动判断已被提升到正式
+Context/Design/ADR。根文档因其他章节过大、没有安全的可封存历史或 Snapshot
+缺少必要事实时返回 `skipped`（带 reason），不创建空 Checkpoint，也不伪造事实。
+用户仍可明确审阅后使用 `checkpoint` 的手工路径。
+
+每个写入都在仓库锁内复核源 SHA-256，分配 checkpoint ID，封存原文，验证完整性，
+只更新 `docs/PLANS.md`；失败恢复原 EP、ID 高水位、索引和 Checkpoint 路径。
+无论建议阈值还是 required 阈值，重复执行只有新完成历史可归档时才会继续产生
+Checkpoint。批量模式各 EP 独立执行；返回 `blocked` 时需要人工检查，不会自行
+修改无关工程制品。
+
 ## 出生即错误的 seal 恢复
 
 历史 Checkpoint 不能因为早期 producer 写错 `payload_sha256` 就被就地修补。只有
