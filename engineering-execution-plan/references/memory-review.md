@@ -103,7 +103,7 @@ python3 -B <skill-dir>/scripts/memory_review.py --repo <repo> \
 
 Evidence 必须指向仓库内的普通文件，包含 SHA-256 和非空 revision。命令验证字节一致性，**不证明记录人具有决定权，也不证明声明本身为真**。历史 revision 的检查不能代表当前 HEAD 通过，所有报告都明确 `current_code_verified: false`。
 
-未来的 observation 不参与进展计时，报告 `FUTURE_OBSERVATION_IGNORED`。同一对象、事件和时刻的重复声明被拒绝。暂停/保留必须有晚于记录时间的 `next_review_at`；到期后报告复核，期间也不能压制依赖变更、原始输入损坏或其他硬边界。
+未来的 observation 不参与进展计时，报告 `FUTURE_OBSERVATION_IGNORED`。同一对象、事件和时刻的重复声明被拒绝。暂停/保留必须有晚于记录时间的 `next_review_at`；到期且尚未完成后续复核时报告 `SCHEDULED_REVIEW_DUE`，期间也不能压制依赖变更、原始输入损坏或其他硬边界。**同一对象在 Hold 创建后完成的、带 digest-bound evidence 的 `review` 满足该 Hold 的复核安排**，报告 `REVIEW_HOLD_SATISFIED`；后续创建的新 Hold 仍按各自的日期判断。EP 的 `review` 不代替 `progress`，不会重置进展时间。
 
 ## 只读与覆盖范围
 
