@@ -1,14 +1,14 @@
-# 安装或升级 RepoFoundry AI
+# 安装或升级 RepoHarnessKit
 
 首次安装和后续升级使用同一条命令：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 -
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 - --host claude
 ```
 
 安装器选择最新稳定 GitHub Release，把 tag 固定到 commit，记录归档 SHA-256，
-验证完整暂存包后原子切换当前版本，并暴露 `repofoundry` CLI。默认只为检测到的
+验证完整暂存包后原子切换当前版本，并暴露兼容保留的 `repofoundry` CLI。默认只为检测到的
 Agent host 注册发现入口；`--host codex` 显式注册 Codex，`--host claude` 在
 `$CLAUDE_CONFIG_DIR/skills/repo-foundry-ai`（未设置时为
 `~/.claude/skills/repo-foundry-ai`）注册 Claude Code，
