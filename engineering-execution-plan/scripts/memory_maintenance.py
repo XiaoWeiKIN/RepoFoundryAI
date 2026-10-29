@@ -220,12 +220,70 @@ def _decorate_consolidations(
         }
 
 
+
+def group_adr_review_packets(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One review packet per identical resolved closure *and* impact evidence.
+
+    Preserve the per-ADR action records and exact provenance for existing API
+    clients. Different resolver impacts are never silently coalesced, even
+    where the ADR ID closure happens to be equal.
+    """
+    groups: dict[str, list[dict[str, Any]]] = {}
+    previews: dict[str, dict[str, Any]] = {}
+    for action in actions:
+        if action["type"] != "preview_adr_consolidation":
+            continue
+        impact = action["impact"]["resolver_preview"]
+        required = (
+            "resolved_adrs", "amendment_edges", "active_plan_impact",
+            "proposed_overlap", "source_digests", "recommendation",
+        )
+        signature = {key: impact[key] for key in required}
+        resolved = signature["resolved_adrs"]
+        if not isinstance(resolved, list) or not resolved:
+            raise MaintenanceError("ADR_REVIEW_PACKET_CLOSURE_INVALID")
+        # Canonical signature includes source hashes and live consumer impact.
+        # A different source/impact means a different review obligation.
+        key = hashlib.sha256(json.dumps(
+            signature, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")).hexdigest()
+        groups.setdefault(key, []).append(action)
+        previews[key] = signature
+    packets: list[dict[str, Any]] = []
+    for key, members in sorted(groups.items()):
+        ordered = sorted(members, key=lambda x: x["artifact_id"])
+        primary = ordered[0]
+        packet_id = "adr-review:" + key
+        for member in ordered:
+            member["review_packet_id"] = packet_id
+            member["review_packet_primary"] = member is primary
+        packets.append({
+            "packet_id": packet_id,
+            "kind": "adr-consolidation",
+            "preview_only": True,
+            "primary_artifact_id": primary["artifact_id"],
+            "preview_command": primary["preview_command"],
+            "member_artifact_ids": [x["artifact_id"] for x in ordered],
+            "member_action_ids": [x["action_id"] for x in ordered],
+            "member_sources": [
+                {"artifact_id": x["artifact_id"], **x["source"]} for x in ordered
+            ],
+            "resolver_impact": previews[key],
+            "authorization_before_mutation":
+                "decision_owner_before_any_new_atomic_adr_or_effect_transition",
+            "automatic_mutation_allowed": False,
+            "semantic_equivalence_proven": False,
+        })
+    return sorted(packets, key=lambda p: p["primary_artifact_id"])
+
+
 def build_plan(
     root: Path,
     *,
     as_of: str,
     policy_path: str | None = None,
     observations_path: str | None = None,
+    milestones_path: str | None = None,
 ) -> dict[str, Any]:
     root = root.expanduser().resolve()
     review = _load(Path(__file__).with_name("memory_review.py"), "_memory_maintenance_review")
@@ -254,7 +312,28 @@ def build_plan(
         )
     else:
         maintenance = {"actions": [], "policy": {"id": "default-v1"}}
+    milestone_actions: list[dict[str, Any]] = []
+    milestone_paths: list[str] = []
+    milestone_hashes: dict[str, str] = {}
+    if milestones_path is not None:
+        milestone = _load(
+            Path(__file__).with_name("memory_milestones.py"),
+            "_memory_maintenance_milestone_evidence",
+        )
+        milestone_actions, milestone_paths, milestone_hashes = milestone.collect(
+            root, milestones_path, report, review, ep,
+        )
+        combined = review.inventory(
+            root, extras + sorted(evidence_paths) + milestone_paths,
+        )
+        if any(combined.get(path) != expected
+               for path, expected in milestone_hashes.items()):
+            raise MaintenanceError("MILESTONE_SOURCES_CHANGED_DURING_REVIEW")
     actions = plan_actions(report, status, maintenance)
+    actions.extend(milestone_actions)
+    actions.sort(key=lambda x: (x["kind"], x["artifact_id"], x["type"], x["action_id"]))
+    if len(actions) > MAX_ACTIONS or len({a["action_id"] for a in actions}) != len(actions):
+        raise MaintenanceError("MAINTENANCE_ACTION_IDENTITY_INVALID")
     for action in actions:
         if action["kind"] == "adr-corpus":
             # Grouped maintenance actions also need a concrete source digest;
@@ -264,8 +343,15 @@ def build_plan(
                 raise MaintenanceError("ADR_CORPUS_SOURCE_UNAVAILABLE")
             action["source"]["sha256"] = projection_digest
     _decorate_consolidations(ep, root, actions)
+    review_packets = group_adr_review_packets(actions)
     if review.inventory(root, extras + sorted(evidence_paths)) != captured:
         raise MaintenanceError("MEMORY_SOURCE_CHANGED_DURING_MAINTENANCE")
+    if milestones_path is not None:
+        latest = review.inventory(
+            root, extras + sorted(evidence_paths) + milestone_paths,
+        )
+        if latest != combined:
+            raise MaintenanceError("MILESTONE_SOURCES_CHANGED_DURING_MAINTENANCE")
     result = {
         "schema_version": SCHEMA_VERSION,
         "engine_version": ENGINE,
@@ -280,8 +366,20 @@ def build_plan(
         "current_code_verified": False,
         "coverage": report["coverage"],
         "actions": actions,
+        "review_packets": review_packets,
+        "milestone_source_snapshot_sha256": (
+            review.digest(review.canonical(
+                {path: milestone_hashes[path] for path in milestone_paths}
+            )) if milestones_path is not None else None
+        ),
         "summary": {
             "actions": len(actions),
+            "adr_consolidation_packets": len(review_packets),
+            "adr_consolidation_deduplicated": (
+                sum(a["type"] == "preview_adr_consolidation" for a in actions)
+                - len(review_packets)
+            ),
+            "milestone_review_actions": len(milestone_actions),
             "ep_actions": sum(x["kind"] == "exec-plan" for x in actions),
             "adr_actions": sum(x["kind"] in {"adr", "adr-corpus"} for x in actions),
             "spec_actions": sum(x["kind"] in {"spec", "requirement"} for x in actions),
@@ -299,12 +397,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of", required=True, help="Timezone-aware ISO instant; no implicit clock")
     parser.add_argument("--policy", help="Optional repository-relative memory-review policy")
     parser.add_argument("--observations", help="Optional digest-bound memory-review observations")
+    parser.add_argument("--milestones", help="Optional exported, digest-bound release/CI evidence JSON")
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
     try:
         result = build_plan(
             Path(args.repo), as_of=args.as_of, policy_path=args.policy,
             observations_path=args.observations,
+            milestones_path=args.milestones,
         )
     except (OSError, RuntimeError, ValueError, UnicodeError, KeyError, TypeError) as exc:
         message = str(exc).replace(str(Path(args.repo).resolve()), ".")
@@ -321,7 +421,13 @@ def main(argv: list[str] | None = None) -> int:
         print("Guided memory maintenance as of " + result["as_of"]
               + " (preview only; no authority changed)")
         print(json.dumps(result["summary"], ensure_ascii=False, sort_keys=True))
+        for packet in result["review_packets"]:
+            print(f"{packet['packet_id']}: {packet['preview_command']}")
+            print("  grouped ADRs: " + ", ".join(packet["member_artifact_ids"]))
         for action in result["actions"]:
+            if (action["type"] == "preview_adr_consolidation"
+                    and "review_packet_id" in action):
+                continue
             print(f"{action['action_id']}: {action['preview_command']}")
             print("  reason: " + ", ".join(action["reason_codes"]))
             print("  authorization: " + action["authorization_before_mutation"])
