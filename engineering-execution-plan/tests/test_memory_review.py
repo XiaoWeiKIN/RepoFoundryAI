@@ -85,6 +85,57 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("SCHEDULED_REVIEW_DUE", result["reason_codes"])
         self.assertEqual(result["assessment"], "review_due")
 
+    def test_later_review_satisfies_expired_hold(self):
+        adr = node("adr", "ADR-001", "accepted", current_effect=True)
+        records = [
+            observation("adr", "ADR-001", "retain", "2026-09-01T00:00:00Z",
+                        next_review_at="2026-10-01T00:00:00Z"),
+            observation("adr", "ADR-001", "review", "2026-10-15T00:00:00Z"),
+        ]
+        result = self.assess(adr, records, adr_review_days=30)
+        self.assertEqual(result["assessment"], "retain_active")
+        self.assertEqual(result["last_review_at"], "2026-10-15T00:00:00Z")
+        self.assertIn("REVIEW_HOLD_SATISFIED", result["reason_codes"])
+        self.assertNotIn("SCHEDULED_REVIEW_DUE", result["reason_codes"])
+
+    def test_old_review_does_not_clear_newer_hold(self):
+        adr = node("adr", "ADR-001", "accepted", current_effect=True)
+        records = [
+            observation("adr", "ADR-001", "review", "2026-08-15T00:00:00Z"),
+            observation("adr", "ADR-001", "retain", "2026-09-01T00:00:00Z",
+                        next_review_at="2026-10-01T00:00:00Z"),
+        ]
+        result = self.assess(adr, records)
+        self.assertEqual(result["assessment"], "review_due")
+        self.assertIn("SCHEDULED_REVIEW_DUE", result["reason_codes"])
+
+    def test_new_hold_after_review_requires_another_review(self):
+        adr = node("adr", "ADR-001", "accepted", current_effect=True)
+        records = [
+            observation("adr", "ADR-001", "retain", "2026-09-01T00:00:00Z",
+                        next_review_at="2026-10-01T00:00:00Z"),
+            observation("adr", "ADR-001", "review", "2026-10-15T00:00:00Z"),
+            observation("adr", "ADR-001", "retain", "2026-10-20T00:00:00Z",
+                        next_review_at="2026-10-25T00:00:00Z"),
+        ]
+        result = self.assess(adr, records)
+        self.assertEqual(result["assessment"], "review_due")
+        self.assertIn("SCHEDULED_REVIEW_DUE", result["reason_codes"])
+        self.assertNotIn("REVIEW_HOLD_SATISFIED", result["reason_codes"])
+
+    def test_ep_review_satisfies_hold_without_resetting_progress_clock(self):
+        records = [
+            observation(at="2026-09-28T00:00:00Z"),
+            observation(event="pause", at="2026-09-29T00:00:00Z",
+                        next_review_at="2026-10-05T00:00:00Z"),
+            observation(event="review", at="2026-10-15T00:00:00Z"),
+        ]
+        result = self.assess(records=records, ep_idle_days=30)
+        self.assertEqual(result["assessment"], "review_due")
+        self.assertIn("EP_IDLE_REVIEW_DUE", result["reason_codes"])
+        self.assertNotIn("SCHEDULED_REVIEW_DUE", result["reason_codes"])
+        self.assertEqual(result["last_progress_at"], "2026-09-28T00:00:00Z")
+
     def test_current_old_adr_remains_authoritative(self):
         adr = node("adr", "ADR-001", "accepted", current_effect=True,
                    consumers=[{"kind": "exec-plan", "artifact_id": "EP-001"}])
