@@ -10,6 +10,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.harness_legacy_fixture import strip_memory_assets
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import foundryctl  # noqa: E402
@@ -88,6 +90,7 @@ class WritingRouteBootstrapTests(unittest.TestCase):
         self.cli("bootstrap", "--adapter", "codex", "--apply")
         manifest = self.manifest()
         manifest["core"]["version"] = "1.5.4"
+        strip_memory_assets(self.repo, manifest)
         manifest["adapters"][0]["version"] = "2.4.1"
         for record in manifest["files"]:
             record["template_version"] = "1.5.4" if record["owner_kind"] == "core" else "2.4.1"
