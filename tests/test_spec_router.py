@@ -599,6 +599,135 @@ class SpecRouterTestCase(unittest.TestCase):
         self.assertEqual(explicit_none["decision"], "none")
         self.assertEqual(explicit_none["activated_specs"], [])
 
+
+    def test_session_context_budget_uses_routing_index_pointer_when_large(self) -> None:
+        index = self.repo / "docs/agent-guides/managed/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8") + "\n" + "UNRELATED_CONTEXT_PADDING\n" * 900,
+            encoding="utf-8",
+        )
+        result = json.loads(
+            self.run_core(
+                "event",
+                stdin={
+                    "protocol_version": 2,
+                    "event": "session_start",
+                    "adapter_id": "portable",
+                    "session_id": "budget-session",
+                    "turn_id": "budget-turn",
+                    "prompt": "Inspect the cache module",
+                },
+            ).stdout
+        )
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("Governance mode:", result["context"])
+        self.assertIn(
+            "[ContextRef:routing-index] docs/agent-guides/managed/index.md",
+            result["context"],
+        )
+        self.assertNotIn("UNRELATED_CONTEXT_PADDING", result["context"])
+        budget = result["context_plan"]
+        self.assertLessEqual(budget["used_bytes"], budget["budget_bytes"])
+        self.assertEqual(
+            [section["selection"] for section in budget["selections"]],
+            ["content", "reference"],
+        )
+        self.assertEqual(len(result["context"].encode("utf-8")), budget["used_bytes"])
+
+
+    def test_session_context_ep_snapshot_and_current_adr_navigation(self) -> None:
+        self.set_governance_profile("adaptive")
+        plan_dir = self.repo / "docs/exec-plans/active/ep-123_cache-invalidation"
+        plan_dir.mkdir(parents=True)
+        plan = plan_dir / "EXECPLAN.md"
+        plan.write_text(
+            '---\nid: EP-123\nstatus: active\nadr_refs: ["ADR-012", "ADR-099"]\n---\n'
+            '# Cache invalidation\n\n## Current Snapshot\n\n'
+            '- Current milestone: Validate cache eviction.\n'
+            '- Next action: Run the focused cache tests.\n\n'
+            '## Context and Orientation\n\nThis should not be injected.\n',
+            encoding="utf-8",
+        )
+        unrelated = self.repo / "docs/exec-plans/active/ep-124_other"
+        unrelated.mkdir(parents=True)
+        (unrelated / "EXECPLAN.md").write_text(
+            "---\nid: EP-124\nstatus: active\n---\n"
+            "## Current Snapshot\n\nUNRELATED_EP_SECRET\n",
+            encoding="utf-8",
+        )
+        adr_path = self.repo / "docs/adr/adr-012_current-contract.md"
+        adr_path.parent.mkdir(parents=True, exist_ok=True)
+        adr_path.write_text("current ADR source\n", encoding="utf-8")
+        adr_index = self.repo / "docs/DECISIONS.md"
+        adr_index.write_text(
+            "# Decisions\n<!-- ADRCTL:CURRENT:START -->\n"
+            "| ADR-012 | Current | accepted | current | — | — | — | "
+            "[ADR](adr/adr-012_current-contract.md) |\n"
+            "<!-- ADRCTL:CURRENT:END -->\n",
+            encoding="utf-8",
+        )
+        started = json.loads(
+            self.run_core(
+                "event",
+                stdin={
+                    "protocol_version": 2,
+                    "event": "session_start",
+                    "adapter_id": "portable",
+                    "session_id": "ep-context-session",
+                    "turn_id": "ep-context-turn",
+                    "prompt": "Continue EP-123 without changing other EPs.",
+                },
+            ).stdout
+        )
+        self.assertEqual(started["decision"], "allow")
+        self.assertIn("Validate cache eviction", started["context"])
+        self.assertIn("Next action: Run the focused cache tests", started["context"])
+        self.assertNotIn("This should not be injected", started["context"])
+        self.assertNotIn("UNRELATED_EP_SECRET", started["context"])
+        self.assertIn("ADR-012: docs/adr/adr-012_current-contract.md", started["context"])
+        self.assertIn("ADR-099: not in the current-effect projection", started["context"])
+        self.assertLessEqual(
+            started["context_plan"]["used_bytes"],
+            started["context_plan"]["budget_bytes"],
+        )
+        resumed = json.loads(
+            self.run_core(
+                "rehydrate", "--adapter-id", "portable",
+                "--session-id", "ep-context-session", "--turn-id", "ep-context-turn",
+            ).stdout
+        )
+        self.assertIn("Validate cache eviction", resumed["context"])
+        self.assertIn("ADR-012: docs/adr/adr-012_current-contract.md", resumed["context"])
+        self.assertNotIn("UNRELATED_EP_SECRET", resumed["context"])
+        self.run_foundry("validate", "--harness")
+
+    def test_session_context_without_explicit_ep_does_not_load_other_plans(self) -> None:
+        plan_dir = self.repo / "docs/exec-plans/active/ep-127_unrelated"
+        plan_dir.mkdir(parents=True)
+        (plan_dir / "EXECPLAN.md").write_text(
+            "---\nid: EP-127\nstatus: active\n---\n"
+            "## Current Snapshot\n\nUNRELATED_EP_CONTENT\n",
+            encoding="utf-8",
+        )
+        started = json.loads(
+            self.run_core(
+                "event",
+                stdin={
+                    "protocol_version": 2,
+                    "event": "session_start",
+                    "adapter_id": "portable",
+                    "session_id": "unscoped-session",
+                    "turn_id": "unscoped-turn",
+                    "prompt": "Fix a small local typo",
+                },
+            ).stdout
+        )
+        self.assertNotIn("UNRELATED_EP_CONTENT", started["context"])
+        self.assertEqual(
+            [item["id"] for item in started["context_plan"]["selections"]],
+            ["routing-contract", "routing-index"],
+        )
+
     def test_normalized_protocol_fails_closed_on_future_version(self) -> None:
         result = self.run_core(
             "event",

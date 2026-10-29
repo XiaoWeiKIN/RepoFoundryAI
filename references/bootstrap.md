@@ -138,7 +138,7 @@ enforcement 为 CLI/advisory，不声称原生拦截写入。
 
 ## 受控技术写作入口
 
-当前源码的 Core `1.5.5` 与 Codex adapter `2.4.2` 增加显式写作路由，尚未发布。
+当前源码的 Core `1.5.6` 与 Codex adapter `2.4.2` 增加显式写作路由，尚未发布。
 新建 Codex `AGENTS.md` 和共享 project Skill 会要求：撰写、修订或评审工程正文前，
 先解析负责该工作的专业 Skill，再读取该 Skill 内的 `references/controlled-writing.md`。
 此路径相对于专业 Skill，不相对于目标仓库或共享 project Skill。
@@ -344,6 +344,37 @@ Requirement 的旧 Spec、迁移和全库审计可用带理由的 whole-Spec
 没有 finding 判定器，因此有效等级固定为 Advisory，导出明确标记 finding lifecycle
 未实现。依赖闭包、explicit-none、digest
 verification、changed-path audit 与五字段 handoff 对所有 adapter 完全相同。
+
+## SessionStart 上下文预算
+
+Core 的 Session Context Planner 对 `session_start`、`subagent_start`、
+`context_resume` 的**非规范性路由说明**使用统一的 8 KiB UTF-8 字节预算。
+它按稳定优先级选择必须内容与可选内容；预算不足时，可选的 routing index
+改为 `[ContextRef:routing-index] docs/agent-guides/managed/index.md` 指针，
+而不是截断或摘要索引。输出 `context_plan` 记录预算、实际使用字节数及各片段
+是正文还是引用。必须内容和全部来源指针超预算时显式失败。
+
+**此预算不约束**已激活的精确 Requirement Capsule：它仍按 32 KiB 默认预算、
+摘要和完整源码范围验证来注入，不能被 Planner 截断、降级为摘要或静默省略。
+Adapter 自己的引导前缀不计入 Core 的路由预算；该预算不是 Agent 整个上下文
+窗口的上限。Planner 不产生新持久文件或第二套 Spec 权威。
+
+
+### 按任务引用 EP 和 ADR，不扫描无关历史
+
+SessionStart / SubagentStart 的任务文本中只有**一个明确的 `EP-NNN` 引用**时，
+Core 才只读该 active EP 的 `## Current Snapshot`，连同 `adr_refs`
+在 `docs/DECISIONS.md` 的 `ADRCTL:CURRENT` 投影中查找对应的当前决策导航。
+任务文本显式包含的 `ADR-NNN` 也参与导航。没有 EP 引用或引用了多个不同 EP
+时，不猜测“当前”计划，也不扫描所有 EP / ADR。Resume 使用同一会话先前记录
+的 ID 重新读取源文件，不把旧快照当作最新事实。
+
+上述片段作为 **optional** 内容加入 Session Context Planner：源路径必须在仓库内，
+拒绝 symlink、损坏索引和不匹配的 EP 状态；过大的 Snapshot 自动降为文件指针，
+不自动生成摘要，也不写入 EP / ADR。ADR 导航来自可重建投影，**不等同于**
+当前效力的最终验证；在决定或实施前仍须读取并校验原始 ADR / Constraint。
+缺失来源只提供“不可用”提示，不阻止普通 Explore 工作。所有规范性 Requirement
+Capsule 与 `before_mutation` 门禁保持原样。
 
 ## 非破坏性与验证
 
