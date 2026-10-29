@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.harness_legacy_fixture import CORE_MEMORY_PATHS, strip_memory_assets
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FOUNDRYCTL = ROOT / "scripts" / "foundryctl.py"
@@ -145,6 +147,7 @@ class FoundryctlTestCase(unittest.TestCase):
         payload["components"] = ["engineering-execution-plan"]
         payload.pop("governance", None)
         payload["core"]["version"] = "1.0.0"
+        strip_memory_assets(self.repo, payload)
         for adapter in payload["adapters"]:
             if adapter["id"] == "codex":
                 adapter["version"] = "2.0.0"
@@ -884,6 +887,7 @@ class FoundryctlTestCase(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["producer"]["version"] = "0.8.4"
         manifest["core"]["version"] = "1.5.0"
+        strip_memory_assets(self.repo, manifest)
         old_digest = foundryctl.sha256_text(old_skill)
         for record in manifest["files"]:
             if record["owner_kind"] != "core":
@@ -983,6 +987,7 @@ class FoundryctlTestCase(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["producer"]["version"] = "0.8.8"
         manifest["core"]["version"] = "1.5.1"
+        strip_memory_assets(self.repo, manifest)
         for adapter in manifest["adapters"]:
             if adapter["id"] == "portable":
                 adapter["version"] = "1.3.0"
@@ -1042,7 +1047,7 @@ class FoundryctlTestCase(unittest.TestCase):
             "--apply",
         )
         migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(migrated["core"]["version"], "1.5.6")
+        self.assertEqual(migrated["core"]["version"], "1.6.0")
         self.assertEqual(
             next(
                 adapter["version"]
@@ -1054,7 +1059,7 @@ class FoundryctlTestCase(unittest.TestCase):
         self.assertEqual(
             [item["id"] for item in migrated["applied_migrations"]],
             [
-                "core-1.5.1-to-1.5.6",
+                "core-1.5.1-to-1.6.0",
                 "adapter-portable-1.3.0-to-1.3.2",
                 f"distribution-0.8.8-to-{foundryctl.REPO_FOUNDRY_VERSION}",
             ],
@@ -1341,6 +1346,7 @@ class FoundryctlTestCase(unittest.TestCase):
             {
                 foundryctl.CORE_PROJECT_SKILL_PATH,
                 foundryctl.CODEX_PROJECT_SKILL_PATH,
+                *CORE_MEMORY_PATHS,
             },
         )
         self.assertFalse((self.repo / foundryctl.CORE_PROJECT_SKILL_PATH).exists())
@@ -1359,6 +1365,7 @@ class FoundryctlTestCase(unittest.TestCase):
             {
                 foundryctl.CORE_PROJECT_SKILL_PATH,
                 foundryctl.CODEX_PROJECT_SKILL_PATH,
+                *CORE_MEMORY_PATHS,
             },
         )
         migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -1552,6 +1559,7 @@ class FoundryctlTestCase(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["producer"]["version"] = "0.4.0"
         manifest["core"]["version"] = "1.3.0"
+        strip_memory_assets(self.repo, manifest)
         old_adapter_versions = {
             "codex": "2.3.0",
             "claude": "1.2.0",
@@ -1681,6 +1689,7 @@ class FoundryctlTestCase(unittest.TestCase):
         skill_path.write_text(old_skill, encoding="utf-8")
         manifest["producer"]["version"] = "0.3.0"
         manifest["core"]["version"] = "1.2.0"
+        strip_memory_assets(self.repo, manifest)
         for record in manifest["files"]:
             if record["owner_kind"] != "core":
                 continue

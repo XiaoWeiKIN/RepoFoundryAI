@@ -10,6 +10,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.harness_legacy_fixture import CORE_MEMORY_PATHS, strip_memory_assets
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import foundryctl  # noqa: E402
@@ -44,7 +46,7 @@ class WritingRouteContractTests(unittest.TestCase):
                 self.assertIn("do not install Skills or create artifacts solely for writing style", prose)
                 self.assertLessEqual(len(text.splitlines()), maximum)
                 self.assertNotIn("## Common guidance", text)
-        self.assertEqual(foundryctl.CORE_HARNESS_VERSION, "1.5.6")
+        self.assertEqual(foundryctl.CORE_HARNESS_VERSION, "1.6.0")
         self.assertEqual(foundryctl.CODEX_ADAPTER_VERSION, "2.4.2")
         self.assertNotIn(GUIDE, foundryctl.CODEX_ROUTER_AGENTS_ROUTES)
 
@@ -88,6 +90,7 @@ class WritingRouteBootstrapTests(unittest.TestCase):
         self.cli("bootstrap", "--adapter", "codex", "--apply")
         manifest = self.manifest()
         manifest["core"]["version"] = "1.5.4"
+        strip_memory_assets(self.repo, manifest)
         manifest["adapters"][0]["version"] = "2.4.1"
         for record in manifest["files"]:
             record["template_version"] = "1.5.4" if record["owner_kind"] == "core" else "2.4.1"
@@ -114,7 +117,7 @@ class WritingRouteBootstrapTests(unittest.TestCase):
         for relative in OLD_SEEDS:
             self.assertIn(GUIDE, (self.repo / relative).read_text(encoding="utf-8"))
         manifest = self.manifest()
-        self.assertEqual(manifest["core"]["version"], "1.5.6")
+        self.assertEqual(manifest["core"]["version"], "1.6.0")
         self.assertEqual(manifest["adapters"][0]["version"], "2.4.2")
         for record in manifest["files"]:
             digest = hashlib.sha256((self.repo / record["path"]).read_bytes()).hexdigest()
@@ -156,16 +159,19 @@ class WritingRouteBootstrapTests(unittest.TestCase):
         before = self.inventory()
         preview = self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION)
         self.assertEqual({a["path"] for a in preview["actions"] if a["action"] == "replace_file"}, set(OLD_SEEDS))
+        self.assertEqual({a["path"] for a in preview["actions"] if a["action"] == "create_file"}, CORE_MEMORY_PATHS)
         self.assertEqual(self.inventory(), before)
-        self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION, "--apply")
+        applied = self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION, "--apply")
+        self.assertEqual(set(applied["created"]), CORE_MEMORY_PATHS)
         after = self.inventory()
-        self.assertEqual(set(after), set(before))
+        self.assertEqual(set(after), set(before) | CORE_MEMORY_PATHS)
         self.assertEqual({p for p in before if before[p] != after[p]}, {*OLD_SEEDS, foundryctl.HARNESS_MANIFEST})
         manifest = self.manifest()
-        self.assertEqual([m["id"] for m in manifest["applied_migrations"]], ["core-1.5.4-to-1.5.6", "adapter-codex-2.4.1-to-2.4.2"])
+        self.assertEqual([m["id"] for m in manifest["applied_migrations"]], ["core-1.5.4-to-1.6.0", "adapter-codex-2.4.1-to-2.4.2"])
         for relative in OLD_SEEDS:
             self.assertIn(GUIDE, after[relative].decode())
         repeated = self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION, "--apply")
+        self.assertEqual(repeated["created"], [])
         self.assertEqual(repeated["updated"], [])
         self.assertEqual(self.inventory(), after)
         self.cli("validate", "--harness")

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -1264,9 +1265,22 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
         raise RouterError("ROUTER_EVENT_INVALID.session_id")
     if not isinstance(turn_id, str) or not turn_id:
         raise RouterError("ROUTER_EVENT_INVALID.turn_id")
+    prompt = payload.get("prompt", "")
+    direct_ep_refs = sorted({
+        f"EP-{int(number):03d}" for number in _SESSION_EP_RE.findall(prompt)
+    }) if isinstance(prompt, str) else []
     existing = _load_runtime(root, adapter_id, session_id, turn_id)
     if existing is not None:
         if payload.get("event") in {"subagent_start", "context_resume"}:
+            prior = existing.get("context_direct_ep_refs", [])
+            if not isinstance(prior, list) or any(not isinstance(item, str) for item in prior):
+                prior = []
+                existing["context_direct_ep_overflow"] = True
+            protected = sorted(set(prior) | set(direct_ep_refs))
+            existing["context_direct_ep_refs"] = protected[:32]
+            existing["context_direct_ep_overflow"] = bool(
+                existing.get("context_direct_ep_overflow") or len(protected) > 32
+            )
             epoch = existing.get("context_epoch")
             if type(epoch) is not int or epoch < 1:
                 raise RouterError("ROUTER_RUNTIME_INVALID.context_epoch")
@@ -1293,6 +1307,8 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
         "turn_id": turn_id,
         "prompt_sha256": _sha256(str(payload.get("prompt", "")).encode("utf-8")),
         "context_ep_ref": ep_refs[0] if ep_refs else None,
+        "context_direct_ep_refs": direct_ep_refs[:32],
+        "context_direct_ep_overflow": len(direct_ep_refs) > 32,
         "context_adr_refs": adr_refs[:_SESSION_MAX_ADR_LINKS],
         "context_adr_omitted_count": max(0, len(adr_refs) - _SESSION_MAX_ADR_LINKS),
         "baseline": _baseline(root),
@@ -2476,6 +2492,40 @@ def _session_artifact_sections(
     return tuple(sections)
 
 
+def _apply_memory_runtime(
+    root: Path, runtime: dict[str, object], payload: dict[str, object],
+    baseline: dict[str, object],
+) -> dict[str, object]:
+    """Optional Core extension; an invalid baseline never reaches this call."""
+    config = root / ".repo-foundry/memory-context.json"
+    if not config.exists() and not config.is_symlink():
+        return baseline
+    previous = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        path = Path(__file__).with_name("memory_runtime.py")
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("MEMORY_RUNTIME_UNAVAILABLE")
+        spec = importlib.util.spec_from_file_location("_repoharness_memory_runtime", path)
+        if spec is None or spec.loader is None:
+            raise ValueError("MEMORY_RUNTIME_UNAVAILABLE")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module.apply_context(
+            sys.modules[__name__], root, runtime, baseline,
+            as_of=payload.get("memory_as_of"),
+        )
+    except (OSError, ImportError, ValueError, RuntimeError, SyntaxError, AttributeError, TypeError):
+        return {**baseline, "memory": {
+            "schema_version": 1, "status": "baseline_fallback",
+            "reason": "MEMORY_RUNTIME_UNAVAILABLE", "saved_bytes": 0,
+            "protected_core_unchanged": True, "authority_changed": False,
+        }}
+    finally:
+        sys.dont_write_bytecode = previous
+
+
 def _route_context(
     root: Path, payload: dict[str, object]
 ) -> tuple[str, dict[str, object]]:
@@ -2536,6 +2586,7 @@ def _route_context(
             *_session_artifact_sections(root, runtime),
         )
     )
+    context_plan = _apply_memory_runtime(root, runtime, payload, context_plan)
     context = str(context_plan["text"])
     activation = runtime.get("activation")
     if isinstance(activation, dict):
