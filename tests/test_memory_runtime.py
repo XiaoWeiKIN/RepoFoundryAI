@@ -93,11 +93,13 @@ class MemoryRuntimeTests(unittest.TestCase):
 
     def test_direct_reference_is_never_reintroduced_as_background(self):
         self.configure()
-        for state in ({'context_ep_ref': 'EP-001'},
-                      {'context_direct_ep_refs': ['EP-001', 'EP-002']}):
-            result = self.apply(state)
-            self.assertEqual(result['text'], self.baseline['text'])
-            self.assertEqual(result['memory']['reason'], 'NO_BACKGROUND_CONTEXT')
+        result = self.apply({'context_ep_ref': 'EP-001'})
+        self.assertEqual(result['text'], self.baseline['text'])
+        self.assertEqual(result['memory']['reason'], 'NO_BACKGROUND_CONTEXT')
+        promoted = self.apply({'context_direct_ep_refs': ['EP-001', 'EP-002']})
+        self.assertIn('BACKGROUND_SENTINEL', promoted['text'])
+        self.assertEqual(promoted['memory']['selection'][0]['tier'], 'direct')
+        self.assertEqual(promoted['memory']['saved_bytes'], 0)
 
     def test_ambiguous_large_scope_falls_back(self):
         self.configure()
@@ -280,9 +282,11 @@ class MemoryRuntimeIntegrationTests(unittest.TestCase):
     def test_new_subagent_explicit_reference_cannot_be_cooled_on_resume(self):
         self.configure('opt-in')
         self.event()
-        self.event(event='subagent_start', prompt='Examine EP-123 and EP-124')
+        child = self.event(event='subagent_start', prompt='Examine EP-123 and EP-124')
+        self.assertIn('RUNTIME_BACKGROUND', child['context'])
         resumed = self.event(event='context_resume', prompt='')
-        self.assertEqual(resumed['context_plan']['memory']['reason'], 'NO_BACKGROUND_CONTEXT')
+        self.assertIn('RUNTIME_BACKGROUND', resumed['context'])
+        self.assertEqual(resumed['context_plan']['memory']['selection'][0]['tier'], 'direct')
 
     def test_mutation_gate_and_capsule_remain_independent(self):
         self.configure('opt-in')
