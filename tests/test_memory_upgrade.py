@@ -113,7 +113,11 @@ class MemoryUpgradeTests(unittest.TestCase):
         router = self.repo / ".repo-foundry/engineering-specs/spec_router.py"
         router.write_bytes(router.read_bytes() + b"\n# Repository-owned customization.\n")
         before = self.inventory()
-        self.upgrade(expected=2)
+        preview = json.loads(self.upgrade().stdout)
+        self.assertIn(
+            router.relative_to(self.repo).as_posix(),
+            {row["path"] for row in preview["actions"] if row["action"] == "conflict"},
+        )
         self.assertEqual(self.inventory(), before)
         self.upgrade(apply=True, expected=2)
         self.assertEqual(self.inventory(), before)
@@ -124,7 +128,11 @@ class MemoryUpgradeTests(unittest.TestCase):
         target = self.repo / ".repo-foundry/engineering-specs/memory_runtime.py"
         target.write_bytes(b"# Local module: not a managed RepoHarnessKit seed.\n")
         before = self.inventory()
-        self.upgrade(expected=2)
+        preview = json.loads(self.upgrade().stdout)
+        self.assertIn(
+            target.relative_to(self.repo).as_posix(),
+            {row["path"] for row in preview["actions"] if row["action"] == "conflict"},
+        )
         self.assertEqual(self.inventory(), before)
         self.upgrade(apply=True, expected=2)
         self.assertEqual(self.inventory(), before)
