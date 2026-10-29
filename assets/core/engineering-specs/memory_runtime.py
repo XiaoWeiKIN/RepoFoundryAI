@@ -160,7 +160,10 @@ def apply_context(router: Any, root: Path, runtime: dict[str, Any],
         selected = runtime.get("context_ep_ref")
         if isinstance(selected, str):
             direct.add(selected)
-        background = [item for item in config["background_ep"] if item not in direct]
+        # The Core already renders its selected EP. Newly explicit subagent
+        # references may not be in that prefix: retain their configured snapshot
+        # as direct context rather than dropping it along with background data.
+        background = [item for item in config["background_ep"] if item != selected]
         if not background:
             return _result(baseline, mode=mode, status="unchanged", reason="NO_BACKGROUND_CONTEXT")
         separator = 2 if baseline["text"] else 0
@@ -190,7 +193,8 @@ def apply_context(router: Any, root: Path, runtime: dict[str, Any],
             candidates.append(selection.MemoryCandidate(
                 kind="exec-plan", artifact_id=plan_id, source=relative,
                 source_sha256=_digest(before), content=snapshot.content,
-                relation="background", priority=40,
+                relation="direct" if plan_id in direct else "background",
+                priority=5 if plan_id in direct else 40,
             ))
         review = None
         report_raw = None
@@ -228,11 +232,12 @@ def apply_context(router: Any, root: Path, runtime: dict[str, Any],
         used = len(text.encode("utf-8"))
         if used > baseline["budget_bytes"]:
             raise MemoryRuntimeError("EFFECTIVE_CONTEXT_EXCEEDS_BUDGET")
+        reduced = effective["text"] != normal["text"]
         reason = ("SHADOW_BASELINE_PRESERVED" if mode == "shadow"
-                  else "BACKGROUND_REFERENCES_APPLIED" if usable
+                  else "BACKGROUND_REFERENCES_APPLIED" if reduced
                   else "NO_BOUNDED_PROPOSAL_BENEFIT")
         result = _result(
-            baseline, mode=mode, status="shadow" if mode == "shadow" else "applied" if usable else "unchanged",
+            baseline, mode=mode, status="shadow" if mode == "shadow" else "applied" if reduced else "unchanged",
             reason=reason, as_of=stamp, config_sha256=_digest(config_raw),
             sources=dict(sorted(source_hashes.items())),
             configured_baseline_bytes=baseline["used_bytes"] + separator + normal["used_bytes"],
