@@ -50,7 +50,7 @@ HARNESS_OWNER = "repo-foundry"
 LEGACY_HARNESS_OWNERS = frozenset({"engineering-workflow"})
 CODEX_HARNESS_PROFILE = "codex"
 CODEX_HARNESS_PROFILE_VERSION = "1.0.0"
-CORE_HARNESS_VERSION = "1.5.6"
+CORE_HARNESS_VERSION = "1.6.0"
 CODEX_ADAPTER_VERSION = "2.4.2"
 CLAUDE_ADAPTER_VERSION = "1.3.1"
 PORTABLE_ADAPTER_VERSION = "1.3.2"
@@ -165,7 +165,19 @@ CORE_BOOTSTRAP_DIRECTORIES = (
     ".repo-foundry/engineering-specs",
     ".repo-foundry/skills/repo-foundry-ai",
 )
+CORE_MEMORY_INTRODUCED = "1.6.0"
+CORE_MEMORY_FILE_ASSETS = (
+    (
+        ".repo-foundry/engineering-specs/memory_retrieval.py",
+        "core/engineering-specs/memory_retrieval.py",
+    ),
+    (
+        ".repo-foundry/engineering-specs/memory_runtime.py",
+        "core/engineering-specs/memory_runtime.py",
+    ),
+)
 CORE_FILE_ASSETS = (
+    *CORE_MEMORY_FILE_ASSETS,
     ("ARCHITECTURE.md", "core/harness-architecture.md"),
     ("docs/index.md", "core/harness-docs-index.md"),
     ("docs/QUALITY_SCORE.md", "core/harness-quality-score.md"),
@@ -275,6 +287,8 @@ ADAPTER_FILE_ASSETS = {
     "portable": PORTABLE_ADAPTER_FILE_ASSETS,
 }
 CORE_TEMPLATE_IDS = {
+    ".repo-foundry/engineering-specs/memory_retrieval.py": "core/engineering-specs-memory-retrieval",
+    ".repo-foundry/engineering-specs/memory_runtime.py": "core/engineering-specs-memory-runtime",
     "ARCHITECTURE.md": "core/architecture",
     "docs/index.md": "core/docs-index",
     "docs/QUALITY_SCORE.md": "core/quality-score",
@@ -319,6 +333,8 @@ ADAPTER_TEMPLATE_IDS = {
 }
 CORE_GENERATED_FILES = frozenset(
     {
+        ".repo-foundry/engineering-specs/memory_retrieval.py",
+        ".repo-foundry/engineering-specs/memory_runtime.py",
         ".repo-foundry/engineering-specs/spec_router.py",
         ".repo-foundry/skills/repo-foundry-ai/SKILL.md",
     }
@@ -907,8 +923,15 @@ def versioned_file_assets(
     core_assets = tuple(
         (relative, asset, "core", None)
         for relative, asset in CORE_FILE_ASSETS
-        if relative != CORE_PROJECT_SKILL_PATH
-        or semver_tuple(core_version, "core.version") >= core_cutoff
+        if (
+            relative != CORE_PROJECT_SKILL_PATH
+            or semver_tuple(core_version, "core.version") >= core_cutoff
+        ) and (
+            relative not in {path for path, _ in CORE_MEMORY_FILE_ASSETS}
+            or semver_tuple(core_version, "core.version") >= semver_tuple(
+                CORE_MEMORY_INTRODUCED, "Core memory runtime introduction"
+            )
+        )
     )
     records = list(core_assets)
     for adapter_id, version in adapter_versions:

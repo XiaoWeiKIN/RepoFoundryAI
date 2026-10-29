@@ -138,7 +138,7 @@ enforcement 为 CLI/advisory，不声称原生拦截写入。
 
 ## 受控技术写作入口
 
-当前源码的 Core `1.5.6` 与 Codex adapter `2.4.2` 增加显式写作路由，尚未发布。
+当前源码的 Core `1.6.0` 与 Codex adapter `2.4.2` 增加显式写作路由，尚未发布。
 新建 Codex `AGENTS.md` 和共享 project Skill 会要求：撰写、修订或评审工程正文前，
 先解析负责该工作的专业 Skill，再读取该 Skill 内的 `references/controlled-writing.md`。
 此路径相对于专业 Skill，不相对于目标仓库或共享 project Skill。
@@ -399,3 +399,8 @@ Core 总是验证；未指定 `--adapter` 时验证全部已安装 adapter。指
 Core 之外验证所选 adapter，因此一个 Claude 或 Portable route 的问题不会伪装成
 Codex route 问题。Codex `AGENTS.md` 保持 100 个物理行硬上限；项目 Skill 也由
 manifest 记录各自的物理行预算。
+
+## 可选运行时记忆降温
+
+Core 1.6.0 增加两个版本化 memory 模块，但不创建配置、不默认开启降温。
+显式配置、升级和回退边界见 [运行时记忆](../engineering-execution-plan/references/memory-runtime.md)。

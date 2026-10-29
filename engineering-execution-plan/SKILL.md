@@ -43,7 +43,7 @@ Explore 的有界可逆工作和 Build 的生产修改默认使用线程内契�
 |---|---|
 | 判定制品、状态机或兼容输入 | [templates.md](references/templates.md) |
 | 起草、决定、修订或替代 ADR | [adr.md](references/adr.md) |
-| ADR 维护、Decision View、capsule 或记忆检索 | [adr.md](references/adr.md)；[记忆复核](references/memory-review.md)；[检索预览](references/memory-context.md) |
+| ADR 维护、Decision View、capsule 或记忆检索 | [adr.md](references/adr.md)；[记忆复核](references/memory-review.md)；[检索预览](references/memory-context.md)；[运行时降温](references/memory-runtime.md) |
 | 创建或接手 ExecPlan、维护 Task 与验收 | [template.md](references/template.md) |
 | 向负责人解释进展、取舍或验收依据 | [handoff.md](references/handoff.md) |
 | 消费 Research / Synthesis | [research.md](references/research.md) |
