@@ -2379,10 +2379,17 @@ def _session_ep_snapshot(
 
 
 def _session_adr_navigation(
-    root: Path, adr_ids: Iterable[str], additional_omitted: int = 0
+    root: Path, adr_ids: Iterable[str], additional_omitted: int = 0,
+    *, priority_ids: Iterable[str] = (),
 ) -> SessionContextSection | None:
     all_ids = tuple(sorted(set(adr_ids)))
-    requested = all_ids[:_SESSION_MAX_ADR_LINKS]
+    # Explicit prompt references take precedence over EP dependency navigation.
+    # Sort within each tier so the same inputs always produce the same context.
+    priority = set(priority_ids)
+    requested = tuple(
+        [value for value in all_ids if value in priority]
+        + [value for value in all_ids if value not in priority]
+    )[:_SESSION_MAX_ADR_LINKS]
     if not requested:
         return None
     source = "docs/DECISIONS.md"
@@ -2454,13 +2461,16 @@ def _session_artifact_sections(
     plan = runtime.get("context_ep_ref")
     adrs = runtime.get("context_adr_refs", [])
     ids = [value for value in adrs if isinstance(value, str)] if isinstance(adrs, list) else []
+    explicit_ids = tuple(ids)
     if isinstance(plan, str) and _SESSION_EP_RE.fullmatch(plan):
         snapshot, plan_adrs = _session_ep_snapshot(root, plan)
         sections.append(snapshot)
         ids.extend(plan_adrs)
     extra = runtime.get("context_adr_omitted_count", 0)
     omitted = extra if type(extra) is int and extra > 0 else 0
-    navigation = _session_adr_navigation(root, ids, additional_omitted=omitted)
+    navigation = _session_adr_navigation(
+        root, ids, additional_omitted=omitted, priority_ids=explicit_ids
+    )
     if navigation is not None:
         sections.append(navigation)
     return tuple(sections)
