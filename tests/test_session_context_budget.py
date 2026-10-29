@@ -225,6 +225,45 @@ class SessionContextBudgetTestCase(unittest.TestCase):
             self.assertIn("3 additional ADR references", section.content)
             self.assertIn("docs/DECISIONS.md", section.content)
 
+    def test_explicit_adr_is_not_evicted_by_many_ep_dependencies(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan_refs = [f"ADR-{number:03d}" for number in range(1, 13)]
+            refs_json = "[" + ",".join(f'"{ref}"' for ref in plan_refs) + "]"
+            plan = root / "docs/exec-plans/active/ep-001_scope/EXECPLAN.md"
+            plan.parent.mkdir(parents=True)
+            plan.write_text(
+                f"---\\nid: EP-001\\nstatus: active\\nadr_refs: {refs_json}\\n---\\n"
+                "## Current Snapshot\\n\\n- Next action: Continue scoped work.\\n",
+                encoding="utf-8",
+            )
+            decision_index = root / "docs/DECISIONS.md"
+            decision_index.parent.mkdir(parents=True, exist_ok=True)
+            rows = []
+            for identity in [*plan_refs, "ADR-099"]:
+                name = identity.lower() + ".md"
+                artifact = root / "docs/adr" / name
+                artifact.parent.mkdir(parents=True, exist_ok=True)
+                artifact.write_text(f"# {identity}\\n", encoding="utf-8")
+                rows.append(
+                    f"| {identity} | Decision | accepted | current | "
+                    f"[ADR](adr/{name}) |"
+                )
+            decision_index.write_text(
+                "<!-- ADRCTL:CURRENT:START -->\\n"
+                + "\\n".join(rows)
+                + "\\n<!-- ADRCTL:CURRENT:END -->\\n",
+                encoding="utf-8",
+            )
+            sections = core._session_artifact_sections(
+                root, {"context_ep_ref": "EP-001", "context_adr_refs": ["ADR-099"]}
+            )
+            nav = next(section for section in sections if section.id == "adr-navigation")
+            self.assertIn("ADR-099: docs/adr/adr-099.md", nav.content)
+            self.assertNotIn("- ADR-012:", nav.content)
+            self.assertIn("1 additional ADR references", nav.content)
+
     def test_adr_navigation_supports_custom_roots_and_rejects_escape(self) -> None:
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
