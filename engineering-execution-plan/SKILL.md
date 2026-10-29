@@ -87,6 +87,12 @@ Checkpoint / artifacts，不能成为继续工作的默认阅读前置。
 
 按 `status` 给出的 working_set、scope 与 completion 信号维护计划。规模超限先
 收敛当前事实和封存历史，不把长度、无活动时间或 ready_to_archive 当作完成证明。
+对**当前正在维护的 active EP**，当 `working_set` 为 `checkpoint_recommended`
+或 `checkpoint_required`，或在里程碑/交接边界需要收敛历史时，
+自动调用 `epctl auto-checkpoint EP-NNN --apply`；命令自行判断阈值并仅封存已完成
+Progress 和已解决 Blocker 等安全历史，不要求用户手写 checkpoint 参数。
+若返回 `skipped`，按 reason 保留原文并报告，绝不强行编造 Snapshot。
+普通 Explore/Build 工作不触发此命令。
 Task 保持有限范围和独立完成边界；技术未知先取证，只在缺权限、外部状态、人类
 决定或真实安全/兼容边界时保留 blocker，解除后恢复推进。
 

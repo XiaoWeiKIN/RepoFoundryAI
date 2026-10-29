@@ -1,16 +1,18 @@
-# RepoFoundry AI
+# RepoHarnessKit
+
+RepoHarnessKit 是面向 AI Coding Agent 的仓库原生工程 Harness 工具集，提供仓库内上下文、受约束的工作流、证据契约与确定性校验；它不替代 Agent runtime。
 
 简体中文 | [English](README.md)
 
 <p align="center">
-  <img src="./assets/brand/repofoundry-icon.svg" alt="RepoFoundry AI 图标" width="128">
+  <img src="./assets/brand/repofoundry-icon.svg" alt="RepoHarnessKit 图标" width="128">
 </p>
 
 <p align="center"><strong>The Agent-Native Engineering System</strong></p>
 
 <p align="center">把任何代码仓库锻造成 AI Agent 可以可靠工作的工程系统。</p>
 
-**RepoFoundry AI** 把普通代码仓库转化为人和 Coding Agent 可以共同导航、治理
+**RepoHarnessKit** 把普通代码仓库转化为人和 Coding Agent 可以共同导航、治理
 和验证的工程环境。它把短 Agent 入口、架构地图、可组合规范、证据契约、
 架构决定、执行计划和确定性校验留在代码旁边，让仓库本身持续保存工程上下文。
 
@@ -20,7 +22,7 @@
 
 ```mermaid
 flowchart LR
-    F["RepoFoundry AI<br/>Agent-Native Engineering System"]
+    F["RepoHarnessKit<br/>Agent-Native Engineering System"]
     F --> I["Inventory<br/>发现事实与缺口"]
     I --> S["Scaffold<br/>补齐工程入口"]
     S --> H["Repository Harness<br/>导航、约束、验证"]
@@ -147,7 +149,7 @@ target-repository/
 ```
 
 Benchmark Scenario 引用项目在 `scripts/bench/` 下维护的可执行测量代码；
-RepoFoundry AI 记录证据，但不接管项目自己的测量实现。
+RepoHarnessKit 记录证据，但不接管项目自己的测量实现。
 
 Bootstrap 不会编造仓库事实。未知命令、Owner、架构、SLO 和安全控制会保留为
 `BOOTSTRAP_TODO`，等待维护者确认。
@@ -180,7 +182,7 @@ flowchart LR
 1. 安装最新稳定版。以后升级仍运行同一条命令：
 
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 -
+   curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 -
    ```
 
 2. 进入目标仓库，预览 Agent-neutral Core 与全部项目 adapter：
@@ -241,9 +243,9 @@ adapter，不依赖这两个宿主目录。
 示例：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --version 0.4.1 --host codex
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host claude
-curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py | python3 - --host none
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 - --version 0.4.1 --host codex
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 - --host claude
+curl -fsSL https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py | python3 - --host none
 ```
 
 目标位置存在非托管内容时，安装器会先备份再替换。Claude Code 在设置
@@ -423,7 +425,7 @@ repofoundry --repo . adapter list
 如果环境禁止把下载内容直接交给解释器，可以先下载并审查：
 
 ```bash
-curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoFoundryAI/main/install.py
+curl -fsSLo /tmp/repofoundry-install.py https://raw.githubusercontent.com/XiaoWeiKIN/RepoHarnessKit/main/install.py
 less /tmp/repofoundry-install.py
 python3 /tmp/repofoundry-install.py
 ```
@@ -431,7 +433,7 @@ python3 /tmp/repofoundry-install.py
 维护者也可以从显式 checkout 安装，无需下载 Release：
 
 ```bash
-git clone https://github.com/XiaoWeiKIN/RepoFoundryAI.git /absolute/path/to/RepoFoundryAI
+git clone https://github.com/XiaoWeiKIN/RepoHarnessKit.git /absolute/path/to/RepoFoundryAI
 python3 /absolute/path/to/RepoFoundryAI/install.py --source /absolute/path/to/RepoFoundryAI
 export REPO_FOUNDRY_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/repofoundry-ai/current"
 ```
@@ -639,7 +641,7 @@ Codex adapter 翻译原生事件：生成的 Hooks 在 `UserPromptSubmit` 建立
 
 ## 清晰边界保证系统可信
 
-- RepoFoundry AI 不运行通用 Agent runtime，也不把编排状态藏在仓库外。
+- RepoHarnessKit 不运行通用 Agent runtime，也不把编排状态藏在仓库外。
 - 根 Skill 不创建 Benchmark Run、Research、ADR、ExecPlan 或 Case Study。
 - 专业 Skill 不推断 Research Owner 或 Decision Owner 的授权。
 - Bootstrap 不覆盖仓库自有文档。
@@ -654,7 +656,7 @@ Codex adapter 翻译原生事件：生成的 Hooks 在 `UserPromptSubmit` 建立
 
 ## 从 EngineeringWorkflow 迁移
 
-RepoFoundry AI 用一套当前入口替换原产品身份：
+RepoHarnessKit 用一套当前入口替换原产品身份：
 
 | 原入口 | 当前入口 |
 |---|---|
@@ -686,7 +688,7 @@ Markdown 链接和独立安装，并验证仓库内 Research、Design 与 ExecPl
 
 ## 参考入口
 
-RepoFoundry AI：
+RepoHarnessKit：
 
 - [根 Skill](./SKILL.md)
 - [Bootstrap 契约](./references/bootstrap.md)
@@ -721,10 +723,10 @@ RepoFoundry AI：
 决定与实施：
 
 - [ADR-007 — 采用 RepoFoundry](./docs/adr/adr-007_repo-foundry-identity.md)
-- [ADR-008 — 对外使用 RepoFoundry AI](./docs/adr/adr-008_repofoundry-ai-brand.md)
-- [ADR-009 — 根 Skill 名称与 RepoFoundry AI 对齐](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
+- [ADR-008 — 对外使用 RepoHarnessKit](./docs/adr/adr-008_repofoundry-ai-brand.md)
+- [ADR-009 — 根 Skill 名称与 RepoHarnessKit 对齐](./docs/adr/adr-009_align-repofoundry-ai-skill-name.md)
 - [ADR-011 — 分离 Core 与 Agent adapters](./docs/adr/adr-011_agent-neutral-harness-adapters.md)
 - [ADR-012 — 分离 Spec 激活与 runtime adapters](./docs/adr/adr-012_agent-neutral-spec-activation.md)
 - [ADR-014 — 治理制品元数据契约（proposed）](./docs/adr/adr-014_governed-artifact-metadata-contract.md)
-- [EP-006 — 迁移到 RepoFoundry AI](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
+- [EP-006 — 迁移到 RepoHarnessKit](./docs/exec-plans/active/ep-006_migrate-to-repo-foundry/EXECPLAN.md)
 - [EP-010 — 实现 Agent-neutral adapters](./docs/exec-plans/completed/ep-010_implement-agent-neutral-adapters/EXECPLAN.md)

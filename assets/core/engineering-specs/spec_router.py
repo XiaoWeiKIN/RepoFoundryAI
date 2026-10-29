@@ -92,6 +92,117 @@ class RouterError(RuntimeError):
     """Raised when local routing state violates its boundary contract."""
 
 
+SESSION_CONTEXT_BUDGET_BYTES = 8 * 1024
+MAX_SESSION_CONTEXT_BUDGET_BYTES = 128 * 1024
+
+
+@dataclass(frozen=True)
+class SessionContextSection:
+    """Non-normative context offered for one agent session."""
+
+    id: str
+    priority: int
+    content: str
+    source: str
+    mandatory: bool = False
+
+
+def plan_session_context(
+    sections: Iterable[SessionContextSection],
+    budget_bytes: int = SESSION_CONTEXT_BUDGET_BYTES,
+) -> dict[str, object]:
+    """Select bounded session context without truncating any section.
+
+    Reserve mandatory content and the shorter of each optional section or its
+    source pointer first. A large early section must not hide later sources.
+    This planner never handles the normative Engineering Spec capsule.
+    """
+    if (
+        type(budget_bytes) is not int
+        or budget_bytes < 1
+        or budget_bytes > MAX_SESSION_CONTEXT_BUDGET_BYTES
+    ):
+        raise RouterError("ROUTER_SESSION_CONTEXT_BUDGET_INVALID")
+    values = tuple(sections)
+    seen: set[str] = set()
+    sources: set[str] = set()
+    for section in values:
+        if not isinstance(section, SessionContextSection):
+            raise RouterError("ROUTER_SESSION_CONTEXT_SECTION_INVALID")
+        if (
+            not isinstance(section.id, str)
+            or not re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", section.id)
+            or section.id in seen
+            or type(section.priority) is not int
+            or section.priority < 0
+            or type(section.mandatory) is not bool
+            or not isinstance(section.content, str)
+            or not section.content.strip()
+            or not isinstance(section.source, str)
+            or not section.source.strip()
+            or len(section.source) > 512
+            or "\n" in section.source
+            or "\r" in section.source
+        ):
+            raise RouterError("ROUTER_SESSION_CONTEXT_SECTION_INVALID")
+        if section.source in sources:
+            raise RouterError("ROUTER_SESSION_CONTEXT_SOURCE_DUPLICATE")
+        seen.add(section.id)
+        sources.add(section.source)
+    ordered = tuple(sorted(values, key=lambda section: (section.priority, section.id)))
+
+    def pointer(section: SessionContextSection) -> str:
+        return f"[ContextRef:{section.id}] {section.source}"
+
+    # Two newlines separate adjacent sections, including references.
+    baseline_bytes = 2 * max(0, len(ordered) - 1) + sum(
+        min(
+            len(section.content.encode("utf-8")),
+            len(pointer(section).encode("utf-8")),
+        )
+        if not section.mandatory
+        else len(section.content.encode("utf-8"))
+        for section in ordered
+    )
+    if baseline_bytes > budget_bytes:
+        raise RouterError(
+            "ROUTER_SESSION_CONTEXT_BUDGET_EXCEEDED: "
+            f"mandatory content and source pointers need {baseline_bytes} bytes; "
+            f"budget is {budget_bytes} bytes"
+        )
+
+    remaining = budget_bytes - baseline_bytes
+    parts: list[str] = []
+    selections: list[dict[str, object]] = []
+    for section in ordered:
+        short = pointer(section)
+        content_size = len(section.content.encode("utf-8"))
+        pointer_size = len(short.encode("utf-8"))
+        extra = max(0, content_size - pointer_size)
+        include = section.mandatory or extra <= remaining
+        chosen = section.content if include else short
+        if not section.mandatory and include:
+            remaining -= extra
+        parts.append(chosen)
+        selections.append(
+            {
+                "id": section.id,
+                "source": section.source,
+                "selection": "content" if include else "reference",
+                "bytes": len(chosen.encode("utf-8")),
+            }
+        )
+    text = "\n\n".join(parts)
+    used_bytes = len(text.encode("utf-8"))
+    assert used_bytes <= budget_bytes
+    return {
+        "text": text,
+        "budget_bytes": budget_bytes,
+        "used_bytes": used_bytes,
+        "selections": selections,
+    }
+
+
 @dataclass(frozen=True)
 class SpecEntry:
     key: str
@@ -1173,6 +1284,7 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
     governance_mode, governance_reasons = _initial_governance(
         governance_profile
     )
+    ep_refs, adr_refs = _session_requested_refs(payload.get("prompt", ""))
     value: dict[str, object] = {
         "version": ROUTER_VERSION,
         "protocol_version": PROTOCOL_VERSION,
@@ -1180,6 +1292,9 @@ def _initialize_turn(root: Path, payload: dict[str, object]) -> dict[str, object
         "session_id": session_id,
         "turn_id": turn_id,
         "prompt_sha256": _sha256(str(payload.get("prompt", "")).encode("utf-8")),
+        "context_ep_ref": ep_refs[0] if ep_refs else None,
+        "context_adr_refs": adr_refs[:_SESSION_MAX_ADR_LINKS],
+        "context_adr_omitted_count": max(0, len(adr_refs) - _SESSION_MAX_ADR_LINKS),
         "baseline": _baseline(root),
         "governance_profile": governance_profile,
         "governance_mode": governance_mode,
@@ -2191,7 +2306,179 @@ def _router_command(adapter_id: str, session_id: str, turn_id: str) -> str:
     )
 
 
-def _route_context(root: Path, payload: dict[str, object]) -> str:
+
+# Session context is an optional navigation surface, never an EP/ADR validator.
+# Only explicit references in the task select artifacts; no background corpus scan.
+_SESSION_EP_RE = re.compile(r"(?<![A-Za-z0-9])EP-([0-9]{3,8})(?![A-Za-z0-9])", re.IGNORECASE)
+_SESSION_ADR_RE = re.compile(r"(?<![A-Za-z0-9])ADR-([0-9]{3,8})(?![A-Za-z0-9])", re.IGNORECASE)
+_SESSION_MAX_ADR_LINKS = 12
+
+
+def _session_requested_refs(prompt: object) -> tuple[list[str], list[str]]:
+    if not isinstance(prompt, str):
+        return [], []
+    plans = sorted({f"EP-{int(n):03d}" for n in _SESSION_EP_RE.findall(prompt)})
+    adrs = sorted({f"ADR-{int(n):03d}" for n in _SESSION_ADR_RE.findall(prompt)})
+    # A multi-plan task needs explicit scoping; never guess which plan is current.
+    return plans[:1] if len(plans) == 1 else [], adrs
+
+
+def _session_ep_snapshot(
+    root: Path, plan_id: str
+) -> tuple[SessionContextSection, list[str]]:
+    number = int(plan_id.split("-", 1)[1])
+    active_root = root / "docs/exec-plans/active"
+    matches = sorted(active_root.glob(f"ep-{number:03d}_*/EXECPLAN.md"))
+    source = "docs/PLANS.md"
+    unavailable = f"{plan_id}: active EP snapshot unavailable; inspect {source} and validate EP."
+    refs: list[str] = []
+    if len(matches) != 1:
+        return SessionContextSection(
+            id="ep-snapshot", priority=5, content=unavailable, source=source
+        ), refs
+    relative = matches[0].relative_to(root).as_posix()
+    try:
+        file_path = _resolve_regular(root, relative, "ROUTER_EP_CONTEXT_INVALID")
+        document = _read_bytes(
+            file_path, "ROUTER_EP_CONTEXT_INVALID", MAX_CONTEXT_BYTES
+        ).decode("utf-8")
+        front = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", document, re.DOTALL)
+        if front is None:
+            raise ValueError("missing frontmatter")
+        identity = re.search(r"(?m)^id:\s*(EP-[0-9]{3,8})\s*$", front.group(1))
+        status = re.search(r"(?m)^status:\s*(active|blocked)\s*$", front.group(1))
+        if identity is None or identity.group(1) != plan_id or status is None:
+            raise ValueError("identity/status does not match the active plan")
+        snapshots = re.findall(
+            r"(?ms)^## Current Snapshot[ \t]*\r?\n(.*?)(?=^## [^\r\n]+|\Z)",
+            document,
+        )
+        if len(snapshots) != 1 or not snapshots[0].strip():
+            raise ValueError("missing unique Current Snapshot")
+        raw_refs = re.search(r"(?m)^adr_refs:\s*(\[[^\r\n]*\])\s*$", front.group(1))
+        if raw_refs is not None:
+            parsed = json.loads(raw_refs.group(1))
+            if not isinstance(parsed, list) or not all(
+                isinstance(value, str) and _SESSION_ADR_RE.fullmatch(value)
+                for value in parsed
+            ):
+                raise ValueError("invalid ADR references")
+            refs = sorted(set(parsed))
+        content = (
+            f"Current Snapshot for {plan_id} (informational, not an acceptance "
+            f"or validation result; source: {relative}):\n\n"
+            + snapshots[0].strip()
+        )
+        return SessionContextSection(
+            id="ep-snapshot", priority=5, content=content, source=relative
+        ), refs
+    except (OSError, UnicodeError, ValueError, RouterError):
+        return SessionContextSection(
+            id="ep-snapshot", priority=5, content=unavailable, source=source
+        ), []
+
+
+def _session_adr_navigation(
+    root: Path, adr_ids: Iterable[str], additional_omitted: int = 0,
+    *, priority_ids: Iterable[str] = (),
+) -> SessionContextSection | None:
+    all_ids = tuple(sorted(set(adr_ids)))
+    # Explicit prompt references take precedence over EP dependency navigation.
+    # Sort within each tier so the same inputs always produce the same context.
+    priority = set(priority_ids)
+    requested = tuple(
+        [value for value in all_ids if value in priority]
+        + [value for value in all_ids if value not in priority]
+    )[:_SESSION_MAX_ADR_LINKS]
+    if not requested:
+        return None
+    source = "docs/DECISIONS.md"
+    unavailable = (
+        "ADR navigation is unavailable or not validated; inspect "
+        f"{source} and run epctl validate before relying on current effect."
+    )
+    try:
+        index_path = _resolve_regular(root, source, "ROUTER_ADR_CONTEXT_INVALID")
+        text = _read_bytes(
+            index_path, "ROUTER_ADR_CONTEXT_INVALID", MAX_CONTEXT_BYTES
+        ).decode("utf-8")
+        start, end = (
+            "<!-- ADRCTL:CURRENT:START -->",
+            "<!-- ADRCTL:CURRENT:END -->",
+        )
+        if text.count(start) != 1 or text.count(end) != 1:
+            raise ValueError("missing or duplicate current projection markers")
+        body = text.split(start, 1)[1].split(end, 1)[0]
+        if end not in text.split(start, 1)[1]:
+            raise ValueError("malformed projection markers")
+        current: dict[str, str] = {}
+        for line in body.splitlines():
+            row = re.match(r"^\|\s*(ADR-[0-9]{3,8})\s*\|", line)
+            if row is None or row.group(1) not in requested:
+                continue
+            matches = re.findall(r"\[ADR\]\(([^()\s]+\.md)\)", line)
+            if len(matches) != 1 or row.group(1) in current:
+                raise ValueError("ambiguous ADR projection")
+            relative = _safe_relative(
+                "docs/" + matches[0], "ROUTER_ADR_CONTEXT_INVALID"
+            )
+            _resolve_regular(root, relative, "ROUTER_ADR_CONTEXT_INVALID")
+            current[row.group(1)] = relative
+        lines = [
+            "Current-effect ADR navigation (derived index only; validate the "
+            "ADR sources before relying on any constraint):"
+        ]
+        for adr_id in requested:
+            if adr_id in current:
+                lines.append(f"- {adr_id}: {current[adr_id]}")
+            else:
+                lines.append(
+                    f"- {adr_id}: not in the current-effect projection; "
+                    "verify history or amendments before use."
+                )
+        missing_count = len(all_ids) - len(requested) + additional_omitted
+        if missing_count:
+            lines.append(
+                f"- {missing_count} additional ADR references: "
+                f"inspect {source}; not individually materialized."
+            )
+        return SessionContextSection(
+            id="adr-navigation",
+            priority=10,
+            content="\n".join(lines),
+            source=source,
+        )
+    except (OSError, UnicodeError, ValueError, RouterError):
+        return SessionContextSection(
+            id="adr-navigation", priority=10, content=unavailable, source=source
+        )
+
+
+def _session_artifact_sections(
+    root: Path, runtime: dict[str, object]
+) -> tuple[SessionContextSection, ...]:
+    sections: list[SessionContextSection] = []
+    plan = runtime.get("context_ep_ref")
+    adrs = runtime.get("context_adr_refs", [])
+    ids = [value for value in adrs if isinstance(value, str)] if isinstance(adrs, list) else []
+    explicit_ids = tuple(ids)
+    if isinstance(plan, str) and _SESSION_EP_RE.fullmatch(plan):
+        snapshot, plan_adrs = _session_ep_snapshot(root, plan)
+        sections.append(snapshot)
+        ids.extend(plan_adrs)
+    extra = runtime.get("context_adr_omitted_count", 0)
+    omitted = extra if type(extra) is int and extra > 0 else 0
+    navigation = _session_adr_navigation(
+        root, ids, additional_omitted=omitted, priority_ids=explicit_ids
+    )
+    if navigation is not None:
+        sections.append(navigation)
+    return tuple(sections)
+
+
+def _route_context(
+    root: Path, payload: dict[str, object]
+) -> tuple[str, dict[str, object]]:
     runtime = _initialize_turn(root, payload)
     adapter_id = str(runtime["adapter_id"])
     session_id = str(runtime["session_id"])
@@ -2218,7 +2505,7 @@ def _route_context(root: Path, payload: dict[str, object]) -> str:
             "justified no-Spec decision before mutation; Governed work also "
             "retains its full evidence and authority gates."
         )
-    context = (
+    routing_contract = (
         governance_context
         + " File scope creates candidates; Applicability chooses Specs; bounded "
         "cards choose exact Requirements and code resolves their context "
@@ -2229,9 +2516,27 @@ def _route_context(root: Path, payload: dict[str, object]) -> str:
         f"Governance reasons: `{json.dumps(reasons, ensure_ascii=False)}`\n\n"
         f"Adapter ID: `{adapter_id}`\nSession ID: `{session_id}`\n"
         f"Turn ID: `{turn_id}`\nContext epoch: `{runtime['context_epoch']}`\n\n"
-        f"Commands:\n{_router_command(adapter_id, session_id, turn_id)}\n\n"
-        "Current locked routing index:\n\n" + index
+        f"Commands:\n{_router_command(adapter_id, session_id, turn_id)}"
     )
+    context_plan = plan_session_context(
+        (
+            SessionContextSection(
+                id="routing-contract",
+                priority=0,
+                content=routing_contract,
+                source=".repo-foundry/engineering-specs/spec_router.py",
+                mandatory=True,
+            ),
+            SessionContextSection(
+                id="routing-index",
+                priority=20,
+                content="Current locked routing index:\n\n" + index,
+                source=INDEX_PATH,
+            ),
+            *_session_artifact_sections(root, runtime),
+        )
+    )
+    context = str(context_plan["text"])
     activation = runtime.get("activation")
     if isinstance(activation, dict):
         capsule = _context_for_activation(root, activation)
@@ -2244,7 +2549,10 @@ def _route_context(root: Path, payload: dict[str, object]) -> str:
             "\n\nExact activation capsule rehydrated for this context epoch:\n\n"
             + capsule
         )
-    return context
+    # Exact activated Spec capsules remain outside the session routing budget.
+    return context, {
+        key: value for key, value in context_plan.items() if key != "text"
+    }
 
 
 def _context_for_activation(root: Path, activation: dict[str, object]) -> str:
@@ -2552,7 +2860,12 @@ def process_event(root: Path, payload: dict[str, object]) -> dict[str, object]:
         raise RouterError(f"ROUTER_EVENT_UNSUPPORTED: {event!r}")
     _event_identity(payload)
     if event in {"session_start", "subagent_start", "context_resume"}:
-        return {"decision": "allow", "context": _route_context(root, payload)}
+        context, context_plan = _route_context(root, payload)
+        return {
+            "decision": "allow",
+            "context": context,
+            "context_plan": context_plan,
+        }
     if event == "before_mutation":
         return _before_mutation(root, payload)
     return _stop(root, payload)
