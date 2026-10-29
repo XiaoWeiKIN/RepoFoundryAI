@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.harness_legacy_fixture import strip_memory_assets
+from tests.harness_legacy_fixture import CORE_MEMORY_PATHS, strip_memory_assets
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -159,16 +159,19 @@ class WritingRouteBootstrapTests(unittest.TestCase):
         before = self.inventory()
         preview = self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION)
         self.assertEqual({a["path"] for a in preview["actions"] if a["action"] == "replace_file"}, set(OLD_SEEDS))
+        self.assertEqual({a["path"] for a in preview["actions"] if a["action"] == "create_file"}, CORE_MEMORY_PATHS)
         self.assertEqual(self.inventory(), before)
-        self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION, "--apply")
+        applied = self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION, "--apply")
+        self.assertEqual(set(applied["created"]), CORE_MEMORY_PATHS)
         after = self.inventory()
-        self.assertEqual(set(after), set(before))
+        self.assertEqual(set(after), set(before) | CORE_MEMORY_PATHS)
         self.assertEqual({p for p in before if before[p] != after[p]}, {*OLD_SEEDS, foundryctl.HARNESS_MANIFEST})
         manifest = self.manifest()
         self.assertEqual([m["id"] for m in manifest["applied_migrations"]], ["core-1.5.4-to-1.6.0", "adapter-codex-2.4.1-to-2.4.2"])
         for relative in OLD_SEEDS:
             self.assertIn(GUIDE, after[relative].decode())
         repeated = self.cli("upgrade", "--to", foundryctl.REPO_FOUNDRY_VERSION, "--apply")
+        self.assertEqual(repeated["created"], [])
         self.assertEqual(repeated["updated"], [])
         self.assertEqual(self.inventory(), after)
         self.cli("validate", "--harness")
