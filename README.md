@@ -179,6 +179,10 @@ explicit upgrades replace only seeds whose recorded provenance permits it.
 
 For an unfinished Explore/Build task, the explicit [Session Handoff / Resume CLI](references/session-handoff.md) records the task, next action, current Git HEAD/branch, visible worktree changes and chosen file digests. The next agent rechecks those facts before continuing. Capture writes JSON to stdout by default; saving requires an explicit path. A matching snapshot does **not** establish that tests passed or Specs were activated; verification remains `unknown` until actual revision-bound evidence exists. The CLI is a distribution script, not an automatically installed Hook or another ExecPlan/Checkpoint lifecycle.
 
+### Check whether earlier test evidence still applies
+
+An explicitly executed command can now produce a [Revision-bound Verification Receipt](references/verification-receipt.md). Its `check` operation compares Git HEAD, staged index, visible worktree changes, selected input bytes and pinned Harness/Spec file bytes against the recorded revision. A changed input yields `stale`; a matching snapshot proves only the scope of the *recorded command*, not task completion or authorization. A Session Handoff can optionally read the same receipt during Resume. The CLI is opt-in and does not automatically execute CI or install Hooks.
+
 ## Install once, enable each repository explicitly
 
 RepoFoundry has two independent scopes. The **distribution installation** puts
