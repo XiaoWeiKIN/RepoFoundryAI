@@ -35,6 +35,7 @@ description: 初始化、升级或诊断 RepoFoundry 仓库 Harness，配置 Age
 | 升级既有 Harness、处理 seed 与历史兼容 | [upgrades.md](references/upgrades.md) |
 | 安装、同步或更新 Engineering Specs | [specifications.md](references/specifications.md) |
 | 检查 Harness 或 Spec 完整性 | `validate --harness` 或 `spec validate`；按诊断读取对应说明 |
+| 显式交接或恢复本地未完成工程任务 | [Session Handoff / Resume](references/session-handoff.md)；默认只读，不代替 EP Checkpoint 或 Spec 路由 |
 | 展示专业 skill 的端到端用法 | [Prompt 示例](examples/README.zh-CN.md) |
 
 初始化或升级先预览，检查 create、preserve、register 和 conflict。用户已要求实施且
@@ -74,6 +75,10 @@ Harness 操作先解释 create、preserve、conflict 对项目的实际影响，
 按问题选表达形式：文字讲条件，图讲关系，交互视图用于探索参数或场景。仅在有助于
 理解时生成附加视图，标明来源与假设；源变化后重新核对。各专业 Skill 复用自己的
 正文、摘要和阅读地图，不增加统一必填章节、额外审批或第二份手工维护的事实源。
+
+## 显式 Session Handoff
+
+普通 Explore/Build 工作中断需要继续时，可按需使用发行包的 `scripts/session_handoff.py`：`capture` 向 stdout 输出任务和 Git 工作树快照；只有显式 `--output` 才保存私有记录。下一会话用 `resume --input` 重新核验分支、HEAD、可见改动与观察文件字节。记录的测试引用不等于真实通过；即使快照匹配，验证仍为 `unknown`。不要默认每次会话创建 Handoff，也不要用它代替 EP/Checkpoint、Spec 激活或下一阶段的 Revision-bound Verification Receipt。详见 [使用与边界](references/session-handoff.md)。
 
 ## 核心边界
 
