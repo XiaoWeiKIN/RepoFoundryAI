@@ -38,8 +38,10 @@ def sha(raw: bytes) -> str:
 
 
 def validate_args(argv: list[str]) -> list[str]:
+    if not isinstance(argv, list):
+        fail("command argv must be an array")
     result = argv[1:] if argv and argv[0] == "--" else argv
-    if not isinstance(result, list) or not 1 <= len(result) <= 64:
+    if not 1 <= len(result) <= 64:
         fail("explicit command argv is required (maximum 64 elements)")
     if any(not isinstance(s, str) or not s or "\x00" in s or
            len(s.encode("utf-8")) > 4096 for s in result):
