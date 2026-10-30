@@ -1,0 +1,50 @@
+name: one-off-real-apm-handoff-audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/one-off-real-apm-handoff-audit.yml'
+      - 'tests/integration/apm_real_go_handoff_audit.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-apm-go-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout RepoHarnessKit audit branch
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout pinned real APM source
+        uses: actions/checkout@v4
+        with:
+          repository: XiaoWeiKIN/apm-control-plane
+          ref: a0eae73f2ec10e9a28c00eb48e0a3593a69209f1
+          path: apm
+          persist-credentials: false
+      - name: Install Go 1.25
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+      - name: Execute isolated real-Go Handoff and Receipt audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B harness/tests/integration/apm_real_go_handoff_audit.py \
+            "$GITHUB_WORKSPACE/harness" \
+            "$GITHUB_WORKSPACE/apm" \
+            "$RUNNER_TEMP/apm-handoff-evidence"
+      - name: Preserve source-bound evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apm-real-go-handoff-audit
+          path: ${{ runner.temp }}/apm-handoff-evidence/
+          retention-days: 14
+          if-no-files-found: warn
