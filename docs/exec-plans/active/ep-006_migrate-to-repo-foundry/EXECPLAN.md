@@ -19,7 +19,7 @@ verified_revision:
 verification_evidence: []
 archive_sha256:
 created: 2026-07-30
-updated: 2026-08-04
+updated: 2026-10-30
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 ---
@@ -45,16 +45,22 @@ validation, and professional Skills operate above that environment.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 4 — validated implementation ready for review.
-- Current state: ADR-009 amends ADR-008 after the Repository Owner explicitly
-  requested the Skill and project names be synchronized. Public Skill surfaces
-  now use `$repo-foundry-ai`; CLI, environment variable, manifest owner, and
-  state paths remain stable. Skill validation and the canonical repository
-  check pass, including 109 tests and zero repository validation warnings.
-- Next action: commit and push the synchronized naming change to the amended PR
-  branch. The external GitHub repository rename remains a separate operation.
-- Open questions: the external GitHub repository rename is intentionally
-  outside this local implementation.
+- Current milestone: Milestone 4 — merged naming work; reconcile the remaining
+  hosting-name scope and current verification before deciding on archival.
+- Current state: the accepted ADR-009 root Skill rename was merged by
+  [PR #13](https://github.com/XiaoWeiKIN/RepoHarnessKit/pull/13) on 2026-08-01;
+  the public Skill remains `repo-foundry-ai` while `foundryctl`,
+  `REPO_FOUNDRY_HOME` and the manifest owner `repo-foundry` stay compatible.
+  [PR #86](https://github.com/XiaoWeiKIN/RepoHarnessKit/pull/86) subsequently
+  aligned README and installation URLs with the current RepoHarnessKit host name.
+  The original 109-test result is historical, not current-HEAD verification.
+- Next action: check remaining EP-006 acceptance against the current tree,
+  obtain the Repository Owner's disposition of the originally deferred external
+  hosting rename, and record a current validated revision and evidence before
+  using the existing `archive-ep` completion gate if no obligation remains.
+- Open questions: whether the originally intended external repository rename
+  is satisfied, superseded, or still required; the current host name alone does
+  not authorize changing this plan's outcome.
 
 ## Context and Orientation
 
@@ -146,23 +152,21 @@ another after observing results; change the plan and record the reason first.
 
 ## Plan of Work
 
-The root CLI and focused test module have been renamed. Root metadata, evals,
-command help, dynamic module names, owner constants, and integrity checks use
-the RepoFoundry technical identity. Explicit compatibility predicates accept
-old manifest owners without scattering string alternatives through validators.
+Implementation and the accepted Skill-name decision were recorded in earlier
+milestones and Progress. The root Skill change is already merged in PR #13;
+PR #86 later aligned current repository documentation and installation sources
+to RepoHarnessKit. **Do not repeat the old rename or push steps.**
 
-Next, finish the opening and navigation model of both READMEs around RepoFoundry
-AI and The Agent-Native Engineering System. Update current Bootstrap, Spec,
-packaging, and example documents. Preserve sealed history and explain the exact
-installation migration.
+The current handoff is a bounded reconciliation, not another identity migration:
 
-The generated visual exploration has been reduced to a deterministic SVG mark:
-two repository braces around a forge-orange AI spark. Keep the transparent
-master, square application-icon variant, raster icon, and README usage aligned.
-
-Finally, run focused unit tests and the canonical check. Store concise final
-validation output in this plan's `artifacts/` directory, scan former-name
-references against the historical allowlist, and update this living document.
+1. Compare the shipped root Skill, current README and installer source against
+   accepted ADR-009 while preserving existing machine identifiers and history.
+2. Resolve with the Repository Owner whether the separately deferred external
+   hosting rename remains in scope or has been superseded by RepoHarnessKit.
+3. Re-run current repository integrity and applicable acceptance checks.
+   Capture the exact tested commit and evidence. If the plan is genuinely
+   complete, use the existing `archive-ep` gate; otherwise keep it active
+   with a concrete next action. Neither outcome is inferred here.
 
 ## Milestones
 
@@ -195,24 +199,25 @@ and visual asset checks. Save complete console output under this EP's
 
 ## Concrete Steps
 
-Run every command from the repository root. The source renames are already
-present in the working tree. Use targeted patches for root metadata, source,
-tests, README files, references, and mutable design documents. Do not apply a
-repository-wide replacement over `docs/adr/` or
-`docs/exec-plans/completed/`.
+From the current repository root, review the merged naming changes in
+[PR #13](https://github.com/XiaoWeiKIN/RepoHarnessKit/pull/13) and the
+repository/README alignment in
+[PR #86](https://github.com/XiaoWeiKIN/RepoHarnessKit/pull/86).
+Keep accepted ADRs and previously recorded Progress immutable as historical
+evidence.
 
-Generate the PNG from the final SVG with an available deterministic local SVG
-renderer. Confirm its dimensions and alpha/channel behavior with an image
-inspection tool.
-
-Run:
+Run the existing checks against the **current** source revision:
 
 ```bash
-python3 -B -m unittest tests.test_foundryctl tests.test_spec_manager
-python3 -B -m unittest tests.test_repository_contracts
 python3 -B scripts/check.py
+python3 -B engineering-execution-plan/scripts/epctl.py --repo . status --json
 python3 -B engineering-execution-plan/scripts/epctl.py --repo . validate
 ```
+
+These commands provide validation and status evidence only. They do not decide
+whether the earlier external hosting-rename goal remains required. Do not
+archive or cancel without a reviewed completion/disposition and the existing
+verification evidence contract.
 
 ## Validation and Acceptance
 
@@ -374,3 +379,9 @@ hosting path because remote rename was explicitly outside this local change.
 - 2026-08-01T08:31:00Z — Regenerated root Skill UI metadata, synchronized
   prompts, evals, current design documents, and installation tests, then passed
   the 109-test canonical check with zero validation errors or warnings.
+- 2026-10-30 — P3-A source reconciliation: verified the naming change
+  is merged in PR #13 and current repository/README sources were updated in
+  PR #86. Replaced the obsolete "push amended PR" next action with current
+  verification and Owner scope review; retained all earlier Progress, accepted
+  ADR authority, and the active lifecycle state. This note does not attest to
+  any external hosting rename or approve completion.

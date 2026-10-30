@@ -24,7 +24,7 @@ verified_revision:
 verification_evidence: []
 archive_sha256:
 created: 2026-09-03
-updated: 2026-09-03
+updated: 2026-10-30
 author: "Codex"
 owner: "RepoFoundry Maintainer"
 ---
@@ -54,16 +54,22 @@ will still fail closed.
 ## Current Snapshot
 
 - Latest checkpoint: none.
-- Current milestone: Milestone 3 — finish the authorized DataFox ADR transitions.
-- Current state: RepoFoundry 0.8.2 is released and installed; DataFox is upgraded,
-  CP-001 has a verified recovery receipt, EP-092 is structurally valid, ADR-038
-  is accepted, and ADR-052/053/054 are superseded by ADR-055. ADR-051 apply
-  rolled back atomically because the validator did not support the existing
-  `ADR-010 -> ADR-051 -> ADR-055` supersession chain.
-- Next action: publish the additive 0.8.3 chain-validation fix, upgrade DataFox,
-  supersede ADR-051, and retarget the storage Decision View to ADR-055.
-- Open questions: none that can change the route; file naming and JSON field
-  names remain bounded implementation details and will be fixed by tests.
+- Current milestone: Milestone 3 — verify the DataFox installation, remaining
+  ADR-051 transition and storage Decision View; no completion attested.
+- Current state: RepoFoundry AI 0.8.3 was published on 2026-09-03, as shown by
+  the [v0.8.3 release](https://github.com/XiaoWeiKIN/RepoHarnessKit/releases/tag/v0.8.3)
+  and `artifacts/release-notes-0.8.3.md`. The 2026-09-03 Progress record
+  describes earlier DataFox CP-001 recovery, EP-092 repair, ADR-038 acceptance
+  and ADR-052/053/054 transitions. This source repository does **not** establish
+  a current DataFox installation or completed ADR-051 supersession and View
+  retargeting. Publication alone does not satisfy the remaining acceptance.
+- Next action: obtain current DataFox version, ADR-051/055 and storage Decision
+  View evidence; if still pending, follow the existing preview-first and
+  separately authorized upgrade/transition workflows, then validate and pin
+  the actual DataFox revision/evidence before considering archival.
+- Open questions: is a compatible 0.8.3-or-later distribution installed in
+  DataFox; are the ADR-051 chain and storage View current and validated?
+  Neither is inferred from the already-published release.
 
 ## Context and Orientation
 
@@ -159,38 +165,26 @@ another after observing results; change the plan and record the reason first.
 
 ## Plan of Work
 
-First, add tests that build a valid checkpoint, deliberately write the wrong
-digest before its first Git commit, and exercise the public recovery command.
-The tests will prove preview has no side effects, apply creates one immutable
-receipt, repeated apply preserves it, normal validation works with Git removed,
-and wrong/non-ancestor commits, pre-existing paths, non-matching bytes,
-additional checkpoint errors, receipt tampering and later checkpoint edits all
-fail closed.
+The born-invalid checkpoint recovery and the chained-supersession validator
+are already implemented in the recorded source history. RepoFoundry AI 0.8.3
+is **published**, as independently evidenced by the release tag. The old plan
+to publish 0.8.3 is not a pending source-repository action.
 
-Second, add a narrow receipt store and validator to `epctl.py`. Registration
-will resolve an exact plan/checkpoint, validate raw UTF-8 bytes and schema 1.2,
-confirm the payload mismatch is the only checkpoint error, prove the supplied
-full commit is an ancestor and introduced the exact path with the same blob
-bytes, and generate a canonical self-digested JSON receipt. Repository
-validation will validate the entire store and suppress only the matching seal
-mismatch.
+The remaining Milestone 3 work depends on the **actual** DataFox repository:
 
-Third, document the command, storage layout, trust boundary and recovery
-limitations in the Skill and checkpoint/integrity/versioning references. Update
-public examples, tests, `VERSION` and release notes to 0.8.2 without changing
-Harness schema or component versions.
-
-Finally, run focused and canonical checks, publish and install 0.8.2, upgrade
-the DataFox Harness, preview/apply the EP-091 CP-001 receipt, repair EP-092's
-structural blocker fields without overwriting unrelated work, accept ADR-038,
-and preview/apply ADR-055 supersession of ADR-051 through ADR-054. Rebuild
-Decision Views and run DataFox validation after each lifecycle stage.
-
-During the DataFox apply, preserve chained supersession instead of flattening
-history. Permit an immediate replacement to have any accepted-origin lifecycle
-status, require every backlink, reject cycles, and keep current contexts anchored
-only at an accepted/current terminal ADR. Publish this additive validator fix as
-0.8.3 before retrying the rolled-back ADR-051 transition.
+1. Read its installed RepoFoundry version, checkpoint recovery receipt,
+   validated EP/ADR state, current ADR-051/055 effect chain and Decision View.
+   Existing progress notes and copied-corpus tests are not proof of the
+   present DataFox source revision.
+2. If needed, perform a preview-first compatible Harness upgrade; apply an
+   ADR-051 -> ADR-055 transition or retarget its storage Decision View only
+   under the already applicable explicit Decision Owner authorization and
+   existing `epctl` gates. Do not recreate receipts or rewrite sealed history.
+3. Validate the target without hiding existing errors; preserve unrelated
+   user changes; record the exact tested revision and evidence under this EP's
+   `artifacts/`. Update acceptance only for verified results.
+4. Reconsider EP archival using the existing completion contract only when
+   all remaining DataFox gates and retrospective evidence are satisfied.
 
 ## Milestones
 
@@ -218,31 +212,23 @@ and unrelated dirty files remain byte-for-byte untouched.
 
 ## Concrete Steps
 
-From `/Users/wangxiaowei1/x-otel/EngineeringPlan-checkpoint-recovery`:
+First, inspect the published
+[RepoFoundry AI v0.8.3 release](https://github.com/XiaoWeiKIN/RepoHarnessKit/releases/tag/v0.8.3)
+and `artifacts/release-notes-0.8.3.md`. The earlier 0.8.2 commands were
+historical implementation steps, **not instructions to reapply** them.
 
-    python3 -B -m unittest engineering-execution-plan.tests.test_epctl
-    python3 -B scripts/check.py
+Obtain access to the actual DataFox checkout and installed CLI version before
+forming an upgrade plan. Run `epctl status --json`, `epctl validate`, and
+the existing Decision View inspection against that checkout. Determine whether
+the installed release supports multi-generation ADR supersession and whether
+ADR-051 -> ADR-055 and the storage View have already been applied.
 
-Expected: focused tests and the canonical check exit zero; only documented
-pre-existing warnings may remain.
-
-From `/Users/wangxiaowei1/x-otel/datafox` after installing 0.8.2:
-
-    repofoundry --repo . upgrade --to 0.8.2
-    repofoundry --repo . upgrade --to 0.8.2 --apply
-    epctl --repo . register-checkpoint-recovery EP-091 CP-001 \
-      --from-git-commit e73ac75fe5c4e566a3c3d65a3b18bb4f75e243e1 \
-      --attested-by Wangxiaowei1 \
-      --reason "CP-001 was introduced with this invalid seal and has not changed"
-    epctl --repo . register-checkpoint-recovery EP-091 CP-001 \
-      --from-git-commit e73ac75fe5c4e566a3c3d65a3b18bb4f75e243e1 \
-      --attested-by Wangxiaowei1 \
-      --reason "CP-001 was introduced with this invalid seal and has not changed" --apply
-    epctl --repo . validate
-
-Expected: preview reports one `create` without changing files; apply writes one
-content-addressed receipt; the checkpoint seal mismatch disappears while
-unrelated validation findings remain visible until separately corrected.
+If an update is genuinely outstanding, use the established preview commands
+for Harness upgrade, `supersede-adr` and `set-decision-view`. Obtain the
+Decision Owner's actual identity, reason and explicit authorization before any
+`--apply`; the publication of 0.8.3 grants no such authority. Re-run DataFox
+validation, record exact commands and source revisions in the existing EP
+`artifacts/`, and update the living Snapshot based on those results.
 
 ## Validation and Acceptance
 
@@ -254,9 +240,12 @@ unrelated validation findings remain visible until separately corrected.
 - [x] Publish and reinstall RepoFoundry AI 0.8.2; expect the release tag to
   resolve to the merged source commit and the immutable local `current` link to
   select 0.8.2. Evidence: `artifacts/release-notes.md`.
-- [ ] Publish and reinstall RepoFoundry AI 0.8.3; expect chained supersession and
-  cycle tests plus the canonical check to pass. Evidence:
-  `artifacts/release-notes-0.8.3.md`.
+- [ ] Verify that a compatible RepoFoundry AI 0.8.3-or-later
+  distribution is installed in DataFox and that its chained supersession,
+  cycle tests and repository validation pass. Publication of v0.8.3 is
+  independently supported by the 2026-09-03 GitHub release and
+  `artifacts/release-notes-0.8.3.md`; target installation and validation
+  remain unverified, so this combined acceptance item stays unchecked.
 - [ ] In DataFox, preview/apply the EP-091/CP-001 receipt and validate once with
   Git available and once from a copied tree without `.git`; expect no checkpoint
   seal error and no checkpoint byte diff. Evidence: `artifacts/datafox-compatibility.txt`.
@@ -374,3 +363,9 @@ compatible with repositories that have no recovery directory.
 - 2026-09-03T07:24:46Z — Initial plan created.
 - 2026-09-03T07:48:22Z — Updated the current snapshot, verification evidence,
   archive-path compatibility decision and release handoff after implementation.
+- 2026-10-30 — P3-A reconciliation checked the published v0.8.3 GitHub
+  release against the previously recorded but unchecked release/install task.
+  Updated the current route to seek actual DataFox installation, ADR-051
+  supersession and storage View evidence; did not treat a published release
+  or the copied-corpus tests as DataFox completion. Earlier Progress and
+  decision history remain unchanged, and the active/archive gates remain open.
