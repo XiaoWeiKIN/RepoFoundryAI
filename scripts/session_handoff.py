@@ -357,8 +357,22 @@ def resume(args: argparse.Namespace, root: Path) -> int:
         "current_branch": current["branch"],
         "read_only": True,
     }
+    if args.receipt:
+        # A command receipt proves only its own explicitly scoped check.
+        # This does not authorize the whole task or override a stale handoff.
+        import verification_receipt
+        try:
+            result["verification_receipt"] = verification_receipt.check_receipt(
+                root, args.receipt
+            )
+        except verification_receipt.handoff.HandoffError as exc:
+            # Running this file as __main__ creates a distinct class identity
+            # from the imported session_handoff module used by the receipt.
+            raise HandoffError(str(exc)) from exc
     sys.stdout.buffer.write(canonical(result))
-    return 1 if stale else 0
+    return 1 if stale or (
+        args.receipt and result["verification_receipt"]["outcome"] != "passed"
+    ) else 0
 
 
 def main() -> int:
@@ -374,6 +388,7 @@ def main() -> int:
     make.add_argument("--output", help="explicit new local JSON file (never overwritten)")
     load = commands.add_parser("resume", help="read-only revalidation of local checkout")
     load.add_argument("--input", required=True, help="existing Handoff JSON path")
+    load.add_argument("--receipt", help="optional revision-bound command evidence")
     args = parser.parse_args()
     try:
         root = repository_root(args.repo)

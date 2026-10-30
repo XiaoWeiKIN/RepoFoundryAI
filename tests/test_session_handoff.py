@@ -228,6 +228,38 @@ class SessionHandoffTest(unittest.TestCase):
         self.output.write_text('{"invalid":NaN}', encoding="utf-8")
         self.cli("resume", "--input", str(self.output), expected=2)
 
+    def test_resume_can_read_scoped_verification_without_claiming_task_completion(self) -> None:
+        self.capture()
+        receipt = self.base / "checks.json"
+        checks = ROOT / "scripts" / "verification_receipt.py"
+        run = subprocess.run(
+            [sys.executable, "-B", str(checks), "--repo", str(self.repo),
+             "run", "--output", str(receipt), "--", sys.executable, "-c", "pass"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(run.returncode, 0, run.stderr)
+        response = json.loads(self.cli(
+            "resume", "--input", str(self.output),
+            "--receipt", str(receipt),
+        ).stdout)
+        self.assertEqual(response["state"], "matching_snapshot")
+        self.assertEqual(response["verification"], "unknown")
+        self.assertEqual(response["verification_receipt"]["outcome"], "passed")
+        self.source.write_text("print('changed')\n")
+        invalid = json.loads(self.cli(
+            "resume", "--input", str(self.output),
+            "--receipt", str(receipt), expected=1,
+        ).stdout)
+        self.assertEqual(invalid["state"], "stale")
+        self.assertEqual(invalid["verification_receipt"]["outcome"], "stale")
+
+    def test_resume_rejects_invalid_receipt(self) -> None:
+        self.capture()
+        bad = self.base / "bad.json"
+        bad.write_text("not json")
+        self.cli("resume", "--input", str(self.output),
+                 "--receipt", str(bad), expected=2)
+
     def test_record_remains_local_without_git_or_ep_mutations(self) -> None:
         self.capture()
         self.resume()
