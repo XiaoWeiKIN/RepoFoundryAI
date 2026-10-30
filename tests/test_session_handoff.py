@@ -208,6 +208,26 @@ class SessionHandoffTest(unittest.TestCase):
         self.cli("capture", "--task", "x", "--next-action", "y", expected=2)
         self.assertFalse(self.output.exists())
 
+    def test_output_inside_worktree_is_rejected_before_any_write(self) -> None:
+        local = self.repo / "handoff.json"
+        self.cli("capture", "--task", "x", "--next-action", "y",
+                 "--output", str(local), expected=2)
+        self.assertFalse(local.exists())
+        self.assertEqual(git(self.repo, "status", "--porcelain"), "")
+
+    def test_nonstring_sha_and_nonfinite_json_fail_as_input_errors(self) -> None:
+        self.capture()
+        record = json.loads(self.output.read_text())
+        record["repository"]["head"] = 123
+        payload = {k: v for k, v in record.items() if k != "payload_sha256"}
+        record["payload_sha256"] = hashlib.sha256(
+            (json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=False) + "\n").encode()).hexdigest()
+        self.output.write_text(json.dumps(record), encoding="utf-8")
+        self.cli("resume", "--input", str(self.output), expected=2)
+        self.output.write_text('{"invalid":NaN}', encoding="utf-8")
+        self.cli("resume", "--input", str(self.output), expected=2)
+
     def test_record_remains_local_without_git_or_ep_mutations(self) -> None:
         self.capture()
         self.resume()
