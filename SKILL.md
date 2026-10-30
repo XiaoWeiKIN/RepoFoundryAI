@@ -36,6 +36,7 @@ description: 初始化、升级或诊断 RepoFoundry 仓库 Harness，配置 Age
 | 安装、同步或更新 Engineering Specs | [specifications.md](references/specifications.md) |
 | 检查 Harness 或 Spec 完整性 | `validate --harness` 或 `spec validate`；按诊断读取对应说明 |
 | 显式交接或恢复本地未完成工程任务 | [Session Handoff / Resume](references/session-handoff.md)；默认只读，不代替 EP Checkpoint 或 Spec 路由 |
+| 对实际运行的检查绑定 Git 修订并复查失效 | [Revision-bound Verification Receipt](references/verification-receipt.md)；仅证明具体命令的验证结果 |
 | 展示专业 skill 的端到端用法 | [Prompt 示例](examples/README.zh-CN.md) |
 
 初始化或升级先预览，检查 create、preserve、register 和 conflict。用户已要求实施且
@@ -79,6 +80,8 @@ Harness 操作先解释 create、preserve、conflict 对项目的实际影响，
 ## 显式 Session Handoff
 
 普通 Explore/Build 工作中断需要继续时，可按需使用发行包的 `scripts/session_handoff.py`：`capture` 向 stdout 输出任务和 Git 工作树快照；只有显式 `--output` 才保存私有记录。下一会话用 `resume --input` 重新核验分支、HEAD、可见改动与观察文件字节。记录的测试引用不等于真实通过；即使快照匹配，验证仍为 `unknown`。不要默认每次会话创建 Handoff，也不要用它代替 EP/Checkpoint、Spec 激活或下一阶段的 Revision-bound Verification Receipt。详见 [使用与边界](references/session-handoff.md)。
+
+当任务需要记录**实际运行过的检查**，显式使用 `scripts/verification_receipt.py --repo . run -- <command>`，输出绑定当前 Git HEAD、暂存区和观察的文件摘要；`check --input <file>` 只读检测旧证据是否失效。`session_handoff.py resume --receipt <file>` 可展示单项检查的结果，但不能用某项检查通过推断整个任务已验收。参见 [Receipt 契约](references/verification-receipt.md)。
 
 ## 核心边界
 
