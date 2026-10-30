@@ -57,6 +57,10 @@ python3 -B <distribution>/scripts/session_handoff.py --repo . resume \
 
 Resume 只能提供下一步和风险提示；下一个 Agent 必须依照仓库真实代码、当前 Spec Router 和工作流重新建立任务上下文。对于已归档或受治理的内容，仍从权威 EP、ADR 和密封证据解析，不把 Handoff 当作替代物。
 
+## 可选验证结果检查
+
+在显式执行测试后，可以用 [Revision-bound Verification Receipt](verification-receipt.md) 保存命令实际退出码及代码修订证据。然后使用 `resume --input <handoff.json> --receipt <receipt.json>` 同时核对工作树交接与该**单项检查**是否仍适用。即使 Receipt `passed`，Handoff 的顶层 `verification` 仍为 `unknown`（工作树变化则为 `stale`），不得从一项检查推断整个任务完成或获得合并权限。
+
 ## 安全及兼容边界
 
 - 只读捕获（不带 `--output`）和恢复不应修改工作树。无隐式外部网络请求。
