@@ -175,6 +175,10 @@ Skills into the project. If the Skill or guide is unavailable, report the gap
 and follow project conventions. Existing `AGENTS.md` files remain unchanged;
 explicit upgrades replace only seeds whose recorded provenance permits it.
 
+## Resume unfinished work across sessions (opt-in)
+
+For an unfinished Explore/Build task, the explicit [Session Handoff / Resume CLI](references/session-handoff.md) records the task, next action, current Git HEAD/branch, visible worktree changes and chosen file digests. The next agent rechecks those facts before continuing. Capture writes JSON to stdout by default; saving requires an explicit path. A matching snapshot does **not** establish that tests passed or Specs were activated; verification remains `unknown` until actual revision-bound evidence exists. The CLI is a distribution script, not an automatically installed Hook or another ExecPlan/Checkpoint lifecycle.
+
 ## Install once, enable each repository explicitly
 
 RepoFoundry has two independent scopes. The **distribution installation** puts
