@@ -1,0 +1,77 @@
+name: one-time P3-A EP index projection and validation
+
+on:
+  push:
+    branches:
+      - docs/reconcile-active-ep-snapshots-p3a
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-and-check:
+    if: github.ref == 'refs/heads/docs/reconcile-active-ep-snapshots-p3a'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact branch with complete history
+        uses: actions/checkout@v6
+        with:
+          ref: docs/reconcile-active-ep-snapshots-p3a
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify source-bound edits and regenerate only plan projections
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor ca9d9ab01492d2fe6329338911940da5ede6c70e HEAD
+          test -z "$(git status --porcelain)"
+          python3 -B engineering-execution-plan/scripts/epctl.py --repo . reindex
+          python3 -B engineering-execution-plan/scripts/epctl.py --repo . validate
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import importlib.util, sys
+          path=Path("engineering-execution-plan/scripts/epctl.py")
+          spec=importlib.util.spec_from_file_location("p3a_epctl", path)
+          module=importlib.util.module_from_spec(spec)
+          sys.modules[spec.name]=module
+          spec.loader.exec_module(module)
+          repo=Path.cwd()
+          rows=module.status_rows(repo)
+          plans={row["id"]:row for row in rows["plans"]}
+          for identity in ("EP-006", "EP-058", "EP-094"):
+              assert plans[identity]["status"]=="active", plans[identity]
+          assert plans["EP-058"]["completion"]=="archive_blocked", plans["EP-058"]
+          design=repo/"docs/design-docs/first-class-technical-design-documents.md"
+          data,_,_=module.parse_frontmatter(design.read_text(encoding="utf-8"))
+          assert data["id"]=="DD-011" and data["status"]=="draft", data
+          for identity in ("EP-006","EP-094"):
+              assert plans[identity]["last_activity"] is not None
+          index=(repo/"docs/PLANS.md").read_text(encoding="utf-8")
+          for identity in ("EP-006","EP-094"):
+              assert any(identity in line and "2026-10-30" in line
+                         for line in index.splitlines()), identity
+          print("P3A_STATUS_VERIFIED: EP-006=active, EP-094=active, "
+                "EP-058=active/archive_blocked, DD-011=draft")
+          PY
+          git diff --check
+          python3 -B - <<'PY'
+          import subprocess
+          paths=subprocess.check_output(
+              ["git","diff","--name-only"], text=True
+          ).splitlines()
+          assert paths==["docs/PLANS.md"], "Unexpected index reindex edits: "+str(paths)
+          print("P3A_INDEX_REGENERATED: "+paths[0])
+          PY
+      - name: Commit only generated index and remove this branch-scoped workflow
+        run: |
+          set -euo pipefail
+          git rm -- .github/workflows/p3a-reindex-once.yml
+          git add -- docs/PLANS.md
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs(ep): reindex updated P3-A current snapshots'
+          git push origin HEAD:refs/heads/docs/reconcile-active-ep-snapshots-p3a
