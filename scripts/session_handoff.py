@@ -100,7 +100,11 @@ def entry(root: Path, raw: str) -> dict[str, str]:
         return {"path": name, "kind": "absent", "sha256": ""}
     if not path.is_file():
         raise HandoffError("observed path is not a regular file: " + name)
-    with path.open("rb") as handle:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(path, flags)
+    with os.fdopen(fd, "rb") as handle:
         if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
             raise HandoffError("observed source changed type: " + name)
         h = hashlib.sha256()
@@ -219,7 +223,8 @@ def read_record(raw: str) -> dict[str, object]:
             result[key] = value
         return result
     try:
-        record = json.loads(data.decode("utf-8"), object_pairs_hook=unique)
+        record = json.loads(data.decode("utf-8"), object_pairs_hook=unique,
+                            parse_constant=lambda _: (_ for _ in ()).throw(HandoffError("non-finite JSON value")) )
     except (UnicodeDecodeError, ValueError) as exc:
         raise HandoffError("invalid handoff JSON") from exc
     if not isinstance(record, dict) or set(record) != {
@@ -246,7 +251,9 @@ def read_record(raw: str) -> dict[str, object]:
     if set(repo) != {"checkout_root", "head", "branch", "changes",
                      "observed_files", "coverage"}:
         raise HandoffError("invalid repository snapshot schema")
-    if not isinstance(repo["checkout_root"], str) or not re.fullmatch(r"[a-f0-9]{40,64}", repo["head"]):
+    if (not isinstance(repo["checkout_root"], str) or
+        not isinstance(repo["head"], str) or
+        not re.fullmatch(r"[a-f0-9]{40,64}", repo["head"])):
         raise HandoffError("invalid repository identity")
     if repo["branch"] is not None and not isinstance(repo["branch"], str):
         raise HandoffError("invalid branch")
@@ -306,6 +313,9 @@ def capture(args: argparse.Namespace, root: Path) -> int:
     if len(data) > MAX_RECORD_BYTES:
         raise HandoffError("handoff record too large")
     if args.output:
+        destination = safe_path(args.output)
+        if destination == root or root in destination.parents:
+            raise HandoffError("save handoff outside the target worktree to avoid self-induced drift")
         write_new(args.output, data)
         print(json.dumps({"written": str(safe_path(args.output)),
                           "payload_sha256": record["payload_sha256"],
