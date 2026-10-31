@@ -123,6 +123,18 @@ class VerificationPlanTests(unittest.TestCase):
         self.assertEqual(observed["local.secret"]["kind"], "regular")
         self.assertEqual(observed["service/new.go"]["kind"], "regular")
 
+    def test_staged_only_bytes_remain_routed_if_worktree_was_reverted(self):
+        original = self.source.read_text(encoding="utf-8")
+        self.source.write_text("package service\n// staged different bytes\n")
+        git(self.repo, "add", "service/main.go")
+        self.source.write_text(original, encoding="utf-8")
+        result = self.cli()
+        self.assertIn("service/main.go", result["revision"]["changed_paths"])
+        self.assertEqual(result["verification_outcome"], "not_executed")
+
+    def test_internal_git_path_is_not_a_verification_input(self):
+        self.cli("--path", ".git/config", expected=2)
+
     def test_rename_routing_sees_both_ends(self):
         renamed = self.repo / "service" / "main.py"
         self.source.rename(renamed)
