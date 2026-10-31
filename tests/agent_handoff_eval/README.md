@@ -124,13 +124,13 @@ Repeat the procedure using a **new evaluation root** for the second case. Six Ch
 
 ## Work shared-checkout isolation: fixed-schema checker
 
-When running the **real \`apm-control-plane\` Work workspace-isolation probe, not the two built-in \`chat_pilot.py\` fixtures**, use the single committed \`workspace_probe.py\` for **all** independent Control/Handoff/Receipt sub-sessions. Do not ask each Agent to write its own validation script. This specifically prevents the observed Control false failure: the expected manifest uses the key \`index\`, while the generated Control probe checked only \`ls_files_stage\`-style aliases.
+When running the **real `apm-control-plane` Work workspace-isolation probe, not the two built-in `chat_pilot.py` fixtures**, use the single committed `workspace_probe.py` for **all** independent Control/Handoff/Receipt sub-sessions. Do not ask each Agent to write its own validation script. This specifically prevents the observed Control false failure: the expected manifest uses the key `index`, while the generated Control probe checked only `ls_files_stage`-style aliases.
 
-The manifest is deliberately strict, matching the original 2026-10-31 isolation incident: \`root\`, \`head\`, \`index\`, \`status\`, \`files\`, \`index_sha256\`, \`status_sha256\`. \`index\` contains the *actual* NUL-delimited \`git ls-files --stage -z\` text; \`status\` contains the raw NUL-delimited porcelain v1 output. Hashes are the SHA-256 of those Git output bytes; \`files\` maps each non-Git-worktree file to its SHA-256. No aliases or automatic schema repair are accepted. File content and full path sets must match, including ignored/untracked files. Symlinks, non-regular source nodes and oversized inputs cause an explicit checker error rather than being followed silently.
+The manifest is deliberately strict, matching the original 2026-10-31 isolation incident: `root`, `head`, `index`, `status`, `files`, `index_sha256`, `status_sha256`. `index` contains the *actual* NUL-delimited `git ls-files --stage -z` text; `status` contains the raw NUL-delimited porcelain v1 output. Hashes are the SHA-256 of those Git output bytes; `files` maps each non-Git-worktree file to its SHA-256. No aliases or automatic schema repair are accepted. File content and full path sets must match, including ignored/untracked files. Symlinks, non-regular source nodes and oversized inputs cause an explicit checker error rather than being followed silently.
 
-Before any sub-session starts, capture one expected manifest **for each checkout** (absolute roots differ across arms). Use the exact pinned RepoHarnessKit checker file from the same checkout/version in all three agents; verify its SHA-256 using \`sha256sum\` or the equivalent trusted operator command:
+Before any sub-session starts, capture one expected manifest **for each checkout** (absolute roots differ across arms). Use the exact pinned RepoHarnessKit checker file from the same checkout/version in all three agents; verify its SHA-256 using `sha256sum` or the equivalent trusted operator command:
 
-\`\`\`bash
+```bash
 RF=/absolute/path/to/RepoHarnessKit
 PROBE="$RF/tests/agent_handoff_eval/workspace_probe.py"
 
@@ -144,13 +144,13 @@ python3 -B "$PROBE" --repo /workspace/eval/receipt capture \
 # Separate Work tool call, before the first source read:
 python3 -B "$PROBE" --repo /workspace/eval/control check \
   --expected /workspace/eval-evidence/control-initial.json
-\`\`\`
+```
 
-Repeat the final read-only \`check\` for the other two arms, with each arm's manifest path, and again in the second independent tool call. Store stdout and any probe marker **outside all three worktrees**. Do not put \`isolation-*.txt\` inside the worktree: it changes Git status and the full file inventory after the initial capture. A Work sub-session may read only its assigned checkout, and it must report the actual SHA-256 of its first source read separately.
+Repeat the final read-only `check` for the other two arms, with each arm's manifest path, and again in the second independent tool call. Store stdout and any probe marker **outside all three worktrees**. Do not put `isolation-*.txt` inside the worktree: it changes Git status and the full file inventory after the initial capture. A Work sub-session may read only its assigned checkout, and it must report the actual SHA-256 of its first source read separately.
 
-**Result classification is enforced by process exit code:** \`0\` = \`matching\`; \`1\` = \`environment_drift\` (actual HEAD/index/status/files differ); \`2\` = \`checker_error\` (missing or malformed \`index\`, incompatible schema, unobservable Git, unsafe input). On either nonzero code the experiment arm is invalid: stop, preserve the original transcript/command outputs, and do not relabel the failure as a Work sync defect or an Agent repair failure. Fix the checker only **between independent experiment attempts**. The checker does not write into the checkout or spawn a model.
+**Result classification is enforced by process exit code:** `0` = `matching`; `1` = `environment_drift` (actual HEAD/index/status/files differ); `2` = `checker_error` (missing or malformed `index`, incompatible schema, unobservable Git, unsafe input). On either nonzero code the experiment arm is invalid: stop, preserve the original transcript/command outputs, and do not relabel the failure as a Work sync defect or an Agent repair failure. Fix the checker only **between independent experiment attempts**. The checker does not write into the checkout or spawn a model.
 
-The committed script is the shared parser and validator. The older \`chat_pilot.py verify-restore\` remains specific to the built-in fixture runner and is **not** an automatic gate for arbitrary \`apm-control-plane\` clones. Separate read calls and a source-read checksum remain necessary; no checksum can stop an uncooperative Work process from mutating files *after* the check.
+The committed script is the shared parser and validator. The older `chat_pilot.py verify-restore` remains specific to the built-in fixture runner and is **not** an automatic gate for arbitrary `apm-control-plane` clones. Separate read calls and a source-read checksum remain necessary; no checksum can stop an uncooperative Work process from mutating files *after* the check.
 
 ## What is measured
 
