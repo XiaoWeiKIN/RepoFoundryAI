@@ -225,7 +225,7 @@ def load_proof(root):
     if (not isinstance(proof, dict) or proof.get("schema") != 1 or
         proof.get("fingerprint_sha256") !=
         hashlib.sha256(encoded({k: v for k, v in proof.items()
-                                if k != "fingerprint_sha256"})).hexdigest()):
+                                if k not in ("schema", "fingerprint_sha256")})).hexdigest()):
         raise ValueError("invalid interruption fingerprint")
     required = {"schema", "head", "branch", "index_sha256", "status_sha256",
                 "files", "fingerprint_sha256"}
