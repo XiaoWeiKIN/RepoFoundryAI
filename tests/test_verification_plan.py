@@ -96,7 +96,7 @@ class VerificationPlanTests(unittest.TestCase):
         first = self.cli()
         second = self.cli()
         self.assertEqual(first, second)
-        self.assertEqual(git(self.repo, "status", "--porcelain=v1").stdout.strip(),
+        self.assertEqual(git(self.repo, "status", "--porcelain=v1").stdout.rstrip("\n"),
                          " M service/main.go")
 
     def test_no_changes_is_not_evidence_of_success(self):
