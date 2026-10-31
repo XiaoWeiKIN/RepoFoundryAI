@@ -59,6 +59,10 @@ python3 -B <distribution>/scripts/session_handoff.py --repo . resume \
 
 The optional `verification_receipt` section shows the scoped command result. The Handoff's existing top-level `verification` remains `unknown` for a matching snapshot (or `stale` for a drifted Handoff): one test never automatically becomes whole-task acceptance. Resume exits nonzero for a stale Handoff or a non-passing supplied Receipt. Invalid receipts cause explicit failure.
 
+## Plan before execution (optional)
+
+The [Spec-aware Verification Plan](spec-aware-verification-plan.md) is a read-only shadow-mode advisor. It uses the Git change and validated installed Specs to show candidate verification rows and uncovered inputs **before** commands are run. It does not activate Requirements or claim a test passed; this Receipt remains the only local record of an explicitly executed command. Missing Spec coverage leads to full-suite review, not optimistic skipping.
+
 ## Limitations and safety
 
 - This is a local worktree snapshot, not a tamper-proof attestation. A hash proves stored bytes were not accidentally altered; it **cannot authenticate** the writer or prove that a command accurately tests the intended behavior.
