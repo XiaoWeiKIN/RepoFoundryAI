@@ -129,6 +129,19 @@ class WorkspaceProbeTests(unittest.TestCase):
         result = self.check(expected_exit=1)
         self.assertIn("isolation-control.txt", result["mismatched_paths"])
 
+    def test_ignored_file_bytes_are_still_part_of_worktree_fingerprint(self):
+        (self.work / ".gitignore").write_text("ignored.secret\n")
+        git(self.work, "add", ".gitignore")
+        git(self.work, "commit", "-m", "ignore a local input")
+        hidden = self.work / "ignored.secret"
+        hidden.write_text("first", encoding="utf-8")
+        self.capture()
+        hidden.write_text("second", encoding="utf-8")
+        mismatch = self.check(expected_exit=1)
+        self.assertEqual(mismatch["status"], "environment_drift")
+        self.assertTrue(mismatch["checks"]["status"])
+        self.assertEqual(mismatch["mismatched_paths"], ["ignored.secret"])
+
     def test_expected_path_and_capture_output_must_be_outside_checkout(self):
         path = self.work / "unsafe.json"
         result = self.run_probe("capture", "--output", path, expected_exit=2)
