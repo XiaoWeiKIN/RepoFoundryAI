@@ -145,6 +145,8 @@ def observation(root: Path) -> dict[str, object]:
     if not GIT_SHA.fullmatch(head):
         raise CheckerError("malformed Git HEAD")
     before_files = file_inventory(root)
+    if before_files != file_inventory(root):
+        raise CheckerError("worktree file contents changed during observation")
     # Catch observable mutation during the audit rather than claiming a
     # successful comparison against a mixed-time snapshot.
     if (index_raw != git(root, "ls-files", "--stage", "-z") or
@@ -172,11 +174,24 @@ def unique_json(pairs: list[tuple[str, object]]) -> dict:
     return result
 
 
-def load_manifest(value: str, root: Path) -> dict:
+def manifest_path(value: str, root: Path, *, output: bool) -> Path:
     raw = Path(value)
-    if (not raw.is_absolute() or raw.is_symlink() or
-        raw == root or root in raw.parents):
-        raise CheckerError("manifest must be an absolute file outside the checkout")
+    if not raw.is_absolute() or raw.is_symlink():
+        raise CheckerError("manifest path must be absolute and non-symlink")
+    try:
+        actual_parent = raw.parent.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise CheckerError("manifest parent path is unavailable") from exc
+    actual = actual_parent / raw.name
+    if actual == root or root in actual.parents:
+        raise CheckerError("manifest must be outside the checkout")
+    if actual.name in (".", ".."):
+        raise CheckerError("invalid manifest filename")
+    return actual
+
+
+def load_manifest(value: str, root: Path) -> dict:
+    raw = manifest_path(value, root, output=False)
     try:
         if not raw.is_file() or raw.stat().st_size > MAX_MANIFEST_BYTES:
             raise CheckerError("missing or oversized expected manifest")
@@ -245,17 +260,14 @@ def compare(expected: dict, actual: dict) -> dict:
 
 
 def new_manifest(path_text: str, root: Path, manifest: dict) -> None:
-    path = Path(path_text)
-    if (not path.is_absolute() or path.is_symlink() or
-        path == root or root in path.parents):
-        raise CheckerError("manifest output must be outside checkout")
+    path = manifest_path(path_text, root, output=True)
+    payload = (json.dumps(manifest, ensure_ascii=True, sort_keys=True,
+                          separators=(",", ":")) + "\n").encode("ascii")
+    if len(payload) > MAX_MANIFEST_BYTES:
+        raise CheckerError("expected manifest exceeds limit")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     try:
         with os.fdopen(os.open(path, flags, 0o600), "wb") as handle:
-            payload = (json.dumps(manifest, ensure_ascii=True, sort_keys=True,
-                                  separators=(",", ":")) + "\n").encode("ascii")
-            if len(payload) > MAX_MANIFEST_BYTES:
-                raise CheckerError("expected manifest exceeds limit")
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
