@@ -211,6 +211,15 @@ class WorkspaceProbeTests(unittest.TestCase):
         self.assertEqual(first["index_sha256"], second["index_sha256"])
         self.assertEqual(first["status_sha256"], second["status_sha256"])
 
+    def test_linked_git_worktree_metadata_file_is_not_a_source(self):
+        linked = Path(self.temp.name) / "linked"
+        git(self.work, "worktree", "add", "-b", "probe-linked", str(linked))
+        self.work = linked
+        manifest = self.capture()
+        self.assertNotIn(".git", manifest["files"])
+        self.assertIn("source.py", manifest["files"])
+        self.assertEqual(self.check()["status"], "matching")
+
     def test_symlink_and_invalid_manifest_path_fail_closed(self):
         other = Path(self.temp.name) / "other.txt"
         other.write_text("sensitive", encoding="utf-8")
