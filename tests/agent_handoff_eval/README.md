@@ -65,6 +65,9 @@ python3 -B "$RF/scripts/session_handoff.py" --repo "$EVAL/workspace" capture \
   --output "$EVAL/private/handoff.json"
 
 python3 -B "$RF/tests/agent_handoff_eval/chat_pilot.py" snapshot --root "$EVAL"
+
+# Optional fingerprint read for the frozen source (no new model session):
+python3 -B "$RF/tests/agent_handoff_eval/chat_pilot.py" fingerprint --root "$EVAL"
 ```
 
 Create `$EVAL/private/control-note.txt` from the same factual task/next-action information, but without Handoff/Receipt JSON or outcome labels. Keep the full Chat A transcript private from B.
@@ -78,7 +81,22 @@ python3 -B "$RF/tests/agent_handoff_eval/chat_pilot.py" restore \
   --root "$EVAL" --arm control
 ```
 
-This **deletes the previously used evaluation workspace and copies the pinned interruption snapshot**, but only under the explicitly managed evaluation root. Finish and grade each arm before restoring the next. Use `--arm handoff` and then `--arm receipt` for the following two runs; do not reuse a Chat conversation.
+This is an **explicit destructive operation restricted to the managed evaluation workspace**. The runner first copies the frozen snapshot to a staging directory, checks HEAD, Git index projection, porcelain status and all file contents (including ignored/untracked source), then replaces the evaluation worktree. Files in the worktree are replaced; the snapshot and evidence outside it are preserved.
+
+**Critical: \`restore\` does not authorize starting Chat B.** Its result is \`restored_unverified\`. Before the next Agent reads or edits the repository, issue a *separate* tool invocation/process:
+
+\`\`\`bash
+python3 -B "$RF/tests/agent_handoff_eval/chat_pilot.py" verify-restore \
+  --root "$EVAL"
+\`\`\`
+
+Only a JSON \`status: ready\` with matching HEAD/index/status/contents permits the Chat B arm to start. If the result is \`invalid_environment\` (exit 1), the arm is excluded and \`results/invalid-<attempt_id>.json\` records the reason. If the check itself fails (exit 2), treat the run as invalid, not as success. **Never run \`grade\` before readiness**: it now fails closed. Save both invocations and their timestamps in the operator log.
+
+The optional diagnostic command \`fingerprint --root "$EVAL"\` produces a stable Git/worktree fingerprint. Refreshing file mtimes alone does not make content valid and does not invalidate identical bytes. If a previous attempt is explicitly marked \`invalid_environment\`, restore the **same** arm with \`--retry-invalid\` while preserving the exclusion record; do not reuse an earlier failed attempt as a valid sample. A different arm cannot start until the previous arm has been graded. A held pilot lock is an error, not a signal to bypass the gate.
+
+In a shared ChatGPT Work filesystem, the operator must also keep overlapping writer sessions inactive and log the SHA-256 of the **first actual source read by Chat B**. A successful \`verify-restore\` shows a separate tool-call observation, but cannot by itself prevent an external Work process from overwriting files *after* that check. A mismatch on first read excludes the attempt. Do not conflate this validation with an authenticated platform synchronization guarantee.
+
+Use \`--arm handoff\` and then \`--arm receipt\` for the following two independent runs; do not reuse a Chat conversation.
 
 Provide this **common prompt** to each fresh Chat B, together with the same task and current visible code:
 
