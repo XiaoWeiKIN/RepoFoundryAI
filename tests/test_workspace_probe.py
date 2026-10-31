@@ -182,6 +182,35 @@ class WorkspaceProbeTests(unittest.TestCase):
         self.expected.write_text(json.dumps(manifest), encoding="utf-8")
         self.assertEqual(self.check(expected_exit=2)["status"], "checker_error")
 
+    def test_manifest_symlink_parent_cannot_escape_inside_observed_checkout(self):
+        link = Path(self.temp.name) / "alias-into-checkout"
+        link.symlink_to(self.work, target_is_directory=True)
+        unsafe = link / "expected.json"
+        self.assertEqual(
+            self.run_probe(
+                "capture", "--output", unsafe, expected_exit=2
+            )["status"], "checker_error"
+        )
+        self.assertFalse((self.work / "expected.json").exists())
+
+        self.capture()
+        # Accessing a manifest through a parent that resolves to the checkout
+        # must not disguise a path located inside the measured worktree.
+        (self.work / "expected.json").write_bytes(self.expected.read_bytes())
+        result = self.run_probe(
+            "check", "--expected", unsafe, expected_exit=2
+        )
+        self.assertEqual(result["status"], "checker_error")
+
+    def test_two_independent_check_processes_match_same_snapshot(self):
+        self.capture()
+        first = self.check()
+        second = self.check()
+        self.assertEqual(first["status"], "matching")
+        self.assertEqual(second["status"], "matching")
+        self.assertEqual(first["index_sha256"], second["index_sha256"])
+        self.assertEqual(first["status_sha256"], second["status_sha256"])
+
     def test_symlink_and_invalid_manifest_path_fail_closed(self):
         other = Path(self.temp.name) / "other.txt"
         other.write_text("sensitive", encoding="utf-8")
