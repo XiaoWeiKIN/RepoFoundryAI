@@ -100,6 +100,9 @@ def file_inventory(root: Path) -> dict[str, str]:
                 raise CheckerError("symlink directory is not supported: " +
                                    child.relative_to(root).as_posix())
         for name in names:
+            if location == root and name == ".git":
+                # Linked Git worktrees store Git metadata in a .git file.
+                continue
             path = location / name
             relative = relative_path(path.relative_to(root).as_posix())
             if path.is_symlink():
@@ -174,7 +177,7 @@ def unique_json(pairs: list[tuple[str, object]]) -> dict:
     return result
 
 
-def manifest_path(value: str, root: Path, *, output: bool) -> Path:
+def manifest_path(value: str, root: Path) -> Path:
     raw = Path(value)
     if not raw.is_absolute() or raw.is_symlink():
         raise CheckerError("manifest path must be absolute and non-symlink")
@@ -191,7 +194,7 @@ def manifest_path(value: str, root: Path, *, output: bool) -> Path:
 
 
 def load_manifest(value: str, root: Path) -> dict:
-    raw = manifest_path(value, root, output=False)
+    raw = manifest_path(value, root)
     try:
         if not raw.is_file() or raw.stat().st_size > MAX_MANIFEST_BYTES:
             raise CheckerError("missing or oversized expected manifest")
@@ -260,7 +263,7 @@ def compare(expected: dict, actual: dict) -> dict:
 
 
 def new_manifest(path_text: str, root: Path, manifest: dict) -> None:
-    path = manifest_path(path_text, root, output=True)
+    path = manifest_path(path_text, root)
     payload = (json.dumps(manifest, ensure_ascii=True, sort_keys=True,
                           separators=(",", ":")) + "\n").encode("ascii")
     if len(payload) > MAX_MANIFEST_BYTES:
