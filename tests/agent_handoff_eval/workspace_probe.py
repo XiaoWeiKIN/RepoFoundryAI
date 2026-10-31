@@ -88,7 +88,11 @@ def relative_path(value: str) -> str:
 
 def file_inventory(root: Path) -> dict[str, str]:
     files: dict[str, str] = {}
-    for parent, dirs, names in os.walk(root, topdown=True, followlinks=False):
+    def directory_error(error: OSError) -> None:
+        raise CheckerError("unable to enumerate worktree directory") from error
+
+    for parent, dirs, names in os.walk(root, topdown=True,
+                                        followlinks=False, onerror=directory_error):
         location = Path(parent)
         dirs.sort()
         names.sort()
