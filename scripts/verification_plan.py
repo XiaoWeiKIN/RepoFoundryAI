@@ -67,19 +67,26 @@ def base_revision(root: Path, raw: str) -> str:
 def git_paths(root: Path, base: str, manual: list[str]) -> list[str]:
     """Compare base commit to working tree, including staged and untracked.
 
-    --no-renames makes both sides of a rename visible for path-based routing.
+    --no-renames makes both sides of a rename visible for path-based routing.\n    Union base/worktree, base/index, index/worktree so a reverted working\n    file with different staged bytes is not silently treated as unchanged.
     Git-ignored inputs are not observable unless explicitly supplied --path.
     """
-    diff = handoff.git(root, "diff", "--no-ext-diff", "--no-renames",
-                       "--name-only", "-z", base, "--")
+    compared = handoff.git(root, "diff", "--no-ext-diff", "--no-renames",
+                           "--name-only", "-z", base, "--")
+    staged = handoff.git(root, "diff", "--cached", "--no-ext-diff",
+                         "--no-renames", "--name-only", "-z", base, "--")
+    unstaged = handoff.git(root, "diff", "--no-ext-diff", "--no-renames",
+                           "--name-only", "-z", "--")
     untracked = handoff.git(root, "ls-files", "--others",
                             "--exclude-standard", "-z")
     try:
-        names = [part.decode("utf-8") for data in (diff, untracked)
+        names = [part.decode("utf-8")
+                 for data in (compared, staged, unstaged, untracked)
                  for part in data.split(b"\x00") if part]
     except UnicodeDecodeError as exc:
         raise PlanError("PLAN_NON_UTF8_GIT_PATH") from exc
     paths = {handoff.relative_path(path) for path in names + manual}
+    if any(path == ".git" or path.startswith(".git/") for path in paths):
+        raise PlanError("PLAN_GIT_INTERNAL_PATH_FORBIDDEN")
     if len(paths) > MAX_PATHS:
         raise PlanError("PLAN_TOO_MANY_CHANGED_PATHS")
     return sorted(paths)
