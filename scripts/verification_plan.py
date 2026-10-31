@@ -67,7 +67,9 @@ def base_revision(root: Path, raw: str) -> str:
 def git_paths(root: Path, base: str, manual: list[str]) -> list[str]:
     """Compare base commit to working tree, including staged and untracked.
 
-    --no-renames makes both sides of a rename visible for path-based routing.\n    Union base/worktree, base/index, index/worktree so a reverted working\n    file with different staged bytes is not silently treated as unchanged.
+    --no-renames makes both sides of a rename visible for path-based routing.
+    Union base/worktree, base/index, index/worktree so a reverted working
+    file with different staged bytes is not silently treated as unchanged.
     Git-ignored inputs are not observable unless explicitly supplied --path.
     """
     compared = handoff.git(root, "diff", "--no-ext-diff", "--no-renames",
