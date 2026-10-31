@@ -87,6 +87,7 @@ class ChatPilotProductIntegrationTests(unittest.TestCase):
         for arm in ("control", "handoff", "receipt"):
             with self.subTest(arm=arm):
                 self.pilot("restore", "--arm", arm)
+                self.assertEqual(self.pilot("verify-restore")["status"], "ready")
                 self.assertEqual((self.worktree / "paging.py").read_bytes(), initial)
                 self.assertEqual(
                     self.session("resume", "--input", self.handoff)["state"],
@@ -125,6 +126,7 @@ class ChatPilotProductIntegrationTests(unittest.TestCase):
         self.task_handoff()
         self.pilot("snapshot")
         self.pilot("restore", "--arm", "receipt")
+        self.assertEqual(self.pilot("verify-restore")["status"], "ready")
 
         self.assertEqual(
             self.session("resume", "--input", self.handoff)["state"],
@@ -163,6 +165,7 @@ class ChatPilotProductIntegrationTests(unittest.TestCase):
         self.task_handoff()
         self.pilot("snapshot")
         self.pilot("restore", "--arm", "receipt")
+        self.assertEqual(self.pilot("verify-restore")["status"], "ready")
         invalid = self.private / "invalid.json"
         invalid.write_text('{"outcome": "passed"}', encoding="utf-8")
         result = self.session(
